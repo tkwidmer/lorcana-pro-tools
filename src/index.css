@@ -33,6 +33,9 @@
     grid-template-columns: repeat(3, 2.5in);
     grid-template-rows: repeat(3, 3.5in);
     gap: 0.083in;
+  }
+
+  .print-sheet:not(:last-child) {
     page-break-after: always;
     break-after: page;
   }

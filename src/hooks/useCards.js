@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const CARDS_URL = 'https://lorcanajson.org/files/current/en/allCards.json'
+const CARDS_URL = '/api/cards'
 
 export function useCards() {
   const [cards, setCards] = useState([])

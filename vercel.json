@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/cards", "destination": "https://lorcanajson.org/files/current/en/allCards.json" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

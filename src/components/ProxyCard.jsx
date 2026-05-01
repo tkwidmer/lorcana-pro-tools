@@ -43,57 +43,42 @@ function CostBadge({ cost }) {
 function StatsBar({ card: c }) {
   const isCharacter = c.type === 'Character'
   const isLocation = c.type === 'Location'
+  const showStats = isCharacter || isLocation
+
+  let stats = null
+  if (isCharacter) stats = `S:${c.strength}  W:${c.willpower}`
+  if (isLocation) stats = `${c.move_cost != null ? `Move:${c.move_cost}  ` : ''}W:${c.willpower}`
 
   return (
     <div style={{
       borderTop: '1.5px solid black',
       borderBottom: '1.5px solid black',
-      padding: '2pt 0',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+      padding: '3pt 0',
       marginBottom: '4pt',
       flexShrink: 0,
+      fontFamily: 'Arial, sans-serif',
     }}>
-      <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '7pt' }}>
-        <span style={{ fontStyle: 'italic', fontWeight: 'bold' }}>{c.color}</span>
-        {c.subtypesText && (
-          <span style={{ marginLeft: '5pt', color: '#222' }}>
-            {c.subtypesText}
-          </span>
-        )}
+      {/* Line 1: Ink color (left) · Stats (right) — same size */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        fontSize: '8pt',
+        fontWeight: 'bold',
+        marginBottom: '2pt',
+      }}>
+        <span style={{ fontStyle: 'italic' }}>{c.color}</span>
+        {showStats && <span>{stats}</span>}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6pt', flexShrink: 0, marginLeft: '4pt' }}>
-        {(isCharacter || isLocation) && (
-          <div style={{
-            display: 'flex',
-            gap: '5pt',
-            fontFamily: 'Arial, sans-serif',
-            fontSize: '10pt',
-            fontWeight: 'bold',
-          }}>
-            {isCharacter && (
-              <>
-                <span>S:{c.strength}</span>
-                <span>W:{c.willpower}</span>
-              </>
-            )}
-            {isLocation && (
-              <>
-                {c.move_cost != null && <span>Move:{c.move_cost}</span>}
-                <span>W:{c.willpower}</span>
-              </>
-            )}
-          </div>
-        )}
-        <span style={{
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '6.5pt',
-          fontStyle: 'italic',
-          color: c.inkwell ? 'black' : '#888',
-          borderLeft: (isCharacter || isLocation) ? '1px solid #ccc' : 'none',
-          paddingLeft: (isCharacter || isLocation) ? '6pt' : 0,
-        }}>
+      {/* Line 2: Subtypes (left) · Inkable (right) */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        fontSize: '7pt',
+      }}>
+        <span>{c.subtypes?.join(', ')}</span>
+        <span style={{ fontStyle: 'italic', color: c.inkwell ? 'black' : '#888' }}>
           {c.inkwell ? 'Inkable' : 'Non-inkable'}
         </span>
       </div>

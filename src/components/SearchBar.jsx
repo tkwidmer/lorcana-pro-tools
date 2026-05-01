@@ -10,9 +10,17 @@ export function SearchBar({ cards, onAdd, disabled }) {
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return []
-    return cards
-      .filter(c => c.simpleName.includes(q) || c.fullName.toLowerCase().includes(q))
-      .slice(0, 12)
+    const seen = new Set()
+    const deduped = []
+    for (const c of cards) {
+      if (seen.has(c.fullName)) continue
+      if (c.simpleName.includes(q) || c.fullName.toLowerCase().includes(q)) {
+        seen.add(c.fullName)
+        deduped.push(c)
+        if (deduped.length === 12) break
+      }
+    }
+    return deduped
   }, [query, cards])
 
   useEffect(() => {

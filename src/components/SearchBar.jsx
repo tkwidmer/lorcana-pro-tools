@@ -17,7 +17,7 @@ export function SearchBar({ cards, onAdd, disabled }) {
       if (c.simpleName.includes(q) || c.fullName.toLowerCase().includes(q)) {
         seen.add(c.fullName)
         deduped.push(c)
-        if (deduped.length === 12) break
+        if (deduped.length === 25) break
       }
     }
     return deduped

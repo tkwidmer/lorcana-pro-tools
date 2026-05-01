@@ -7,6 +7,12 @@ const TOOLS = [
     description: 'Search for any Lorcana card and generate a printable B&W proxy sheet. 9 cards per page, grayscale printer friendly.',
     label: 'Open Tool',
   },
+  {
+    path: '/cut-calculator',
+    name: 'Cut Calculator',
+    description: 'Track your record during a Swiss tournament and know exactly when it\'s safe to intentional draw into top cut.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

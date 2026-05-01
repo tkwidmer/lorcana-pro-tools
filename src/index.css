@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-sheet {
+    width: 8.5in;
+    height: 11in;
+    display: grid;
+    grid-template-columns: repeat(3, 2.5in);
+    grid-template-rows: repeat(3, 3.5in);
+    gap: 0.083in;
+    padding: 0.25in;
+    page-break-after: always;
+  }
+}

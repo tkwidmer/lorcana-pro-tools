@@ -63,30 +63,40 @@ function StatsBar({ card: c }) {
           </span>
         )}
       </div>
-      {(isCharacter || isLocation) && (
-        <div style={{
-          display: 'flex',
-          gap: '5pt',
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6pt', flexShrink: 0, marginLeft: '4pt' }}>
+        {(isCharacter || isLocation) && (
+          <div style={{
+            display: 'flex',
+            gap: '5pt',
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '10pt',
+            fontWeight: 'bold',
+          }}>
+            {isCharacter && (
+              <>
+                <span>S:{c.strength}</span>
+                <span>W:{c.willpower}</span>
+              </>
+            )}
+            {isLocation && (
+              <>
+                {c.move_cost != null && <span>Move:{c.move_cost}</span>}
+                <span>W:{c.willpower}</span>
+              </>
+            )}
+          </div>
+        )}
+        <span style={{
           fontFamily: 'Arial, sans-serif',
-          fontSize: '7.5pt',
-          fontWeight: 'bold',
-          flexShrink: 0,
-          marginLeft: '4pt',
+          fontSize: '6.5pt',
+          fontStyle: 'italic',
+          color: c.inkwell ? 'black' : '#888',
+          borderLeft: (isCharacter || isLocation) ? '1px solid #ccc' : 'none',
+          paddingLeft: (isCharacter || isLocation) ? '6pt' : 0,
         }}>
-          {isCharacter && (
-            <>
-              <span>S:{c.strength}</span>
-              <span>W:{c.willpower}</span>
-            </>
-          )}
-          {isLocation && (
-            <>
-              {c.move_cost != null && <span>Move:{c.move_cost}</span>}
-              <span>W:{c.willpower}</span>
-            </>
-          )}
-        </div>
-      )}
+          {c.inkwell ? 'Inkable' : 'Non-inkable'}
+        </span>
+      </div>
     </div>
   )
 }
@@ -145,15 +155,6 @@ export function ProxyCard({ card: c, onRemove }) {
               {c.version}
             </div>
           )}
-        </div>
-        <div style={{
-          fontSize: '8pt',
-          minWidth: '10pt',
-          textAlign: 'right',
-          paddingTop: '2pt',
-          color: c.inkwell ? 'black' : '#aaa',
-        }}>
-          {c.inkwell ? '●' : '○'}
         </div>
       </div>
 

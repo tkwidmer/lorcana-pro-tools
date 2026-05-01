@@ -1,5 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 
+const QUANTITIES = [1, 2, 3, 4]
+
 export function SearchBar({ cards, onAdd, disabled }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -23,8 +25,8 @@ export function SearchBar({ cards, onAdd, disabled }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  function handleSelect(card) {
-    onAdd(card)
+  function handleAdd(card, qty) {
+    for (let i = 0; i < qty; i++) onAdd(card)
     setQuery('')
     setOpen(false)
   }
@@ -45,13 +47,23 @@ export function SearchBar({ cards, onAdd, disabled }) {
           {results.map(card => (
             <li
               key={`${card.id}-${card.setCode}`}
-              onMouseDown={() => handleSelect(card)}
-              className="flex items-baseline justify-between px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0"
+              className="flex items-center justify-between px-3 py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50"
             >
-              <span className="font-medium">{card.fullName}</span>
-              <span className="text-xs text-gray-400 ml-3 shrink-0">
-                {card.color} · {card.type} · Set {card.setCode}
-              </span>
+              <div className="min-w-0 mr-3">
+                <div className="text-sm font-medium truncate">{card.fullName}</div>
+                <div className="text-xs text-gray-400">{card.color} · {card.type} · Set {card.setCode}</div>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                {QUANTITIES.map(qty => (
+                  <button
+                    key={qty}
+                    onMouseDown={() => handleAdd(card, qty)}
+                    className="w-7 h-7 text-xs font-medium border border-gray-300 rounded hover:bg-black hover:text-white hover:border-black transition-colors"
+                  >
+                    ×{qty}
+                  </button>
+                ))}
+              </div>
             </li>
           ))}
         </ul>

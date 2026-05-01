@@ -23,18 +23,19 @@ function expectedAboveWinLoss(N, R, minPoints) {
 }
 
 // Lower-bound model: trinomial win/draw/loss (optimistic — accounts for IDs compressing the field).
-// ~20% of matches end in draws (intentional draws are common among leaders in late rounds).
-const P_DRAW = 0.20
-const P_WIN  = (1 - P_DRAW) / 2
-const P_LOSS = P_WIN
+// Default draw rate: ~20%. When the user supplies a known draw count from standings,
+// we derive p_draw = drawCount / N instead for a more accurate lower bound.
+const DEFAULT_P_DRAW = 0.20
 
-function expectedAboveTrinomial(N, R, minPoints) {
+function expectedAboveTrinomial(N, R, minPoints, pDraw) {
+  const pWin = (1 - pDraw) / 2
+  const pLoss = pWin
   let prob = 0
   for (let w = 0; w <= R; w++) {
     for (let d = 0; d <= R - w; d++) {
       if (w * 3 + d >= minPoints) {
         prob += multinomialCoeff(R, w, d) *
-          Math.pow(P_WIN, w) * Math.pow(P_DRAW, d) * Math.pow(P_LOSS, R - w - d)
+          Math.pow(pWin, w) * Math.pow(pDraw, d) * Math.pow(pLoss, R - w - d)
       }
     }
   }
@@ -50,10 +51,18 @@ function cutlineFrom(expectedFn, N, R, T) {
 }
 
 // Returns {lower, upper} — the realistic range for where the cutline will fall.
-// lower = with IDs common (trinomial), upper = no IDs (pure W/L).
-function estimateCutlineRange(N, R, T) {
+// upper = no IDs (pure W/L, pessimistic). lower = with draws (optimistic).
+// drawCount: players known to have at least one draw (from live standings). If
+// omitted, falls back to DEFAULT_P_DRAW.
+function estimateCutlineRange(N, R, T, drawCount) {
   const upper = cutlineFrom(expectedAboveWinLoss, N, R, T)
-  const lower = Math.min(cutlineFrom(expectedAboveTrinomial, N, R, T), upper)
+  const pDraw = (drawCount != null && N > 0)
+    ? Math.min(drawCount / N, 0.45)
+    : DEFAULT_P_DRAW
+  const lower = Math.min(
+    cutlineFrom((N, R, pts) => expectedAboveTrinomial(N, R, pts, pDraw), N, R, T),
+    upper
+  )
   return { lower, upper }
 }
 
@@ -106,6 +115,7 @@ export function TournamentCutPage() {
   const [players, setPlayers] = useState('')
   const [rounds, setRounds] = useState('')
   const [topCut, setTopCut] = useState('8')
+  const [fieldDraws, setFieldDraws] = useState('')
   const [wins, setWins] = useState(0)
   const [losses, setLosses] = useState(0)
   const [draws, setDraws] = useState(0)
@@ -113,6 +123,7 @@ export function TournamentCutPage() {
   const N = parseInt(players) || 0
   const R = parseInt(rounds) || 0
   const T = parseInt(topCut) || 0
+  const fieldDrawCount = fieldDraws !== '' ? parseInt(fieldDraws) || 0 : null
 
   const roundsPlayed = wins + losses + draws
   const roundsRemaining = Math.max(0, R - roundsPlayed)
@@ -125,7 +136,7 @@ export function TournamentCutPage() {
 
     const pointsIfDrawOut = currentPoints + roundsRemaining
     const pointsIfWinOut  = currentPoints + roundsRemaining * 3
-    const { lower, upper } = estimateCutlineRange(N, R, T)
+    const { lower, upper } = estimateCutlineRange(N, R, T, fieldDrawCount)
     const range = cutlineLabel({ lower, upper })
 
     // marginUpper: gap between draw-out score and the pessimistic (no-ID) cutline.
@@ -182,7 +193,7 @@ export function TournamentCutPage() {
     }
 
     return { pointsIfDrawOut, pointsIfWinOut, lower, upper, range, roundsRemaining, currentPoints, status, color, detail }
-  }, [N, R, T, wins, losses, draws, setupValid, recordValid, currentPoints, roundsRemaining])
+  }, [N, R, T, fieldDrawCount, wins, losses, draws, setupValid, recordValid, currentPoints, roundsRemaining])
 
   const recordOverflow = R > 0 && roundsPlayed > R
 
@@ -241,6 +252,20 @@ export function TournamentCutPage() {
             </select>
           </div>
         </div>
+        <div className="mt-3">
+          <label className="block text-xs text-gray-500 mb-1">
+            Players with draws <span className="text-gray-400">(optional — from standings)</span>
+          </label>
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            value={fieldDraws}
+            onChange={e => setFieldDraws(e.target.value)}
+            placeholder="0"
+            className="w-28 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+          />
+        </div>
       </div>
 
       {/* Your Record */}
@@ -297,7 +322,10 @@ export function TournamentCutPage() {
             </div>
 
             <p className="text-xs text-gray-400 mt-5 leading-relaxed">
-              The range reflects uncertainty: the upper end assumes no intentional draws in the field (pessimistic), the lower end assumes ~20% of matches end in draws (optimistic). Reality is somewhere in between.
+              The upper end assumes no draws in the field; the lower end is calibrated to
+              {fieldDrawCount != null
+                ? ` the ${fieldDrawCount} player${fieldDrawCount !== 1 ? 's' : ''} with draws you entered.`
+                : ' a ~20% draw rate. Enter "players with draws" from standings to narrow this range.'}
             </p>
           </div>
         )

@@ -32,7 +32,8 @@
     display: grid;
     grid-template-columns: repeat(3, 2.5in);
     grid-template-rows: repeat(3, 3.5in);
-    gap: 0.083in;
+    column-gap: 0.083in;
+    row-gap: 0;
   }
 
   .print-sheet:not(:last-child) {

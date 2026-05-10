@@ -1,8 +1,6 @@
 const LORE_PIP = '◇'
 
-const card = {
-  width: '2.5in',
-  height: '3.5in',
+const commonCardStyle = {
   border: '2px solid black',
   borderRadius: '6pt',
   display: 'flex',
@@ -11,12 +9,58 @@ const card = {
   padding: '0.1in',
   backgroundColor: 'white',
   overflow: 'hidden',
-  breakInside: 'avoid',
-  pageBreakInside: 'avoid',
   fontFamily: 'Georgia, serif',
   fontSize: '7.5pt',
   lineHeight: '1.25',
   color: 'black',
+}
+
+const portraitCard = {
+  ...commonCardStyle,
+  width: '2.5in',
+  height: '3.5in',
+  breakInside: 'avoid',
+  pageBreakInside: 'avoid',
+}
+
+// Location cards are landscape content rotated into a portrait slot.
+// The wrapper holds the portrait layout footprint; the inner div is
+// landscape-dimensioned and rotated 90° so it fills the slot exactly.
+const locationWrapper = {
+  width: '2.5in',
+  height: '3.5in',
+  position: 'relative',
+  flexShrink: 0,
+  breakInside: 'avoid',
+  pageBreakInside: 'avoid',
+}
+
+const locationCard = {
+  ...commonCardStyle,
+  width: '3.5in',
+  height: '2.5in',
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%) rotate(90deg)',
+}
+
+const removeButtonStyle = {
+  position: 'absolute',
+  top: '4px',
+  right: '4px',
+  background: 'black',
+  color: 'white',
+  border: 'none',
+  borderRadius: '50%',
+  width: '18px',
+  height: '18px',
+  fontSize: '11px',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  lineHeight: 1,
 }
 
 function CostBadge({ cost }) {
@@ -47,7 +91,7 @@ function StatsBar({ card: c }) {
 
   let stats = null
   if (isCharacter) stats = `S:${c.strength}  W:${c.willpower}`
-  if (isLocation) stats = `${c.move_cost != null ? `Move:${c.move_cost}  ` : ''}W:${c.willpower}`
+  if (isLocation) stats = `${c.moveCost != null ? `Move:${c.moveCost}  ` : ''}W:${c.willpower}`
 
   return (
     <div style={{
@@ -58,7 +102,6 @@ function StatsBar({ card: c }) {
       flexShrink: 0,
       fontFamily: 'Arial, sans-serif',
     }}>
-      {/* Line 1: Ink color (left) · Stats (right) — same size */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -70,7 +113,6 @@ function StatsBar({ card: c }) {
         <span style={{ fontStyle: 'italic' }}>{c.color}</span>
         {showStats && <span>{stats}</span>}
       </div>
-      {/* Line 2: Subtypes (left) · Inkable (right) */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -107,14 +149,26 @@ function AbilityText({ ability, first }) {
   )
 }
 
-export function ProxyCard({ card: c, onRemove }) {
+function EffectText({ text, first, hasAbilities }) {
+  return (
+    <div style={{ marginBottom: '3pt' }}>
+      {(!first || hasAbilities) && (
+        <div style={{ borderTop: '0.5pt solid #bbb', marginBottom: '3pt' }} />
+      )}
+      <span>{text}</span>
+    </div>
+  )
+}
+
+function CardInner({ c }) {
   const hasLore = c.lore > 0
   const hasAbilities = c.abilities?.length > 0
+  const hasEffects = c.effects?.length > 0
   const hasFlavorText = !!c.flavorText
 
   return (
-    <div style={card}>
-      {/* Header: cost · name · inkable */}
+    <>
+      {/* Header: cost · name */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6pt', marginBottom: '4pt', flexShrink: 0 }}>
         <CostBadge cost={c.cost} />
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
@@ -143,7 +197,7 @@ export function ProxyCard({ card: c, onRemove }) {
         </div>
       </div>
 
-      {/* Stats bar: color · subtypes · S/W */}
+      {/* Stats bar */}
       <StatsBar card={c} />
 
       {/* Text body: abilities + lore pips */}
@@ -152,11 +206,14 @@ export function ProxyCard({ card: c, onRemove }) {
           {hasAbilities && c.abilities.map((ability, i) => (
             <AbilityText key={i} ability={ability} first={i === 0} />
           ))}
+          {hasEffects && c.effects.map((effect, i) => (
+            <EffectText key={i} text={effect} first={i === 0} hasAbilities={hasAbilities} />
+          ))}
           {hasFlavorText && (
             <div style={{
-              marginTop: hasAbilities ? '4pt' : 0,
-              paddingTop: hasAbilities ? '3pt' : 0,
-              borderTop: hasAbilities ? '0.5pt solid #bbb' : 'none',
+              marginTop: (hasAbilities || hasEffects) ? '4pt' : 0,
+              paddingTop: (hasAbilities || hasEffects) ? '3pt' : 0,
+              borderTop: (hasAbilities || hasEffects) ? '0.5pt solid #bbb' : 'none',
               fontStyle: 'italic',
               color: '#444',
               lineHeight: '1.3',
@@ -183,7 +240,7 @@ export function ProxyCard({ card: c, onRemove }) {
         )}
       </div>
 
-      {/* Footer: artist · set/number · rarity */}
+      {/* Footer */}
       <div style={{
         borderTop: '1px solid black',
         marginTop: '3pt',
@@ -198,32 +255,29 @@ export function ProxyCard({ card: c, onRemove }) {
         <span>{c.artistsText}</span>
         <span>{c.setCode}/{c.number} · {c.rarity}</span>
       </div>
+    </>
+  )
+}
 
-      {/* Screen-only remove button */}
+export function ProxyCard({ card: c, onRemove }) {
+  if (c.type === 'Location') {
+    return (
+      <div style={locationWrapper}>
+        <div style={locationCard}>
+          <CardInner c={c} />
+        </div>
+        {onRemove && (
+          <button onClick={onRemove} className="no-print" style={removeButtonStyle}>×</button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div style={portraitCard}>
+      <CardInner c={c} />
       {onRemove && (
-        <button
-          onClick={onRemove}
-          className="no-print"
-          style={{
-            position: 'absolute',
-            top: '4px',
-            right: '4px',
-            background: 'black',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            width: '18px',
-            height: '18px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            lineHeight: 1,
-          }}
-        >
-          ×
-        </button>
+        <button onClick={onRemove} className="no-print" style={removeButtonStyle}>×</button>
       )}
     </div>
   )

@@ -13,6 +13,12 @@ const TOOLS = [
     description: 'Track your record during a Swiss tournament and know exactly when it\'s safe to intentional draw into top cut.',
     label: 'Open Tool',
   },
+  {
+    path: '/limited-guide',
+    name: 'Limited Guide',
+    description: 'Quick reference for sealed and draft: the BREAD framework, ideal mana curves, and uninkable targets for each format.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

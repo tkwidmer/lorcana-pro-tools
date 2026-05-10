@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html {
+    background-color: white;
+    color: #111827;
+  }
+}
+
 /* ── Print layout ─────────────────────────────────────────── */
 
 @media screen {

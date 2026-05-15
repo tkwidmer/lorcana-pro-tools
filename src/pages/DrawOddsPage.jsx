@@ -114,7 +114,36 @@ function lsSet(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
 }
 
+function encodeShareState({ deckText, deckSize, goingFirst, mulliganCount, additionalDraws, groups }) {
+  const payload = { v: 1, d: deckText, s: deckSize, f: goingFirst, m: mulliganCount, x: additionalDraws, g: groups }
+  return btoa(encodeURIComponent(JSON.stringify(payload)))
+}
+
+function decodeShareState() {
+  try {
+    const hash = window.location.hash
+    if (!hash.startsWith('#d=')) return null
+    return JSON.parse(decodeURIComponent(atob(hash.slice(3))))
+  } catch { return null }
+}
+
 export function DrawOddsPage() {
+  // Bootstrap: if a share URL is present, write its state into localStorage before
+  // other state initializers read from it, then clear the hash.
+  useState(() => {
+    const payload = decodeShareState()
+    if (!payload || payload.v !== 1) return null
+    localStorage.setItem('drawOdds.deckText', payload.d ?? '')
+    lsSet('drawOdds.deckSize', payload.s ?? 60)
+    lsSet('drawOdds.goingFirst', payload.f ?? true)
+    lsSet('drawOdds.mulliganCount', payload.m ?? 0)
+    lsSet('drawOdds.additionalDraws', payload.x ?? 0)
+    lsSet('drawOdds.groups', payload.g ?? [])
+    history.replaceState(null, '', window.location.pathname)
+    return null
+  })
+
+  const [copied, setCopied] = useState(false)
   const [deckSize, setDeckSize] = useState(() => lsGet('drawOdds.deckSize', 60))
   const [goingFirst, setGoingFirst] = useState(() => lsGet('drawOdds.goingFirst', true))
   const [mulliganCount, setMulliganCount] = useState(() => lsGet('drawOdds.mulliganCount', 0))
@@ -136,6 +165,14 @@ export function DrawOddsPage() {
   function resetDeck() {
     saveDeckText('')
     saveGroups([])
+  }
+  function copyShareLink() {
+    const hash = encodeShareState({ deckText, deckSize, goingFirst, mulliganCount, additionalDraws, groups })
+    const url = `${window.location.origin}${window.location.pathname}#d=${hash}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
   function saveGroups(updater) {
     setGroups(prev => {
@@ -306,6 +343,14 @@ export function DrawOddsPage() {
               <span className={`text-xs ${deckSizeWarning ? 'text-orange-600' : 'text-gray-400'}`}>
                 {totalCards} cards · {cards.length} unique
               </span>
+            )}
+            {deckText && (
+              <button
+                onClick={copyShareLink}
+                className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                {copied ? 'Copied!' : 'Copy link'}
+              </button>
             )}
             {!deckText && (
               <button

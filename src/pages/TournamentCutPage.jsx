@@ -198,7 +198,8 @@ export function TournamentCutPage() {
   const recordOverflow = R > 0 && roundsPlayed > R
 
   return (
-    <div className="max-w-lg mx-auto px-6 py-12">
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-lg">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
           Cut Calculator
@@ -336,6 +337,7 @@ export function TournamentCutPage() {
           Fill in the tournament setup to see your analysis.
         </p>
       )}
+      </div>
     </div>
   )
 }

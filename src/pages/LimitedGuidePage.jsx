@@ -150,21 +150,23 @@ export function LimitedGuidePage() {
   const fmt = FORMATS[format]
 
   return (
-    <div className="max-w-lg mx-auto px-6 py-12">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
-          Limited Guide
-        </h1>
-        <p className="text-gray-500 mb-5">
-          Quick reference for building your best sealed or draft deck.
-        </p>
-        <FormatToggle value={format} onChange={setFormat} />
-        <p className="text-sm text-gray-400 mt-2">{fmt.description}</p>
-      </div>
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-lg">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
+            Limited Guide
+          </h1>
+          <p className="text-gray-500 mb-5">
+            Quick reference for building your best sealed or draft deck.
+          </p>
+          <FormatToggle value={format} onChange={setFormat} />
+          <p className="text-sm text-gray-400 mt-2">{fmt.description}</p>
+        </div>
 
-      <div className="space-y-4">
-        <BreadSection />
-        <CurveSection format={format} />
+        <div className="space-y-4">
+          <BreadSection />
+          <CurveSection format={format} />
+        </div>
       </div>
     </div>
   )

@@ -19,6 +19,12 @@ const TOOLS = [
     description: 'Quick reference for sealed and draft: the BREAD framework, ideal mana curves, and uninkable targets for each format.',
     label: 'Open Tool',
   },
+  {
+    path: '/draw-odds',
+    name: 'Draw Odds Calculator',
+    description: 'Paste a deck list and see the hypergeometric probability of drawing each card by your opening hand and key turns.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

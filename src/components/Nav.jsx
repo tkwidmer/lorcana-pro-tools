@@ -17,6 +17,7 @@ export function Nav() {
               {pathname === '/proxy' ? 'Proxy Generator'
                 : pathname === '/cut-calculator' ? 'Cut Calculator'
                 : pathname === '/limited-guide' ? 'Limited Guide'
+                : pathname === '/draw-odds' ? 'Draw Odds Calculator'
                 : ''}
             </span>
           </>

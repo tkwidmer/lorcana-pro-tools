@@ -360,14 +360,6 @@ export function DrawOddsPage() {
                 Load sample
               </button>
             )}
-            {deckText && (
-              <button
-                onClick={() => saveDeckText('')}
-                className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
-              >
-                Clear
-              </button>
-            )}
           </div>
         </div>
         <textarea

@@ -64,6 +64,229 @@ function jointDrawOdds(N, kA, kB, M, g, scrySources = []) {
   ))
 }
 
+// P(drawing at least minCopies copies of a K-of card in n draws from N-card deck).
+function drawOddsAtLeast(N, K, n, minCopies) {
+  if (minCopies <= 0) return 1
+  if (K < minCopies || n < minCopies) return 0
+  let p = 0
+  for (let k = minCopies; k <= Math.min(K, n); k++) {
+    const logP = logBinom(K, k) + logBinom(N - K, n - k) - logBinom(N, n)
+    if (isFinite(logP)) p += Math.exp(logP)
+  }
+  return Math.max(0, Math.min(1, p))
+}
+
+// --- Monte Carlo simulation ---
+// Used for group/joint calculations to accurately model keepInMulligan and scry effects.
+
+const MC_ITERS = 10000
+
+// Build typed arrays for a single group simulation.
+function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceList) {
+  const targetSet = new Set(targetNames)
+  const scryByName = new Map()
+  for (const s of scrySourceList) {
+    if (s.name && s.copies > 0 && s.lookAt > 0) scryByName.set(s.name, s)
+  }
+  const isTarget = new Uint8Array(N)
+  const isKeep = new Uint8Array(N)   // alwaysKeep = isTarget && keepInMulligan
+  const scryLookAt = new Uint8Array(N)
+  let pos = 0
+  for (const card of cards) {
+    const t = targetSet.has(card.name)
+    const s = scryByName.get(card.name)
+    const count = Math.min(card.count, N - pos)
+    for (let i = 0; i < count; i++) {
+      isTarget[pos] = t ? 1 : 0
+      isKeep[pos] = (t && keepInMulligan) ? 1 : 0
+      scryLookAt[pos] = s ? s.lookAt : 0
+      pos++
+    }
+  }
+  return { isTarget, isKeep, scryLookAt }
+}
+
+// Build typed arrays for a joint two-group simulation.
+function buildMCJointDeck(N, cards, gA, gB, scrySourceList) {
+  const setA = new Set(gA.cardNames)
+  const setB = new Set(gB.cardNames)
+  const scryByName = new Map()
+  for (const s of scrySourceList) {
+    if (s.name && s.copies > 0 && s.lookAt > 0) scryByName.set(s.name, s)
+  }
+  const isTargetA = new Uint8Array(N)
+  const isTargetB = new Uint8Array(N)
+  const isKeepA = new Uint8Array(N)
+  const isKeepB = new Uint8Array(N)
+  const scryLookAt = new Uint8Array(N)
+  let pos = 0
+  for (const card of cards) {
+    const tA = setA.has(card.name)
+    const tB = setB.has(card.name)
+    const s = scryByName.get(card.name)
+    const count = Math.min(card.count, N - pos)
+    for (let i = 0; i < count; i++) {
+      isTargetA[pos] = tA ? 1 : 0
+      isTargetB[pos] = tB ? 1 : 0
+      isKeepA[pos] = (tA && gA.keepInMulligan) ? 1 : 0
+      isKeepB[pos] = (tB && gB.keepInMulligan) ? 1 : 0
+      scryLookAt[pos] = s ? s.lookAt : 0
+      pos++
+    }
+  }
+  return { isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt }
+}
+
+// Simulate P(find ≥need targets by T gameplay draws with M-card mulligan).
+// keepInMulligan cards are never sent back; when need>1, partial target progress is also kept.
+// Scry cards: when drawn, look at next `lookAt` cards; if enough targets found, win; else go to bottom.
+function mcSim({ isTarget, isKeep, scryLookAt, N, M, T, need = 1 }) {
+  const order = new Int32Array(N)
+  for (let i = 0; i < N; i++) order[i] = i
+  const pool = new Int32Array(N)
+  let hits = 0
+  for (let iter = 0; iter < MC_ITERS; iter++) {
+    for (let i = N - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      const t = order[i]; order[i] = order[j]; order[j] = t
+    }
+    let count = 0
+    for (let i = 0; i < 7; i++) {
+      if (isTarget[order[i]]) count++
+    }
+    let found = count >= need
+    if (!found && M > 0) {
+      let pi = 0
+      for (let i = 7; i < N; i++) pool[pi++] = order[i]
+      let sent = 0
+      for (let i = 0; i < 7 && sent < M; i++) {
+        // When need>1, keep any targets already in hand (partial progress toward goal)
+        const keepThis = isKeep[order[i]] || (need > 1 && isTarget[order[i]])
+        if (!keepThis) { pool[pi++] = order[i]; sent++ }
+      }
+      const actualM = sent, poolSize = pi
+      for (let i = poolSize - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0
+        const t = pool[i]; pool[i] = pool[j]; pool[j] = t
+      }
+      for (let i = 0; i < actualM && !found; i++) {
+        if (isTarget[pool[i]]) { count++; if (count >= need) found = true }
+      }
+      if (!found) {
+        let dp = actualM
+        for (let draw = 0; draw < T && dp < poolSize && !found; draw++) {
+          const c = pool[dp++]
+          if (isTarget[c]) { count++; if (count >= need) { found = true; break } }
+          if (scryLookAt[c] > 0 && dp < poolSize) {
+            const look = Math.min(scryLookAt[c], poolSize - dp)
+            for (let s = 0; s < look && !found; s++) {
+              if (isTarget[pool[dp + s]]) { count++; if (count >= need) found = true }
+            }
+            dp += look
+          }
+        }
+      }
+    } else if (!found) {
+      let dp = 7
+      for (let draw = 0; draw < T && dp < N && !found; draw++) {
+        const c = order[dp++]
+        if (isTarget[c]) { count++; if (count >= need) { found = true; break } }
+        if (scryLookAt[c] > 0 && dp < N) {
+          const look = Math.min(scryLookAt[c], N - dp)
+          for (let s = 0; s < look && !found; s++) {
+            if (isTarget[order[dp + s]]) { count++; if (count >= need) found = true }
+          }
+          dp += look
+        }
+      }
+    }
+    if (found) hits++
+  }
+  return hits / MC_ITERS
+}
+
+// Simulate P(find ≥needA of A by T_A AND ≥needB of B by T_B, with M mulligan).
+function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, T_A, T_B, needA = 1, needB = 1 }) {
+  const T = Math.max(T_A, T_B)
+  const order = new Int32Array(N)
+  for (let i = 0; i < N; i++) order[i] = i
+  const pool = new Int32Array(N)
+  let hits = 0
+  for (let iter = 0; iter < MC_ITERS; iter++) {
+    for (let i = N - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      const t = order[i]; order[i] = order[j]; order[j] = t
+    }
+    let cntA = 0, cntB = 0
+    for (let i = 0; i < 7; i++) {
+      const c = order[i]
+      if (isTargetA[c]) cntA++
+      if (isTargetB[c]) cntB++
+    }
+    let foundA = cntA >= needA, foundB = cntB >= needB
+    if ((!foundA || !foundB) && M > 0) {
+      let pi = 0
+      for (let i = 7; i < N; i++) pool[pi++] = order[i]
+      let sent = 0
+      for (let i = 0; i < 7 && sent < M; i++) {
+        const c = order[i]
+        const kA = isKeepA[c] || (needA > 1 && cntA < needA && isTargetA[c])
+        const kB = isKeepB[c] || (needB > 1 && cntB < needB && isTargetB[c])
+        if (!kA && !kB) { pool[pi++] = c; sent++ }
+      }
+      const actualM = sent, poolSize = pi
+      for (let i = poolSize - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0
+        const t = pool[i]; pool[i] = pool[j]; pool[j] = t
+      }
+      for (let i = 0; i < actualM; i++) {
+        const c = pool[i]
+        if (isTargetA[c]) { cntA++; if (cntA >= needA) foundA = true }
+        if (isTargetB[c]) { cntB++; if (cntB >= needB) foundB = true }
+      }
+      if (!foundA || !foundB) {
+        let dp = actualM
+        for (let draw = 0; draw < T && dp < poolSize; draw++) {
+          const c = pool[dp++]
+          if (!foundA && draw < T_A && isTargetA[c]) { cntA++; if (cntA >= needA) foundA = true }
+          if (!foundB && draw < T_B && isTargetB[c]) { cntB++; if (cntB >= needB) foundB = true }
+          if (foundA && foundB) break
+          if (scryLookAt[c] > 0 && dp < poolSize) {
+            const look = Math.min(scryLookAt[c], poolSize - dp)
+            for (let s = 0; s < look; s++) {
+              const sc = pool[dp + s]
+              if (!foundA && draw < T_A && isTargetA[sc]) { cntA++; if (cntA >= needA) foundA = true }
+              if (!foundB && draw < T_B && isTargetB[sc]) { cntB++; if (cntB >= needB) foundB = true }
+            }
+            if (foundA && foundB) break
+            dp += look
+          }
+        }
+      }
+    } else if (!foundA || !foundB) {
+      let dp = 7
+      for (let draw = 0; draw < T && dp < N; draw++) {
+        const c = order[dp++]
+        if (!foundA && draw < T_A && isTargetA[c]) { cntA++; if (cntA >= needA) foundA = true }
+        if (!foundB && draw < T_B && isTargetB[c]) { cntB++; if (cntB >= needB) foundB = true }
+        if (foundA && foundB) break
+        if (scryLookAt[c] > 0 && dp < N) {
+          const look = Math.min(scryLookAt[c], N - dp)
+          for (let s = 0; s < look; s++) {
+            const sc = order[dp + s]
+            if (!foundA && draw < T_A && isTargetA[sc]) { cntA++; if (cntA >= needA) foundA = true }
+            if (!foundB && draw < T_B && isTargetB[sc]) { cntB++; if (cntB >= needB) foundB = true }
+          }
+          if (foundA && foundB) break
+          dp += look
+        }
+      }
+    }
+    if (foundA && foundB) hits++
+  }
+  return hits / MC_ITERS
+}
+
 // --- Deck list parsing ---
 
 function parseDeckList(text) {
@@ -95,6 +318,295 @@ function oddsColor(p) {
   if (p >= 0.50) return 'text-yellow-700'
   if (p >= 0.25) return 'text-orange-600'
   return 'text-red-600'
+}
+
+function brickGrade(maxRisk) {
+  if (maxRisk < 0.03) return 'A'
+  if (maxRisk < 0.07) return 'B'
+  if (maxRisk < 0.14) return 'C'
+  if (maxRisk < 0.25) return 'D'
+  return 'F'
+}
+
+function brickGradeColor(grade) {
+  if (grade === 'A') return 'text-green-600'
+  if (grade === 'B') return 'text-emerald-600'
+  if (grade === 'C') return 'text-yellow-600'
+  if (grade === 'D') return 'text-orange-500'
+  return 'text-red-600'
+}
+
+function brickRiskColor(p) {
+  if (p < 0.03) return 'text-green-600'
+  if (p < 0.07) return 'text-yellow-600'
+  if (p < 0.14) return 'text-orange-500'
+  return 'text-red-600'
+}
+
+function brickBarColor(p) {
+  if (p < 0.03) return 'bg-green-400'
+  if (p < 0.07) return 'bg-yellow-400'
+  if (p < 0.14) return 'bg-orange-400'
+  return 'bg-red-500'
+}
+
+// --- Curve Probability Simulation ---
+// For each turn T1-T8: P(have at least one card with cost ≤ T in hand)
+// Accounts for mulligan: keeps playable cards, sends back up to maxMulligan non-playable ones.
+// When no playable card is in opening hand, sends back min(maxMulligan, 7) cards and redraws.
+function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDraws, iterations = 4000) {
+  const hits = new Int32Array(8)
+  const order = new Int32Array(N)
+  const pool = new Int32Array(N)
+
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < N; i++) order[i] = i
+    for (let i = N - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      const tmp = order[i]; order[i] = order[j]; order[j] = tmp
+    }
+
+    for (let ti = 0; ti < 8; ti++) {
+      const T = ti + 1
+      const extraDraws = Math.min(
+        (goingFirst ? Math.max(0, T - 1) : T) + additionalDraws,
+        N - 7
+      )
+
+      // Check opening hand
+      let handHas = false
+      for (let i = 0; i < 7; i++) {
+        if (deckCosts[order[i]] <= T) { handHas = true; break }
+      }
+      if (handHas) { hits[ti]++; continue }
+
+      // No playable card in hand — mulligan if allowed
+      if (maxMulligan === 0) {
+        // No mulligan: check extra draws only
+        let found = false
+        for (let i = 7; i < 7 + extraDraws && i < N; i++) {
+          if (deckCosts[order[i]] <= T) { found = true; break }
+        }
+        if (found) hits[ti]++
+        continue
+      }
+
+      // Send back min(maxMulligan, 7) non-playable hand cards, pool = undrawn + sent
+      const toSend = Math.min(maxMulligan, 7)
+      let pi = 0
+      for (let i = 7; i < N; i++) pool[pi++] = order[i]
+      for (let i = 0; i < toSend; i++) pool[pi++] = order[i] // all hand cards are non-playable here
+
+      // Shuffle pool
+      for (let i = pi - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0
+        const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
+      }
+
+      // Draw toSend replacements + extraDraws turn draws from pool
+      const toDraw = toSend + extraDraws
+      let found = false
+      for (let i = 0; i < toDraw && i < pi; i++) {
+        if (deckCosts[pool[i]] <= T) { found = true; break }
+      }
+      if (found) hits[ti]++
+    }
+  }
+
+  return Array.from(hits).map(h => h / iterations)
+}
+
+// P(3+ non-inkable cards in opening hand even after mulliganing excess non-inkables).
+// Strategy: if hand has 3+ non-inkable, send back non-inkable cards (up to maxMulligan).
+function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 5000) {
+  const order = new Int32Array(N)
+  const pool = new Int32Array(N)
+  let hits = 0
+
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < N; i++) order[i] = i
+    for (let i = N - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      const tmp = order[i]; order[i] = order[j]; order[j] = tmp
+    }
+
+    // Count non-inkables in opening hand
+    let nonInk = 0
+    for (let i = 0; i < 7; i++) if (!deckInkable[order[i]]) nonInk++
+
+    if (nonInk < 3) continue
+    if (maxMulligan === 0) { hits++; continue }
+
+    // Send back non-inkable cards (up to maxMulligan), pool = undrawn + sent
+    let pi = 0
+    for (let i = 7; i < N; i++) pool[pi++] = order[i]
+    let sent = 0
+    for (let i = 0; i < 7 && sent < maxMulligan; i++) {
+      if (!deckInkable[order[i]]) { pool[pi++] = order[i]; sent++ }
+    }
+
+    // Shuffle pool
+    for (let i = pi - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
+    }
+
+    // Rebuild hand: kept cards + sent replacements from pool
+    let newNonInk = 0
+    for (let i = 0; i < 7; i++) {
+      // kept cards: inkable ones from original hand (nonInk - sent were kept non-inkable if sent < nonInk)
+    }
+    // Simpler: count non-inkables in final hand directly
+    // Final hand = original hand minus sent non-inkables + sent replacements from pool
+    newNonInk = nonInk - sent // non-inkables kept from original hand
+    for (let i = 0; i < sent && i < pi; i++) {
+      if (!deckInkable[pool[i]]) newNonInk++
+    }
+
+    if (newNonInk >= 3) hits++
+  }
+
+  return hits / iterations
+}
+
+// P(no card with cost ≤ threshold in opening hand even after mulliganing non-playable cards).
+// Used for Brickability dead draw risk.
+function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations = 5000) {
+  const order = new Int32Array(N)
+  const pool = new Int32Array(N)
+  let misses = 0
+
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < N; i++) order[i] = i
+    for (let i = N - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      const tmp = order[i]; order[i] = order[j]; order[j] = tmp
+    }
+
+    // Check opening hand
+    let hasPlayable = false
+    for (let i = 0; i < 7; i++) {
+      if (deckCosts[order[i]] <= threshold) { hasPlayable = true; break }
+    }
+    if (hasPlayable) continue
+    if (maxMulligan === 0) { misses++; continue }
+
+    // All hand cards are non-playable — send back up to maxMulligan, draw replacements
+    const toSend = Math.min(maxMulligan, 7)
+    let pi = 0
+    for (let i = 7; i < N; i++) pool[pi++] = order[i]
+    for (let i = 0; i < toSend; i++) pool[pi++] = order[i]
+
+    // Shuffle pool
+    for (let i = pi - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
+    }
+
+    // Draw replacements only (opening hand, no subsequent turn draws)
+    let found = false
+    for (let i = 0; i < toSend && i < pi; i++) {
+      if (deckCosts[pool[i]] <= threshold) { found = true; break }
+    }
+    if (!found) misses++
+  }
+
+  return misses / iterations
+}
+
+// --- Quest Pressure Simulation ---
+// Simulates T1-T8 cumulative lore assuming:
+//   - Opening hand of 7, draw 1 per turn
+//   - Ink 1 inkable card per turn (prefer non-questers, then lowest lore)
+//   - Play characters + locations greedily (highest lore first) within ink budget
+//   - Cards played on turn K can quest starting turn K+1 (they "dry" for one turn)
+//   - Locations generate lore passively each turn after played, no characters needed
+function questPressureSim(deckCards, iterations = 6000) {
+  const N = deckCards.length
+  if (N === 0) return { avgLore: new Array(8).fill(0), estWinTurn: null }
+  const order = new Uint16Array(N)
+  const loreSums = new Float64Array(8)
+
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < N; i++) order[i] = i
+    for (let i = N - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      const tmp = order[i]; order[i] = order[j]; order[j] = tmp
+    }
+
+    // inHand[i] = 1 if card i is in hand
+    const inHand = new Uint8Array(N)
+    for (let i = 0; i < 7 && i < N; i++) inHand[order[i]] = 1
+    let deckIdx = 7
+
+    let cumLore = 0
+    let ink = 0
+    // boardLore[i] = lore of a card on the board ready to quest this turn
+    const boardLore = []
+    // justPlayed: lore values of cards played this turn (quest next turn)
+    const justPlayed = []
+
+    for (let t = 0; t < 8; t++) {
+      // Draw one card (not on T1 since we start with opening hand)
+      if (t > 0 && deckIdx < N) inHand[order[deckIdx++]] = 1
+
+      // Gain 1 permanent ink token
+      ink++
+
+      // Ink the best card: prefer non-questers, then lowest lore among questers
+      // Only inkable cards can go to inkwell
+      let inkChoice = -1
+      let inkScore = Infinity
+      for (let i = 0; i < N; i++) {
+        if (!inHand[i] || !deckCards[i].inkwell) continue
+        const c = deckCards[i]
+        const isQuester = c.type === 'Character' || c.type === 'Location'
+        const score = (isQuester ? 10000 : 0) + (c.lore ?? 0)
+        if (score < inkScore) { inkScore = score; inkChoice = i }
+      }
+      if (inkChoice !== -1) inHand[inkChoice] = 0
+
+      // Quest with existing board
+      for (let i = 0; i < boardLore.length; i++) cumLore += boardLore[i]
+
+      // Move last turn's just-played cards onto board
+      for (let i = 0; i < justPlayed.length; i++) boardLore.push(justPlayed[i])
+      justPlayed.length = 0
+
+      // Collect playable questers sorted by lore desc, cost asc
+      const candidates = []
+      for (let i = 0; i < N; i++) {
+        if (!inHand[i]) continue
+        const c = deckCards[i]
+        if ((c.type === 'Character' || c.type === 'Location') && c.cost <= ink) {
+          candidates.push(i)
+        }
+      }
+      candidates.sort((a, b) => {
+        const la = deckCards[a].lore ?? 0, lb = deckCards[b].lore ?? 0
+        if (lb !== la) return lb - la
+        return deckCards[a].cost - deckCards[b].cost
+      })
+
+      // Greedily play highest-lore cards within ink budget
+      let spent = 0
+      for (const idx of candidates) {
+        const cost = deckCards[idx].cost
+        if (spent + cost <= ink) {
+          spent += cost
+          inHand[idx] = 0
+          justPlayed.push(deckCards[idx].lore ?? 0)
+        }
+      }
+
+      loreSums[t] += cumLore
+    }
+  }
+
+  const avgLore = Array.from(loreSums).map(v => v / iterations)
+  // Estimated turn to reach 20 lore (first turn where avg >= 20, or null)
+  const estWinTurn = avgLore.findIndex(v => v >= 20)
+  return { avgLore, estWinTurn: estWinTurn === -1 ? null : estWinTurn + 1 }
 }
 
 // --- Constants ---
@@ -133,8 +645,8 @@ function lsSet(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
 }
 
-function encodeShareState({ deckText, deckSize, goingFirst, mulliganCount, additionalDraws, groups, scrySources }) {
-  const payload = { v: 1, d: deckText, s: deckSize, f: goingFirst, m: mulliganCount, x: additionalDraws, g: groups, sc: scrySources }
+function encodeShareState({ deckText, deckSize, goingFirst, maxMulligan, additionalDraws, groups, scrySources }) {
+  const payload = { v: 1, d: deckText, s: deckSize, f: goingFirst, m: maxMulligan, x: additionalDraws, g: groups, sc: scrySources }
   return btoa(encodeURIComponent(JSON.stringify(payload)))
 }
 
@@ -155,7 +667,7 @@ export function DrawOddsPage() {
     localStorage.setItem('drawOdds.deckText', payload.d ?? '')
     lsSet('drawOdds.deckSize', payload.s ?? 60)
     lsSet('drawOdds.goingFirst', payload.f ?? true)
-    lsSet('drawOdds.mulliganCount', payload.m ?? 0)
+    lsSet('drawOdds.maxMulligan', payload.m ?? 7)
     lsSet('drawOdds.additionalDraws', payload.x ?? 0)
     lsSet('drawOdds.groups', payload.g ?? [])
     lsSet('drawOdds.scrySources', payload.sc ?? [])
@@ -164,9 +676,14 @@ export function DrawOddsPage() {
   })
 
   const [copied, setCopied] = useState(false)
+  const [insightsOpen, setInsightsOpen] = useState(true)
+  const [drawRatesOpen, setDrawRatesOpen] = useState(false)
+  const [targetTurnOverrides, setTargetTurnOverrides] = useState({})
+  const [targetedOddsOpen, setTargetedOddsOpen] = useState(true)
+  const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [deckSize, setDeckSize] = useState(() => lsGet('drawOdds.deckSize', 60))
   const [goingFirst, setGoingFirst] = useState(() => lsGet('drawOdds.goingFirst', true))
-  const [mulliganCount, setMulliganCount] = useState(() => lsGet('drawOdds.mulliganCount', 0))
+  const [maxMulligan, setMaxMulligan] = useState(() => lsGet('drawOdds.maxMulligan', 7))
   const [additionalDraws, setAdditionalDraws] = useState(() => lsGet('drawOdds.additionalDraws', 0))
   const [deckText, setDeckText] = useState(() => localStorage.getItem('drawOdds.deckText') ?? '')
   const [groups, setGroups] = useState(() => lsGet('drawOdds.groups', []))
@@ -186,7 +703,7 @@ export function DrawOddsPage() {
 
   function saveDeckSize(v) { setDeckSize(v); lsSet('drawOdds.deckSize', v) }
   function saveGoingFirst(v) { setGoingFirst(v); lsSet('drawOdds.goingFirst', v) }
-  function saveMulliganCount(v) { setMulliganCount(v); lsSet('drawOdds.mulliganCount', v) }
+  function saveMaxMulligan(v) { setMaxMulligan(v); lsSet('drawOdds.maxMulligan', v) }
   function saveAdditionalDraws(v) { setAdditionalDraws(v); lsSet('drawOdds.additionalDraws', v) }
   function saveDeckText(text) { setDeckText(text); localStorage.setItem('drawOdds.deckText', text) }
   function resetDeck() {
@@ -211,7 +728,7 @@ export function DrawOddsPage() {
     saveScrySources(ss => ss.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
   function copyShareLink() {
-    const hash = encodeShareState({ deckText, deckSize, goingFirst, mulliganCount, additionalDraws, groups, scrySources })
+    const hash = encodeShareState({ deckText, deckSize, goingFirst, maxMulligan, additionalDraws, groups, scrySources })
     const url = `${window.location.origin}${window.location.pathname}#d=${hash}`
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true)
@@ -236,8 +753,71 @@ export function DrawOddsPage() {
     return map
   }, [allApiCards])
 
+  const inkwellMap = useMemo(() => {
+    const map = new Map()
+    for (const c of allApiCards) {
+      if (c.fullName) map.set(c.fullName.toLowerCase(), c.inkwell)
+    }
+    return map
+  }, [allApiCards])
+
   const cards = useMemo(() => parseDeckList(deckText), [deckText])
   const totalCards = useMemo(() => cards.reduce((s, c) => s + c.count, 0), [cards])
+
+  const brickability = useMemo(() => {
+    if (cards.length === 0) return null
+    let uninkableCount = 0
+    let unknownCount = 0
+    const costCopies = []
+    for (const card of cards) {
+      const key = card.name.toLowerCase()
+      const inkwell = inkwellMap.get(key)
+      const cost = costMap.get(key)
+      if (inkwell === undefined) {
+        unknownCount += card.count
+      } else if (!inkwell) {
+        uninkableCount += card.count
+      }
+      if (cost != null) {
+        for (let i = 0; i < card.count; i++) costCopies.push(cost)
+      }
+    }
+    // Adaptive threshold: deck's median cost minus 1, clamped to [1, 3].
+    // Aggro (median ≤2) checks ≤1 — missing a 1-drop is effectively dead.
+    // Mid-curve (median 3) checks ≤2; control/midrange (median 4+) checks ≤3 —
+    // even control needs to play something by T2-T3.
+    costCopies.sort((a, b) => a - b)
+    const medianCost = costCopies.length > 0 ? costCopies[Math.floor(costCopies.length / 2)] : 3
+    const curveThreshold = Math.max(1, Math.min(3, medianCost - 1))
+    const playableCount = cards.reduce((s, c) => {
+      const cost = costMap.get(c.name.toLowerCase())
+      return s + (cost != null && cost <= curveThreshold ? c.count : 0)
+    }, 0)
+    // Build flat deck arrays for MC simulations
+    const deckCosts = new Int16Array(deckSize).fill(999)
+    const deckInkable = new Uint8Array(deckSize) // 1 = inkable, 0 = non-inkable (unknown treated as inkable)
+    let idx = 0
+    for (const card of cards) {
+      const key = card.name.toLowerCase()
+      const cost = costMap.get(key)
+      const inkwell = inkwellMap.get(key)
+      const c = cost != null ? cost : 999
+      const ink = inkwell === false ? 0 : 1 // unknown → treat as inkable (conservative)
+      for (let i = 0; i < card.count && idx < deckSize; i++) {
+        deckCosts[idx] = c
+        deckInkable[idx] = ink
+        idx++
+      }
+    }
+    // Uninkable hand: MC — if 3+ non-inkables, send them back and redraw
+    const uninkableRisk = uninkableRiskMC(deckInkable, deckSize, maxMulligan)
+    // Dead draw: MC — if no ≤curveThreshold card, send non-playables back and redraw
+    const curveRisk = playableCount > 0
+      ? deadDrawRiskMC(deckCosts, deckSize, curveThreshold, maxMulligan)
+      : 1
+    const grade = brickGrade(Math.max(uninkableRisk, curveRisk))
+    return { uninkableRisk, curveRisk, grade, uninkableCount, playableCount, unknownCount, curveThreshold, medianCost }
+  }, [cards, deckSize, inkwellMap, costMap, maxMulligan])
 
   // Ink curve: aggregate copy counts by ink cost using API data
   const curveCounts = useMemo(() => {
@@ -249,15 +829,97 @@ export function DrawOddsPage() {
     return counts
   }, [cards, costMap])
 
+  // Curve probability: P(can play at least one card) for each turn T1-T8
+  // Monte Carlo — accounts for mulligan strategy (keep playable, send back non-playable)
+  const curveProbability = useMemo(() => {
+    if (cards.length === 0) return null
+    // Build a flat cost array across all deck positions
+    const deckCosts = new Int16Array(deckSize).fill(999)
+    let idx = 0
+    for (const card of cards) {
+      const cost = costMap.get(card.name.toLowerCase())
+      const c = cost != null ? cost : 999
+      for (let i = 0; i < card.count && idx < deckSize; i++) deckCosts[idx++] = c
+    }
+    const probs = curveProbMC(deckCosts, deckSize, maxMulligan, goingFirst, additionalDraws)
+    return probs.map((prob, i) => ({ turn: i + 1, prob }))
+  }, [cards, deckSize, costMap, maxMulligan, goingFirst, additionalDraws])
+
+  // Quest pressure: full deck array (one entry per copy) for simulation
+  const questDeckCards = useMemo(() => {
+    if (cards.length === 0) return []
+    const result = []
+    for (const card of cards) {
+      const key = card.name.toLowerCase()
+      const apiCard = allApiCards.find(c => c.fullName?.toLowerCase() === key)
+      if (!apiCard) continue
+      for (let i = 0; i < card.count; i++) {
+        result.push({
+          cost: apiCard.cost ?? 0,
+          lore: apiCard.lore ?? 0,
+          type: apiCard.type ?? '',
+          inkwell: !!apiCard.inkwell,
+        })
+      }
+    }
+    return result
+  }, [cards, allApiCards])
+
+  const questPressure = useMemo(() => {
+    if (questDeckCards.length === 0) return null
+    return questPressureSim(questDeckCards)
+  }, [questDeckCards])
+
   const N = deckSize
-  const M = mulliganCount
 
   // Gameplay draws by turn T plus any bonus draws from card effects
   const gameDraws = (T) => (goingFirst ? Math.max(0, T - 1) : T) + additionalDraws
 
+  // Monte Carlo results for group and joint probability displays.
+  // Recomputes only when deck, groups, scry sources, or draw settings change.
+  const mcResults = useMemo(() => {
+    if (cards.length === 0) return {}
+    const gDraws = (T) => (goingFirst ? Math.max(0, T - 1) : T) + additionalDraws
+    const result = {}
+
+    for (const group of groups) {
+      if (group.cardNames.length === 0) continue
+      const deck = buildMCDeck(N, cards, group.cardNames, group.keepInMulligan, scrySources)
+      const need = group.need ?? 1
+      if (group.targetTurn != null) {
+        result[group.id] = {
+          mulliganRange: Array.from({ length: maxMulligan + 1 }, (_, m) => ({
+            m,
+            p: mcSim({ ...deck, N, M: m, T: gDraws(group.targetTurn), need }),
+          })),
+        }
+      } else {
+        result[group.id] = {
+          opening: mcSim({ ...deck, N, M: 0, T: 0, need }),
+          turns: TURN_COLS.map(T => mcSim({ ...deck, N, M: 0, T: gDraws(T), need })),
+        }
+      }
+    }
+
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        const gA = groups[i], gB = groups[j]
+        if (gA.cardNames.length === 0 || gB.cardNames.length === 0) continue
+        if (gA.targetTurn == null || gB.targetTurn == null) continue
+        const deck = buildMCJointDeck(N, cards, gA, gB, scrySources)
+        result[`${gA.id}-${gB.id}`] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
+          m,
+          p: mcJointSim({ ...deck, N, M: m, T_A: gDraws(gA.targetTurn), T_B: gDraws(gB.targetTurn), needA: gA.need ?? 1, needB: gB.need ?? 1 }),
+        }))
+      }
+    }
+
+    return result
+  }, [N, cards, groups, scrySources, maxMulligan, goingFirst, additionalDraws])
+
   function addGroup() {
     const id = nextGroupId.current++
-    saveGroups(gs => [...gs, { id, name: `Group ${id}`, cardNames: [] }])
+    saveGroups(gs => [...gs, { id, name: `Group ${id}`, cardNames: [], keepInMulligan: false, targetTurn: null, need: 1 }])
   }
   function removeGroup(id) {
     saveGroups(gs => gs.filter(g => g.id !== id))
@@ -276,6 +938,15 @@ export function DrawOddsPage() {
     saveGroups(gs => gs.map(g =>
       g.id === id ? { ...g, cardNames: g.cardNames.filter(n => n !== cardName) } : g
     ))
+  }
+  function toggleKeepInMulligan(id) {
+    saveGroups(gs => gs.map(g => g.id === id ? { ...g, keepInMulligan: !g.keepInMulligan } : g))
+  }
+  function setGroupTargetTurn(id, turn) {
+    saveGroups(gs => gs.map(g => g.id === id ? { ...g, targetTurn: turn } : g))
+  }
+  function setGroupNeed(id, n) {
+    saveGroups(gs => gs.map(g => g.id === id ? { ...g, need: n } : g))
   }
 
   const deckSizeWarning = totalCards > 0 && totalCards !== N
@@ -332,20 +1003,20 @@ export function DrawOddsPage() {
         <div className="flex flex-wrap gap-6 items-end">
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Mulliganed <span className="text-gray-400">(cards sent back)</span>
+              Max Mulligan <span className="text-gray-400">(max cards replaced)</span>
             </label>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => saveMulliganCount(Math.max(0, mulliganCount - 1))}
-                disabled={mulliganCount === 0}
+                onClick={() => saveMaxMulligan(Math.max(0, maxMulligan - 1))}
+                disabled={maxMulligan === 0}
                 className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
               >
                 −
               </button>
-              <span className="text-xl font-bold w-6 text-center tabular-nums">{mulliganCount}</span>
+              <span className="text-xl font-bold w-6 text-center tabular-nums">{maxMulligan}</span>
               <button
-                onClick={() => saveMulliganCount(Math.min(7, mulliganCount + 1))}
-                disabled={mulliganCount === 7}
+                onClick={() => saveMaxMulligan(Math.min(7, maxMulligan + 1))}
+                disabled={maxMulligan === 7}
                 className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
               >
                 +
@@ -505,89 +1176,303 @@ export function DrawOddsPage() {
         )}
       </div>
 
-      {/* Ink Curve */}
-      {curveCounts.size > 0 && (() => {
-        const costs = [...curveCounts.keys()].sort((a, b) => a - b)
-        const maxCount = Math.max(...curveCounts.values())
-        const avgCost = (
-          [...curveCounts.entries()].reduce((s, [c, n]) => s + c * n, 0) /
-          [...curveCounts.values()].reduce((s, n) => s + n, 0)
-        ).toFixed(1)
-        return (
-          <div className="border border-gray-200 rounded-lg p-6 mb-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ink Curve</h2>
-              <span className="text-xs text-gray-400">avg cost {avgCost}</span>
-            </div>
-            <div className="flex items-end gap-3">
-              {costs.map(cost => {
-                const count = curveCounts.get(cost)
-                const heightPct = count / maxCount
-                return (
-                  <div key={cost} className="flex flex-col items-center gap-1 flex-1">
-                    <span className="text-xs font-medium text-gray-600">{count}</span>
-                    <div
-                      className="w-full bg-gray-900 rounded-t min-h-[4px]"
-                      style={{ height: `${Math.round(heightPct * 72)}px` }}
-                    />
-                    <span className="text-xs text-gray-500">{cost}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })()}
+      {/* Deck Insights — collapsible 2×2 tile grid */}
+      {(curveCounts.size > 0 || curveProbability || brickability || questPressure) && (
+        <div className="mb-4">
+          <button
+            onClick={() => setInsightsOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Deck Insights</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${insightsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {insightsOpen && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
 
-      {/* Results table */}
+          {/* Ink Curve tile */}
+          {curveCounts.size > 0 && (() => {
+            const costs = [...curveCounts.keys()].sort((a, b) => a - b)
+            const maxCount = Math.max(...curveCounts.values())
+            const avgCost = (
+              [...curveCounts.entries()].reduce((s, [c, n]) => s + c * n, 0) /
+              [...curveCounts.values()].reduce((s, n) => s + n, 0)
+            ).toFixed(1)
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ink Curve</h2>
+                  <span className="text-xs text-gray-400">avg {avgCost}</span>
+                </div>
+                <div className="flex items-end gap-1.5">
+                  {costs.map(cost => {
+                    const count = curveCounts.get(cost)
+                    const heightPct = count / maxCount
+                    return (
+                      <div key={cost} className="flex flex-col items-center gap-0.5 flex-1">
+                        <span className="text-[10px] font-medium text-gray-600">{count}</span>
+                        <div
+                          className="w-full bg-gray-900 rounded-t min-h-[3px]"
+                          style={{ height: `${Math.round(heightPct * 52)}px` }}
+                        />
+                        <span className="text-[10px] text-gray-500">{cost}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Curve Probability tile */}
+          {curveProbability && (() => {
+            const barColor = (p) => {
+              if (p >= 0.90) return 'bg-green-500'
+              if (p >= 0.75) return 'bg-yellow-400'
+              if (p >= 0.55) return 'bg-orange-400'
+              return 'bg-red-500'
+            }
+            const textColor = (p) => {
+              if (p >= 0.90) return 'text-green-600'
+              if (p >= 0.75) return 'text-yellow-600'
+              if (p >= 0.55) return 'text-orange-500'
+              return 'text-red-600'
+            }
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Curve Probability</h2>
+                  <span className="text-xs text-gray-400">P(playable by turn)</span>
+                </div>
+                <div className="flex items-end gap-1.5">
+                  {curveProbability.map(({ turn, prob }) => (
+                    <div key={turn} className="flex flex-col items-center gap-0.5 flex-1">
+                      <span className={`text-[10px] font-semibold tabular-nums ${textColor(prob)}`}>
+                        {Math.round(prob * 100)}%
+                      </span>
+                      <div className="relative w-full" style={{ height: '52px' }}>
+                        <div
+                          className="absolute w-full border-t border-dashed border-gray-300"
+                          style={{ bottom: `${0.80 * 52}px` }}
+                        />
+                        <div
+                          className={`absolute bottom-0 w-full rounded-t ${barColor(prob)}`}
+                          style={{ height: `${Math.max(2, prob * 52)}px` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-500">T{turn}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2">Mull {maxMulligan} · dashed = 80%</p>
+              </div>
+            )
+          })()}
+
+          {/* Brickability tile */}
+          {brickability && (
+            <div className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Brickability</h2>
+                <div className={`text-2xl font-black leading-none ${brickGradeColor(brickability.grade)}`}>
+                  {brickability.grade}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-gray-500">Uninkable hand</span>
+                    <span className={`text-[10px] font-semibold tabular-nums ${brickRiskColor(brickability.uninkableRisk)}`}>
+                      {pct(brickability.uninkableRisk)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${brickBarColor(brickability.uninkableRisk)}`}
+                      style={{ width: `${Math.min(100, brickability.uninkableRisk / 0.30 * 100).toFixed(1)}%` }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{brickability.uninkableCount} non-inkable · 3+ after mull</div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-gray-500">Dead draw</span>
+                    <span className={`text-[10px] font-semibold tabular-nums ${brickRiskColor(brickability.curveRisk)}`}>
+                      {pct(brickability.curveRisk)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${brickBarColor(brickability.curveRisk)}`}
+                      style={{ width: `${Math.min(100, brickability.curveRisk / 0.30 * 100).toFixed(1)}%` }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{brickability.playableCount} playable (≤{brickability.curveThreshold} cost) · after mull</div>
+                </div>
+              </div>
+              {brickability.unknownCount > 0 && (
+                <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-100">
+                  {brickability.unknownCount} cop{brickability.unknownCount === 1 ? 'y' : 'ies'} not in database — ink data may be incomplete.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Quest Pressure tile */}
+          {questPressure && (() => {
+            const { avgLore, estWinTurn } = questPressure
+            const turns = [1, 2, 3, 4, 5, 6, 7, 8]
+            const maxLore = Math.max(20, ...avgLore)
+            const W = 300, H = 96, padL = 22, padR = 6, padT = 6, padB = 18
+            const cW = W - padL - padR
+            const cH = H - padT - padB
+            const tx = (i) => padL + (i / 7) * cW
+            const ty = (v) => padT + cH - (v / maxLore) * cH
+            const points = avgLore.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(' ')
+            const callouts = [3, 5, 7].map(i => ({ turn: i + 1, lore: avgLore[i].toFixed(1) }))
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Quest Pressure</h2>
+                  {estWinTurn != null
+                    ? <span className="text-xs text-gray-400">avg win ~T{estWinTurn}</span>
+                    : <span className="text-xs text-gray-400">avg &lt;20 by T8</span>
+                  }
+                </div>
+                <div className="flex gap-3 mb-2">
+                  {callouts.map(({ turn, lore }) => (
+                    <div key={turn} className="text-center">
+                      <div className="text-[10px] text-gray-400">T{turn}</div>
+                      <div className="text-xs font-semibold tabular-nums text-gray-700">{lore}</div>
+                    </div>
+                  ))}
+                  <div className="text-[10px] text-gray-300 self-end pb-px ml-0.5">avg lore</div>
+                </div>
+                <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: '96px' }}>
+                  {[5, 10, 15, 20].map(v => (
+                    <g key={v}>
+                      <line x1={padL} y1={ty(v).toFixed(1)} x2={W - padR} y2={ty(v).toFixed(1)}
+                        stroke={v === 20 ? '#ef4444' : '#e5e7eb'}
+                        strokeWidth={v === 20 ? 1 : 0.5}
+                        strokeDasharray={v === 20 ? '3 3' : undefined}
+                      />
+                      <text x={padL - 3} y={ty(v)} textAnchor="end" fontSize="6" fill={v === 20 ? '#ef4444' : '#9ca3af'} dominantBaseline="middle">{v}</text>
+                    </g>
+                  ))}
+                  {turns.map((t, i) => (
+                    <text key={t} x={tx(i).toFixed(1)} y={H - padB + 9} textAnchor="middle" fontSize="6" fill="#9ca3af">T{t}</text>
+                  ))}
+                  <polyline points={points} fill="none" stroke="#1d4ed8" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+                  {avgLore.map((v, i) => (
+                    <circle key={i} cx={tx(i).toFixed(1)} cy={ty(v).toFixed(1)} r="2" fill="#1d4ed8" />
+                  ))}
+                </svg>
+              </div>
+            )
+          })()}
+
+          </div>}
+        </div>
+      )}
+
+      {/* Draw Rates — collapsible results table */}
       {cards.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setDrawRatesOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Card Draw Rates</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${drawRatesOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {drawRatesOpen && <div className="mt-3">
         <div className="border border-gray-200 rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Card
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Card</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Cost</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Count</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Target Turn
+                    <div className="font-normal normal-case tracking-normal text-gray-400">defaults to cost</div>
                   </th>
                   <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    #
+                    On Curve %
+                    <div className="font-normal normal-case tracking-normal text-gray-400">P(≥1 by target)</div>
                   </th>
                   <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Opening Hand
-                    {M > 0 && (
-                      <div className="font-normal normal-case tracking-normal text-gray-400">
-                        +{M} mulligan
-                      </div>
-                    )}
+                    Avg Seen
+                    <div className="font-normal normal-case tracking-normal text-gray-400">copies by target</div>
                   </th>
-                  {TURN_COLS.map(T => (
-                    <th key={T} className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      By Turn {T}
-                      <div className="font-normal normal-case tracking-normal text-gray-400">
-                        {7 + gameDraws(T)} drawn
-                      </div>
+                  {scrySources.length > 0 && (
+                    <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Scry Boost
+                      <div className="font-normal normal-case tracking-normal text-gray-400">vs no scry</div>
                     </th>
-                  ))}
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {cards.map((card, i) => {
-                  const opening = drawOdds(N, card.count, M, 0)
-                  const turns = TURN_COLS.map(T => drawOdds(N, card.count, M, gameDraws(T), scrySources))
+                {[...cards].sort((a, b) => {
+                  const ca = costMap.get(a.name.toLowerCase()) ?? 99
+                  const cb = costMap.get(b.name.toLowerCase()) ?? 99
+                  return ca !== cb ? ca - cb : a.name.localeCompare(b.name)
+                }).map((card, i) => {
+                  const cost = costMap.get(card.name.toLowerCase())
+                  const defaultTurn = cost != null ? Math.max(1, Math.min(8, cost)) : 4
+                  const curveT = targetTurnOverrides[card.name] ?? defaultTurn
+                  const draws = gameDraws(curveT)
+                  const totalDrawn = 7 + draws
+                  const onCurve = drawOdds(N, card.count, maxMulligan, draws, scrySources)
+                  const onCurveNoScry = drawOdds(N, card.count, maxMulligan, draws)
+                  const avgSeen = card.count * totalDrawn / N
+                  const scryBoost = onCurve - onCurveNoScry
+                  const isCustom = targetTurnOverrides[card.name] != null
                   return (
                     <tr key={card.name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
                       <td className="px-4 py-2.5 text-gray-900">{card.name}</td>
                       <td className="px-3 py-2.5 text-center text-gray-400 text-xs tabular-nums">
-                        {card.count}
+                        {cost != null ? cost : '—'}
                       </td>
-                      <td className={`px-3 py-2.5 text-center font-semibold tabular-nums ${oddsColor(opening)}`}>
-                        {pct(opening)}
+                      <td className="px-3 py-2.5 text-center text-gray-400 text-xs tabular-nums">{card.count}</td>
+                      <td className="px-2 py-1.5 text-center">
+                        <input
+                          type="number"
+                          min={1}
+                          max={8}
+                          value={curveT}
+                          onChange={e => {
+                            const v = Math.max(1, Math.min(8, parseInt(e.target.value) || 1))
+                            setTargetTurnOverrides(prev => ({ ...prev, [card.name]: v }))
+                          }}
+                          className={`w-12 text-center text-sm rounded border py-0.5 tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                            isCustom
+                              ? 'border-blue-300 bg-blue-50 text-blue-700 font-semibold'
+                              : 'border-gray-200 bg-transparent text-gray-500'
+                          }`}
+                        />
                       </td>
-                      {turns.map((p, j) => (
-                        <td key={j} className={`px-3 py-2.5 text-center font-semibold tabular-nums ${oddsColor(p)}`}>
-                          {pct(p)}
+                      <td className={`px-3 py-2.5 text-center font-semibold tabular-nums ${oddsColor(onCurve)}`}>
+                        {pct(onCurve)}
+                      </td>
+                      <td className={`px-3 py-2.5 text-center font-semibold tabular-nums ${
+                        avgSeen >= 1 ? 'text-green-600'
+                        : avgSeen >= 0.5 ? 'text-yellow-500'
+                        : 'text-red-500'
+                      }`}>
+                        {avgSeen.toFixed(2)}
+                      </td>
+                      {scrySources.length > 0 && (
+                        <td className={`px-3 py-2.5 text-center tabular-nums text-xs font-medium ${
+                          scryBoost > 0.01 ? 'text-blue-500' : 'text-gray-400'
+                        }`}>
+                          {scryBoost > 0.001 ? `+${pct(scryBoost)}` : '—'}
                         </td>
-                      ))}
+                      )}
                     </tr>
                   )
                 })}
@@ -596,21 +1481,13 @@ export function DrawOddsPage() {
           </div>
           <div className="border-t border-gray-200 px-4 py-3 bg-gray-50/50">
             <p className="text-xs text-gray-400 leading-relaxed">
-              Each percentage is the chance of drawing at least 1 copy by that point.{' '}
-              {goingFirst
-                ? 'Going first — no draw on turn 1, so turn 1 odds equal your opening hand.'
-                : 'Going second — you draw on every turn, starting with turn 1.'}
-              {M > 0
-                ? ` Mulligan: assumes you send back ${M} non-target card${M > 1 ? 's' : ''} and draw ${M} fresh replacement${M > 1 ? 's' : ''}.`
-                : ''}
-              {additionalDraws > 0
-                ? ` +${additionalDraws} additional draw${additionalDraws > 1 ? 's' : ''} added to every turn column (not opening hand).`
-                : ''}
-              {scrySources.length > 0
-                ? ` Scry: turn odds include the expected benefit of ${scrySources.length} scry source${scrySources.length > 1 ? 's' : ''} — each played copy lets you look at extra cards from your remaining deck and keep any target found.`
-                : ''}
+              Sorted by cost. <strong className="text-gray-500">Target Turn</strong> defaults to each card's ink cost — adjust it for songs or off-curve plays. <strong className="text-gray-500">On Curve %</strong> = P(see ≥1 copy by that turn) with up to {maxMulligan}-card mulligan{scrySources.length > 0 ? ' and scry' : ''}. <strong className="text-gray-500">Avg Seen</strong> = expected copies in hand — below 0.5 means you'll often miss it entirely.{' '}
+              {scrySources.length > 0 && <><strong className="text-gray-500">Scry Boost</strong> = improvement from your scry sources. </>}
+              {goingFirst ? 'Going first.' : 'Going second.'}
             </p>
           </div>
+        </div>
+          </div>}
         </div>
       )}
 
@@ -620,9 +1497,20 @@ export function DrawOddsPage() {
         </p>
       )}
 
-      {/* Groups */}
+      {/* Targeted Card Odds — collapsible groups + joint probability */}
       {cards.length > 0 && (
-        <div className="mt-6">
+        <div className="mb-4">
+          <button
+            onClick={() => setTargetedOddsOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Targeted Card Odds</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${targetedOddsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {targetedOddsOpen && (
+            <div className="mt-3">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-semibold text-gray-900">Card Groups</h2>
@@ -650,26 +1538,69 @@ export function DrawOddsPage() {
               })
               const hasMissing = cardEntries.some(e => e.missing)
               const kTotal = cardEntries.reduce((s, e) => s + e.count, 0)
-              const opening = drawOdds(N, kTotal, M, 0)
-              const turns = TURN_COLS.map(T => drawOdds(N, kTotal, M, gameDraws(T), scrySources))
               const available = cards.filter(c => !group.cardNames.includes(c.name))
+              const targetTurn = group.targetTurn
+              const mcGroup = mcResults[group.id]
+              const mulliganRange = targetTurn != null ? (mcGroup?.mulliganRange ?? null) : null
+              const opening = targetTurn == null ? (mcGroup?.opening ?? 0) : 0
+              const turns = targetTurn == null ? (mcGroup?.turns ?? TURN_COLS.map(() => 0)) : []
 
               return (
                 <div key={group.id} className={`border rounded-lg p-4 ${hasMissing ? 'border-orange-200' : 'border-gray-200'}`}>
                   {/* Header */}
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2 justify-between mb-3">
                     <input
                       type="text"
                       value={group.name}
                       onChange={e => renameGroup(group.id, e.target.value)}
-                      className="text-sm font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-gray-900 focus:outline-none"
+                      className="text-sm font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-gray-900 focus:outline-none min-w-0 flex-1"
                     />
-                    <button
-                      onClick={() => removeGroup(group.id)}
-                      className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-4"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {targetTurn != null && (
+                        <button
+                          onClick={() => toggleKeepInMulligan(group.id)}
+                          title="Always keep in mulligan — these cards won't be sent back when mulliganing"
+                          className={`text-xs px-2 py-1 rounded border transition-colors ${group.keepInMulligan ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-400 hover:border-gray-400'}`}
+                        >
+                          Always keep
+                        </button>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <label className="text-xs text-gray-400 whitespace-nowrap">Need</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="4"
+                          value={group.need ?? 1}
+                          onChange={e => {
+                            const v = parseInt(e.target.value)
+                            setGroupNeed(group.id, isNaN(v) ? 1 : Math.max(1, Math.min(4, v)))
+                          }}
+                          className="w-10 border border-gray-200 rounded px-1.5 py-1 text-xs text-center focus:outline-none focus:border-gray-900"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <label className="text-xs text-gray-400 whitespace-nowrap">By T</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          placeholder="—"
+                          value={targetTurn ?? ''}
+                          onChange={e => {
+                            const v = parseInt(e.target.value)
+                            setGroupTargetTurn(group.id, isNaN(v) ? null : Math.max(1, Math.min(10, v)))
+                          }}
+                          className="w-10 border border-gray-200 rounded px-1.5 py-1 text-xs text-center focus:outline-none focus:border-gray-900"
+                        />
+                      </div>
+                      <button
+                        onClick={() => removeGroup(group.id)}
+                        className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
 
                   {hasMissing && (
@@ -718,34 +1649,57 @@ export function DrawOddsPage() {
                   {/* Odds */}
                   {group.cardNames.length === 0 ? (
                     <p className="text-xs text-gray-400">Add cards above to see combined odds.</p>
+                  ) : mulliganRange != null ? (
+                    <div className="border-t border-gray-100 pt-3">
+                      <div className="text-xs text-gray-400 mb-2">
+                        By Turn {targetTurn} · need {group.need ?? 1}+ of {kTotal}{group.keepInMulligan ? ' · always keep' : ''}{' '}
+                        <span className="text-gray-300">· simulated</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-2">
+                        {mulliganRange.map(({ m, p }) => (
+                          <div key={m} className="text-center min-w-[3rem]">
+                            <div className={`text-sm font-bold tabular-nums ${oddsColor(p)}`}>{pct(p)}</div>
+                            <div className="text-xs text-gray-400">Mull {m}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   ) : (
                     <div className="border-t border-gray-100 pt-3">
-                      <div className="flex items-center gap-1 mb-2">
+                      <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs text-gray-400">{kTotal} cop{kTotal === 1 ? 'y' : 'ies'} total</span>
+                        {group.keepInMulligan && <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">always keep</span>}
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-2">
                         <div className="text-center min-w-[4rem]">
                           <div className={`text-base font-bold tabular-nums ${oddsColor(opening)}`}>{pct(opening)}</div>
                           <div className="text-xs text-gray-400">Opening</div>
+                          {kTotal >= 2 && (
+                            <div className="text-xs text-gray-300 tabular-nums">{pct(drawOddsAtLeast(N, kTotal, 7, 2))} 2+</div>
+                          )}
                         </div>
                         {TURN_COLS.map((T, i) => (
                           <div key={T} className="text-center min-w-[4rem]">
                             <div className={`text-base font-bold tabular-nums ${oddsColor(turns[i])}`}>{pct(turns[i])}</div>
                             <div className="text-xs text-gray-400">Turn {T}</div>
+                            {kTotal >= 2 && (
+                              <div className="text-xs text-gray-300 tabular-nums">{pct(drawOddsAtLeast(N, kTotal, 7 + gameDraws(T), 2))} 2+</div>
+                            )}
                           </div>
                         ))}
                       </div>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Assumes no mulligan. Set a target turn to see simulated odds across mulligan counts.
+                      </p>
                     </div>
                   )}
                 </div>
               )
             })}
           </div>
-        </div>
-      )}
 
       {/* Joint Probability */}
-      {cards.length > 0 && groups.length >= 2 && (() => {
+      {groups.length >= 2 && (() => {
         const pairs = []
         for (let i = 0; i < groups.length; i++) {
           for (let j = i + 1; j < groups.length; j++) {
@@ -764,25 +1718,58 @@ export function DrawOddsPage() {
               {pairs.map(([gA, gB]) => {
                 const kA = gA.cardNames.reduce((s, n) => s + (cards.find(c => c.name === n)?.count || 0), 0)
                 const kB = gB.cardNames.reduce((s, n) => s + (cards.find(c => c.name === n)?.count || 0), 0)
-                const opening = jointDrawOdds(N, kA, kB, M, 0)
-                const turns = TURN_COLS.map(T => jointDrawOdds(N, kA, kB, M, gameDraws(T), scrySources))
+                const hasJointTarget = gA.targetTurn != null && gB.targetTurn != null
+                const T_A = gA.targetTurn
+                const T_B = gB.targetTurn
+                const opening = jointDrawOdds(N, kA, kB, 0, 0)
+                const turns = TURN_COLS.map(T => jointDrawOdds(N, kA, kB, 0, gameDraws(T), scrySources))
+                const jointMulliganRange = hasJointTarget
+                  ? (mcResults[`${gA.id}-${gB.id}`] ?? null)
+                  : null
+                const turnLabel = hasJointTarget
+                  ? T_A === T_B
+                    ? `By Turn ${T_A}`
+                    : `${gA.name} by T${T_A} · ${gB.name} by T${T_B}`
+                  : null
                 return (
                   <div key={`${gA.id}-${gB.id}`} className="border border-gray-200 rounded-lg p-4">
                     <p className="text-sm font-semibold text-gray-900 mb-3">
                       {gA.name} <span className="text-gray-400 font-normal">and</span> {gB.name}
+                      {(gA.keepInMulligan || gB.keepInMulligan) && (
+                        <span className="ml-2 text-xs font-normal text-green-600">always keep modeled</span>
+                      )}
                     </p>
-                    <div className="flex flex-wrap gap-x-4 gap-y-2">
-                      <div className="text-center min-w-[4rem]">
-                        <div className={`text-base font-bold tabular-nums ${oddsColor(opening)}`}>{pct(opening)}</div>
-                        <div className="text-xs text-gray-400">Opening</div>
-                      </div>
-                      {TURN_COLS.map((T, i) => (
-                        <div key={T} className="text-center min-w-[4rem]">
-                          <div className={`text-base font-bold tabular-nums ${oddsColor(turns[i])}`}>{pct(turns[i])}</div>
-                          <div className="text-xs text-gray-400">Turn {T}</div>
+                    {jointMulliganRange != null ? (
+                      <div>
+                        <div className="text-xs text-gray-400 mb-2">{turnLabel} <span className="text-gray-300">· simulated</span></div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-2">
+                          {jointMulliganRange.map(({ m, p }) => (
+                            <div key={m} className="text-center min-w-[3rem]">
+                              <div className={`text-sm font-bold tabular-nums ${oddsColor(p)}`}>{pct(p)}</div>
+                              <div className="text-xs text-gray-400">Mull {m}</div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2">
+                          <div className="text-center min-w-[4rem]">
+                            <div className={`text-base font-bold tabular-nums ${oddsColor(opening)}`}>{pct(opening)}</div>
+                            <div className="text-xs text-gray-400">Opening</div>
+                          </div>
+                          {TURN_COLS.map((T, i) => (
+                            <div key={T} className="text-center min-w-[4rem]">
+                              <div className={`text-base font-bold tabular-nums ${oddsColor(turns[i])}`}>{pct(turns[i])}</div>
+                              <div className="text-xs text-gray-400">Turn {T}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-2">
+                          Assumes no mulligan (M=0). Set a target turn on both groups to see simulated odds across mulligan counts.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -790,6 +1777,77 @@ export function DrawOddsPage() {
           </div>
         )
       })()}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Methodology */}
+      <div className="mb-4 mt-6">
+        <button
+          onClick={() => setMethodologyOpen(o => !o)}
+          className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+        >
+          <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Methodology</span>
+          <svg className={`w-4 h-4 text-gray-400 transition-transform ${methodologyOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {methodologyOpen && (
+          <div className="mt-6 space-y-6 text-sm text-gray-600 leading-relaxed">
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Ink Curve</h3>
+              <p>
+                A bar chart showing how many cards in your deck cost each amount of ink, alongside the average cost across all cards. This gives you a quick read on whether your deck is aggressive (lots of cheap cards), controlling (heavier top end), or balanced in the middle. The average cost is weighted by copy count, so four 1-cost cards pull the average down more than one 4-cost card pulls it up.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Curve Probability</h3>
+              <p>
+                The bars show how likely you are to have at least one playable card on each turn from T1 through T8 — meaning a card that costs no more than the current turn number. This is simulated using Monte Carlo methods (thousands of random game openings) so it correctly accounts for your mulligan: if your opening hand has nothing playable, the simulator will send back cards and redraw, just like you would in a real game. The dashed line marks the 80% threshold — turns above it mean you'll almost always have a play, turns below it are where you might get stuck.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Brickability</h3>
+              <p>
+                Two separate risks, both simulated with Monte Carlo across thousands of hands:
+              </p>
+              <ul className="mt-2 space-y-1.5 list-disc list-inside text-gray-500">
+                <li><span className="font-medium text-gray-700">Uninkable hand</span> — the chance your opening hand (after mulligan) has three or more cards that can't be put into your inkwell. A flooded inkwell hand means you can't ramp your ink and will fall behind on tempo.</li>
+                <li><span className="font-medium text-gray-700">Dead draw</span> — the chance your opening hand (after mulligan) has no card you could play on the early turns, based on your deck's cost profile. An aggro deck needs a T1 play; a control deck can survive until T2 or T3.</li>
+              </ul>
+              <p className="mt-2">
+                The letter grade combines both risks into a single score: <span className="font-medium text-green-600">A</span> means your deck is very consistent, <span className="font-medium text-red-500">F</span> means you're likely to brick at least one of these ways fairly often.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Quest Pressure</h3>
+              <p>
+                A simulation of how much lore your deck generates on average across turns T1–T8, played out across thousands of games. Each simulated game follows the basic rules of Lorcana: characters enter play "dry" and can't quest until the following turn, locations generate passive lore each turn automatically, and the ink system is modeled so you're spending the right amount each turn. The simulator plays greedily — it always tries to maximize lore gained — so the numbers represent a best-case ceiling rather than a conservative floor. The dashed red line at 20 lore marks the win condition. The average win turn is shown in the top-right corner.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Card Draw Rates</h3>
+              <p>
+                A card-by-card table showing how likely you are to have seen each card by your chosen target turn. The target turn defaults to each card's ink cost (its "on curve" turn), but you can adjust it — useful for songs you plan to sing with a character rather than hard-cast, or late-game finishers you just need to see eventually. The percentages account for your mulligan and any scry sources you've configured. <span className="font-medium text-gray-700">Avg Seen</span> is the expected number of copies in your hand by that turn: a value below 0.5 means you'll typically miss it entirely.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Targeted Card Odds</h3>
+              <p>
+                A flexible tool for asking specific questions about your deck — like "how likely am I to have at least one of these three win conditions by turn 5?" You can group any cards together and the calculator works out the combined probability of drawing at least one of them by your target turn. It runs a full simulation across mulligan counts so you can see exactly how many cards you need to send back to maximize your odds of hitting the group. Joint probability mode lets you ask about two separate groups at once — for example, "what are the odds I have both an early play and a finisher by turn 6?"
+              </p>
+            </div>
+
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }

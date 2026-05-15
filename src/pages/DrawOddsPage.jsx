@@ -957,10 +957,10 @@ export function DrawOddsPage() {
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
-          Draw Odds Calculator
+          Deck Insights
         </h1>
         <p className="text-gray-500">
-          Paste a deck list to see your probability of drawing each card by key turns.
+          Paste a deck list to analyse your curve, consistency, lore pressure, and draw odds.
         </p>
       </div>
 

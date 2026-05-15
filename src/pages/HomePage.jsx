@@ -20,9 +20,9 @@ const TOOLS = [
     label: 'Open Tool',
   },
   {
-    path: '/draw-odds',
-    name: 'Draw Odds Calculator',
-    description: 'Paste a deck list and see the hypergeometric probability of drawing each card by your opening hand and key turns.',
+    path: '/deck-insights',
+    name: 'Deck Insights',
+    description: 'Paste a deck list to analyse your curve, consistency, lore pressure, and draw odds for every card.',
     label: 'Open Tool',
   },
 ]

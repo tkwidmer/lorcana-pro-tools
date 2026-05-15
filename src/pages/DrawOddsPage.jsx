@@ -16,12 +16,15 @@ function logBinom(n, k) {
   return logFact(n) - logFact(k) - logFact(n - k)
 }
 
-// P(see at least 1 copy of a K-of card) through three sequential draw stages:
+// P(see at least 1 copy of a K-of card) through sequential draw stages:
 //   1) Initial 7-card opening draw from N-card deck
 //   2) M mulligan replacement draws (cards go back, deck reshuffled to N-7+M)
 //   3) g additional gameplay draws from the N-7 card remaining deck
+//   4) Scry sources: each played copy looks at `lookAt` cards from the remaining deck;
+//      if a target is among them it's kept, so P(hit in scry) uses the same hypergeometric
+//      formula as a regular draw of `lookAt` cards.
 // Each stage is only included if you missed in the prior stage.
-function drawOdds(N, K, M, g) {
+function drawOdds(N, K, M, g, scrySources = []) {
   const safeG = Math.min(g, Math.max(0, N - 7))
   let logPMiss = logBinom(N - K, 7) - logBinom(N, 7)
   if (M > 0) {
@@ -32,6 +35,22 @@ function drawOdds(N, K, M, g) {
     const pool = N - 7
     logPMiss += logBinom(pool - K, safeG) - logBinom(pool, safeG)
   }
+  if (scrySources.length > 0) {
+    const totalDrawn = 7 + (M > 0 ? M : 0) + safeG
+    const remainingPool = N - 7 - safeG
+    // Expected scry cards in hand by this point, proportional to cards drawn so far.
+    let totalLooks = 0
+    for (const src of scrySources) {
+      if (src.copies > 0 && src.lookAt > 0) {
+        const fraction = Math.min(1, totalDrawn / N)
+        totalLooks += src.copies * fraction * src.lookAt
+      }
+    }
+    const intLooks = Math.min(Math.round(totalLooks), Math.max(0, remainingPool - K))
+    if (intLooks > 0 && remainingPool >= K) {
+      logPMiss += logBinom(remainingPool - K, intLooks) - logBinom(remainingPool, intLooks)
+    }
+  }
   if (!isFinite(logPMiss)) return logPMiss < 0 ? 1 : 0
   return Math.max(0, Math.min(1, 1 - Math.exp(logPMiss)))
 }
@@ -39,9 +58,9 @@ function drawOdds(N, K, M, g) {
 // P(at least 1 from group A AND at least 1 from group B), assuming disjoint groups.
 // Uses inclusion-exclusion: P(A∩B) = P(A) + P(B) - P(A∪B)
 // where P(A∪B) = drawOdds treating A+B as a single pool.
-function jointDrawOdds(N, kA, kB, M, g) {
+function jointDrawOdds(N, kA, kB, M, g, scrySources = []) {
   return Math.max(0, Math.min(1,
-    drawOdds(N, kA, M, g) + drawOdds(N, kB, M, g) - drawOdds(N, kA + kB, M, g)
+    drawOdds(N, kA, M, g, scrySources) + drawOdds(N, kB, M, g, scrySources) - drawOdds(N, kA + kB, M, g, scrySources)
   ))
 }
 
@@ -114,8 +133,8 @@ function lsSet(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
 }
 
-function encodeShareState({ deckText, deckSize, goingFirst, mulliganCount, additionalDraws, groups }) {
-  const payload = { v: 1, d: deckText, s: deckSize, f: goingFirst, m: mulliganCount, x: additionalDraws, g: groups }
+function encodeShareState({ deckText, deckSize, goingFirst, mulliganCount, additionalDraws, groups, scrySources }) {
+  const payload = { v: 1, d: deckText, s: deckSize, f: goingFirst, m: mulliganCount, x: additionalDraws, g: groups, sc: scrySources }
   return btoa(encodeURIComponent(JSON.stringify(payload)))
 }
 
@@ -139,6 +158,7 @@ export function DrawOddsPage() {
     lsSet('drawOdds.mulliganCount', payload.m ?? 0)
     lsSet('drawOdds.additionalDraws', payload.x ?? 0)
     lsSet('drawOdds.groups', payload.g ?? [])
+    lsSet('drawOdds.scrySources', payload.sc ?? [])
     history.replaceState(null, '', window.location.pathname)
     return null
   })
@@ -150,10 +170,17 @@ export function DrawOddsPage() {
   const [additionalDraws, setAdditionalDraws] = useState(() => lsGet('drawOdds.additionalDraws', 0))
   const [deckText, setDeckText] = useState(() => localStorage.getItem('drawOdds.deckText') ?? '')
   const [groups, setGroups] = useState(() => lsGet('drawOdds.groups', []))
+  const [scrySources, setScrySources] = useState(() => lsGet('drawOdds.scrySources', []))
   const nextGroupId = useRef(
     (() => {
       const saved = lsGet('drawOdds.groups', [])
       return saved.length > 0 ? Math.max(...saved.map(g => g.id)) + 1 : 1
+    })()
+  )
+  const nextScryId = useRef(
+    (() => {
+      const saved = lsGet('drawOdds.scrySources', [])
+      return saved.length > 0 ? Math.max(...saved.map(s => s.id)) + 1 : 1
     })()
   )
 
@@ -166,8 +193,25 @@ export function DrawOddsPage() {
     saveDeckText('')
     saveGroups([])
   }
+  function saveScrySources(updater) {
+    setScrySources(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      lsSet('drawOdds.scrySources', next)
+      return next
+    })
+  }
+  function addScrySource() {
+    const id = nextScryId.current++
+    saveScrySources(ss => [...ss, { id, name: '', copies: 4, lookAt: 2, keep: 1 }])
+  }
+  function removeScrySource(id) {
+    saveScrySources(ss => ss.filter(s => s.id !== id))
+  }
+  function updateScrySource(id, field, value) {
+    saveScrySources(ss => ss.map(s => s.id === id ? { ...s, [field]: value } : s))
+  }
   function copyShareLink() {
-    const hash = encodeShareState({ deckText, deckSize, goingFirst, mulliganCount, additionalDraws, groups })
+    const hash = encodeShareState({ deckText, deckSize, goingFirst, mulliganCount, additionalDraws, groups, scrySources })
     const url = `${window.location.origin}${window.location.pathname}#d=${hash}`
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true)
@@ -311,7 +355,7 @@ export function DrawOddsPage() {
 
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Additional Draws <span className="text-gray-400">(e.g. Develop Your Brain)</span>
+              Additional Draws
             </label>
             <div className="flex items-center gap-2">
               <button
@@ -332,6 +376,83 @@ export function DrawOddsPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Scry Sources */}
+      <div className="border border-gray-200 rounded-lg p-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Scry Sources</h2>
+          <span className="text-xs text-gray-400">Develop Your Brain &amp; similar</span>
+        </div>
+        <div className="border-l-2 border-yellow-400 pl-3 mb-4 text-xs text-gray-500 leading-relaxed">
+          A <strong>scry source</strong> looks at the top <em>N</em> cards of your deck, lets you keep <em>K</em> in hand, and bottoms the rest.
+          Example: <em>Develop Your Brain</em> = look at 2, keep 1. The calculator models each scry as seeing those extra cards from your remaining
+          deck — if your target is among them, you keep it. A scry source counts only as a scry — not toward any group.
+        </div>
+        {scrySources.length > 0 && (
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Source Name</span>
+              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Copies</span>
+              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Look At</span>
+              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Keep</span>
+              <span className="w-6" />
+            </div>
+            <div className="space-y-2">
+              {scrySources.map(src => (
+                <div key={src.id} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={src.name}
+                    onChange={e => updateScrySource(src.id, 'name', e.target.value)}
+                    placeholder="Card name (optional)"
+                    className="flex-1 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max="4"
+                    value={src.copies}
+                    onChange={e => updateScrySource(src.id, 'copies', Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))}
+                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={src.lookAt}
+                    onChange={e => {
+                      const v = Math.max(1, Math.min(10, parseInt(e.target.value) || 1))
+                      updateScrySource(src.id, 'lookAt', v)
+                      if (src.keep > v) updateScrySource(src.id, 'keep', v)
+                    }}
+                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max={src.lookAt}
+                    value={src.keep}
+                    onChange={e => updateScrySource(src.id, 'keep', Math.max(1, Math.min(src.lookAt, parseInt(e.target.value) || 1)))}
+                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
+                  />
+                  <button
+                    onClick={() => removeScrySource(src.id)}
+                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <button
+          onClick={addScrySource}
+          className="w-full border border-dashed border-gray-300 rounded py-2 text-sm text-gray-500 hover:border-gray-500 hover:text-gray-700 transition-colors"
+        >
+          + Add scry source
+        </button>
       </div>
 
       {/* Deck List */}
@@ -452,7 +573,7 @@ export function DrawOddsPage() {
               <tbody>
                 {cards.map((card, i) => {
                   const opening = drawOdds(N, card.count, M, 0)
-                  const turns = TURN_COLS.map(T => drawOdds(N, card.count, M, gameDraws(T)))
+                  const turns = TURN_COLS.map(T => drawOdds(N, card.count, M, gameDraws(T), scrySources))
                   return (
                     <tr key={card.name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
                       <td className="px-4 py-2.5 text-gray-900">{card.name}</td>
@@ -484,6 +605,9 @@ export function DrawOddsPage() {
                 : ''}
               {additionalDraws > 0
                 ? ` +${additionalDraws} additional draw${additionalDraws > 1 ? 's' : ''} added to every turn column (not opening hand).`
+                : ''}
+              {scrySources.length > 0
+                ? ` Scry: turn odds include the expected benefit of ${scrySources.length} scry source${scrySources.length > 1 ? 's' : ''} — each played copy lets you look at extra cards from your remaining deck and keep any target found.`
                 : ''}
             </p>
           </div>
@@ -527,7 +651,7 @@ export function DrawOddsPage() {
               const hasMissing = cardEntries.some(e => e.missing)
               const kTotal = cardEntries.reduce((s, e) => s + e.count, 0)
               const opening = drawOdds(N, kTotal, M, 0)
-              const turns = TURN_COLS.map(T => drawOdds(N, kTotal, M, gameDraws(T)))
+              const turns = TURN_COLS.map(T => drawOdds(N, kTotal, M, gameDraws(T), scrySources))
               const available = cards.filter(c => !group.cardNames.includes(c.name))
 
               return (
@@ -641,7 +765,7 @@ export function DrawOddsPage() {
                 const kA = gA.cardNames.reduce((s, n) => s + (cards.find(c => c.name === n)?.count || 0), 0)
                 const kB = gB.cardNames.reduce((s, n) => s + (cards.find(c => c.name === n)?.count || 0), 0)
                 const opening = jointDrawOdds(N, kA, kB, M, 0)
-                const turns = TURN_COLS.map(T => jointDrawOdds(N, kA, kB, M, gameDraws(T)))
+                const turns = TURN_COLS.map(T => jointDrawOdds(N, kA, kB, M, gameDraws(T), scrySources))
                 return (
                   <div key={`${gA.id}-${gB.id}`} className="border border-gray-200 rounded-lg p-4">
                     <p className="text-sm font-semibold text-gray-900 mb-3">

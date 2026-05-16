@@ -261,15 +261,19 @@ function parseReplay(data) {
             trackMyCard(cardRefs[0], 'oppForcedDiscards')
           } else if (ek.key === 'grantsAnAdditionalInk') {
             trackMyCard(cardRefs[0], 'extraInks')
+          } else if (ek.key === 'movesDamageDetailedBanished') {
+            // Damage moved to opponent's character, causing banishment (e.g. Belle - Accomplished Mystic)
+            trackMyCard(cardRefs[0], 'effectRemovals')
           }
         }
         break
       }
 
       case 'CARD_PUT_INTO_INKWELL': {
-        // fromZone 'field' means a character/item on the board was inkwelled by an effect (e.g. Let It Go)
-        // We attribute this to the last card we played as a heuristic
-        if (isMe && ld.fromZone === 'field' && lastPlayedByMe) {
+        // player = the player whose card is being inkwelled (the target), not the actor
+        // isOpp here means the opponent's field card was inkwelled — i.e. we did it (Let It Go, Hades, etc.)
+        // Attribute to the last card we played as a heuristic (works for Let It Go, Hades on-play triggers)
+        if (isOpp && ld.fromZone === 'field' && lastPlayedByMe) {
           trackMyCard(lastPlayedByMe, 'effectRemovals')
         }
         break

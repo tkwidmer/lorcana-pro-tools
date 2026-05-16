@@ -873,7 +873,7 @@ function ReplayAnalysis({ game }) {
 
       <MulliganAnalysis mulligan={game.mulligan} />
 
-      <DeckStats games={[game]} subtitle="This game" />
+      <DeckStats filteredGames={[game]} subtitle="This game" />
 
       <Section collapsible title="Your Deck" subtitle="Cards seen this game, sorted by cost. Count = times played or inked.">
         <MyDeckList cards={myCardList} />
@@ -1224,27 +1224,65 @@ function MulliganTable({ rows, emptyText }) {
   )
 }
 
-function DeckStats({ games, subtitle: subtitleProp }) {
-  const [matchupFilter, setMatchupFilter] = useState(null) // null = All
+function CrossGameDefenders({ games }) {
+  const allChallenges = games.flatMap(g => g.challenges ?? [])
+  const opp = allChallenges.filter(c => !c.isMe)
+  if (!opp.length) return null
 
-  if (games.length === 0) return null
-
-  // Build unique matchups from all games
-  const matchups = []
-  const seen = new Set()
-  for (const g of games) {
-    const key = g.oppInkCombo?.join('/') || 'Unknown'
-    if (!seen.has(key)) {
-      seen.add(key)
-      matchups.push({ key, colors: g.oppInkCombo ?? [] })
-    }
+  const map = {}
+  for (const c of opp) {
+    const key = c.defenderName
+    if (!key) continue
+    if (!map[key]) map[key] = { name: key, seq: [] }
+    map[key].seq.push(c)
   }
-  const showFilter = matchups.length > 1
 
-  const filteredGames = matchupFilter
-    ? games.filter(g => (g.oppInkCombo?.join('/') || 'Unknown') === matchupFilter)
-    : games
+  const rows = Object.values(map).map(({ name, seq }) => {
+    let hits = 0, tanked = 0, killedInOne = 0, killedMultiple = 0
+    for (const c of seq) {
+      hits++
+      if (c.defenderBanished) {
+        if (hits === 1) killedInOne++
+        else killedMultiple++
+        hits = 0
+      } else {
+        tanked++
+      }
+    }
+    return { name, timesTargeted: seq.length, tanked, killedInOne, killedMultiple }
+  })
+    .filter(r => r.timesTargeted >= 2)
+    .sort((a, b) => b.timesTargeted - a.timesTargeted)
 
+  if (!rows.length) return null
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Your Characters as Defenders</h3>
+      <div className="text-sm">
+        <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+          <span>Character</span>
+          <span className="text-center">Targeted</span>
+          <span className="text-center text-emerald-600">Tanked</span>
+          <span className="text-center text-yellow-600">1-shot</span>
+          <span className="text-center text-red-500">Multi</span>
+        </div>
+        {rows.map(r => (
+          <div key={r.name} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+            <span className="text-gray-800 truncate">{r.name}</span>
+            <span className="text-center font-bold text-gray-700">{r.timesTargeted}</span>
+            <span className="text-center font-semibold text-emerald-600">{r.tanked || '—'}</span>
+            <span className="text-center font-semibold text-yellow-600">{r.killedInOne || '—'}</span>
+            <span className="text-center font-semibold text-red-500">{r.killedMultiple || '—'}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1.5">Characters targeted 2+ times shown · Tanked = survived a hit · 1-shot = banished in one challenge · Multi = required 2+</p>
+    </div>
+  )
+}
+
+function DeckStats({ filteredGames, subtitle }) {
   const cards = aggregateMyCards(filteredGames)
   const mulliganCards = aggregateMulliganSentBack(filteredGames)
 
@@ -1257,55 +1295,8 @@ function DeckStats({ games, subtitle: subtitleProp }) {
   const topSentBack = [...mulliganCards].filter(c => c.sentBackCount > 0)
     .sort((a, b) => b.sentBackCount - a.sentBackCount).slice(0, 8)
 
-  const totalGames = games.length
-  const filteredCount = filteredGames.length
-  const subtitle = subtitleProp ?? (
-    matchupFilter
-      ? `${filteredCount} game${filteredCount !== 1 ? 's' : ''} vs this matchup · ${totalGames} total`
-      : `Aggregated across ${totalGames} game${totalGames !== 1 ? 's' : ''}`
-  )
-
   return (
     <Section collapsible defaultOpen={true} title="Deck Stats" subtitle={subtitle}>
-      {showFilter && (
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs text-gray-500 font-medium">vs</span>
-          <button
-            onClick={() => setMatchupFilter(null)}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-              matchupFilter === null
-                ? 'bg-gray-900 border-gray-900 text-white'
-                : 'border-gray-300 text-gray-600 hover:border-gray-500'
-            }`}
-          >
-            All
-          </button>
-          {matchups.map(({ key, colors }) => (
-            <button
-              key={key}
-              onClick={() => setMatchupFilter(matchupFilter === key ? null : key)}
-              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                matchupFilter === key
-                  ? 'bg-gray-900 border-gray-900 text-white'
-                  : 'border-gray-300 text-gray-600 hover:border-gray-500'
-              }`}
-            >
-              {colors.length ? (
-                colors.map(c => (
-                  <img
-                    key={c}
-                    src={`/ink/${c}.png`}
-                    alt={c}
-                    width={14}
-                    height={14}
-                    className={`inline-block flex-shrink-0 ${matchupFilter === key ? 'brightness-0 invert' : ''}`}
-                  />
-                ))
-              ) : key}
-            </button>
-          ))}
-        </div>
-      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-1">
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Played</h3>
@@ -1326,8 +1317,135 @@ function DeckStats({ games, subtitle: subtitleProp }) {
         </div>
       </div>
       {filteredGames.length > 1 && <CardWinRateTable games={filteredGames} />}
-      <CrossGameChallengers games={filteredGames} />
     </Section>
+  )
+}
+
+function ChallengeStats({ filteredGames, subtitle }) {
+  const hasChallenges = filteredGames.some(g => g.challenges?.length)
+  if (!hasChallenges) return null
+  return (
+    <Section collapsible defaultOpen={true} title="Challenge Stats" subtitle={subtitle}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-1">
+        <CrossGameChallengers games={filteredGames} />
+        <CrossGameDefenders games={filteredGames} />
+      </div>
+    </Section>
+  )
+}
+
+function AggregateView({ games }) {
+  const [matchupFilter, setMatchupFilter] = useState(null)
+
+  if (games.length === 0) return null
+
+  const matchups = []
+  const seen = new Set()
+  for (const g of games) {
+    const key = g.oppInkCombo?.join('/') || 'Unknown'
+    if (!seen.has(key)) {
+      seen.add(key)
+      matchups.push({ key, colors: g.oppInkCombo ?? [] })
+    }
+  }
+  const showFilter = matchups.length > 1
+
+  const filteredGames = matchupFilter
+    ? games.filter(g => (g.oppInkCombo?.join('/') || 'Unknown') === matchupFilter)
+    : games
+
+  const totalGames = games.length
+  const filteredCount = filteredGames.length
+  const subtitle = matchupFilter
+    ? `${filteredCount} game${filteredCount !== 1 ? 's' : ''} vs this matchup · ${totalGames} total`
+    : `Aggregated across ${totalGames} game${totalGames !== 1 ? 's' : ''}`
+
+  const filterUI = showFilter && (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      <span className="text-xs text-gray-500 font-medium">vs</span>
+      <button
+        onClick={() => setMatchupFilter(null)}
+        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+          matchupFilter === null
+            ? 'bg-gray-900 border-gray-900 text-white'
+            : 'border-gray-300 text-gray-600 hover:border-gray-500'
+        }`}
+      >
+        All
+      </button>
+      {matchups.map(({ key, colors }) => (
+        <button
+          key={key}
+          onClick={() => setMatchupFilter(matchupFilter === key ? null : key)}
+          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+            matchupFilter === key
+              ? 'bg-gray-900 border-gray-900 text-white'
+              : 'border-gray-300 text-gray-600 hover:border-gray-500'
+          }`}
+        >
+          {colors.length ? (
+            colors.map(c => (
+              <img
+                key={c}
+                src={`/ink/${c}.png`}
+                alt={c}
+                width={14}
+                height={14}
+                className={`inline-block flex-shrink-0 ${matchupFilter === key ? 'brightness-0 invert' : ''}`}
+              />
+            ))
+          ) : key}
+        </button>
+      ))}
+    </div>
+  )
+
+  return (
+    <>
+      {showFilter && (
+        <div className="mb-2 px-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500 font-medium">Filter by matchup:</span>
+            <button
+              onClick={() => setMatchupFilter(null)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                matchupFilter === null
+                  ? 'bg-gray-900 border-gray-900 text-white'
+                  : 'border-gray-300 text-gray-600 hover:border-gray-500'
+              }`}
+            >
+              All
+            </button>
+            {matchups.map(({ key, colors }) => (
+              <button
+                key={key}
+                onClick={() => setMatchupFilter(matchupFilter === key ? null : key)}
+                className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  matchupFilter === key
+                    ? 'bg-gray-900 border-gray-900 text-white'
+                    : 'border-gray-300 text-gray-600 hover:border-gray-500'
+                }`}
+              >
+                {colors.length ? (
+                  colors.map(c => (
+                    <img
+                      key={c}
+                      src={`/ink/${c}.png`}
+                      alt={c}
+                      width={14}
+                      height={14}
+                      className={`inline-block flex-shrink-0 ${matchupFilter === key ? 'brightness-0 invert' : ''}`}
+                    />
+                  ))
+                ) : key}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <DeckStats filteredGames={filteredGames} subtitle={subtitle} />
+      <ChallengeStats filteredGames={filteredGames} subtitle={subtitle} />
+    </>
   )
 }
 
@@ -1444,7 +1562,7 @@ export function ReplayAnalyzerPage() {
       {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3 mb-4">{error}</div>}
 
       {games.length > 0 && <WinRateStats games={games} />}
-      {games.length > 1 && <DeckStats games={games} />}
+      {games.length > 1 && <AggregateView games={games} />}
 
       {/* Saved replays list */}
       {games.length > 0 && (

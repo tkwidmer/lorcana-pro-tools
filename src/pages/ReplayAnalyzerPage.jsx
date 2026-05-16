@@ -828,16 +828,26 @@ function WinRateStats({ games }) {
 function aggregateMulliganSentBack(games) {
   const map = {}
   for (const game of games) {
-    const seen = new Set()
-    for (const card of (game.mulligan?.openingHand ?? [])) {
+    const openingHand = game.mulligan?.openingHand ?? []
+    const sentBack = game.mulligan?.sentBack ?? []
+
+    // Count copies in hand and sent back per card
+    const handCounts = {}
+    for (const card of openingHand) {
       const key = card.fullName || card.name
-      if (!map[key]) map[key] = { ...card, sentBackCount: 0, openingHandCount: 0 }
-      if (!seen.has(key)) { map[key].openingHandCount++; seen.add(key) }
+      handCounts[key] = { card, count: (handCounts[key]?.count ?? 0) + 1 }
     }
-    for (const card of (game.mulligan?.sentBack ?? [])) {
+    const sentBackCounts = {}
+    for (const card of sentBack) {
       const key = card.fullName || card.name
+      sentBackCounts[key] = (sentBackCounts[key] ?? 0) + 1
+    }
+
+    for (const [key, { card, count: inHand }] of Object.entries(handCounts)) {
       if (!map[key]) map[key] = { ...card, sentBackCount: 0, openingHandCount: 0 }
-      map[key].sentBackCount++
+      map[key].openingHandCount++
+      // Only counts as a deliberate send-back if zero copies were kept
+      if ((sentBackCounts[key] ?? 0) >= inHand) map[key].sentBackCount++
     }
   }
   return Object.values(map)

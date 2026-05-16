@@ -1282,6 +1282,45 @@ function CrossGameDefenders({ games }) {
   )
 }
 
+function LeastImpactful({ games }) {
+  const cards = aggregateMyCards(games)
+
+  // Build a set of card names that challenged at least once
+  const challengers = new Set(
+    games.flatMap(g => g.challenges ?? [])
+      .filter(c => c.isMe && c.attackerName)
+      .map(c => c.attackerName)
+  )
+
+  const rows = cards
+    .filter(c => c.playedCount >= 3)
+    .map(c => ({
+      ...c,
+      lorePerPlay: c.loreGained / c.playedCount,
+      everChallenged: challengers.has(c.fullName),
+    }))
+    .sort((a, b) => a.lorePerPlay - b.lorePerPlay || b.playedCount - a.playedCount)
+    .slice(0, 8)
+
+  if (!rows.length) return <p className="text-sm text-gray-400">Not enough data (need 3+ plays per card).</p>
+
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      {rows.map(c => (
+        <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
+          <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.playedCount}</span>
+          <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+          <InkCombo colors={c.colors} size={12} />
+          <span className="text-xs text-gray-400 flex-shrink-0 w-16 text-right whitespace-nowrap">
+            {c.everChallenged && <span className="text-blue-400 mr-1" title="Used as a challenger">⚔</span>}
+            {c.loreGained} lore
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function DeckStats({ filteredGames, subtitle }) {
   const cards = aggregateMyCards(filteredGames)
   const mulliganCards = aggregateMulliganSentBack(filteredGames)
@@ -1317,6 +1356,13 @@ function DeckStats({ filteredGames, subtitle }) {
         </div>
       </div>
       {filteredGames.length > 1 && <CardWinRateTable games={filteredGames} />}
+      {filteredGames.length > 1 && (
+        <div className="mt-6 pt-5 border-t border-gray-100">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Least Impactful Cards</h3>
+          <p className="text-[10px] text-gray-400 mb-2">Plays · sorted by lowest lore gained · ⚔ = used as challenger</p>
+          <LeastImpactful games={filteredGames} />
+        </div>
+      )}
     </Section>
   )
 }

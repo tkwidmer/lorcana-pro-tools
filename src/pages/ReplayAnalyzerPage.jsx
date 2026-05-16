@@ -736,16 +736,33 @@ const COLOR_DOT = {
   steel: 'bg-gray-400',
 }
 
-function InkCombo({ colors, size = 'sm' }) {
+// Ink drop fill colors matching each Lorcana ink
+const INK_FILL = {
+  amber: '#f59e0b',
+  amethyst: '#a855f7',
+  emerald: '#10b981',
+  ruby: '#ef4444',
+  sapphire: '#3b82f6',
+  steel: '#9ca3af',
+}
+
+function InkDrop({ color, size = 16 }) {
+  const fill = INK_FILL[color?.toLowerCase()] ?? '#d1d5db'
+  // Teardrop: pointed top, rounded bottom — mirrors the Lorcana ink symbol shape
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" title={color}>
+      <path d="M8 1 L3 10 A5 5 0 1 0 13 10 Z" fill={fill} />
+    </svg>
+  )
+}
+
+function InkCombo({ colors, size = 16, showLabel = false }) {
   if (!colors?.length) return null
-  const dotSize = size === 'sm' ? 'w-2.5 h-2.5' : 'w-3 h-3'
   const label = colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(' / ')
   return (
-    <span className="inline-flex items-center gap-1" title={label}>
-      {colors.map(c => (
-        <span key={c} className={`${dotSize} rounded-full flex-shrink-0 ${COLOR_DOT[c] ?? 'bg-gray-300'}`} />
-      ))}
-      <span className="text-xs text-gray-500 capitalize">{label}</span>
+    <span className="inline-flex items-center gap-0.5" title={label}>
+      {colors.map(c => <InkDrop key={c} color={c} size={size} />)}
+      {showLabel && <span className="text-xs text-gray-500 ml-1">{label}</span>}
     </span>
   )
 }
@@ -782,9 +799,9 @@ function WinRateStats({ games }) {
   // Group by opponent ink combo
   const byOppInk = {}
   for (const g of games) {
-    const key = g.oppInkCombo?.join(' / ') || 'Unknown'
-    if (!byOppInk[key]) byOppInk[key] = []
-    byOppInk[key].push(g)
+    const key = g.oppInkCombo?.join('/') || 'Unknown'
+    if (!byOppInk[key]) byOppInk[key] = { colors: g.oppInkCombo ?? [], games: [] }
+    byOppInk[key].games.push(g)
   }
 
   return (
@@ -798,8 +815,12 @@ function WinRateStats({ games }) {
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">vs Opponent Ink</h3>
-          {Object.entries(byOppInk).map(([key, subset]) => (
-            <WinRateRow key={key} label={key} {...tally(subset)} />
+          {Object.entries(byOppInk).map(([key, { colors, games: subset }]) => (
+            <WinRateRow
+              key={key}
+              label={colors.length ? <InkCombo colors={colors} size={14} showLabel /> : 'Unknown'}
+              {...tally(subset)}
+            />
           ))}
         </div>
       </div>
@@ -1024,13 +1045,11 @@ export function ReplayAnalyzerPage() {
                         vs {g.opponentName}
                       </span>
                       {g.myInkCombo?.length > 0 && (
-                        <span className="inline-flex items-center gap-0.5" title={`Your deck: ${g.myInkCombo.join(' / ')}`}>
-                          {g.myInkCombo.map(c => <span key={c} className={`w-2 h-2 rounded-full ${COLOR_DOT[c] ?? 'bg-gray-300'}`} />)}
-                        </span>
+                        <InkCombo colors={g.myInkCombo} size={12} />
                       )}
                       {g.oppInkCombo?.length > 0 && (
-                        <span className="inline-flex items-center gap-0.5 opacity-50" title={`Opponent: ${g.oppInkCombo.join(' / ')}`}>
-                          {g.oppInkCombo.map(c => <span key={c} className={`w-2 h-2 rounded-full ${COLOR_DOT[c] ?? 'bg-gray-300'}`} />)}
+                        <span className="opacity-50">
+                          <InkCombo colors={g.oppInkCombo} size={12} />
                         </span>
                       )}
                     </div>

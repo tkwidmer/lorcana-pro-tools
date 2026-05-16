@@ -81,6 +81,9 @@ function parseReplay(data) {
       kept: [],             // enriched cards kept
       replacements: [],     // enriched cards drawn as replacements
       tookMulligan: false,
+      wentFirst: myPlayerNum === 1,
+      matchFormat: data.baseSnapshot?.roomView?.matchFormat ?? null,
+      gameNumber: data.baseSnapshot?.roomView?.gameNumber ?? null,
     },
     inkCurve: {},      // turn -> [cardNames played that turn]
     turnSummaries: {},
@@ -574,11 +577,27 @@ function MulliganGroup({ label, cards, accent }) {
 
 function MulliganAnalysis({ mulligan }) {
   if (!mulligan) return null
-  const { openingHand = [], sentBack = [], kept = [], replacements = [], tookMulligan = false } = mulligan
+  const { openingHand = [], sentBack = [], kept = [], replacements = [], tookMulligan = false, wentFirst, matchFormat, gameNumber } = mulligan
   if (!openingHand.length) return null
 
+  const formatLabel = matchFormat === 'bo3' ? `Best of 3${gameNumber ? ` · Game ${gameNumber}` : ''}` : matchFormat === 'bo1' ? 'Best of 1' : null
+  const orderLabel = wentFirst ? 'Going First' : 'Going Second'
+  const contextParts = [orderLabel, formatLabel].filter(Boolean)
+  const mulliganSubtitle = [
+    contextParts.join(' · '),
+    tookMulligan ? `Sent back ${sentBack.length}, kept ${kept.length}, drew ${replacements.length}` : 'Kept opening hand',
+  ].filter(Boolean).join(' — ')
+
   return (
-    <Section collapsible title="Mulligan" subtitle={tookMulligan ? `Sent back ${sentBack.length}, kept ${kept.length}, drew ${replacements.length}` : 'Kept opening hand'}>
+    <Section collapsible title="Mulligan" subtitle={mulliganSubtitle}>
+      <div className="flex flex-wrap gap-2 mb-4">
+        <span className={`text-xs font-semibold px-2 py-1 rounded ${wentFirst ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+          {orderLabel}
+        </span>
+        {formatLabel && (
+          <span className="text-xs font-semibold px-2 py-1 rounded bg-gray-100 text-gray-600">{formatLabel}</span>
+        )}
+      </div>
       {tookMulligan ? (
         <div className="space-y-5">
           <MulliganGroup label="Opening Hand" cards={openingHand} accent="text-gray-500" />

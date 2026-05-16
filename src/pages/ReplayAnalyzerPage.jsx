@@ -871,17 +871,15 @@ function aggregateMyCards(games) {
   return Object.values(map)
 }
 
-function StatTable({ rows, valueLabel, valueKey, emptyText }) {
+function StatTable({ rows, valueKey, emptyText }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
   return (
     <div className="font-mono text-sm space-y-0.5">
       {rows.map(c => (
-        <div key={c.fullName} className="flex items-baseline gap-2 py-1 border-b border-gray-100 last:border-0">
+        <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
           <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c[valueKey]}</span>
           <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {c.colors?.map(col => <ColorBadge key={col} color={col} />)}
-          </div>
+          <InkCombo colors={c.colors} size={12} />
         </div>
       ))}
     </div>
@@ -895,9 +893,10 @@ function MulliganTable({ rows, emptyText }) {
       {rows.map(c => {
         const pct = c.openingHandCount > 0 ? Math.round((c.sentBackCount / c.openingHandCount) * 100) : 100
         return (
-          <div key={c.fullName} className="flex items-baseline gap-2 py-1 border-b border-gray-100 last:border-0">
+          <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
             <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.sentBackCount}</span>
             <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+            <InkCombo colors={c.colors} size={12} />
             <span className="text-xs text-gray-400 flex-shrink-0">{pct}%</span>
           </div>
         )
@@ -938,7 +937,7 @@ function DeckStats({ games, subtitle: subtitleProp }) {
           <StatTable rows={topLore} valueKey="loreGained" emptyText="No quests recorded." />
         </div>
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Sent Back</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Mulliganed</h3>
           <p className="text-[10px] text-gray-400 mb-1.5">Count · % of opening hand appearances</p>
           <MulliganTable rows={topSentBack} emptyText="No mulligan data." />
         </div>

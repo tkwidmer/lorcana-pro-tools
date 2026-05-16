@@ -1150,6 +1150,61 @@ function CardWinRateTable({ games }) {
   )
 }
 
+function CrossGameChallengers({ games }) {
+  const allChallenges = games.flatMap(g => g.challenges ?? [])
+  const mine = allChallenges.filter(c => c.isMe)
+  if (!mine.length) return null
+
+  const map = {}
+  for (const c of mine) {
+    const key = c.attackerName
+    if (!key) continue
+    if (!map[key]) map[key] = { name: key, challenged: 0, survived: 0, traded: 0, banishedNoKill: 0 }
+    map[key].challenged++
+    if (!c.attackerBanished) map[key].survived++
+    else if (c.defenderBanished) map[key].traded++
+    else map[key].banishedNoKill++
+  }
+
+  const rows = Object.values(map)
+    .filter(r => r.challenged >= 2)
+    .sort((a, b) => b.challenged - a.challenged)
+
+  if (!rows.length) return null
+
+  return (
+    <div className="mt-6 pt-5 border-t border-gray-100">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Challenger Stats</h3>
+      <div className="text-sm">
+        <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 4rem' }}>
+          <span>Character</span>
+          <span className="text-center">Total</span>
+          <span className="text-center text-emerald-600">Survived</span>
+          <span className="text-center text-yellow-600">Traded</span>
+          <span className="text-center text-red-500">No kill</span>
+          <span className="text-right text-emerald-600">Surv%</span>
+        </div>
+        {rows.map(r => {
+          const pct = Math.round((r.survived / r.challenged) * 100)
+          return (
+            <div key={r.name} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 4rem' }}>
+              <span className="text-gray-800 truncate">{r.name}</span>
+              <span className="text-center font-bold text-gray-700">{r.challenged}</span>
+              <span className="text-center font-semibold text-emerald-600">{r.survived || '—'}</span>
+              <span className="text-center font-semibold text-yellow-600">{r.traded || '—'}</span>
+              <span className="text-center font-semibold text-red-500">{r.banishedNoKill || '—'}</span>
+              <div className="flex items-center gap-1 justify-end">
+                <span className={`text-xs font-bold ${pct >= 75 ? 'text-emerald-600' : pct >= 50 ? 'text-gray-600' : 'text-red-500'}`}>{pct}%</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1.5">Cards with 2+ challenges shown · Surv% = attacker survived the challenge</p>
+    </div>
+  )
+}
+
 function MulliganTable({ rows, emptyText }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
   return (
@@ -1202,7 +1257,13 @@ function DeckStats({ games, subtitle: subtitleProp }) {
   const topSentBack = [...mulliganCards].filter(c => c.sentBackCount > 0)
     .sort((a, b) => b.sentBackCount - a.sentBackCount).slice(0, 8)
 
-  const subtitle = subtitleProp ?? `Aggregated across ${games.length} game${games.length !== 1 ? 's' : ''}`
+  const totalGames = games.length
+  const filteredCount = filteredGames.length
+  const subtitle = subtitleProp ?? (
+    matchupFilter
+      ? `${filteredCount} game${filteredCount !== 1 ? 's' : ''} vs this matchup · ${totalGames} total`
+      : `Aggregated across ${totalGames} game${totalGames !== 1 ? 's' : ''}`
+  )
 
   return (
     <Section collapsible defaultOpen={true} title="Deck Stats" subtitle={subtitle}>
@@ -1265,6 +1326,7 @@ function DeckStats({ games, subtitle: subtitleProp }) {
         </div>
       </div>
       {filteredGames.length > 1 && <CardWinRateTable games={filteredGames} />}
+      <CrossGameChallengers games={filteredGames} />
     </Section>
   )
 }

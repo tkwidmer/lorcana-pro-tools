@@ -294,6 +294,22 @@ function parseReplay(data) {
     confirmedTotal,
   }
 
+  // Derive ink combos
+  const deckIds = data.baseSnapshot?.roomView?.mySetup?.deckCardIds ?? []
+  const myColorSet = new Set()
+  for (const id of deckIds) {
+    cardLookup[id]?.colors?.forEach(c => myColorSet.add(c))
+  }
+  // Fallback: derive from cards seen in game
+  if (myColorSet.size === 0) {
+    Object.values(result.myCards).forEach(c => c.colors?.forEach(col => myColorSet.add(col)))
+  }
+  result.myInkCombo = [...myColorSet].sort()
+
+  const oppColorSet = new Set()
+  Object.values(result.opponentCards).forEach(c => c.colors?.forEach(col => oppColorSet.add(col)))
+  result.oppInkCombo = [...oppColorSet].sort()
+
   return result
 }
 
@@ -709,6 +725,88 @@ function ReplayAnalysis({ game }) {
   )
 }
 
+// --- Win rate stats ---
+
+const COLOR_DOT = {
+  amber: 'bg-amber-400',
+  amethyst: 'bg-purple-500',
+  emerald: 'bg-emerald-500',
+  ruby: 'bg-red-500',
+  sapphire: 'bg-blue-500',
+  steel: 'bg-gray-400',
+}
+
+function InkCombo({ colors, size = 'sm' }) {
+  if (!colors?.length) return null
+  const dotSize = size === 'sm' ? 'w-2.5 h-2.5' : 'w-3 h-3'
+  const label = colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(' / ')
+  return (
+    <span className="inline-flex items-center gap-1" title={label}>
+      {colors.map(c => (
+        <span key={c} className={`${dotSize} rounded-full flex-shrink-0 ${COLOR_DOT[c] ?? 'bg-gray-300'}`} />
+      ))}
+      <span className="text-xs text-gray-500 capitalize">{label}</span>
+    </span>
+  )
+}
+
+function WinRateRow({ label, wins, losses }) {
+  const total = wins + losses
+  const pct = total > 0 ? Math.round((wins / total) * 100) : null
+  return (
+    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100 last:border-0">
+      <span className="flex-1 text-sm text-gray-700">{label}</span>
+      <span className="text-sm font-bold text-gray-900 w-12 text-right">
+        {wins}–{losses}
+      </span>
+      {pct !== null && (
+        <span className={`text-xs font-semibold w-10 text-right ${pct >= 50 ? 'text-emerald-600' : 'text-red-500'}`}>
+          {pct}%
+        </span>
+      )}
+    </div>
+  )
+}
+
+function WinRateStats({ games }) {
+  if (games.length === 0) return null
+
+  const tally = (subset) => {
+    const wins = subset.filter(g => g.winner === g.myPlayerNum).length
+    return { wins, losses: subset.length - wins }
+  }
+
+  const first = games.filter(g => g.mulligan?.wentFirst)
+  const second = games.filter(g => !g.mulligan?.wentFirst)
+
+  // Group by opponent ink combo
+  const byOppInk = {}
+  for (const g of games) {
+    const key = g.oppInkCombo?.join(' / ') || 'Unknown'
+    if (!byOppInk[key]) byOppInk[key] = []
+    byOppInk[key].push(g)
+  }
+
+  return (
+    <Section collapsible title="Win Rate" subtitle={`${games.length} game${games.length !== 1 ? 's' : ''} recorded`}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Overall</h3>
+          <WinRateRow label="All games" {...tally(games)} />
+          <WinRateRow label="Going first" {...tally(first)} />
+          <WinRateRow label="Going second" {...tally(second)} />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">vs Opponent Ink</h3>
+          {Object.entries(byOppInk).map(([key, subset]) => (
+            <WinRateRow key={key} label={key} {...tally(subset)} />
+          ))}
+        </div>
+      </div>
+    </Section>
+  )
+}
+
 // --- Cross-game deck stats ---
 
 function aggregateMyCards(games) {
@@ -891,6 +989,7 @@ export function ReplayAnalyzerPage() {
       {loading && <div className="text-sm text-gray-500 mb-4">Parsing replays…</div>}
       {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3 mb-4">{error}</div>}
 
+      {games.length > 0 && <WinRateStats games={games} />}
       {games.length > 1 && <DeckStats games={games} />}
 
       {/* Saved replays list */}
@@ -920,9 +1019,21 @@ export function ReplayAnalyzerPage() {
                     {didWin ? 'W' : 'L'}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm text-gray-900 font-medium truncate block">
-                      vs {g.opponentName}
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-gray-900 font-medium truncate">
+                        vs {g.opponentName}
+                      </span>
+                      {g.myInkCombo?.length > 0 && (
+                        <span className="inline-flex items-center gap-0.5" title={`Your deck: ${g.myInkCombo.join(' / ')}`}>
+                          {g.myInkCombo.map(c => <span key={c} className={`w-2 h-2 rounded-full ${COLOR_DOT[c] ?? 'bg-gray-300'}`} />)}
+                        </span>
+                      )}
+                      {g.oppInkCombo?.length > 0 && (
+                        <span className="inline-flex items-center gap-0.5 opacity-50" title={`Opponent: ${g.oppInkCombo.join(' / ')}`}>
+                          {g.oppInkCombo.map(c => <span key={c} className={`w-2 h-2 rounded-full ${COLOR_DOT[c] ?? 'bg-gray-300'}`} />)}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs text-gray-400">{date} · {g.turnCount} turns · {g.victoryReason}</span>
                   </div>
                   <button

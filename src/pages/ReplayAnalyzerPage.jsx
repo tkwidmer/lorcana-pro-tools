@@ -712,6 +712,49 @@ function InkDiscipline({ inkByTurn }) {
   )
 }
 
+function BestChallengers({ challenges, myCards }) {
+  if (!challenges?.length) return null
+  const mine = challenges.filter(c => c.isMe)
+  if (!mine.length) return null
+
+  const map = {}
+  for (const c of mine) {
+    const key = c.attackerName
+    if (!key) continue
+    if (!map[key]) map[key] = { name: key, challenged: 0, survived: 0, traded: 0, banishedNoKill: 0 }
+    map[key].challenged++
+    if (!c.attackerBanished) map[key].survived++
+    else if (c.defenderBanished) map[key].traded++
+    else map[key].banishedNoKill++
+  }
+
+  const rows = Object.values(map).sort((a, b) => b.challenged - a.challenged)
+
+  return (
+    <div className="mb-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Your Challengers</h3>
+      <div className="text-sm">
+        <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+          <span>Character</span>
+          <span className="text-center">Total</span>
+          <span className="text-center text-emerald-600">Survived</span>
+          <span className="text-center text-yellow-600">Traded</span>
+          <span className="text-center text-red-500">No kill</span>
+        </div>
+        {rows.map(r => (
+          <div key={r.name} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+            <span className="text-gray-800 truncate">{r.name}</span>
+            <span className="text-center font-bold text-gray-700">{r.challenged}</span>
+            <span className="text-center font-semibold text-emerald-600">{r.survived || '—'}</span>
+            <span className="text-center font-semibold text-yellow-600">{r.traded || '—'}</span>
+            <span className="text-center font-semibold text-red-500">{r.banishedNoKill || '—'}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function CombatStats({ stats }) {
   if (!stats || stats.challenged === 0) return null
   const rows = [
@@ -786,6 +829,7 @@ function ReplayAnalysis({ game }) {
       {(game.combatLog.length > 0 || game.combatStats?.challenged > 0) && (
         <Section collapsible title="Combat Log">
           <CombatStats stats={game.combatStats} />
+          <BestChallengers challenges={game.challenges} />
           <div className="space-y-1 mt-3">
             {game.combatLog.map((e, i) => (
               <div key={i} className="flex items-start gap-2 text-sm">

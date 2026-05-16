@@ -650,13 +650,13 @@ function ReplayAnalysis({ game }) {
     <div>
       <GameHeader game={game} />
 
-      <MulliganAnalysis mulligan={game.mulligan} />
-
       <InkDiscipline inkByTurn={game.inkByTurn} />
 
       <Section title="Lore Race" subtitle="Lore totals at end of each half-turn">
         <LoreChart loreByTurn={game.loreByTurn} myName={game.myName} oppName={game.opponentName} />
       </Section>
+
+      <MulliganAnalysis mulligan={game.mulligan} />
 
       <DeckStats games={[game]} subtitle="This game" />
 

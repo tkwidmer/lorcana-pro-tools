@@ -75,6 +75,7 @@ function parseReplay(data) {
     opponentCards: {}, // fullName -> { ...cardData, playCount, inkCount, discardCount, confirmedCopies }
     loreByTurn: [],    // { turn, myLore, oppLore }
     combatLog: [],
+    challenges: [], // { turn, isMe, attackerName, defenderName, attackerBanished, defenderBanished }
     mulligan: {
       openingHand: [],      // enriched cards — the initial 7
       sentBack: [],         // enriched cards sent back
@@ -263,6 +264,16 @@ function parseReplay(data) {
           attacker: cardRefs[0] ? (cardRefs[0].fullName || cardRefs[0].name) : null,
           defender: cardRefs[1] ? (cardRefs[1].fullName || cardRefs[1].name) : null,
         })
+        if (ld.attackerBanished !== undefined) {
+          result.challenges.push({
+            turn: turnNumber,
+            isMe,
+            attackerName: cardRefs[0] ? (cardRefs[0].fullName || cardRefs[0].name) : null,
+            defenderName: cardRefs[1] ? (cardRefs[1].fullName || cardRefs[1].name) : null,
+            attackerBanished: ld.attackerBanished,
+            defenderBanished: ld.defenderBanished,
+          })
+        }
         if (isOpp && cardRefs[0]) trackOppCard(cardRefs[0], 'combat')
         break
       }
@@ -283,6 +294,31 @@ function parseReplay(data) {
         break
     }
   }
+
+  // Compute combat stats from challenges
+  const myChallenges = result.challenges.filter(c => c.isMe)
+  const survived = myChallenges.filter(c => !c.attackerBanished).length
+  const trades = myChallenges.filter(c => c.attackerBanished && c.defenderBanished).length
+
+  // Double challenge: same opponent card targeted 2+ times by me in one turn
+  const defenderHits = {}
+  for (const c of myChallenges) {
+    const key = `${c.turn}::${c.defenderName}`
+    defenderHits[key] = (defenderHits[key] ?? 0) + 1
+  }
+  const doubleChallenge = Object.values(defenderHits).filter(n => n >= 2).length
+
+  // 2-for-1: in a single turn, I lost 2+ characters from my own challenges while banishing ≤1 of theirs
+  const myTurns = [...new Set(myChallenges.map(c => c.turn))]
+  let twoForOne = 0
+  for (const turn of myTurns) {
+    const t = myChallenges.filter(c => c.turn === turn)
+    const myLost = t.filter(c => c.attackerBanished).length
+    const oppLost = t.filter(c => c.defenderBanished).length
+    if (myLost >= 2 && oppLost <= 1) twoForOne++
+  }
+
+  result.combatStats = { challenged: myChallenges.length, survived, trades, doubleChallenge, twoForOne }
 
   // Build deck reconstruction: confirmed cards + unknown slots to reach 60
   const confirmedCards = Object.values(result.opponentCards)
@@ -676,6 +712,47 @@ function InkDiscipline({ inkByTurn }) {
   )
 }
 
+function CombatStats({ stats }) {
+  if (!stats || stats.challenged === 0) return null
+  const rows = [
+    {
+      label: 'Challenged and survived',
+      value: stats.survived,
+      sub: `${stats.challenged} total challenges`,
+      color: 'text-emerald-600',
+    },
+    {
+      label: 'Challenged and traded',
+      value: stats.trades,
+      sub: 'both characters banished',
+      color: 'text-yellow-600',
+    },
+    {
+      label: 'Double-challenged one character',
+      value: stats.doubleChallenge,
+      sub: 'needed 2 attackers to finish one',
+      color: 'text-orange-500',
+    },
+    {
+      label: "2-for-1'd yourself",
+      value: stats.twoForOne,
+      sub: 'lost 2+ characters, banished ≤1',
+      color: 'text-red-600',
+    },
+  ]
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
+      {rows.map(r => (
+        <div key={r.label} className="border border-gray-100 rounded-lg p-3">
+          <div className={`text-2xl font-bold mb-0.5 ${r.color}`}>{r.value}</div>
+          <div className="text-xs font-medium text-gray-700 leading-tight mb-1">{r.label}</div>
+          <div className="text-[10px] text-gray-400">{r.sub}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function ReplayAnalysis({ game }) {
   const myCardList = Object.values(game.myCards).sort((a, b) => (a.cost ?? 99) - (b.cost ?? 99))
   const { confirmed, unknownCount, confirmedTotal } = game.oppDeckList
@@ -706,9 +783,10 @@ function ReplayAnalysis({ game }) {
         <OppDeckList confirmed={confirmed} unknownCount={unknownCount} />
       </Section>
 
-      {game.combatLog.length > 0 && (
-        <Section title="Combat Log">
-          <div className="space-y-1">
+      {(game.combatLog.length > 0 || game.combatStats?.challenged > 0) && (
+        <Section collapsible title="Combat Log">
+          <CombatStats stats={game.combatStats} />
+          <div className="space-y-1 mt-3">
             {game.combatLog.map((e, i) => (
               <div key={i} className="flex items-start gap-2 text-sm">
                 <span className="text-xs text-gray-400 w-12 flex-shrink-0 pt-0.5">T{e.turn}</span>

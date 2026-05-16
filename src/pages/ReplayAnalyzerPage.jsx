@@ -600,9 +600,9 @@ function MulliganAnalysis({ mulligan }) {
       {tookMulligan ? (
         <div className="space-y-5">
           <MulliganGroup label="Opening Hand" cards={openingHand} accent="text-gray-500" />
-          <div className="border-t border-gray-100 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="border-t border-gray-100 pt-4 space-y-5">
             <MulliganGroup label="Sent Back" cards={sentBack} accent="text-red-500" />
-            <MulliganGroup label="Kept" cards={kept} accent="text-emerald-600" />
+            {kept.length > 0 && <MulliganGroup label="Kept" cards={kept} accent="text-emerald-600" />}
           </div>
           <div className="border-t border-gray-100 pt-4">
             <MulliganGroup label="Drew as Replacements" cards={replacements} accent="text-blue-500" />

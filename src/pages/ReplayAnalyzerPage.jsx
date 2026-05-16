@@ -1072,6 +1072,84 @@ function StatTable({ rows, valueKey, emptyText }) {
   )
 }
 
+function aggregateCardWinRates(games) {
+  const map = {}
+  for (const game of games) {
+    const won = game.winner === game.myPlayerNum
+    for (const card of Object.values(game.myCards)) {
+      if (card.playedCount === 0 && card.inkedCount === 0) continue
+      const key = card.fullName
+      if (!map[key]) map[key] = { ...card, wins: 0, losses: 0 }
+      if (won) map[key].wins++
+      else map[key].losses++
+    }
+  }
+  return Object.values(map)
+}
+
+function CardWinRateTable({ games }) {
+  const [minGames, setMinGames] = useState(2)
+  const cards = aggregateCardWinRates(games)
+  const filtered = cards
+    .filter(c => c.wins + c.losses >= minGames)
+    .sort((a, b) => {
+      const pctA = a.wins / (a.wins + a.losses)
+      const pctB = b.wins / (b.wins + b.losses)
+      return pctB - pctA || (b.wins + b.losses) - (a.wins + a.losses)
+    })
+
+  return (
+    <div className="mt-6 pt-5 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Card Win Rate</h3>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-gray-400">Min appearances:</span>
+          {[2, 3, 5].map(n => (
+            <button
+              key={n}
+              onClick={() => setMinGames(n)}
+              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                minGames === n ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-500'
+              }`}
+            >{n}+</button>
+          ))}
+        </div>
+      </div>
+      {filtered.length === 0 ? (
+        <p className="text-sm text-gray-400">Not enough data — upload more replays.</p>
+      ) : (
+        <div className="text-sm">
+          <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 2.5rem 2.5rem 2.5rem 5rem' }}>
+            <span>Card</span>
+            <span className="text-center">W</span>
+            <span className="text-center">L</span>
+            <span className="text-right">Win%</span>
+            <span></span>
+          </div>
+          {filtered.map(c => {
+            const total = c.wins + c.losses
+            const pct = Math.round((c.wins / total) * 100)
+            return (
+              <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 2.5rem 2.5rem 2.5rem 5rem' }}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-gray-800 truncate">{c.fullName}</span>
+                  <InkCombo colors={c.colors} size={11} />
+                </div>
+                <span className="text-center font-semibold text-emerald-600">{c.wins}</span>
+                <span className="text-center font-semibold text-red-400">{c.losses}</span>
+                <span className={`text-right font-bold text-xs ${pct >= 70 ? 'text-emerald-600' : pct >= 50 ? 'text-gray-700' : 'text-red-500'}`}>{pct}%</span>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${pct >= 70 ? 'bg-emerald-400' : pct >= 50 ? 'bg-gray-400' : 'bg-red-400'}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function MulliganTable({ rows, emptyText }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
   return (
@@ -1186,6 +1264,7 @@ function DeckStats({ games, subtitle: subtitleProp }) {
           <MulliganTable rows={topSentBack} emptyText="No mulligan data." />
         </div>
       </div>
+      {filteredGames.length > 1 && <CardWinRateTable games={filteredGames} />}
     </Section>
   )
 }

@@ -736,23 +736,18 @@ const COLOR_DOT = {
   steel: 'bg-gray-400',
 }
 
-// Ink drop fill colors matching each Lorcana ink
-const INK_FILL = {
-  amber: '#f59e0b',
-  amethyst: '#a855f7',
-  emerald: '#10b981',
-  ruby: '#ef4444',
-  sapphire: '#3b82f6',
-  steel: '#9ca3af',
-}
-
 function InkDrop({ color, size = 16 }) {
-  const fill = INK_FILL[color?.toLowerCase()] ?? '#d1d5db'
-  // Teardrop: pointed top, rounded bottom — mirrors the Lorcana ink symbol shape
+  const c = color?.toLowerCase()
+  if (!c) return null
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" title={color}>
-      <path d="M8 1 L3 10 A5 5 0 1 0 13 10 Z" fill={fill} />
-    </svg>
+    <img
+      src={`/ink/${c}.png`}
+      alt={c}
+      title={c.charAt(0).toUpperCase() + c.slice(1)}
+      width={size}
+      height={size}
+      className="inline-block flex-shrink-0"
+    />
   )
 }
 

@@ -825,6 +825,24 @@ function WinRateStats({ games }) {
 
 // --- Cross-game deck stats ---
 
+function aggregateMulliganSentBack(games) {
+  const map = {}
+  for (const game of games) {
+    const seen = new Set()
+    for (const card of (game.mulligan?.openingHand ?? [])) {
+      const key = card.fullName || card.name
+      if (!map[key]) map[key] = { ...card, sentBackCount: 0, openingHandCount: 0 }
+      if (!seen.has(key)) { map[key].openingHandCount++; seen.add(key) }
+    }
+    for (const card of (game.mulligan?.sentBack ?? [])) {
+      const key = card.fullName || card.name
+      if (!map[key]) map[key] = { ...card, sentBackCount: 0, openingHandCount: 0 }
+      map[key].sentBackCount++
+    }
+  }
+  return Object.values(map)
+}
+
 function aggregateMyCards(games) {
   const map = {}
   for (const game of games) {
@@ -860,9 +878,28 @@ function StatTable({ rows, valueLabel, valueKey, emptyText }) {
   )
 }
 
+function MulliganTable({ rows, emptyText }) {
+  if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      {rows.map(c => {
+        const pct = c.openingHandCount > 0 ? Math.round((c.sentBackCount / c.openingHandCount) * 100) : 100
+        return (
+          <div key={c.fullName} className="flex items-baseline gap-2 py-1 border-b border-gray-100 last:border-0">
+            <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.sentBackCount}</span>
+            <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+            <span className="text-xs text-gray-400 flex-shrink-0">{pct}%</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function DeckStats({ games, subtitle: subtitleProp }) {
   if (games.length === 0) return null
   const cards = aggregateMyCards(games)
+  const mulliganCards = aggregateMulliganSentBack(games)
 
   const topPlayed = [...cards].filter(c => c.playedCount > 0)
     .sort((a, b) => b.playedCount - a.playedCount).slice(0, 8)
@@ -870,12 +907,14 @@ function DeckStats({ games, subtitle: subtitleProp }) {
     .sort((a, b) => b.inkedCount - a.inkedCount).slice(0, 8)
   const topLore = [...cards].filter(c => c.loreGained > 0)
     .sort((a, b) => b.loreGained - a.loreGained).slice(0, 8)
+  const topSentBack = [...mulliganCards].filter(c => c.sentBackCount > 0)
+    .sort((a, b) => b.sentBackCount - a.sentBackCount).slice(0, 8)
 
   const subtitle = subtitleProp ?? `Aggregated across ${games.length} game${games.length !== 1 ? 's' : ''}`
 
   return (
     <Section collapsible defaultOpen={true} title="Deck Stats" subtitle={subtitle}>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-1">
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Played</h3>
           <StatTable rows={topPlayed} valueKey="playedCount" emptyText="No plays recorded." />
@@ -887,6 +926,11 @@ function DeckStats({ games, subtitle: subtitleProp }) {
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Lore Gained</h3>
           <StatTable rows={topLore} valueKey="loreGained" emptyText="No quests recorded." />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Sent Back</h3>
+          <p className="text-[10px] text-gray-400 mb-1.5">Count · % of opening hand appearances</p>
+          <MulliganTable rows={topSentBack} emptyText="No mulligan data." />
         </div>
       </div>
     </Section>

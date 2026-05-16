@@ -1356,10 +1356,9 @@ function DrawEffectsTable({ games }) {
   )
 }
 
-function LeastImpactful({ games }) {
+function ImpactTable({ games, order }) {
   const cards = aggregateMyCards(games)
 
-  // Build per-card challenge stats for scoring
   const challengeMap = {}
   for (const c of games.flatMap(g => g.challenges ?? []).filter(c => c.isMe && c.attackerName)) {
     if (!challengeMap[c.attackerName]) challengeMap[c.attackerName] = { kills: 0, survived: 0 }
@@ -1367,11 +1366,10 @@ function LeastImpactful({ games }) {
     if (!c.attackerBanished) challengeMap[c.attackerName].survived++
   }
 
-  const rows = cards
+  const scored = cards
     .filter(c => c.playedCount >= 3)
     .map(c => {
       const ch = challengeMap[c.fullName] ?? { kills: 0, survived: 0 }
-      // Composite impact score: lore + card advantage effects + combat value
       const impactScore =
         c.loreGained +
         (c.effectDraws ?? 0) * 2 +
@@ -1382,8 +1380,11 @@ function LeastImpactful({ games }) {
         ch.survived * 0.5
       return { ...c, impactScore, ch }
     })
-    .sort((a, b) => a.impactScore - b.impactScore || b.playedCount - a.playedCount)
-    .slice(0, 8)
+
+  const rows = (order === 'asc'
+    ? scored.sort((a, b) => a.impactScore - b.impactScore || b.playedCount - a.playedCount)
+    : scored.sort((a, b) => b.impactScore - a.impactScore || b.playedCount - a.playedCount)
+  ).slice(0, 8)
 
   if (!rows.length) return <p className="text-sm text-gray-400">Not enough data (need 3+ plays per card).</p>
 
@@ -1411,6 +1412,9 @@ function LeastImpactful({ games }) {
     </div>
   )
 }
+
+const LeastImpactful = ({ games }) => <ImpactTable games={games} order="asc" />
+const MostImpactful = ({ games }) => <ImpactTable games={games} order="desc" />
 
 function DeckStats({ filteredGames, subtitle }) {
   const cards = aggregateMyCards(filteredGames)
@@ -1455,9 +1459,18 @@ function DeckStats({ filteredGames, subtitle }) {
       )}
       {filteredGames.length > 1 && (
         <div className="mt-6 pt-5 border-t border-gray-100">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Least Impactful Cards</h3>
-          <p className="text-[10px] text-gray-400 mb-2">Plays · sorted by composite impact score (lore + draws + kills + removal)</p>
-          <LeastImpactful games={filteredGames} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Most Impactful Cards</h3>
+              <p className="text-[10px] text-gray-400 mb-2">Plays · composite score: lore + draws + kills + removal</p>
+              <MostImpactful games={filteredGames} />
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Least Impactful Cards</h3>
+              <p className="text-[10px] text-gray-400 mb-2">Plays · composite score: lore + draws + kills + removal</p>
+              <LeastImpactful games={filteredGames} />
+            </div>
+          </div>
         </div>
       )}
     </Section>

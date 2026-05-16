@@ -1173,7 +1173,7 @@ function CrossGameChallengers({ games }) {
   if (!rows.length) return null
 
   return (
-    <div className="mt-6 pt-5 border-t border-gray-100">
+    <div>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Challenger Stats</h3>
       <div className="text-sm">
         <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 4rem' }}>

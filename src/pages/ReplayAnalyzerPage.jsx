@@ -182,11 +182,16 @@ function parseReplay(data) {
 
       case 'MULLIGAN':
         if (isMe) {
-          // cardRefs are the cards sent back; kept = openingHand minus sent back
-          const sentBackIds = new Set(cardRefs.map(c => c.id))
-          result.mulligan.sentBack = cardRefs.map(c => enrich(c))
+          // cardRefs = [sent back cards..., replacement draws...]
+          // data.mulliganCount tells us the split point
+          const count = ld.mulliganCount ?? cardRefs.length
+          const sentBack = cardRefs.slice(0, count).map(c => enrich(c))
+          const replacements = cardRefs.slice(count).map(c => enrich(c))
+          const sentBackIds = new Set(sentBack.map(c => c.id))
+          result.mulligan.sentBack = sentBack
+          result.mulligan.replacements = replacements
           result.mulligan.kept = result.mulligan.openingHand.filter(c => !sentBackIds.has(c.id))
-          result.mulligan.tookMulligan = cardRefs.length > 0
+          result.mulligan.tookMulligan = count > 0
         }
         break
 
@@ -218,13 +223,7 @@ function parseReplay(data) {
         break
 
       case 'CARD_DRAWN':
-        if (isMe) {
-          if (inPreGamePhase) {
-            result.mulligan.replacements.push(...cardRefs.map(c => enrich(c)))
-          } else {
-            cardRefs.forEach(c => trackMyCard(c, 'drawnCount'))
-          }
-        }
+        if (isMe && !inPreGamePhase) cardRefs.forEach(c => trackMyCard(c, 'drawnCount'))
         break
 
       case 'CARD_DISCARDED':

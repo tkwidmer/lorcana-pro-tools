@@ -1577,7 +1577,7 @@ export function ReplayAnalyzerPage() {
             </button>
           </div>
           <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
-            {[...games].reverse().map((g) => {
+            {[...games].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((g) => {
               const isActive = g.gameId === activeId
               const date = new Date(g.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
               const didWin = g.winner === g.myPlayerNum

@@ -75,8 +75,13 @@ function parseReplay(data) {
     opponentCards: {}, // fullName -> { ...cardData, playCount, inkCount, discardCount, confirmedCopies }
     loreByTurn: [],    // { turn, myLore, oppLore }
     combatLog: [],
-    mulliganInfo: null,
-    openingHand: [],
+    mulligan: {
+      openingHand: [],      // enriched cards — the initial 7
+      sentBack: [],         // enriched cards sent back
+      kept: [],             // enriched cards kept
+      replacements: [],     // enriched cards drawn as replacements
+      tookMulligan: false,
+    },
     inkCurve: {},      // turn -> [cardNames played that turn]
     turnSummaries: {},
     inkByTurn: [],     // { turn, inked: bool } for my turns only
@@ -88,6 +93,7 @@ function parseReplay(data) {
   let currentTurnInked = false
   let currentTurn = null
   let currentController = null // 'me' | 'opp'
+  let inPreGamePhase = true    // true until first TURN_START
 
   const enrich = (cardRef) => cardRef?.id ? { ...cardLookup[cardRef.id], ...cardRef } : cardRef
 
@@ -168,24 +174,21 @@ function parseReplay(data) {
 
     switch (type) {
       case 'INITIAL_HAND':
-        if (isMe) result.openingHand = cardRefs.map(c => c.fullName || c.name)
+        if (isMe) result.mulligan.openingHand = cardRefs.map(c => enrich(c))
         break
 
       case 'MULLIGAN':
-        if (isMe && !result.mulliganInfo) {
-          const mulliganedNames = (ld.mulliganed || []).map(c => c.fullName || c.name)
-          const keptNames = (ld.kept || []).map(c => c.fullName || c.name)
-          // Extract from message fallback
-          result.mulliganInfo = {
-            mulliganedCount: mulliganedNames.length || (message.match(/mulliganed (\d+)/) ? parseInt(message.match(/mulliganed (\d+)/)[1]) : 0),
-            mulligan: mulliganedNames,
-            kept: keptNames,
-            message: resolveCardRefs(message, cardRefs),
-          }
+        if (isMe) {
+          // cardRefs are the cards sent back; kept = openingHand minus sent back
+          const sentBackIds = new Set(cardRefs.map(c => c.id))
+          result.mulligan.sentBack = cardRefs.map(c => enrich(c))
+          result.mulligan.kept = result.mulligan.openingHand.filter(c => !sentBackIds.has(c.id))
+          result.mulligan.tookMulligan = cardRefs.length > 0
         }
         break
 
       case 'TURN_START':
+        inPreGamePhase = false
         currentController = isMe ? 'me' : 'opp'
         if (isMe) { trackingMyTurn = true; currentTurnInked = false }
         break
@@ -212,7 +215,13 @@ function parseReplay(data) {
         break
 
       case 'CARD_DRAWN':
-        if (isMe) cardRefs.forEach(c => trackMyCard(c, 'drawnCount'))
+        if (isMe) {
+          if (inPreGamePhase) {
+            result.mulligan.replacements.push(...cardRefs.map(c => enrich(c)))
+          } else {
+            cardRefs.forEach(c => trackMyCard(c, 'drawnCount'))
+          }
+        }
         break
 
       case 'CARD_DISCARDED':
@@ -524,6 +533,72 @@ function MyDeckList({ cards }) {
   )
 }
 
+function MiniCard({ card }) {
+  const colorCls = card.colors?.[0] ? (COLOR_BADGE[card.colors[0].toLowerCase()] || 'bg-gray-100 text-gray-600') : 'bg-gray-100 text-gray-600'
+  return (
+    <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
+      {card.imageSmallUrl
+        ? (
+          <img
+            src={card.imageSmallUrl}
+            alt={card.fullName}
+            className="w-14 h-20 rounded object-cover border border-gray-200"
+            loading="lazy"
+          />
+        )
+        : (
+          <div className={`w-14 h-20 rounded border border-gray-200 flex items-center justify-center text-xs text-center font-medium px-1 ${colorCls}`}>
+            {card.fullName || card.name || '?'}
+          </div>
+        )
+      }
+      <span className="text-[10px] text-gray-500 text-center leading-tight line-clamp-2">{card.fullName || card.name}</span>
+      {card.cost != null && (
+        <span className="text-[10px] font-bold text-gray-400">Cost {card.cost}</span>
+      )}
+    </div>
+  )
+}
+
+function MulliganGroup({ label, cards, accent }) {
+  if (!cards.length) return null
+  return (
+    <div>
+      <div className={`text-xs font-semibold uppercase tracking-wide mb-2 ${accent}`}>{label} ({cards.length})</div>
+      <div className="flex flex-wrap gap-3">
+        {cards.map((c, i) => <MiniCard key={`${c.id}-${i}`} card={c} />)}
+      </div>
+    </div>
+  )
+}
+
+function MulliganAnalysis({ mulligan }) {
+  if (!mulligan) return null
+  const { openingHand = [], sentBack = [], kept = [], replacements = [], tookMulligan = false } = mulligan
+  if (!openingHand.length) return null
+
+  return (
+    <Section collapsible title="Mulligan" subtitle={tookMulligan ? `Sent back ${sentBack.length}, kept ${kept.length}, drew ${replacements.length}` : 'Kept opening hand'}>
+      {tookMulligan ? (
+        <div className="space-y-5">
+          <MulliganGroup label="Opening Hand" cards={openingHand} accent="text-gray-500" />
+          <div className="border-t border-gray-100 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <MulliganGroup label="Sent Back" cards={sentBack} accent="text-red-500" />
+            <MulliganGroup label="Kept" cards={kept} accent="text-emerald-600" />
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <MulliganGroup label="Drew as Replacements" cards={replacements} accent="text-blue-500" />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <MulliganGroup label="Opening Hand — Kept" cards={openingHand} accent="text-emerald-600" />
+        </div>
+      )}
+    </Section>
+  )
+}
+
 const EARLY_TURNS = 4
 
 function InkDiscipline({ inkByTurn }) {
@@ -574,6 +649,8 @@ function ReplayAnalysis({ game }) {
   return (
     <div>
       <GameHeader game={game} />
+
+      <MulliganAnalysis mulligan={game.mulligan} />
 
       <InkDiscipline inkByTurn={game.inkByTurn} />
 

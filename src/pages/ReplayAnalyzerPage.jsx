@@ -247,10 +247,22 @@ function parseReplay(data) {
 
       case 'ABILITY_TRIGGERED': {
         if (!isMe || !cardRefs[0]) break
-        const keys = (ld.effectDescriptionKeys ?? []).map(k => k.key)
-        if (keys.includes('drawsACard')) trackMyCard(cardRefs[0], 'effectDraws')
-        if (keys.includes('discardedCard')) trackMyCard(cardRefs[0], 'oppForcedDiscards')
-        if (keys.includes('grantsAnAdditionalInk')) trackMyCard(cardRefs[0], 'extraInks')
+        for (const ek of (ld.effectDescriptionKeys ?? [])) {
+          if (ek.key === 'drawsACard') {
+            trackMyCard(cardRefs[0], 'effectDraws')
+          } else if (ek.key === 'drawsCards') {
+            // drawsCards has a params.count for multi-draw effects (e.g. Friends on the Other Side draws 2)
+            const count = ek.params?.count ?? 1
+            trackMyCard(cardRefs[0], 'effectDraws') // initialises card + adds 1
+            const k = enrich(cardRefs[0])
+            const key = k.fullName || k.name || k.id
+            result.myCards[key].effectDraws += count - 1
+          } else if (ek.key === 'discardedCard') {
+            trackMyCard(cardRefs[0], 'oppForcedDiscards')
+          } else if (ek.key === 'grantsAnAdditionalInk') {
+            trackMyCard(cardRefs[0], 'extraInks')
+          }
+        }
         break
       }
 

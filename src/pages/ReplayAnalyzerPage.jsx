@@ -906,9 +906,28 @@ function MulliganTable({ rows, emptyText }) {
 }
 
 function DeckStats({ games, subtitle: subtitleProp }) {
+  const [matchupFilter, setMatchupFilter] = useState(null) // null = All
+
   if (games.length === 0) return null
-  const cards = aggregateMyCards(games)
-  const mulliganCards = aggregateMulliganSentBack(games)
+
+  // Build unique matchups from all games
+  const matchups = []
+  const seen = new Set()
+  for (const g of games) {
+    const key = g.oppInkCombo?.join('/') || 'Unknown'
+    if (!seen.has(key)) {
+      seen.add(key)
+      matchups.push({ key, colors: g.oppInkCombo ?? [] })
+    }
+  }
+  const showFilter = matchups.length > 1
+
+  const filteredGames = matchupFilter
+    ? games.filter(g => (g.oppInkCombo?.join('/') || 'Unknown') === matchupFilter)
+    : games
+
+  const cards = aggregateMyCards(filteredGames)
+  const mulliganCards = aggregateMulliganSentBack(filteredGames)
 
   const topPlayed = [...cards].filter(c => c.playedCount > 0)
     .sort((a, b) => b.playedCount - a.playedCount).slice(0, 8)
@@ -923,6 +942,45 @@ function DeckStats({ games, subtitle: subtitleProp }) {
 
   return (
     <Section collapsible defaultOpen={true} title="Deck Stats" subtitle={subtitle}>
+      {showFilter && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="text-xs text-gray-500 font-medium">vs</span>
+          <button
+            onClick={() => setMatchupFilter(null)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              matchupFilter === null
+                ? 'bg-gray-900 border-gray-900 text-white'
+                : 'border-gray-300 text-gray-600 hover:border-gray-500'
+            }`}
+          >
+            All
+          </button>
+          {matchups.map(({ key, colors }) => (
+            <button
+              key={key}
+              onClick={() => setMatchupFilter(matchupFilter === key ? null : key)}
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                matchupFilter === key
+                  ? 'bg-gray-900 border-gray-900 text-white'
+                  : 'border-gray-300 text-gray-600 hover:border-gray-500'
+              }`}
+            >
+              {colors.length ? (
+                colors.map(c => (
+                  <img
+                    key={c}
+                    src={`/ink/${c}.png`}
+                    alt={c}
+                    width={14}
+                    height={14}
+                    className={`inline-block flex-shrink-0 ${matchupFilter === key ? 'brightness-0 invert' : ''}`}
+                  />
+                ))
+              ) : key}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-1">
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Played</h3>

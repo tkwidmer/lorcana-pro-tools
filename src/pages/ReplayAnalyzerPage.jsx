@@ -755,6 +755,67 @@ function BestChallengers({ challenges, myCards }) {
   )
 }
 
+function BestDefenders({ challenges }) {
+  if (!challenges?.length) return null
+  const oppChallenges = challenges.filter(c => !c.isMe)
+  if (!oppChallenges.length) return null
+
+  // Group opponent challenges by defender (my character being attacked)
+  const map = {}
+  for (const c of oppChallenges) {
+    const key = c.defenderName
+    if (!key) continue
+    if (!map[key]) map[key] = { name: key, seq: [] }
+    map[key].seq.push(c)
+  }
+
+  const rows = Object.values(map).map(({ name, seq }) => {
+    // Walk the sequence: reset hit counter each time a banishment occurs
+    let hits = 0
+    let tanked = 0      // survived individual hits without being banished
+    let killedInOne = 0
+    let killedMultiple = 0
+
+    for (const c of seq) {
+      hits++
+      if (c.defenderBanished) {
+        if (hits === 1) killedInOne++
+        else killedMultiple++
+        hits = 0
+      } else {
+        tanked++
+      }
+    }
+
+    return { name, timesTargeted: seq.length, tanked, killedInOne, killedMultiple }
+  }).sort((a, b) => b.timesTargeted - a.timesTargeted)
+
+  return (
+    <div className="mb-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Your Characters as Defenders</h3>
+      <div className="text-sm">
+        <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+          <span>Character</span>
+          <span className="text-center">Targeted</span>
+          <span className="text-center text-emerald-600">Tanked</span>
+          <span className="text-center text-yellow-600">1-shot</span>
+          <span className="text-center text-red-500">Multi</span>
+        </div>
+        {rows.map(r => (
+          <div key={r.name} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+            <span className="text-gray-800 truncate">{r.name}</span>
+            <span className="text-center font-bold text-gray-700">{r.timesTargeted}</span>
+            <span className="text-center font-semibold text-emerald-600">{r.tanked || '—'}</span>
+            <span className="text-center font-semibold text-yellow-600">{r.killedInOne || '—'}</span>
+            <span className="text-center font-semibold text-red-500">{r.killedMultiple || '—'}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1.5">Tanked = survived a hit · 1-shot = banished in one challenge · Multi = required 2+ challenges</p>
+    </div>
+  )
+}
+
 function CombatStats({ stats }) {
   if (!stats || stats.challenged === 0) return null
   const rows = [
@@ -829,7 +890,10 @@ function ReplayAnalysis({ game }) {
       {(game.combatLog.length > 0 || game.combatStats?.challenged > 0) && (
         <Section collapsible title="Combat Log">
           <CombatStats stats={game.combatStats} />
-          <BestChallengers challenges={game.challenges} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4 mb-2">
+            <BestChallengers challenges={game.challenges} />
+            <BestDefenders challenges={game.challenges} />
+          </div>
           <div className="space-y-1 mt-3">
             {game.combatLog.map((e, i) => (
               <div key={i} className="flex items-start gap-2 text-sm">

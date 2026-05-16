@@ -100,6 +100,13 @@ function parseReplay(data) {
   let inPreGamePhase = true    // true until first TURN_START
   let inMyTurnDraw = false     // true between TURN_DRAW and first CARD_DRAWN for me
   let lastPlayedByMe = null    // last card played by me (for effect removal attribution)
+  let pendingDrawSource = null // card to attribute next drawn cards to (e.g. Guidebook on-play draws)
+  let pendingDrawCount = 0     // how many remaining draws to attribute
+
+  // Cards known to draw on play with no ABILITY_TRIGGERED event
+  const ON_PLAY_DRAWS = {
+    '10-66': 2, // Junior Woodchuck Guidebook
+  }
 
   const enrich = (cardRef) => cardRef?.id ? { ...cardLookup[cardRef.id], ...cardRef } : cardRef
 
@@ -124,6 +131,7 @@ function parseReplay(data) {
         imageSmallUrl: cardRef.imageSmallUrl,
         playedCount: 0, questedCount: 0, inkedCount: 0, drawnCount: 0, loreGained: 0,
         effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0,
+        exerts: 0, cardsRecovered: 0,
         playedTurns: [],
       }
     }
@@ -215,7 +223,11 @@ function parseReplay(data) {
           if (!result.inkCurve[turnNumber]) result.inkCurve[turnNumber] = []
           result.inkCurve[turnNumber].push(...played)
           result.turnSummaries[turnNumber].played.push(...played)
-          if (cardRefs[0]) lastPlayedByMe = enrich(cardRefs[0])
+          if (cardRefs[0]) {
+            lastPlayedByMe = enrich(cardRefs[0])
+            const drawCount = ON_PLAY_DRAWS[cardRefs[0].id]
+            if (drawCount) { pendingDrawSource = lastPlayedByMe; pendingDrawCount = drawCount }
+          }
         } else if (isOpp) {
           cardRefs.forEach(c => trackOppCard(c, 'played'))
           result.turnSummaries[turnNumber].played.push(...cardRefs.map(c => `[OPP] ${c.fullName || c.name}`))
@@ -235,6 +247,12 @@ function parseReplay(data) {
         if (isMe && !inPreGamePhase) {
           if (inMyTurnDraw) {
             inMyTurnDraw = false // first draw after TURN_DRAW is the normal draw step
+          } else if (pendingDrawCount > 0 && pendingDrawSource) {
+            cardRefs.forEach(() => {
+              trackMyCard(pendingDrawSource, 'effectDraws')
+              pendingDrawCount--
+              if (pendingDrawCount <= 0) { pendingDrawSource = null; pendingDrawCount = 0 }
+            })
           }
           cardRefs.forEach(c => trackMyCard(c, 'drawnCount'))
         }
@@ -262,8 +280,25 @@ function parseReplay(data) {
           } else if (ek.key === 'grantsAnAdditionalInk') {
             trackMyCard(cardRefs[0], 'extraInks')
           } else if (ek.key === 'movesDamageDetailedBanished') {
-            // Damage moved to opponent's character, causing banishment (e.g. Belle - Accomplished Mystic)
             trackMyCard(cardRefs[0], 'effectRemovals')
+          } else if (ek.key === 'exertsCharacter') {
+            trackMyCard(cardRefs[0], 'exerts')
+          } else if (ek.key === 'eachPlayerDrawsToHandSize') {
+            trackMyCard(cardRefs[0], 'effectDraws')
+          } else if (ek.key === 'returnedFromDiscard') {
+            const count = ld.returnedCardRefs?.length ?? 1
+            trackMyCard(cardRefs[0], 'cardsRecovered') // ensures card entry exists
+            const k = enrich(cardRefs[0])
+            const key = k.fullName || k.name || k.id
+            result.myCards[key].cardsRecovered += count - 1 // trackMyCard already added 1
+          } else if (ek.key === 'banishesTarget') {
+            trackMyCard(cardRefs[0], 'effectRemovals')
+          } else if (ek.key === 'opponentDiscardsCards') {
+            const count = ek.params?.count ?? 1
+            trackMyCard(cardRefs[0], 'oppForcedDiscards')
+            const k = enrich(cardRefs[0])
+            const key = k.fullName || k.name || k.id
+            result.myCards[key].oppForcedDiscards += count - 1
           }
         }
         break
@@ -1092,7 +1127,7 @@ function aggregateMyCards(games) {
     for (const card of Object.values(game.myCards)) {
       const key = card.fullName
       if (!map[key]) {
-        map[key] = { ...card, playedCount: 0, inkedCount: 0, questedCount: 0, loreGained: 0, games: 0, effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0 }
+        map[key] = { ...card, playedCount: 0, inkedCount: 0, questedCount: 0, loreGained: 0, games: 0, effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0 }
       }
       map[key].playedCount += card.playedCount
       map[key].inkedCount += card.inkedCount
@@ -1102,6 +1137,8 @@ function aggregateMyCards(games) {
       map[key].oppForcedDiscards += card.oppForcedDiscards ?? 0
       map[key].extraInks += card.extraInks ?? 0
       map[key].effectRemovals += card.effectRemovals ?? 0
+      map[key].exerts += card.exerts ?? 0
+      map[key].cardsRecovered += card.cardsRecovered ?? 0
       if (card.playedCount > 0 || card.inkedCount > 0) map[key].games++
     }
   }
@@ -1336,27 +1373,29 @@ function CrossGameDefenders({ games }) {
 function DrawEffectsTable({ games }) {
   const cards = aggregateMyCards(games)
   const rows = cards
-    .filter(c => (c.effectDraws + c.oppForcedDiscards + c.extraInks + c.effectRemovals) > 0)
+    .filter(c => (c.effectDraws + c.oppForcedDiscards + c.extraInks + c.effectRemovals + (c.exerts ?? 0) + (c.cardsRecovered ?? 0)) > 0)
     .sort((a, b) => {
-      const scoreB = b.effectDraws * 2 + b.oppForcedDiscards * 1.5 + b.extraInks + b.effectRemovals * 2
-      const scoreA = a.effectDraws * 2 + a.oppForcedDiscards * 1.5 + a.extraInks + a.effectRemovals * 2
+      const scoreB = b.effectDraws * 2 + b.oppForcedDiscards * 1.5 + b.extraInks + b.effectRemovals * 2 + (b.exerts ?? 0) * 1.5 + (b.cardsRecovered ?? 0) * 1.5
+      const scoreA = a.effectDraws * 2 + a.oppForcedDiscards * 1.5 + a.extraInks + a.effectRemovals * 2 + (a.exerts ?? 0) * 1.5 + (a.cardsRecovered ?? 0) * 1.5
       return scoreB - scoreA
     })
-    .slice(0, 8)
+    .slice(0, 10)
 
   if (!rows.length) return <p className="text-sm text-gray-400">No effect data recorded yet.</p>
 
   return (
     <div className="text-sm">
-      <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+      <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem' }}>
         <span>Card</span>
         <span className="text-center text-blue-500">Draw</span>
         <span className="text-center text-purple-500">Discard</span>
         <span className="text-center text-amber-500">+Ink</span>
         <span className="text-center text-red-500">Remove</span>
+        <span className="text-center text-orange-500">Exert</span>
+        <span className="text-center text-teal-500">Recover</span>
       </div>
       {rows.map(c => (
-        <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+        <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem' }}>
           <span className="text-gray-700 truncate flex items-center gap-1">
             {c.fullName}
             <InkCombo colors={c.colors} size={11} />
@@ -1365,9 +1404,11 @@ function DrawEffectsTable({ games }) {
           <span className="text-center font-semibold text-purple-500">{c.oppForcedDiscards || '—'}</span>
           <span className="text-center font-semibold text-amber-500">{c.extraInks || '—'}</span>
           <span className="text-center font-semibold text-red-500">{c.effectRemovals || '—'}</span>
+          <span className="text-center font-semibold text-orange-500">{c.exerts || '—'}</span>
+          <span className="text-center font-semibold text-teal-500">{c.cardsRecovered || '—'}</span>
         </div>
       ))}
-      <p className="text-[10px] text-gray-400 mt-1.5">Draw = cards drawn by effect · Discard = opp forced discards · +Ink = extra ink actions · Remove = field cards inkwelled</p>
+      <p className="text-[10px] text-gray-400 mt-1.5">Draw = effect draws · Discard = opp forced discards · +Ink = extra ink · Remove = banished/inkwelled · Exert = opp exerted · Recover = cards from discard</p>
     </div>
   )
 }
@@ -1392,6 +1433,8 @@ function ImpactTable({ games, order }) {
         (c.oppForcedDiscards ?? 0) * 1.5 +
         (c.extraInks ?? 0) * 1 +
         (c.effectRemovals ?? 0) * 2 +
+        (c.exerts ?? 0) * 1.5 +
+        (c.cardsRecovered ?? 0) * 1.5 +
         ch.kills * 2 +
         ch.survived * 0.5
       return { ...c, impactScore, ch }
@@ -1413,6 +1456,8 @@ function ImpactTable({ games, order }) {
         if ((c.oppForcedDiscards ?? 0) > 0) tags.push(`${c.oppForcedDiscards} discard`)
         if ((c.extraInks ?? 0) > 0) tags.push(`${c.extraInks} +ink`)
         if ((c.effectRemovals ?? 0) > 0) tags.push(`${c.effectRemovals} remove`)
+        if ((c.exerts ?? 0) > 0) tags.push(`${c.exerts} exert`)
+        if ((c.cardsRecovered ?? 0) > 0) tags.push(`${c.cardsRecovered} recover`)
         if (c.ch.kills > 0) tags.push(`${c.ch.kills} kills`)
         return (
           <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">

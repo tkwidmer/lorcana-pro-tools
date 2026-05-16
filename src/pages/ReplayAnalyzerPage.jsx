@@ -98,6 +98,8 @@ function parseReplay(data) {
   let currentTurn = null
   let currentController = null // 'me' | 'opp'
   let inPreGamePhase = true    // true until first TURN_START
+  let inMyTurnDraw = false     // true between TURN_DRAW and first CARD_DRAWN for me
+  let lastPlayedByMe = null    // last card played by me (for effect removal attribution)
 
   const enrich = (cardRef) => cardRef?.id ? { ...cardLookup[cardRef.id], ...cardRef } : cardRef
 
@@ -121,6 +123,7 @@ function parseReplay(data) {
         rarity: cardRef.rarity,
         imageSmallUrl: cardRef.imageSmallUrl,
         playedCount: 0, questedCount: 0, inkedCount: 0, drawnCount: 0, loreGained: 0,
+        effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0,
         playedTurns: [],
       }
     }
@@ -212,6 +215,7 @@ function parseReplay(data) {
           if (!result.inkCurve[turnNumber]) result.inkCurve[turnNumber] = []
           result.inkCurve[turnNumber].push(...played)
           result.turnSummaries[turnNumber].played.push(...played)
+          if (cardRefs[0]) lastPlayedByMe = enrich(cardRefs[0])
         } else if (isOpp) {
           cardRefs.forEach(c => trackOppCard(c, 'played'))
           result.turnSummaries[turnNumber].played.push(...cardRefs.map(c => `[OPP] ${c.fullName || c.name}`))
@@ -223,14 +227,41 @@ function parseReplay(data) {
         else if (isOpp) cardRefs.forEach(c => trackOppCard(c, 'inked'))
         break
 
+      case 'TURN_DRAW':
+        if (isMe) inMyTurnDraw = true
+        break
+
       case 'CARD_DRAWN':
-        if (isMe && !inPreGamePhase) cardRefs.forEach(c => trackMyCard(c, 'drawnCount'))
+        if (isMe && !inPreGamePhase) {
+          if (inMyTurnDraw) {
+            inMyTurnDraw = false // first draw after TURN_DRAW is the normal draw step
+          }
+          cardRefs.forEach(c => trackMyCard(c, 'drawnCount'))
+        }
         break
 
       case 'CARD_DISCARDED':
         // Discards reveal opponent cards
         if (isOpp) cardRefs.forEach(c => trackOppCard(c, 'discarded'))
         break
+
+      case 'ABILITY_TRIGGERED': {
+        if (!isMe || !cardRefs[0]) break
+        const keys = (ld.effectDescriptionKeys ?? []).map(k => k.key)
+        if (keys.includes('drawsACard')) trackMyCard(cardRefs[0], 'effectDraws')
+        if (keys.includes('discardedCard')) trackMyCard(cardRefs[0], 'oppForcedDiscards')
+        if (keys.includes('grantsAnAdditionalInk')) trackMyCard(cardRefs[0], 'extraInks')
+        break
+      }
+
+      case 'CARD_PUT_INTO_INKWELL': {
+        // fromZone 'field' means a character/item on the board was inkwelled by an effect (e.g. Let It Go)
+        // We attribute this to the last card we played as a heuristic
+        if (isMe && ld.fromZone === 'field' && lastPlayedByMe) {
+          trackMyCard(lastPlayedByMe, 'effectRemovals')
+        }
+        break
+      }
 
       case 'CARD_QUEST': {
         // lore is tracked in the message: (+N lore, M total)
@@ -1045,12 +1076,16 @@ function aggregateMyCards(games) {
     for (const card of Object.values(game.myCards)) {
       const key = card.fullName
       if (!map[key]) {
-        map[key] = { ...card, playedCount: 0, inkedCount: 0, questedCount: 0, loreGained: 0, games: 0 }
+        map[key] = { ...card, playedCount: 0, inkedCount: 0, questedCount: 0, loreGained: 0, games: 0, effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0 }
       }
       map[key].playedCount += card.playedCount
       map[key].inkedCount += card.inkedCount
       map[key].questedCount += card.questedCount
       map[key].loreGained += card.loreGained
+      map[key].effectDraws += card.effectDraws ?? 0
+      map[key].oppForcedDiscards += card.oppForcedDiscards ?? 0
+      map[key].extraInks += card.extraInks ?? 0
+      map[key].effectRemovals += card.effectRemovals ?? 0
       if (card.playedCount > 0 || card.inkedCount > 0) map[key].games++
     }
   }
@@ -1282,41 +1317,97 @@ function CrossGameDefenders({ games }) {
   )
 }
 
+function DrawEffectsTable({ games }) {
+  const cards = aggregateMyCards(games)
+  const rows = cards
+    .filter(c => (c.effectDraws + c.oppForcedDiscards + c.extraInks + c.effectRemovals) > 0)
+    .sort((a, b) => {
+      const scoreB = b.effectDraws * 2 + b.oppForcedDiscards * 1.5 + b.extraInks + b.effectRemovals * 2
+      const scoreA = a.effectDraws * 2 + a.oppForcedDiscards * 1.5 + a.extraInks + a.effectRemovals * 2
+      return scoreB - scoreA
+    })
+    .slice(0, 8)
+
+  if (!rows.length) return <p className="text-sm text-gray-400">No effect data recorded yet.</p>
+
+  return (
+    <div className="text-sm">
+      <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+        <span>Card</span>
+        <span className="text-center text-blue-500">Draw</span>
+        <span className="text-center text-purple-500">Discard</span>
+        <span className="text-center text-amber-500">+Ink</span>
+        <span className="text-center text-red-500">Remove</span>
+      </div>
+      {rows.map(c => (
+        <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+          <span className="text-gray-700 truncate flex items-center gap-1">
+            {c.fullName}
+            <InkCombo colors={c.colors} size={11} />
+          </span>
+          <span className="text-center font-semibold text-blue-500">{c.effectDraws || '—'}</span>
+          <span className="text-center font-semibold text-purple-500">{c.oppForcedDiscards || '—'}</span>
+          <span className="text-center font-semibold text-amber-500">{c.extraInks || '—'}</span>
+          <span className="text-center font-semibold text-red-500">{c.effectRemovals || '—'}</span>
+        </div>
+      ))}
+      <p className="text-[10px] text-gray-400 mt-1.5">Draw = cards drawn by effect · Discard = opp forced discards · +Ink = extra ink actions · Remove = field cards inkwelled</p>
+    </div>
+  )
+}
+
 function LeastImpactful({ games }) {
   const cards = aggregateMyCards(games)
 
-  // Build a set of card names that challenged at least once
-  const challengers = new Set(
-    games.flatMap(g => g.challenges ?? [])
-      .filter(c => c.isMe && c.attackerName)
-      .map(c => c.attackerName)
-  )
+  // Build per-card challenge stats for scoring
+  const challengeMap = {}
+  for (const c of games.flatMap(g => g.challenges ?? []).filter(c => c.isMe && c.attackerName)) {
+    if (!challengeMap[c.attackerName]) challengeMap[c.attackerName] = { kills: 0, survived: 0 }
+    if (c.defenderBanished) challengeMap[c.attackerName].kills++
+    if (!c.attackerBanished) challengeMap[c.attackerName].survived++
+  }
 
   const rows = cards
     .filter(c => c.playedCount >= 3)
-    .map(c => ({
-      ...c,
-      lorePerPlay: c.loreGained / c.playedCount,
-      everChallenged: challengers.has(c.fullName),
-    }))
-    .sort((a, b) => a.lorePerPlay - b.lorePerPlay || b.playedCount - a.playedCount)
+    .map(c => {
+      const ch = challengeMap[c.fullName] ?? { kills: 0, survived: 0 }
+      // Composite impact score: lore + card advantage effects + combat value
+      const impactScore =
+        c.loreGained +
+        (c.effectDraws ?? 0) * 2 +
+        (c.oppForcedDiscards ?? 0) * 1.5 +
+        (c.extraInks ?? 0) * 1 +
+        (c.effectRemovals ?? 0) * 2 +
+        ch.kills * 2 +
+        ch.survived * 0.5
+      return { ...c, impactScore, ch }
+    })
+    .sort((a, b) => a.impactScore - b.impactScore || b.playedCount - a.playedCount)
     .slice(0, 8)
 
   if (!rows.length) return <p className="text-sm text-gray-400">Not enough data (need 3+ plays per card).</p>
 
   return (
     <div className="font-mono text-sm space-y-0.5">
-      {rows.map(c => (
-        <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
-          <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.playedCount}</span>
-          <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
-          <InkCombo colors={c.colors} size={12} />
-          <span className="text-xs text-gray-400 flex-shrink-0 w-16 text-right whitespace-nowrap">
-            {c.everChallenged && <span className="text-blue-400 mr-1" title="Used as a challenger">⚔</span>}
-            {c.loreGained} lore
-          </span>
-        </div>
-      ))}
+      {rows.map(c => {
+        const tags = []
+        if (c.loreGained > 0) tags.push(`${c.loreGained} lore`)
+        if ((c.effectDraws ?? 0) > 0) tags.push(`${c.effectDraws} draw`)
+        if ((c.oppForcedDiscards ?? 0) > 0) tags.push(`${c.oppForcedDiscards} discard`)
+        if ((c.extraInks ?? 0) > 0) tags.push(`${c.extraInks} +ink`)
+        if ((c.effectRemovals ?? 0) > 0) tags.push(`${c.effectRemovals} remove`)
+        if (c.ch.kills > 0) tags.push(`${c.ch.kills} kills`)
+        return (
+          <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
+            <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.playedCount}</span>
+            <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+            <InkCombo colors={c.colors} size={12} />
+            <span className="text-[10px] text-gray-400 flex-shrink-0 text-right whitespace-nowrap">
+              {tags.length ? tags.join(' · ') : 'no impact tracked'}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1358,8 +1449,14 @@ function DeckStats({ filteredGames, subtitle }) {
       {filteredGames.length > 1 && <CardWinRateTable games={filteredGames} />}
       {filteredGames.length > 1 && (
         <div className="mt-6 pt-5 border-t border-gray-100">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Card Effects</h3>
+          <DrawEffectsTable games={filteredGames} />
+        </div>
+      )}
+      {filteredGames.length > 1 && (
+        <div className="mt-6 pt-5 border-t border-gray-100">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Least Impactful Cards</h3>
-          <p className="text-[10px] text-gray-400 mb-2">Plays · sorted by lowest lore gained · ⚔ = used as challenger</p>
+          <p className="text-[10px] text-gray-400 mb-2">Plays · sorted by composite impact score (lore + draws + kills + removal)</p>
           <LeastImpactful games={filteredGames} />
         </div>
       )}

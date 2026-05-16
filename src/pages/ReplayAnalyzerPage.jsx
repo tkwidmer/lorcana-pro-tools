@@ -914,7 +914,7 @@ function DeckStats({ games, subtitle: subtitleProp }) {
 
   return (
     <Section collapsible defaultOpen={true} title="Deck Stats" subtitle={subtitle}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-1">
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Played</h3>
           <StatTable rows={topPlayed} valueKey="playedCount" emptyText="No plays recorded." />

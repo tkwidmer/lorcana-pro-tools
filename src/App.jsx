@@ -5,6 +5,7 @@ import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { TournamentCutPage } from './pages/TournamentCutPage'
 import { LimitedGuidePage } from './pages/LimitedGuidePage'
 import { DrawOddsPage } from './pages/DrawOddsPage'
+import { ReplayAnalyzerPage } from './pages/ReplayAnalyzerPage'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/cut-calculator" element={<TournamentCutPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
         <Route path="/deck-insights" element={<DrawOddsPage />} />
+        <Route path="/replay-analyzer" element={<ReplayAnalyzerPage />} />
       </Routes>
     </BrowserRouter>
   )

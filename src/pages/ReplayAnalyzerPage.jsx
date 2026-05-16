@@ -1,0 +1,850 @@
+import { useState, useCallback } from 'react'
+
+// --- Replay parsing ---
+
+async function decompressGzip(arrayBuffer) {
+  const ds = new DecompressionStream('gzip')
+  const writer = ds.writable.getWriter()
+  writer.write(arrayBuffer)
+  writer.close()
+  const chunks = []
+  const reader = ds.readable.getReader()
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+  }
+  const total = chunks.reduce((n, c) => n + c.length, 0)
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const c of chunks) { out.set(c, offset); offset += c.length }
+  return new TextDecoder().decode(out)
+}
+
+function resolveCardRefs(message, cardRefs = []) {
+  return message.replace(/\{card:(\d+)\}/g, (_, i) => {
+    const c = cardRefs[parseInt(i)]
+    return c ? (c.fullName || c.name || '?') : '?'
+  })
+}
+
+function buildCardLookup(data) {
+  const map = {}
+  function walk(obj) {
+    if (!obj || typeof obj !== 'object') return
+    if (Array.isArray(obj)) { obj.forEach(walk); return }
+    if ('id' in obj && 'cost' in obj && 'fullName' in obj) {
+      map[obj.id] = {
+        id: obj.id,
+        name: obj.name,
+        fullName: obj.fullName,
+        cost: obj.cost,
+        colors: obj.colors,
+        type: obj.type,
+        strength: obj.strength,
+        willpower: obj.willpower,
+        lore: obj.lore,
+        inkable: obj.inkable,
+        rarity: obj.rarity,
+        imageSmallUrl: obj.imageSmallUrl,
+      }
+    }
+    Object.values(obj).forEach(walk)
+  }
+  walk(data)
+  return map
+}
+
+function parseReplay(data) {
+  const logs = data.logs || []
+  const perspective = data.perspective // 1 = you are player 1
+  const myPlayerNum = perspective
+  const cardLookup = buildCardLookup(data)
+
+  const result = {
+    gameId: data.gameId,
+    createdAt: data.createdAt,
+    playerNames: data.playerNames,
+    myName: data.playerNames?.[String(myPlayerNum)] || 'You',
+    opponentName: data.playerNames?.[String(myPlayerNum === 1 ? 2 : 1)] || 'Opponent',
+    myPlayerNum,
+    winner: data.winner,
+    victoryReason: data.victoryReason,
+    turnCount: data.turnCount,
+    myCards: {},       // fullName -> { ...cardData, playedCount, questedCount, inkedCount, drawnCount }
+    opponentCards: {}, // fullName -> { ...cardData, playCount, inkCount, discardCount, confirmedCopies }
+    loreByTurn: [],    // { turn, myLore, oppLore }
+    combatLog: [],
+    mulliganInfo: null,
+    openingHand: [],
+    inkCurve: {},      // turn -> [cardNames played that turn]
+    turnSummaries: {},
+    inkByTurn: [],     // { turn, inked: bool } for my turns only
+  }
+
+  let myLore = 0
+  let oppLore = 0
+  let trackingMyTurn = false
+  let currentTurnInked = false
+  let currentTurn = null
+  let currentController = null // 'me' | 'opp'
+
+  const enrich = (cardRef) => cardRef?.id ? { ...cardLookup[cardRef.id], ...cardRef } : cardRef
+
+  const trackMyCard = (cardRef, field) => {
+    if (!cardRef) return
+    cardRef = enrich(cardRef)
+    const key = cardRef.fullName || cardRef.name || cardRef.id
+    if (!result.myCards[key]) {
+      result.myCards[key] = {
+        name: cardRef.name,
+        fullName: cardRef.fullName || cardRef.name,
+        id: cardRef.id,
+        cost: cardRef.cost,
+        inkable: cardRef.inkable,
+        colors: cardRef.colors,
+        type: cardRef.type,
+        strength: cardRef.strength,
+        willpower: cardRef.willpower,
+        lore: cardRef.lore,
+        abilities: cardRef.abilities,
+        rarity: cardRef.rarity,
+        imageSmallUrl: cardRef.imageSmallUrl,
+        playedCount: 0, questedCount: 0, inkedCount: 0, drawnCount: 0, loreGained: 0,
+        playedTurns: [],
+      }
+    }
+    result.myCards[key][field]++
+  }
+
+  const trackOppCard = (cardRef, event) => {
+    // event: 'played' | 'inked' | 'discarded' | 'combat'
+    // Each 'played', 'inked', or 'discarded' event means a physical copy left the opponent's hand,
+    // so we use them to count minimum confirmed copies. 'combat' just reveals identity, no copy count.
+    if (!cardRef) return
+    cardRef = enrich(cardRef)
+    const key = cardRef.fullName || cardRef.name || cardRef.id
+    if (!result.opponentCards[key]) {
+      result.opponentCards[key] = {
+        name: cardRef.name,
+        fullName: cardRef.fullName || cardRef.name,
+        id: cardRef.id,
+        cost: cardRef.cost,
+        inkable: cardRef.inkable,
+        colors: cardRef.colors,
+        type: cardRef.type,
+        strength: cardRef.strength,
+        willpower: cardRef.willpower,
+        lore: cardRef.lore,
+        abilities: cardRef.abilities,
+        rarity: cardRef.rarity,
+        imageSmallUrl: cardRef.imageSmallUrl,
+        playCount: 0,
+        inkCount: 0,
+        discardCount: 0,
+        seenInCombat: false,
+      }
+    }
+    const c = result.opponentCards[key]
+    if (event === 'played') c.playCount++
+    else if (event === 'inked') c.inkCount++
+    else if (event === 'discarded') c.discardCount++
+    else if (event === 'combat') c.seenInCombat = true
+    // confirmedCopies = distinct from-hand events, capped at 4
+    c.confirmedCopies = Math.min(4, c.playCount + c.inkCount + c.discardCount) || 1
+  }
+
+  for (const log of logs) {
+    const { type, player, turnNumber, cardRefs = [], data: ld = {}, message = '' } = log
+    const isMe = player === myPlayerNum
+    const isOpp = player !== null && player !== myPlayerNum
+
+    if (turnNumber !== currentTurn) {
+      currentTurn = turnNumber
+      if (!result.turnSummaries[turnNumber]) {
+        result.turnSummaries[turnNumber] = { played: [], quested: [], inked: [], challenges: [] }
+      }
+    }
+
+    switch (type) {
+      case 'INITIAL_HAND':
+        if (isMe) result.openingHand = cardRefs.map(c => c.fullName || c.name)
+        break
+
+      case 'MULLIGAN':
+        if (isMe && !result.mulliganInfo) {
+          const mulliganedNames = (ld.mulliganed || []).map(c => c.fullName || c.name)
+          const keptNames = (ld.kept || []).map(c => c.fullName || c.name)
+          // Extract from message fallback
+          result.mulliganInfo = {
+            mulliganedCount: mulliganedNames.length || (message.match(/mulliganed (\d+)/) ? parseInt(message.match(/mulliganed (\d+)/)[1]) : 0),
+            mulligan: mulliganedNames,
+            kept: keptNames,
+            message: resolveCardRefs(message, cardRefs),
+          }
+        }
+        break
+
+      case 'TURN_START':
+        currentController = isMe ? 'me' : 'opp'
+        if (isMe) { trackingMyTurn = true; currentTurnInked = false }
+        break
+
+      case 'CARD_PLAYED':
+        if (isMe) {
+          cardRefs.forEach(c => {
+            trackMyCard(c, 'playedCount')
+            result.myCards[c.fullName || c.name || c.id].playedTurns.push(turnNumber)
+          })
+          const played = cardRefs.map(c => c.fullName || c.name)
+          if (!result.inkCurve[turnNumber]) result.inkCurve[turnNumber] = []
+          result.inkCurve[turnNumber].push(...played)
+          result.turnSummaries[turnNumber].played.push(...played)
+        } else if (isOpp) {
+          cardRefs.forEach(c => trackOppCard(c, 'played'))
+          result.turnSummaries[turnNumber].played.push(...cardRefs.map(c => `[OPP] ${c.fullName || c.name}`))
+        }
+        break
+
+      case 'CARD_INKED':
+        if (isMe) { cardRefs.forEach(c => trackMyCard(c, 'inkedCount')); currentTurnInked = true }
+        else if (isOpp) cardRefs.forEach(c => trackOppCard(c, 'inked'))
+        break
+
+      case 'CARD_DRAWN':
+        if (isMe) cardRefs.forEach(c => trackMyCard(c, 'drawnCount'))
+        break
+
+      case 'CARD_DISCARDED':
+        // Discards reveal opponent cards
+        if (isOpp) cardRefs.forEach(c => trackOppCard(c, 'discarded'))
+        break
+
+      case 'CARD_QUEST': {
+        // lore is tracked in the message: (+N lore, M total)
+        const loreMatch = message.match(/\+(\d+) lore.*?(\d+) total/)
+        const gain = loreMatch ? parseInt(loreMatch[1]) : 0
+        const total = loreMatch ? parseInt(loreMatch[2]) : null
+        if (isMe) {
+          if (total !== null) myLore = total
+          cardRefs.forEach(c => {
+            trackMyCard(c, 'questedCount')
+            const key = enrich(c).fullName || c.name || c.id
+            if (result.myCards[key]) result.myCards[key].loreGained += gain
+          })
+          result.turnSummaries[turnNumber].quested.push(cardRefs[0]?.fullName || cardRefs[0]?.name || '?')
+        } else {
+          if (total !== null) oppLore = total
+          // opponent questing with unnamed cards — not revealing info
+        }
+        break
+      }
+
+      case 'CARD_ATTACK': {
+        // Only log the detailed damage line (contains '|')
+        if (!message.includes('|')) break
+        const dmgMatch = message.match(/(\d+) str dealt (\d+) dmg/)
+        result.combatLog.push({
+          turn: turnNumber,
+          isMe,
+          message: resolveCardRefs(message.split('|')[0].trim(), cardRefs),
+          damage: dmgMatch ? parseInt(dmgMatch[2]) : null,
+          attacker: cardRefs[0] ? (cardRefs[0].fullName || cardRefs[0].name) : null,
+          defender: cardRefs[1] ? (cardRefs[1].fullName || cardRefs[1].name) : null,
+        })
+        if (isOpp && cardRefs[0]) trackOppCard(cardRefs[0], 'combat')
+        break
+      }
+
+      case 'TURN_END':
+        if (currentController === 'me') {
+          result.loreByTurn.push({ turn: currentTurn, myLore, oppLore, controller: 'me' })
+          if (trackingMyTurn) {
+            result.inkByTurn.push({ turn: currentTurn, inked: currentTurnInked })
+            trackingMyTurn = false
+          }
+        } else if (currentController === 'opp') {
+          result.loreByTurn.push({ turn: currentTurn, myLore, oppLore, controller: 'opp' })
+        }
+        break
+
+      default:
+        break
+    }
+  }
+
+  // Build deck reconstruction: confirmed cards + unknown slots to reach 60
+  const confirmedCards = Object.values(result.opponentCards)
+    .sort((a, b) => (a.cost ?? 99) - (b.cost ?? 99) || a.fullName.localeCompare(b.fullName))
+  const confirmedTotal = confirmedCards.reduce((n, c) => n + c.confirmedCopies, 0)
+  result.oppDeckList = {
+    confirmed: confirmedCards,
+    unknownCount: Math.max(0, 60 - confirmedTotal),
+    confirmedTotal,
+  }
+
+  return result
+}
+
+// --- UI helpers ---
+
+const COLOR_BADGE = {
+  amber: 'bg-amber-100 text-amber-800',
+  amethyst: 'bg-purple-100 text-purple-800',
+  emerald: 'bg-emerald-100 text-emerald-800',
+  ruby: 'bg-red-100 text-red-800',
+  sapphire: 'bg-blue-100 text-blue-800',
+  steel: 'bg-gray-200 text-gray-700',
+}
+
+function ColorBadge({ color }) {
+  const cls = COLOR_BADGE[color?.toLowerCase()] || 'bg-gray-100 text-gray-600'
+  return (
+    <span className={`text-xs font-medium px-1.5 py-0.5 rounded capitalize ${cls}`}>
+      {color}
+    </span>
+  )
+}
+
+function StatPill({ label, value }) {
+  return (
+    <span className="inline-flex items-center gap-1 bg-gray-100 rounded px-2 py-0.5 text-xs text-gray-600">
+      <span className="font-medium text-gray-800">{value}</span> {label}
+    </span>
+  )
+}
+
+const SOURCE_LABEL = {
+  played: { label: 'played', cls: 'bg-blue-100 text-blue-700' },
+  inked: { label: 'inked', cls: 'bg-yellow-100 text-yellow-700' },
+  discarded: { label: 'discarded', cls: 'bg-orange-100 text-orange-700' },
+  combat: { label: 'combat', cls: 'bg-red-100 text-red-700' },
+}
+
+function CardRow({ card, fields, sources }) {
+  return (
+    <div className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
+      {card.imageSmallUrl && (
+        <img
+          src={card.imageSmallUrl}
+          alt={card.fullName}
+          className="w-10 h-14 rounded object-cover flex-shrink-0 border border-gray-200"
+          loading="lazy"
+        />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+          <span className="text-sm font-semibold text-gray-900 truncate">{card.fullName}</span>
+          {card.colors?.map(c => <ColorBadge key={c} color={c} />)}
+          {card.rarity && (
+            <span className="text-xs text-gray-400 capitalize">{card.rarity}</span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5 text-xs text-gray-500 mb-1">
+          {card.cost != null && <span>Cost {card.cost}</span>}
+          {card.strength != null && <span>STR {card.strength}</span>}
+          {card.willpower != null && <span>WP {card.willpower}</span>}
+          {card.lore != null && <span>◆{card.lore}</span>}
+          {card.inkable === false && <span className="text-orange-600 font-medium">Uninkable</span>}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {fields.map(f => f.value != null && f.value > 0
+            ? <StatPill key={f.label} label={f.label} value={f.value} />
+            : null
+          )}
+          {sources?.map(s => {
+            const cfg = SOURCE_LABEL[s]
+            return cfg
+              ? <span key={s} className={`text-xs px-1.5 py-0.5 rounded font-medium ${cfg.cls}`}>{cfg.label}</span>
+              : null
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ title, subtitle, children, collapsible, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen)
+  if (!collapsible) {
+    return (
+      <div className="mb-8">
+        <div className="mb-3">
+          <h2 className="text-base font-bold text-gray-900">{title}</h2>
+          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+        </div>
+        {children}
+      </div>
+    )
+  }
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+      >
+        <div className="text-left">
+          <span className="text-base font-bold text-gray-800 group-hover:text-gray-900 transition-colors">{title}</span>
+          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+        </div>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-4 ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && <div className="mt-3">{children}</div>}
+    </div>
+  )
+}
+
+function GameHeader({ game }) {
+  const date = new Date(game.createdAt).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+  })
+  const didWin = game.winner === game.myPlayerNum
+  return (
+    <div className={`rounded-lg border p-4 mb-6 ${didWin ? 'border-emerald-300 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <span className={`text-sm font-bold ${didWin ? 'text-emerald-700' : 'text-red-600'}`}>
+            {didWin ? '✓ Victory' : '✗ Defeat'} — {game.victoryReason}
+          </span>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {game.myName} vs {game.opponentName} · {game.turnCount} turns · {date}
+          </p>
+        </div>
+        <span className="text-xs font-mono text-gray-400">{game.gameId?.slice(0, 8)}</span>
+      </div>
+    </div>
+  )
+}
+
+function LoreBar({ value, maxLore, colorClass, label }) {
+  const pct = maxLore > 0 ? value / maxLore : 0
+  const heightPx = Math.round(pct * 96)
+  return (
+    <div className="flex flex-col items-center" style={{ width: 24 }}>
+      <span className="text-[10px] font-medium text-gray-600 mb-0.5 leading-none">
+        {value > 0 ? value : ''}
+      </span>
+      <div
+        className={`w-5 rounded-t transition-all ${colorClass}`}
+        style={{ height: `${heightPx}px` }}
+        title={`${label}: ${value} lore`}
+      />
+    </div>
+  )
+}
+
+function LoreChart({ loreByTurn, myName, oppName }) {
+  if (!loreByTurn.length) return null
+  const maxLore = Math.max(...loreByTurn.flatMap(t => [t.myLore, t.oppLore]), 1)
+  return (
+    <div className="overflow-x-auto">
+      <div className="flex items-end gap-2 min-w-max pb-1">
+        {loreByTurn.map((t, i) => (
+          <div key={i} className="flex flex-col items-center gap-1">
+            <div className="flex items-end gap-0.5 h-32">
+              <LoreBar value={t.myLore} maxLore={maxLore} colorClass="bg-blue-400" label={myName} />
+              <LoreBar value={t.oppLore} maxLore={maxLore} colorClass="bg-red-400" label={oppName} />
+            </div>
+            <span className="text-[10px] text-gray-400">T{t.turn}{t.controller === 'me' ? '' : '★'}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-400 rounded-sm inline-block" /> {myName}</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-400 rounded-sm inline-block" /> {oppName}</span>
+        <span className="text-gray-400">★ = opponent's turn</span>
+      </div>
+    </div>
+  )
+}
+
+const HOW_LABEL = {
+  playCount: 'played',
+  inkCount: 'inked',
+  discardCount: 'discarded',
+}
+
+function OppDeckList({ confirmed, unknownCount }) {
+  if (confirmed.length === 0 && unknownCount > 0) {
+    return <p className="text-sm text-gray-400">No opponent cards recorded.</p>
+  }
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      {confirmed.map(c => {
+        const how = Object.entries(HOW_LABEL)
+          .filter(([field]) => c[field] > 0)
+          .map(([, label]) => label)
+          .join(', ')
+        return (
+          <div key={c.fullName} className="flex items-baseline gap-3 py-1 border-b border-gray-100 last:border-0 group">
+            <span className="w-5 text-right font-bold text-gray-900 flex-shrink-0">{c.confirmedCopies}x</span>
+            <span className="flex-1 text-gray-800 group-hover:text-gray-900">{c.fullName}</span>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {c.colors?.map(col => <ColorBadge key={col} color={col} />)}
+              {c.cost != null && <span className="text-xs text-gray-400">Cost {c.cost}</span>}
+              {how && <span className="text-xs text-gray-400 italic">via {how}</span>}
+            </div>
+          </div>
+        )
+      })}
+      {unknownCount > 0 && (
+        <div className="flex items-baseline gap-3 py-1 mt-1 border-t-2 border-dashed border-gray-200">
+          <span className="w-5 text-right font-bold text-gray-400 flex-shrink-0">{unknownCount}x</span>
+          <span className="flex-1 text-gray-400 italic">Unknown Cards</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MyDeckList({ cards }) {
+  if (cards.length === 0) return <p className="text-sm text-gray-400">No cards recorded.</p>
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      {cards.map(c => {
+        const uses = c.playedCount + c.inkedCount
+        const tags = []
+        if (c.playedCount > 0) tags.push(`${c.playedCount}× played`)
+        if (c.inkedCount > 0) tags.push(`${c.inkedCount}× inked`)
+        return (
+          <div key={c.fullName} className="flex items-baseline gap-3 py-1 border-b border-gray-100 last:border-0 group">
+            <span className="w-5 text-right font-bold text-gray-900 flex-shrink-0">{uses > 0 ? uses : '—'}</span>
+            <span className="flex-1 text-gray-800 group-hover:text-gray-900">{c.fullName}</span>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {c.colors?.map(col => <ColorBadge key={col} color={col} />)}
+              {c.cost != null && <span className="text-xs text-gray-400">Cost {c.cost}</span>}
+              {tags.length > 0 && <span className="text-xs text-gray-400 italic">{tags.join(', ')}</span>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+const EARLY_TURNS = 4
+
+function InkDiscipline({ inkByTurn }) {
+  if (!inkByTurn?.length) return null
+
+  const earlyMisses = inkByTurn.filter(t => t.turn <= EARLY_TURNS && !t.inked)
+  const lateMisses = inkByTurn.filter(t => t.turn > EARLY_TURNS && !t.inked)
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-base font-bold text-gray-900 mb-2">Ink Discipline</h2>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {inkByTurn.map(({ turn, inked }) => {
+          const isEarly = turn <= EARLY_TURNS
+          const cls = inked
+            ? 'bg-gray-100 text-gray-500'
+            : isEarly
+              ? 'bg-red-100 text-red-700 font-semibold'
+              : 'bg-yellow-50 text-yellow-600'
+          return (
+            <span key={turn} className={`text-xs px-2 py-1 rounded ${cls}`} title={inked ? `T${turn}: inked` : `T${turn}: skipped`}>
+              T{turn} {inked ? '✓' : '✗'}
+            </span>
+          )
+        })}
+      </div>
+      {earlyMisses.length === 0 && lateMisses.length === 0 && (
+        <p className="text-xs text-gray-500">Inked every turn — great ink discipline.</p>
+      )}
+      {earlyMisses.length > 0 && (
+        <p className="text-xs text-red-600">
+          Missed early ink on {earlyMisses.map(t => `T${t.turn}`).join(', ')} — these are high-cost tempo misses.
+        </p>
+      )}
+      {lateMisses.length > 0 && (
+        <p className="text-xs text-gray-500 mt-0.5">
+          Held ink on {lateMisses.map(t => `T${t.turn}`).join(', ')} (late game — likely intentional).
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ReplayAnalysis({ game }) {
+  const myCardList = Object.values(game.myCards).sort((a, b) => (a.cost ?? 99) - (b.cost ?? 99))
+  const { confirmed, unknownCount, confirmedTotal } = game.oppDeckList
+
+  return (
+    <div>
+      <GameHeader game={game} />
+
+      <InkDiscipline inkByTurn={game.inkByTurn} />
+
+      <Section title="Lore Race" subtitle="Lore totals at end of each half-turn">
+        <LoreChart loreByTurn={game.loreByTurn} myName={game.myName} oppName={game.opponentName} />
+      </Section>
+
+      <DeckStats games={[game]} subtitle="This game" />
+
+      <Section collapsible title="Your Deck" subtitle="Cards seen this game, sorted by cost. Count = times played or inked.">
+        <MyDeckList cards={myCardList} />
+      </Section>
+
+      <Section
+        collapsible
+        title="Opponent Decklist"
+        subtitle={`${confirmedTotal} of 60 cards identified · ${unknownCount} unknown`}
+      >
+        <OppDeckList confirmed={confirmed} unknownCount={unknownCount} />
+      </Section>
+
+      {game.combatLog.length > 0 && (
+        <Section title="Combat Log">
+          <div className="space-y-1">
+            {game.combatLog.map((e, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-xs text-gray-400 w-12 flex-shrink-0 pt-0.5">T{e.turn}</span>
+                <span className={e.isMe ? 'text-blue-700' : 'text-red-700'}>
+                  {e.isMe ? game.myName : game.opponentName}
+                </span>
+                <span className="text-gray-600 flex-1">{e.message}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+    </div>
+  )
+}
+
+// --- Cross-game deck stats ---
+
+function aggregateMyCards(games) {
+  const map = {}
+  for (const game of games) {
+    for (const card of Object.values(game.myCards)) {
+      const key = card.fullName
+      if (!map[key]) {
+        map[key] = { ...card, playedCount: 0, inkedCount: 0, questedCount: 0, loreGained: 0, games: 0 }
+      }
+      map[key].playedCount += card.playedCount
+      map[key].inkedCount += card.inkedCount
+      map[key].questedCount += card.questedCount
+      map[key].loreGained += card.loreGained
+      if (card.playedCount > 0 || card.inkedCount > 0) map[key].games++
+    }
+  }
+  return Object.values(map)
+}
+
+function StatTable({ rows, valueLabel, valueKey, emptyText }) {
+  if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      {rows.map(c => (
+        <div key={c.fullName} className="flex items-baseline gap-2 py-1 border-b border-gray-100 last:border-0">
+          <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c[valueKey]}</span>
+          <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {c.colors?.map(col => <ColorBadge key={col} color={col} />)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function DeckStats({ games, subtitle: subtitleProp }) {
+  if (games.length === 0) return null
+  const cards = aggregateMyCards(games)
+
+  const topPlayed = [...cards].filter(c => c.playedCount > 0)
+    .sort((a, b) => b.playedCount - a.playedCount).slice(0, 8)
+  const topInked = [...cards].filter(c => c.inkedCount > 0)
+    .sort((a, b) => b.inkedCount - a.inkedCount).slice(0, 8)
+  const topLore = [...cards].filter(c => c.loreGained > 0)
+    .sort((a, b) => b.loreGained - a.loreGained).slice(0, 8)
+
+  const subtitle = subtitleProp ?? `Aggregated across ${games.length} game${games.length !== 1 ? 's' : ''}`
+
+  return (
+    <Section collapsible defaultOpen={true} title="Deck Stats" subtitle={subtitle}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-1">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Played</h3>
+          <StatTable rows={topPlayed} valueKey="playedCount" emptyText="No plays recorded." />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Inked</h3>
+          <StatTable rows={topInked} valueKey="inkedCount" emptyText="No inks recorded." />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Lore Gained</h3>
+          <StatTable rows={topLore} valueKey="loreGained" emptyText="No quests recorded." />
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+// --- Main page ---
+
+const LS_KEY = 'lorcana-replays-v1'
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveToStorage(games) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(games))
+  } catch {
+    // storage full — silently continue
+  }
+}
+
+export function ReplayAnalyzerPage() {
+  const [games, setGames] = useState(() => loadFromStorage())
+  const [activeId, setActiveId] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+
+  const persistGames = (updated) => {
+    setGames(updated)
+    saveToStorage(updated)
+  }
+
+  const processFiles = useCallback(async (files) => {
+    setLoading(true)
+    setError(null)
+    const results = []
+    for (const file of files) {
+      try {
+        const buf = await file.arrayBuffer()
+        const json = await decompressGzip(buf)
+        const data = JSON.parse(json)
+        const parsed = parseReplay(data)
+        results.push(parsed)
+      } catch (e) {
+        setError(`Failed to parse ${file.name}: ${e.message}`)
+      }
+    }
+    if (results.length) {
+      setGames(prev => {
+        // Deduplicate by gameId
+        const existingIds = new Set(prev.map(g => g.gameId))
+        const fresh = results.filter(g => !existingIds.has(g.gameId))
+        const updated = [...prev, ...fresh]
+        saveToStorage(updated)
+        return updated
+      })
+      setActiveId(results[results.length - 1].gameId)
+    }
+    setLoading(false)
+  }, [])
+
+  const removeGame = (gameId) => {
+    setGames(prev => {
+      const updated = prev.filter(g => g.gameId !== gameId)
+      saveToStorage(updated)
+      return updated
+    })
+    setActiveId(id => id === gameId ? null : id)
+  }
+
+  const activeGame = games.find(g => g.gameId === activeId) ?? null
+
+  const onFileChange = (e) => {
+    if (e.target.files?.length) processFiles(Array.from(e.target.files))
+    e.target.value = ''
+  }
+
+  const onDrop = (e) => {
+    e.preventDefault()
+    setDragOver(false)
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.gz'))
+    if (files.length) processFiles(files)
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-6 py-10">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Replay Analyzer</h1>
+        <p className="text-sm text-gray-500">
+          Upload Lorcana Duels replay files (<code className="bg-gray-100 px-1 rounded text-xs">.replay.gz</code>) to analyze gameplay and reconstruct opponent decklists. Replays are saved locally in your browser.
+        </p>
+      </div>
+
+      {/* Drop zone */}
+      <label
+        className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 mb-6 cursor-pointer transition-colors ${dragOver ? 'border-gray-900 bg-gray-50' : 'border-gray-300 hover:border-gray-400'}`}
+        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+      >
+        <input type="file" accept=".gz" multiple className="sr-only" onChange={onFileChange} />
+        <svg className="w-7 h-7 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        </svg>
+        <span className="text-sm font-medium text-gray-700">Drop replay files here or click to upload</span>
+        <span className="text-xs text-gray-400 mt-1">Accepts .replay.gz files · duplicates are skipped</span>
+      </label>
+
+      {loading && <div className="text-sm text-gray-500 mb-4">Parsing replays…</div>}
+      {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3 mb-4">{error}</div>}
+
+      {games.length > 1 && <DeckStats games={games} />}
+
+      {/* Saved replays list */}
+      {games.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-700">{games.length} saved replay{games.length !== 1 ? 's' : ''}</h2>
+            <button
+              onClick={() => { persistGames([]); setActiveId(null) }}
+              className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+            >
+              Clear all
+            </button>
+          </div>
+          <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
+            {[...games].reverse().map((g) => {
+              const isActive = g.gameId === activeId
+              const date = new Date(g.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+              const didWin = g.winner === g.myPlayerNum
+              return (
+                <div
+                  key={g.gameId}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${isActive ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                  onClick={() => setActiveId(isActive ? null : g.gameId)}
+                >
+                  <span className={`text-xs font-bold w-12 flex-shrink-0 ${didWin ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {didWin ? 'W' : 'L'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-gray-900 font-medium truncate block">
+                      vs {g.opponentName}
+                    </span>
+                    <span className="text-xs text-gray-400">{date} · {g.turnCount} turns · {g.victoryReason}</span>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeGame(g.gameId) }}
+                    className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0 text-lg leading-none px-1"
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeGame && <ReplayAnalysis game={activeGame} />}
+    </div>
+  )
+}

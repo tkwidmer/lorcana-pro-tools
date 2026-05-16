@@ -18,6 +18,7 @@ export function Nav() {
                 : pathname === '/cut-calculator' ? 'Cut Calculator'
                 : pathname === '/limited-guide' ? 'Limited Guide'
                 : pathname === '/deck-insights' ? 'Deck Insights'
+                : pathname === '/replay-analyzer' ? 'Replay Analyzer'
                 : ''}
             </span>
           </>

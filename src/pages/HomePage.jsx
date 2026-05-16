@@ -25,6 +25,12 @@ const TOOLS = [
     description: 'Paste a deck list to analyse your curve, consistency, lore pressure, and draw odds for every card.',
     label: 'Open Tool',
   },
+  {
+    path: '/replay-analyzer',
+    name: 'Replay Analyzer',
+    description: 'Upload Lorcana Duels replay files to review your gameplay, track lore progression, and reconstruct your opponent\'s decklist.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

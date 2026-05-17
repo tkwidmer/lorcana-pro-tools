@@ -78,18 +78,46 @@ function parseLiveGame(data) {
 
 // --- Bookmarklet generator ---
 
-function makeBookmarklet(uuid) {
-  const js = `
-(function(){
-  try {
-    const state = window.__GAME_STATE__ || window.gameState || null;
-    const data = JSON.stringify(state || {error:'No state found at window.__GAME_STATE__'});
-    const w = window.open('${window.location.origin}/game-scraper?uuid=${uuid}&data=', '_blank');
-    w && (w.location.href = '${window.location.origin}/game-scraper?uuid=${uuid}&data=' + encodeURIComponent(data));
-  } catch(e) { alert('Error: ' + e.message); }
-})();
-`.trim()
-  return 'javascript:' + encodeURIComponent(js)
+function makeBookmarkletCode(uuid, origin) {
+  return `javascript:(function(){try{const s=window.__GAME_STATE__||window.gameState||null;const d=JSON.stringify(s||{error:'No state found'});window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(d),'_blank');}catch(e){alert('Error: '+e.message);}})();`
+}
+
+function BookmarkletPanel({ uuid }) {
+  const [copied, setCopied] = useState(false)
+  const origin = window.location.origin
+  const code = makeBookmarkletCode(uuid, origin)
+
+  const copy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <details className="mt-2">
+      <summary className="text-xs font-medium text-red-700 cursor-pointer select-none">Bookmarklet (run on the duels.ink page)</summary>
+      <div className="mt-2 space-y-2">
+        <p className="text-xs text-gray-600">
+          1. Copy the code below.<br />
+          2. In your browser, create a new bookmark (any page).<br />
+          3. Edit the bookmark and paste this code as the <strong>URL</strong>.<br />
+          4. Navigate to the duels.ink spectate page and click the bookmark.
+        </p>
+        <div className="flex items-start gap-2">
+          <code className="flex-1 block text-xs bg-gray-100 border border-gray-200 rounded p-2 font-mono break-all select-all">
+            {code}
+          </code>
+          <button
+            onClick={copy}
+            className="flex-shrink-0 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded font-medium transition-colors"
+          >
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+    </details>
+  )
 }
 
 // --- UI Components ---
@@ -279,20 +307,7 @@ export function GameScraperPage() {
                 </a>{' '}
                 in this browser, then try again. If it still fails, use the bookmarklet below on the spectate page.
               </p>
-              <details className="mt-2">
-                <summary className="text-xs font-medium text-red-700 cursor-pointer select-none">Bookmarklet (run on the duels.ink page)</summary>
-                <p className="text-xs text-gray-600 mt-2 mb-1">
-                  Drag this link to your bookmarks bar, then click it while on the duels.ink spectate page:
-                </p>
-                <a
-                  href={makeBookmarklet(uuid)}
-                  className="inline-block bg-red-100 border border-red-300 text-red-800 text-xs px-3 py-1.5 rounded font-mono"
-                  onClick={e => e.preventDefault()}
-                  title="Drag me to bookmarks bar"
-                >
-                  📋 Extract Lorcana Game
-                </a>
-              </details>
+              <BookmarkletPanel uuid={uuid} />
             </div>
           )}
         </div>

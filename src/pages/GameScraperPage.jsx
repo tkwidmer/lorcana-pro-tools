@@ -93,26 +93,33 @@ function parseLiveGame(data) {
 
 // --- Bookmarklet generator ---
 
+function makeGenericBookmarkletCode(origin) {
+  return `javascript:(function(){ var done=false; var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); Object.defineProperty(WebSocket.prototype,'onmessage',{set:function(h){ var self=this; var wrapped=function(ev){ if(!done){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game){ var match=window.location.href.match(/spectate\\/([a-f0-9-]+)/i); var uuid=match?match[1]:'unknown'; done=true; window.open('${origin}/game-scraper?uuid='+uuid+'&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank'); return; } }catch(e){} } if(h) h.call(self,ev); }; if(origDesc&&origDesc.set){ origDesc.set.call(this,wrapped); } else { this.addEventListener('message',wrapped); } }, get:function(){ return origDesc&&origDesc.get ? origDesc.get.call(this) : this._onmessage; }}); alert('Waiting for next game update...\\nThe tool will open automatically in a new tab when the server sends the next update (usually within a few seconds).'); })();`
+}
+
 function makeBookmarkletCode(uuid, origin) {
   return `javascript:(function(){ var done=false; var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); Object.defineProperty(WebSocket.prototype,'onmessage',{set:function(h){ var self=this; var wrapped=function(ev){ console.log('Message!'); if(!done){ try{ var d=JSON.parse(ev.data); console.log('Type:',d.type); if(d.type==='spectator_update'&&d.game){ console.log('Found game!'); done=true; window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank'); return; } }catch(e){ console.log('Error:',e.message); } } if(h) h.call(self,ev); }; if(origDesc&&origDesc.set){ origDesc.set.call(this,wrapped); } else { this.addEventListener('message',wrapped); } }, get:function(){ return origDesc&&origDesc.get ? origDesc.get.call(this) : this._onmessage; }}); alert('Waiting for next game update...\\nThe tool will open automatically in a new tab when the server sends the next update (usually within a few seconds).\\n\\nOpen DevTools (F12 > Console) to see debugging info.'); })();`
 }
 
 function BookmarkletPanel({ uuid }) {
   const [copied, setCopied] = useState(false)
+  const [genericCopied, setGenericCopied] = useState(false)
+  const [showGeneric, setShowGeneric] = useState(false)
   const origin = window.location.origin
-  const code = makeBookmarkletCode(uuid, origin)
+  const specificCode = makeBookmarkletCode(uuid, origin)
+  const genericCode = makeGenericBookmarkletCode(origin)
 
-  const copy = () => {
+  const copy = (code, setType) => {
     navigator.clipboard.writeText(code).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setType(true)
+      setTimeout(() => setType(false), 2000)
     })
   }
 
   return (
     <details className="mt-2">
       <summary className="text-xs font-medium text-red-700 cursor-pointer select-none">Bookmarklet (run on the duels.ink page)</summary>
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 space-y-3">
         <p className="text-xs text-gray-600">
           1. Copy the code below.<br />
           2. Create a new bookmark in your browser (right-click bookmarks bar → Add page).<br />
@@ -121,17 +128,47 @@ function BookmarkletPanel({ uuid }) {
           5. An alert will appear saying "Waiting for next game update…" — dismiss it.<br />
           6. Within a few seconds the server will send the next live update and this tool will open automatically in a new tab with the game data.
         </p>
-        <div className="flex items-start gap-2">
-          <code className="flex-1 block text-xs bg-gray-100 border border-gray-200 rounded p-2 font-mono break-all select-all">
-            {code}
-          </code>
-          <button
-            onClick={copy}
-            className="flex-shrink-0 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded font-medium transition-colors"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
+
+        <div>
+          <div className="text-xs font-semibold text-gray-700 mb-1">Option 1: Generic Bookmarklet (Recommended)</div>
+          <p className="text-xs text-gray-500 mb-2">Works for any spectate game. Save once, use forever.</p>
+          <div className="flex items-start gap-2">
+            <code className="flex-1 block text-xs bg-gray-100 border border-gray-200 rounded p-2 font-mono break-all select-all">
+              {genericCode}
+            </code>
+            <button
+              onClick={() => copy(genericCode, setGenericCopied)}
+              className="flex-shrink-0 text-xs bg-green-200 hover:bg-green-300 text-green-700 px-3 py-1.5 rounded font-medium transition-colors"
+            >
+              {genericCopied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
         </div>
+
+        <button
+          onClick={() => setShowGeneric(!showGeneric)}
+          className="text-xs text-gray-500 hover:text-gray-700 underline"
+        >
+          {showGeneric ? 'Hide' : 'Show'} specific game bookmarklet
+        </button>
+
+        {showGeneric && (
+          <div>
+            <div className="text-xs font-semibold text-gray-700 mb-1">Option 2: Game-Specific Bookmarklet</div>
+            <p className="text-xs text-gray-500 mb-2">Pre-filled with this game's UUID. Need a new one for each game.</p>
+            <div className="flex items-start gap-2">
+              <code className="flex-1 block text-xs bg-gray-100 border border-gray-200 rounded p-2 font-mono break-all select-all">
+                {specificCode}
+              </code>
+              <button
+                onClick={() => copy(specificCode, setCopied)}
+                className="flex-shrink-0 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded font-medium transition-colors"
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </details>
   )

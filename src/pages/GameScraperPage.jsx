@@ -80,35 +80,59 @@ function parseLiveGame(data) {
 // --- Bookmarklet generator ---
 
 function makeBookmarkletCode(uuid, origin) {
-  // Walks the React fiber tree looking for objects that look like game state
   return `javascript:(function(){
 try{
-  function walkFiber(node,depth){
-    if(!node||depth>100)return null;
-    var s=node.memoizedState;
-    while(s){
-      var v=s.memoizedState;
-      if(v&&typeof v==='object'&&!Array.isArray(v)){
-        if(v.playerNames||v.roomView||v.gameState||v.players||v.logs||v.lore!=null){return v;}
-        if(v.baseSnapshot||v.turnNumber!=null){return v;}
+  var found=null;
+
+  // 1. TanStack Router loaderData (duels.ink uses __TSR_ROUTER__)
+  if(!found&&window.__TSR_ROUTER__){
+    var matches=window.__TSR_ROUTER__.state.matches||[];
+    for(var i=0;i<matches.length;i++){
+      var ld=matches[i].loaderData;
+      if(ld&&typeof ld==='object'){
+        // loaderData may be the game object directly or nested
+        var candidate=ld.game||ld.spectate||ld.roomView||ld.gameState||ld;
+        if(candidate&&(candidate.playerNames||candidate.players||candidate.logs||candidate.roomView)){
+          found=candidate; break;
+        }
       }
-      s=s.next;
     }
-    return walkFiber(node.child,depth+1)||walkFiber(node.sibling,depth+1);
+    // Also check pending/cached matches
+    if(!found){
+      var cached=window.__TSR_ROUTER__.state.cachedMatches||[];
+      for(var j=0;j<cached.length;j++){
+        var cld=cached[j].loaderData;
+        if(cld&&typeof cld==='object'){
+          var cc=cld.game||cld.spectate||cld.roomView||cld.gameState||cld;
+          if(cc&&(cc.playerNames||cc.players||cc.logs||cc.roomView)){found=cc;break;}
+        }
+      }
+    }
   }
-  var found=window.__GAME_STATE__||window.gameState||window.__lorcanaState__||null;
+
+  // 2. Walk React fiber tree from root
   if(!found){
-    var roots=['root','app','__react-root'].map(function(id){return document.getElementById(id);}).filter(Boolean);
+    function walkFiber(node,depth){
+      if(!node||depth>120)return null;
+      var s=node.memoizedState;
+      while(s){
+        var v=s.memoizedState;
+        if(v&&typeof v==='object'&&!Array.isArray(v)){
+          if(v.playerNames||v.roomView||v.gameState||v.players||v.logs){return v;}
+        }
+        s=s.next;
+      }
+      return walkFiber(node.child,depth+1)||walkFiber(node.sibling,depth+1);
+    }
+    var roots=['root','app'].map(function(id){return document.getElementById(id);}).filter(Boolean);
     if(!roots.length)roots=[document.body];
-    for(var i=0;i<roots.length;i++){
-      var fk=Object.keys(roots[i]).find(function(k){return k.startsWith('__reactFiber')||k.startsWith('__reactInternalInstance');});
-      if(fk){found=walkFiber(roots[i][fk],0);if(found)break;}
+    for(var k=0;k<roots.length;k++){
+      var fk=Object.keys(roots[k]).find(function(key){return key.startsWith('__reactFiber')||key.startsWith('__reactInternalInstance');});
+      if(fk){found=walkFiber(roots[k][fk],0);if(found)break;}
     }
   }
-  if(!found){
-    try{var ls=localStorage.getItem('gameState')||localStorage.getItem('spectateState');if(ls)found=JSON.parse(ls);}catch(e){}
-  }
-  var d=JSON.stringify(found||{error:'Could not locate game state. Try opening DevTools > Network and look for a fetch/XHR response with game data, then paste the JSON into the tool manually.'});
+
+  var d=JSON.stringify(found||{error:'Game state not found. Open DevTools > Network tab, reload the spectate page, find the API response with game data, and paste the JSON manually into the tool.'});
   window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(d),'_blank');
 }catch(e){alert('Bookmarklet error: '+e.message);}
 })();`.replace(/\n\s*/g,' ')

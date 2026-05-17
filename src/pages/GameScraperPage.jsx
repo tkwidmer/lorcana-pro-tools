@@ -45,97 +45,56 @@ async function tryFetch(uuid) {
 // --- Game state parsers ---
 
 function parseLiveGame(data) {
-  // Try various shapes duels.ink might return for a live/spectate game
-  const room = data.roomView ?? data.room ?? data.gameState ?? data.state ?? data
-  const players = room?.players ?? room?.playerStates ?? []
-  const player1 = Array.isArray(players) ? players[0] : players?.['1'] ?? players?.player1
-  const player2 = Array.isArray(players) ? players[1] : players?.['2'] ?? players?.player2
+  // data may be the full WS message { type, game } or just the game object
+  const game = data.game ?? data
 
-  const names = data.playerNames ?? room?.playerNames ?? {}
-  const p1Name = names?.['1'] ?? player1?.name ?? player1?.username ?? 'Player 1'
-  const p2Name = names?.['2'] ?? player2?.name ?? player2?.username ?? 'Player 2'
+  // Build definitionId → name lookup from log cardRefs
+  const defIdToName = {}
+  const logs = game.logs ?? []
+  for (const log of logs) {
+    for (const ref of (log.cardRefs ?? [])) {
+      if (ref.id && ref.name) defIdToName[ref.id] = ref.name
+    }
+  }
 
-  const p1Lore = player1?.lore ?? player1?.score ?? null
-  const p2Lore = player2?.lore ?? player2?.score ?? null
+  const p1 = game.player1 ?? {}
+  const p2 = game.player2 ?? {}
+  const names = game.playerNames ?? {}
 
-  const currentTurn = room?.turn ?? room?.turnNumber ?? room?.currentTurn ?? data.turnNumber ?? null
-  const activePlayer = room?.activePlayer ?? room?.currentPlayer ?? room?.turnPlayer ?? null
-  const phase = room?.phase ?? room?.currentPhase ?? null
-  const status = room?.status ?? data.status ?? data.gameStatus ?? null
-  const winner = data.winner ?? room?.winner ?? null
+  const p1Name = names.player1 ?? names['1'] ?? 'Player 1'
+  const p2Name = names.player2 ?? names['2'] ?? 'Player 2'
 
-  const p1Field = player1?.field ?? player1?.board ?? player1?.characters ?? []
-  const p2Field = player2?.field ?? player2?.board ?? player2?.characters ?? []
+  const enrichField = (field) => (field ?? []).map(card => ({
+    ...card,
+    name: defIdToName[card.definitionId] ?? card.name ?? card.definitionId,
+    fullName: defIdToName[card.definitionId] ?? card.fullName ?? card.name ?? card.definitionId,
+  }))
 
-  const p1Hand = player1?.handCount ?? player1?.hand?.length ?? null
-  const p2Hand = player2?.handCount ?? player2?.hand?.length ?? null
-  const p1Deck = player1?.deckCount ?? player1?.deck?.length ?? null
-  const p2Deck = player2?.deckCount ?? player2?.deck?.length ?? null
-
-  const log = data.logs ?? data.log ?? room?.log ?? []
-
-  return { p1Name, p2Name, p1Lore, p2Lore, currentTurn, activePlayer, phase, status, winner, p1Field, p2Field, p1Hand, p2Hand, p1Deck, p2Deck, log, raw: data }
+  return {
+    p1Name,
+    p2Name,
+    p1Lore: p1.lore ?? null,
+    p2Lore: p2.lore ?? null,
+    currentTurn: game.turnNumber ?? null,
+    activePlayer: game.currentPlayer ?? game.timerView?.activePlayer ?? null,
+    phase: null,
+    status: game.status ?? null,
+    winner: game.winner ?? null,
+    p1Field: enrichField(p1.field),
+    p2Field: enrichField(p2.field),
+    p1Hand: p1.handCount ?? null,
+    p2Hand: p2.handCount ?? null,
+    p1Deck: p1.deckCount ?? null,
+    p2Deck: p2.deckCount ?? null,
+    log: logs,
+    raw: data,
+  }
 }
 
 // --- Bookmarklet generator ---
 
 function makeBookmarkletCode(uuid, origin) {
-  return `javascript:(function(){
-try{
-  var found=null;
-
-  // 1. TanStack Router loaderData (duels.ink uses __TSR_ROUTER__)
-  if(!found&&window.__TSR_ROUTER__){
-    var matches=window.__TSR_ROUTER__.state.matches||[];
-    for(var i=0;i<matches.length;i++){
-      var ld=matches[i].loaderData;
-      if(ld&&typeof ld==='object'){
-        // loaderData may be the game object directly or nested
-        var candidate=ld.game||ld.spectate||ld.roomView||ld.gameState||ld;
-        if(candidate&&(candidate.playerNames||candidate.players||candidate.logs||candidate.roomView)){
-          found=candidate; break;
-        }
-      }
-    }
-    // Also check pending/cached matches
-    if(!found){
-      var cached=window.__TSR_ROUTER__.state.cachedMatches||[];
-      for(var j=0;j<cached.length;j++){
-        var cld=cached[j].loaderData;
-        if(cld&&typeof cld==='object'){
-          var cc=cld.game||cld.spectate||cld.roomView||cld.gameState||cld;
-          if(cc&&(cc.playerNames||cc.players||cc.logs||cc.roomView)){found=cc;break;}
-        }
-      }
-    }
-  }
-
-  // 2. Walk React fiber tree from root
-  if(!found){
-    function walkFiber(node,depth){
-      if(!node||depth>120)return null;
-      var s=node.memoizedState;
-      while(s){
-        var v=s.memoizedState;
-        if(v&&typeof v==='object'&&!Array.isArray(v)){
-          if(v.playerNames||v.roomView||v.gameState||v.players||v.logs){return v;}
-        }
-        s=s.next;
-      }
-      return walkFiber(node.child,depth+1)||walkFiber(node.sibling,depth+1);
-    }
-    var roots=['root','app'].map(function(id){return document.getElementById(id);}).filter(Boolean);
-    if(!roots.length)roots=[document.body];
-    for(var k=0;k<roots.length;k++){
-      var fk=Object.keys(roots[k]).find(function(key){return key.startsWith('__reactFiber')||key.startsWith('__reactInternalInstance');});
-      if(fk){found=walkFiber(roots[k][fk],0);if(found)break;}
-    }
-  }
-
-  var d=JSON.stringify(found||{error:'Game state not found. Open DevTools > Network tab, reload the spectate page, find the API response with game data, and paste the JSON manually into the tool.'});
-  window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(d),'_blank');
-}catch(e){alert('Bookmarklet error: '+e.message);}
-})();`.replace(/\n\s*/g,' ')
+  return `javascript:(function(){ var orig=EventTarget.prototype.dispatchEvent; var done=false; EventTarget.prototype.dispatchEvent=function(ev){ if(!done&&ev instanceof MessageEvent){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game){ done=true; EventTarget.prototype.dispatchEvent=orig; window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank'); } }catch(e){} } return orig.call(this,ev); }; alert('Waiting for next game update...\\nThe tool will open automatically in a new tab when the server sends the next update (usually within a few seconds). You can dismiss this alert.'); })();`
 }
 
 function BookmarkletPanel({ uuid }) {
@@ -159,7 +118,8 @@ function BookmarkletPanel({ uuid }) {
           2. Create a new bookmark in your browser (right-click bookmarks bar → Add page).<br />
           3. Edit it and paste this as the <strong>URL / Address</strong> field.<br />
           4. Go to the duels.ink spectate page and click the bookmark.<br />
-          5. A new tab will open here with the game data — or an error message if the state could not be found.
+          5. An alert will appear saying "Waiting for next game update…" — dismiss it.<br />
+          6. Within a few seconds the server will send the next live update and this tool will open automatically in a new tab with the game data.
         </p>
         <div className="flex items-start gap-2">
           <code className="flex-1 block text-xs bg-gray-100 border border-gray-200 rounded p-2 font-mono break-all select-all">
@@ -245,14 +205,16 @@ function PlayerPanel({ name, lore, handCount, deckCount, field, loreColor, isAct
   )
 }
 
-function LogEntry({ entry, index }) {
-  const { type, message, player, turnNumber, cardRefs = [] } = entry
-  const cardName = cardRefs[0]?.fullName ?? cardRefs[0]?.name ?? null
-  const label = message || `${type ?? 'Action'}${cardName ? `: ${cardName}` : ''}`
+function LogEntry({ entry }) {
+  const { type, message = '', player, turnNumber, cardRefs = [] } = entry
+  const resolved = message.replace(/\{card:(\d+)\}/g, (_, i) => {
+    const ref = cardRefs[parseInt(i)]
+    return ref ? (ref.name ?? ref.id ?? '?') : '?'
+  })
   return (
     <div className="flex gap-2 py-1 text-xs border-b border-gray-50 last:border-0">
       <span className="text-gray-400 flex-shrink-0 w-14">T{turnNumber ?? '?'} P{player ?? '?'}</span>
-      <span className="text-gray-700 truncate">{label}</span>
+      <span className="text-gray-700 truncate">{resolved || type}</span>
     </div>
   )
 }

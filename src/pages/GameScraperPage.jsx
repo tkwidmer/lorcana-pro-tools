@@ -80,7 +80,38 @@ function parseLiveGame(data) {
 // --- Bookmarklet generator ---
 
 function makeBookmarkletCode(uuid, origin) {
-  return `javascript:(function(){try{const s=window.__GAME_STATE__||window.gameState||null;const d=JSON.stringify(s||{error:'No state found'});window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(d),'_blank');}catch(e){alert('Error: '+e.message);}})();`
+  // Walks the React fiber tree looking for objects that look like game state
+  return `javascript:(function(){
+try{
+  function walkFiber(node,depth){
+    if(!node||depth>100)return null;
+    var s=node.memoizedState;
+    while(s){
+      var v=s.memoizedState;
+      if(v&&typeof v==='object'&&!Array.isArray(v)){
+        if(v.playerNames||v.roomView||v.gameState||v.players||v.logs||v.lore!=null){return v;}
+        if(v.baseSnapshot||v.turnNumber!=null){return v;}
+      }
+      s=s.next;
+    }
+    return walkFiber(node.child,depth+1)||walkFiber(node.sibling,depth+1);
+  }
+  var found=window.__GAME_STATE__||window.gameState||window.__lorcanaState__||null;
+  if(!found){
+    var roots=['root','app','__react-root'].map(function(id){return document.getElementById(id);}).filter(Boolean);
+    if(!roots.length)roots=[document.body];
+    for(var i=0;i<roots.length;i++){
+      var fk=Object.keys(roots[i]).find(function(k){return k.startsWith('__reactFiber')||k.startsWith('__reactInternalInstance');});
+      if(fk){found=walkFiber(roots[i][fk],0);if(found)break;}
+    }
+  }
+  if(!found){
+    try{var ls=localStorage.getItem('gameState')||localStorage.getItem('spectateState');if(ls)found=JSON.parse(ls);}catch(e){}
+  }
+  var d=JSON.stringify(found||{error:'Could not locate game state. Try opening DevTools > Network and look for a fetch/XHR response with game data, then paste the JSON into the tool manually.'});
+  window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(d),'_blank');
+}catch(e){alert('Bookmarklet error: '+e.message);}
+})();`.replace(/\n\s*/g,' ')
 }
 
 function BookmarkletPanel({ uuid }) {
@@ -101,9 +132,10 @@ function BookmarkletPanel({ uuid }) {
       <div className="mt-2 space-y-2">
         <p className="text-xs text-gray-600">
           1. Copy the code below.<br />
-          2. In your browser, create a new bookmark (any page).<br />
-          3. Edit the bookmark and paste this code as the <strong>URL</strong>.<br />
-          4. Navigate to the duels.ink spectate page and click the bookmark.
+          2. Create a new bookmark in your browser (right-click bookmarks bar → Add page).<br />
+          3. Edit it and paste this as the <strong>URL / Address</strong> field.<br />
+          4. Go to the duels.ink spectate page and click the bookmark.<br />
+          5. A new tab will open here with the game data — or an error message if the state could not be found.
         </p>
         <div className="flex items-start gap-2">
           <code className="flex-1 block text-xs bg-gray-100 border border-gray-200 rounded p-2 font-mono break-all select-all">

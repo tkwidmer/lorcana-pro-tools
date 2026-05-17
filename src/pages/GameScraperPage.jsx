@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 // --- Helpers ---
 
@@ -210,6 +211,7 @@ function StatusBadge({ status, winner }) {
 // --- Main Page ---
 
 export function GameScraperPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [urlInput, setUrlInput] = useState('')
   const [uuid, setUuid] = useState(null)
   const [gameData, setGameData] = useState(null)
@@ -221,6 +223,30 @@ export function GameScraperPage() {
   const [refreshInterval, setRefreshInterval] = useState(10)
   const [showRaw, setShowRaw] = useState(false)
   const intervalRef = useRef(null)
+
+  // Read data injected by the bookmarklet via URL params
+  useEffect(() => {
+    const paramUuid = searchParams.get('uuid')
+    const paramData = searchParams.get('data')
+    if (paramUuid && paramData) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(paramData))
+        if (parsed.error) {
+          setError(`Bookmarklet error: ${parsed.error}`)
+        } else {
+          setUuid(paramUuid)
+          setUrlInput(`https://duels.ink/spectate/${paramUuid}`)
+          setGameData(parseLiveGame(parsed))
+          setEndpoint('bookmarklet')
+          setLastUpdated(new Date())
+        }
+      } catch {
+        setError('Could not parse data from bookmarklet.')
+      }
+      // Clear params from URL so a refresh doesn't re-apply stale data
+      setSearchParams({}, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const scrape = useCallback(async (id) => {
     if (!id) return

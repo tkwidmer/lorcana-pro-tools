@@ -83,7 +83,7 @@ function makeGenericBookmarkletCode(origin, newTab = true) {
   const open = newTab
     ? `window.open('${origin}/game-scraper?uuid='+uuid+'&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank')`
     : `window.location.href='${origin}/game-scraper?uuid='+uuid+'&data='+encodeURIComponent(JSON.stringify(d.game))`
-  return `javascript:(function(){ console.log('[Lorcana] Bookmarklet init'); var alreadyDone=sessionStorage.getItem('__lorcanaInterceptor'); if(alreadyDone){ sessionStorage.removeItem('__lorcanaInterceptor'); } var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); var origAEL=WebSocket.prototype.addEventListener; var done=false; function intercept(ev){ try{ var d=JSON.parse(ev.data); console.log('[Lorcana] WS message type:', d.type); if(d.type==='spectator_update'&&d.game&&!done){ var match=window.location.href.match(/spectate\\/([a-f0-9-]+)/i); var uuid=match?match[1]:'unknown'; console.log('[Lorcana] Found game! uuid:', uuid); done=true; ${open}; } }catch(e){ console.log('[Lorcana] parse error:', e.message); } } Object.defineProperty(WebSocket.prototype,'onmessage',{ set:function(h){ console.log('[Lorcana] onmessage setter called'); var self=this; origDesc.set.call(this,function(ev){ intercept.call(self,ev); if(h) h.call(self,ev); }); }, get:function(){ return origDesc.get.call(this); } }); WebSocket.prototype.addEventListener=function(type,listener){ if(type==='message'){ console.log('[Lorcana] addEventListener message called'); var self=this; return origAEL.call(this,type,function(ev){ intercept.call(self,ev); listener.call(self,ev); }); } return origAEL.call(this,type,listener); }; console.log('[Lorcana] Patched WebSocket prototype (onmessage + addEventListener)'); if(!alreadyDone){ console.log('[Lorcana] First run — reloading page to catch new WebSocket connections'); sessionStorage.setItem('__lorcanaInterceptor','1'); window.location.reload(); } else { console.log('[Lorcana] Ready — waiting for spectator_update message...'); } })();`
+  return `javascript:(function(){ if(window.__lorcanaActive){ console.log('[Lorcana] Already active'); return; } window.__lorcanaActive=true; var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); var origAEL=WebSocket.prototype.addEventListener; var done=false; function intercept(ev){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game&&!done){ var match=window.location.href.match(/spectate\\/([a-f0-9-]+)/i); var uuid=match?match[1]:'unknown'; console.log('[Lorcana] Found game! Opening tool...'); done=true; ${open}; } }catch(e){} } Object.defineProperty(WebSocket.prototype,'onmessage',{ set:function(h){ var self=this; origDesc.set.call(this,function(ev){ intercept.call(self,ev); if(h) h.call(self,ev); }); }, get:function(){ return origDesc.get.call(this); } }); WebSocket.prototype.addEventListener=function(type,listener){ if(type==='message'){ var self=this; return origAEL.call(this,type,function(ev){ intercept.call(self,ev); listener.call(self,ev); }); } return origAEL.call(this,type,listener); }; console.log('[Lorcana] Ready! Now navigate to a spectate page and the tool will open automatically.'); })();`
 }
 
 function makeBookmarkletCode(uuid, origin) {
@@ -111,11 +111,12 @@ function BookmarkletPanel({ uuid }) {
       <summary className="text-xs font-medium text-red-700 cursor-pointer select-none">Bookmarklet (run on the duels.ink page)</summary>
       <div className="mt-2 space-y-3">
         <p className="text-xs text-gray-600">
-          1. Copy the code below.<br />
-          2. Create a new bookmark in your browser (right-click bookmarks bar → Add page).<br />
-          3. Edit it and paste this as the <strong>URL / Address</strong> field.<br />
-          4. Go to the duels.ink spectate page and click the bookmark.<br />
-          5. The tool will open automatically when the server sends the next update (usually within a few seconds).
+          <strong>One-time setup:</strong> Copy the code below and save it as a bookmark (right-click bookmarks bar → Add page, then paste as the URL).<br /><br />
+          <strong>Each game:</strong><br />
+          1. Go to any duels.ink page (home, profile, lobby — anywhere <em>except</em> the spectate page).<br />
+          2. Click the bookmark. You'll see <code>[Lorcana] Ready!</code> in the browser console.<br />
+          3. Navigate to the spectate URL.<br />
+          4. The tool opens automatically in a new tab as soon as the game data arrives.
         </p>
 
         <div>

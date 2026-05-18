@@ -1,32 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-// --- Helpers ---
-
-function extractUuid(input) {
-  const trimmed = input.trim()
-  // Match a UUID anywhere in the string (e.g. from a full URL)
-  const match = trimmed.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
-  return match ? match[0] : null
-}
-
 const DUELS_ORIGIN = 'https://duels.ink'
-
-async function tryFetch(uuid) {
-  try {
-    const res = await fetch(`/api/proxy?uuid=${encodeURIComponent(uuid)}`)
-    if (res.ok) {
-      const data = await res.json()
-      return { data, endpoint: '/api/proxy' }
-    }
-    if (res.status === 404) {
-      throw new Error('Game not found. Make sure you\'re logged into duels.ink and the spectate link is valid.')
-    }
-    throw new Error(`Server error: ${res.status}`)
-  } catch (e) {
-    throw new Error(`Could not fetch game data: ${e.message}`)
-  }
-}
 
 // --- Game state parsers ---
 
@@ -268,24 +243,17 @@ function StatusBadge({ status, winner }) {
 
 export function GameScraperPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [urlInput, setUrlInput] = useState('')
   const [uuid, setUuid] = useState(null)
   const [gameData, setGameData] = useState(null)
   const [endpoint, setEndpoint] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [autoRefresh, setAutoRefresh] = useState(false)
-  const [refreshInterval, setRefreshInterval] = useState(10)
   const [showRaw, setShowRaw] = useState(false)
-  const intervalRef = useRef(null)
 
   // Read UUID from URL params (set by bookmarklet when opening this tab)
   useEffect(() => {
     const paramUuid = searchParams.get('uuid')
     if (paramUuid) {
       setUuid(paramUuid)
-      setUrlInput(`https://duels.ink/spectate/${paramUuid}`)
       setSearchParams({}, { replace: true })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -297,51 +265,11 @@ export function GameScraperPage() {
         setGameData(parseLiveGame(event.data.game))
         setEndpoint('bookmarklet')
         setLastUpdated(new Date())
-        setError(null)
       }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
   }, [])
-
-  const scrape = useCallback(async (id) => {
-    if (!id) return
-    setLoading(true)
-    setError(null)
-    try {
-      const { data, endpoint: ep } = await tryFetch(id)
-      setGameData(parseLiveGame(data))
-      setEndpoint(ep)
-      setLastUpdated(new Date())
-    } catch (e) {
-      setError(e.message)
-      setGameData(null)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const id = extractUuid(urlInput)
-    if (!id) {
-      setError('Could not find a valid game UUID in that URL.')
-      return
-    }
-    setUuid(id)
-    setGameData(null)
-    setError(null)
-    scrape(id)
-  }
-
-  // Auto-refresh
-  useEffect(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current)
-    if (autoRefresh && uuid) {
-      intervalRef.current = setInterval(() => scrape(uuid), refreshInterval * 1000)
-    }
-    return () => clearInterval(intervalRef.current)
-  }, [autoRefresh, refreshInterval, uuid, scrape])
 
   const game = gameData
 
@@ -354,97 +282,21 @@ export function GameScraperPage() {
         </p>
       </div>
 
-      {/* URL Input */}
-      <form onSubmit={handleSubmit} className="mb-6">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={urlInput}
-            onChange={e => setUrlInput(e.target.value)}
-            placeholder="https://duels.ink/spectate/019e371b-8152-7ec3-bcde-8c1eb483a18e"
-            className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent font-mono"
-            spellCheck={false}
-          />
-          <button
-            type="submit"
-            disabled={loading || !urlInput.trim()}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
-          >
-            {loading ? 'Loading…' : 'Scrape'}
-          </button>
-        </div>
-      </form>
-
-      {/* Error state */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-          <div className="font-semibold text-red-700 text-sm mb-1">Could not fetch game data</div>
-          <pre className="text-xs text-red-600 whitespace-pre-wrap font-mono">{error}</pre>
-          {uuid && (
-            <div className="mt-3 pt-3 border-t border-red-100">
-              <p className="text-xs text-red-600 mb-2">
-                This usually means CORS is blocking the request. Make sure you're logged into{' '}
-                <a href={`${DUELS_ORIGIN}/spectate/${uuid}`} target="_blank" rel="noopener noreferrer" className="underline">
-                  duels.ink
-                </a>{' '}
-                in this browser, then try again. If it still fails, use the bookmarklet below on the spectate page.
-              </p>
-              <BookmarkletPanel uuid={uuid} />
-            </div>
-          )}
-        </div>
-      )}
+      {/* Bookmarklet instructions — always visible */}
+      <BookmarkletPanel uuid={uuid} />
 
       {/* Game view */}
       {game && (
         <>
-          {/* Controls bar */}
-          <div className="flex flex-wrap items-center gap-3 mb-4 text-sm">
+          {/* Status bar */}
+          <div className="flex flex-wrap items-center gap-3 mt-6 mb-4 text-sm">
             <StatusBadge status={game.status} winner={game.winner} />
             {game.currentTurn != null && (
               <span className="text-gray-500">Turn <span className="font-semibold text-gray-800">{game.currentTurn}</span></span>
             )}
-            {game.phase && (
-              <span className="text-gray-400 capitalize">{game.phase}</span>
-            )}
-            {endpoint && (
-              <span className="text-gray-300 text-xs truncate hidden sm:block ml-auto">{endpoint}</span>
-            )}
             {lastUpdated && (
-              <span className="text-gray-400 text-xs">
-                Updated {lastUpdated.toLocaleTimeString()}
-              </span>
+              <span className="text-gray-400 text-xs ml-auto">Updated {lastUpdated.toLocaleTimeString()}</span>
             )}
-            <button
-              onClick={() => scrape(uuid)}
-              disabled={loading}
-              className="text-xs bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 px-3 py-1.5 rounded font-medium transition-colors"
-            >
-              {loading ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-
-          {/* Auto-refresh toggle */}
-          <div className="flex items-center gap-3 mb-5 text-sm">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={e => setAutoRefresh(e.target.checked)}
-                className="rounded"
-              />
-              <span className="text-gray-600">Auto-refresh every</span>
-            </label>
-            <select
-              value={refreshInterval}
-              onChange={e => setRefreshInterval(Number(e.target.value))}
-              className="border border-gray-200 rounded text-xs px-2 py-1 text-gray-700"
-            >
-              <option value={5}>5 s</option>
-              <option value={10}>10 s</option>
-              <option value={30}>30 s</option>
-              <option value={60}>60 s</option>
-            </select>
           </div>
 
           {/* Player panels */}
@@ -508,11 +360,9 @@ export function GameScraperPage() {
       )}
 
       {/* Empty state */}
-      {!game && !error && !loading && (
-        <div className="text-center py-16 text-gray-400">
-          <div className="text-4xl mb-3">🎮</div>
-          <div className="text-sm">Paste a spectate URL above to get started.</div>
-          <div className="text-xs mt-1">Example: https://duels.ink/spectate/019e371b-…</div>
+      {!game && (
+        <div className="text-center py-12 text-gray-400">
+          <div className="text-sm">Waiting for game data from the bookmarklet…</div>
         </div>
       )}
     </div>

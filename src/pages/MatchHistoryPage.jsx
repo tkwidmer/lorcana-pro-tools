@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { getToken, fetchMatchHistory } from '../lib/duelsApi'
+import { Link, useNavigate } from 'react-router-dom'
+import { getToken, fetchMatchHistory, fetchReplayBuffer } from '../lib/duelsApi'
 
 function formatDate(isoString) {
   if (!isoString) return '—'
@@ -48,6 +48,42 @@ function InkIcons({ colors }) {
   )
 }
 
+function ImportReplayButton({ game }) {
+  const navigate = useNavigate()
+  const [status, setStatus] = useState(null) // null | 'loading' | 'done' | 'error'
+
+  if (!game.replay_id) return null
+
+  async function handleImport() {
+    setStatus('loading')
+    try {
+      const buf = await fetchReplayBuffer(game.replay_id)
+      const bytes = new Uint8Array(buf)
+      const binary = Array.from(bytes).map(b => String.fromCharCode(b)).join('')
+      const base64 = btoa(binary)
+      sessionStorage.setItem('lorcana_pending_replay', JSON.stringify({
+        base64,
+        filename: game.replay_filename ?? `${game.replay_id}.replay.gz`,
+      }))
+      navigate('/replay-analyzer')
+    } catch {
+      setStatus('error')
+      setTimeout(() => setStatus(null), 3000)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleImport}
+      disabled={status === 'loading'}
+      className="text-xs text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-40 whitespace-nowrap"
+      title="Import replay into Replay Analyzer"
+    >
+      {status === 'loading' ? 'Importing…' : status === 'error' ? 'Failed' : '↗ Replay'}
+    </button>
+  )
+}
+
 function GameRow({ game }) {
   const isSealed = game.queue_id?.toLowerCase().includes('sealed') || game.queue_name?.toLowerCase().includes('sealed')
   return (
@@ -81,6 +117,9 @@ function GameRow({ game }) {
       </td>
       <td className="py-3 px-3 text-sm hidden sm:table-cell text-center">
         <MmrDelta delta={game.mmr_delta} />
+      </td>
+      <td className="py-3 px-3 hidden sm:table-cell">
+        <ImportReplayButton game={game} />
       </td>
     </tr>
   )
@@ -160,6 +199,7 @@ export function MatchHistoryPage() {
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell text-center">Turns</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Duration</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell text-center">MMR Δ</th>
+                <th className="py-2 px-3 hidden sm:table-cell" />
               </tr>
             </thead>
             <tbody>

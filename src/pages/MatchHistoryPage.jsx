@@ -49,6 +49,7 @@ function InkIcons({ colors }) {
 }
 
 function GameRow({ game }) {
+  const isSealed = game.queue_id?.toLowerCase().includes('sealed') || game.queue_name?.toLowerCase().includes('sealed')
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
       <td className="py-3 px-3 text-sm text-gray-600 whitespace-nowrap">
@@ -61,15 +62,13 @@ function GameRow({ game }) {
         <ResultBadge result={game.result} />
       </td>
       <td className="py-3 px-3 hidden sm:table-cell">
-        <InkIcons colors={game.your_deck_colors} />
+        {isSealed ? <span className="text-gray-400 text-sm">Sealed</span> : <InkIcons colors={game.your_deck_colors} />}
       </td>
       <td className="py-3 px-3 text-sm text-gray-700 hidden sm:table-cell">
-        <span className="font-medium">{game.opp_display_name ?? '—'}</span>
-        {game.opp_deck_colors && (
-          <span className="ml-2 inline-flex items-center gap-1">
-            <InkIcons colors={game.opp_deck_colors} />
-          </span>
-        )}
+        <span className="inline-flex items-center gap-2">
+          {!isSealed && game.opp_deck_colors && <InkIcons colors={game.opp_deck_colors} />}
+          <span className="font-medium">{game.opp_display_name ?? '—'}</span>
+        </span>
       </td>
       <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
         {game.your_lore ?? '?'} – {game.opp_lore ?? '?'}

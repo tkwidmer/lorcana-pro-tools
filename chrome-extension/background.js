@@ -1,41 +1,25 @@
 /* eslint-disable no-undef */
 
-const APP_ORIGINS = [
-  'https://lorcana-pro-tools.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:4173',
-]
-
-// Extract game UUID from a duels.ink spectate URL
 function extractUuid(url) {
   const match = (url ?? '').match(/spectate\/([a-f0-9-]+)/i)
   return match ? match[1] : null
 }
 
-// Listen for game data from the duels.ink content script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request) => {
   if (request.type !== 'GAME_DATA') return
 
-  const uuid = extractUuid(request.url)
   const payload = request.payload
+  if (payload?.type !== 'spectator_update' || !payload?.game) return
 
-  // Forward to all open lorcana-pro-tools tabs
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      if (!tab.url) return
-      const isAppTab = APP_ORIGINS.some(origin => tab.url.startsWith(origin))
-      if (!isAppTab) return
+  const uuid = extractUuid(request.url)
 
-      chrome.tabs.sendMessage(tab.id, {
-        type: 'GAME_DATA',
-        payload,
-        uuid,
-        url: request.url,
-      }).catch(() => {
-        // Tab may not have bridge.js loaded yet
-      })
-    })
+  // Write to storage — bridge.js listens via chrome.storage.onChanged,
+  // which fires reliably without any tab messaging timing issues.
+  chrome.storage.local.set({
+    lorcana_latest_game: {
+      game: payload.game,
+      uuid,
+      timestamp: Date.now(),
+    },
   })
-
-  sendResponse({ success: true })
 })

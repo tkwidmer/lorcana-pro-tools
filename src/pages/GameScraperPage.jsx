@@ -355,6 +355,11 @@ export function GameScraperPage() {
     return () => window.removeEventListener('message', handler)
   }, [])
 
+  // Expose game data to console for debugging
+  useEffect(() => {
+    window.__gameData = gameData
+  }, [gameData])
+
   const game = gameData
 
   return (

@@ -11,6 +11,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const uuidMatch = uuid.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
   const cleanUuid = uuidMatch ? uuidMatch[0] : uuid
 
+  // Forward cookies from the browser to duels.ink
+  const cookies = req.headers.cookie || ''
+
   // Try multiple endpoints
   const endpoints = [
     `/api/spectate/${cleanUuid}`,
@@ -26,13 +29,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Cookie': cookies,
         },
-        credentials: 'include',
       })
 
       if (response.ok) {
         const data = await response.json()
         return res.status(200).json(data)
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        // Auth failed, but might work with different endpoint
+        continue
       }
     } catch (e) {
       // Try next endpoint
@@ -40,5 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  return res.status(404).json({ error: 'Game not found or not accessible' })
+  return res.status(404).json({
+    error: 'Game not found or not accessible. Make sure you\'re logged into duels.ink in this browser and the spectate link is valid.'
+  })
 }

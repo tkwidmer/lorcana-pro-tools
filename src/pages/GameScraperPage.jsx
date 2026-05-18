@@ -181,6 +181,8 @@ function parseLiveGame(data, cardLookup = {}) {
       p2InkColors: p2Observed.colors,
       sampleCardRef: sampleCardRefs[0],
       sampleFieldCard: sampleFieldCards[0],
+      sampleObservedCard: p1Observed.cards[0],
+      cardLookupSize: Object.keys(cardLookup).length,
     },
   }
 }
@@ -535,7 +537,14 @@ export function GameScraperPage() {
 
   // Load card data once
   useEffect(() => {
-    loadCardData().then(lookup => setCardLookup(lookup))
+    loadCardData().then(lookup => {
+      console.log('[GameScraper] Loaded card lookup:', Object.keys(lookup).length, 'cards')
+      if (Object.keys(lookup).length > 0) {
+        const sampleId = Object.keys(lookup)[0]
+        console.log('[GameScraper] Sample card:', sampleId, lookup[sampleId])
+      }
+      setCardLookup(lookup)
+    })
   }, [])
 
   // Handshake with bookmarklet: signal ready, then receive game data
@@ -690,6 +699,16 @@ export function GameScraperPage() {
                 <div className="font-bold">Sample Field Card fields:</div>
                 <div className="font-mono text-xs bg-white p-1 rounded mt-1">
                   {game._debug?.sampleFieldCard ? Object.keys(game._debug.sampleFieldCard).join(', ') : 'none'}
+                </div>
+              </div>
+              <div className="mt-2">
+                <div className="font-bold">Card Lookup Size:</div>
+                <div className="text-xs">{Object.keys(cardLookup).length} cards loaded</div>
+              </div>
+              <div className="mt-2">
+                <div className="font-bold">Sample observed deck card IDs:</div>
+                <div className="font-mono text-xs bg-white p-1 rounded mt-1">
+                  {game._debug?.sampleObservedCard?.definitionId ? game._debug.sampleObservedCard.definitionId : 'none'}
                 </div>
               </div>
             </div>

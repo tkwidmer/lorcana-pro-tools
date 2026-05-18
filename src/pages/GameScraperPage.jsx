@@ -285,8 +285,9 @@ function BookmarkletPanel({ uuid }) {
 
 export function GameScraperPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [uuid, setUuid] = useState(null)
-  const [rawGame, setRawGame] = useState(null)   // buffered raw WS game object
+  const [activeUuid, setActiveUuid] = useState(null)
+  const [activeGames, setActiveGames] = useState({}) // uuid → { game, uuid, timestamp }
+  const [rawGame, setRawGame] = useState(null)
   const [gameData, setGameData] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [cardLookup, setCardLookup] = useState({})
@@ -295,7 +296,7 @@ export function GameScraperPage() {
   useEffect(() => {
     const paramUuid = searchParams.get('uuid')
     if (paramUuid) {
-      setUuid(paramUuid)
+      setActiveUuid(paramUuid)
       setSearchParams({}, { replace: true })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -304,7 +305,7 @@ export function GameScraperPage() {
     loadCardData().then(lookup => setCardLookup(lookup))
   }, [])
 
-  // Re-parse whenever cardLookup is populated or rawGame changes
+  // Re-parse when cardLookup populates or selected game changes
   useEffect(() => {
     if (!rawGame) return
     setGameData(parseLiveGame(rawGame.game, cardLookup))
@@ -312,41 +313,88 @@ export function GameScraperPage() {
 
   useEffect(() => {
     const handler = (event) => {
-      if (event.data?.type === 'lorcana_game_data' && event.data?.game) {
+      // Extension: full active-games map (new protocol)
+      if (event.data?.type === 'lorcana_active_games' && event.data?.games) {
+        const games = event.data.games
         setExtensionActive(true)
-        const incomingUuid = event.data.uuid ?? null
-        if (incomingUuid && !uuid) setUuid(incomingUuid)
-        const activeUuid = uuid || incomingUuid
-        setRawGame({ game: event.data.game, uuid: activeUuid })
+        setActiveGames(games)
+
+        // Auto-select: keep current selection if still live, else pick most recent
+        setActiveUuid(prev => {
+          const pick = prev && games[prev] ? prev
+            : Object.values(games).sort((a, b) => b.timestamp - a.timestamp)[0]?.uuid ?? null
+          return pick
+        })
+      }
+      // Bookmarklet: single-game legacy protocol
+      if (event.data?.type === 'lorcana_game_data' && event.data?.game) {
+        const incomingUuid = event.data.uuid ?? `bookmarklet-${Date.now()}`
+        setExtensionActive(true)
+        setActiveGames(prev => ({
+          ...prev,
+          [incomingUuid]: { game: event.data.game, uuid: incomingUuid, timestamp: Date.now() },
+        }))
+        setActiveUuid(incomingUuid)
         setLastUpdated(new Date())
         const parsed = parseLiveGame(event.data.game, cardLookup)
-        if (activeUuid) saveGame(activeUuid, parsed).catch(e => console.error('Failed to save game:', e))
+        saveGame(incomingUuid, parsed).catch(e => console.error('Failed to save game:', e))
       }
     }
     window.addEventListener('message', handler)
-    if (window.opener) {
-      window.opener.postMessage({ type: 'lorcana_ready' }, '*')
-    }
+    if (window.opener) window.opener.postMessage({ type: 'lorcana_ready' }, '*')
     return () => window.removeEventListener('message', handler)
-  }, [cardLookup, uuid])
+  }, [cardLookup])
+
+  // When the selected UUID or games map changes, update displayed game
+  useEffect(() => {
+    if (!activeUuid || !activeGames[activeUuid]) return
+    setRawGame({ game: activeGames[activeUuid].game, uuid: activeUuid })
+    setLastUpdated(new Date(activeGames[activeUuid].timestamp))
+  }, [activeUuid, activeGames])
 
   useEffect(() => {
     window.__gameData = gameData
   }, [gameData])
+
+  const gameList = Object.values(activeGames).sort((a, b) => b.timestamp - a.timestamp)
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Game Scraper</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Paste a duels.ink spectate URL to view live game state. You must be logged into duels.ink in this browser.
+          Open a duels.ink spectate tab to view live game state.
         </p>
       </div>
 
       <ExtensionPanel active={extensionActive} />
-      <BookmarkletPanel uuid={uuid} />
+      <BookmarkletPanel uuid={activeUuid} />
 
-      {gameData && <GameView game={gameData} lastUpdated={lastUpdated} uuid={uuid} />}
+      {gameList.length > 1 && (
+        <div className="flex gap-2 my-4 flex-wrap">
+          {gameList.map(({ uuid, game, timestamp }) => {
+            const g = parseLiveGame(game, cardLookup)
+            const label = g.p1Name && g.p2Name ? `${g.p1Name} vs ${g.p2Name}` : uuid.slice(0, 8)
+            const isActive = uuid === activeUuid
+            return (
+              <button
+                key={uuid}
+                onClick={() => setActiveUuid(uuid)}
+                className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+                  isActive
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-900'
+                }`}
+              >
+                {label}
+                {g.winner == null && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-green-400 align-middle" title="Live" />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {gameData && <GameView game={gameData} lastUpdated={lastUpdated} uuid={activeUuid} />}
 
       {!gameData && (
         <div className="text-center py-12 text-gray-400">

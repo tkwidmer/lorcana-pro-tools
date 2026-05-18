@@ -1,8 +1,7 @@
 /* eslint-disable no-undef */
-// Runs on all lorcana-pro-tools pages. Receives game data from the extension
-// background, forwards it to the page (so GameScraperPage can render it), and
-// also writes directly to IndexedDB so games are saved regardless of which
-// page is currently open.
+// Runs on all lorcana-pro-tools pages. Saves every game update to IndexedDB
+// and forwards the active games map to the page so GameScraperPage can render
+// and toggle between simultaneous games.
 
 const DB_NAME = 'lorcana_pro_tools'
 const DB_VERSION = 1
@@ -15,9 +14,7 @@ function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const d = req.result
-      if (!d.objectStoreNames.contains(STORE)) {
-        d.createObjectStore(STORE, { keyPath: 'uuid' })
-      }
+      if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, { keyPath: 'uuid' })
     }
     req.onsuccess = () => { db = req.result; resolve(db) }
     req.onerror = () => reject(req.error)
@@ -31,35 +28,27 @@ function saveGame(uuid, game) {
     const store = tx.objectStore(STORE)
     const getReq = store.get(uuid)
     getReq.onsuccess = () => {
-      store.put({
-        uuid,
-        savedAt: getReq.result?.savedAt ?? Date.now(),
-        lastUpdated: Date.now(),
-        game,
-      })
+      store.put({ uuid, savedAt: getReq.result?.savedAt ?? Date.now(), lastUpdated: Date.now(), game })
     }
   }).catch(() => {})
 }
 
-function forward(value) {
-  if (!value?.game) return
-  const { game, uuid } = value
-
-  // Save to IndexedDB on every update, from any page
-  if (uuid) saveGame(uuid, game)
-
-  // Also push to the page in case GameScraperPage is open
-  window.postMessage({ type: 'lorcana_game_data', game, uuid: uuid ?? null }, '*')
+function forwardGames(games) {
+  if (!games || typeof games !== 'object') return
+  // Save every game to IndexedDB
+  Object.values(games).forEach(({ uuid, game }) => saveGame(uuid, game))
+  // Push updated map to the page
+  window.postMessage({ type: 'lorcana_active_games', games }, '*')
 }
 
-// Push any game data already in storage when this page loads
-chrome.storage.local.get('lorcana_latest_game', (result) => {
-  forward(result.lorcana_latest_game)
+// Push any games already in storage when this page loads
+chrome.storage.local.get('lorcana_active_games', (result) => {
+  forwardGames(result.lorcana_active_games)
 })
 
 // Listen for future updates
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.lorcana_latest_game) {
-    forward(changes.lorcana_latest_game.newValue)
+  if (area === 'local' && changes.lorcana_active_games) {
+    forwardGames(changes.lorcana_active_games.newValue)
   }
 })

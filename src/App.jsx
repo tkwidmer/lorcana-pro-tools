@@ -10,6 +10,7 @@ import { GameScraperPage } from './pages/GameScraperPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { GameHistoryDetailPage } from './pages/GameHistoryDetailPage'
 import { PlayerProfilePage } from './pages/PlayerProfilePage'
+import { DeckComparisonPage } from './pages/DeckComparisonPage'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
         <Route path="/players/:name" element={<PlayerProfilePage />} />
+        <Route path="/deck-comparison" element={<DeckComparisonPage />} />
         {/* Redirects from old routes */}
         <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />
         <Route path="/players" element={<Navigate to="/library?tab=players" replace />} />

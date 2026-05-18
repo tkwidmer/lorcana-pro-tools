@@ -37,6 +37,12 @@ const TOOLS = [
     description: 'Paste a duels.ink spectate URL to view live game state: player lore, board, hand counts, and action log with auto-refresh.',
     label: 'Open Tool',
   },
+  {
+    path: '/game-history',
+    name: 'Game History',
+    description: 'Review past games scraped on this browser. Stats dashboard tracks most-played cards, ink color win rates, average game length, and matchups.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

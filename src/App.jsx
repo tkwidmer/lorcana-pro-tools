@@ -7,6 +7,8 @@ import { LimitedGuidePage } from './pages/LimitedGuidePage'
 import { DrawOddsPage } from './pages/DrawOddsPage'
 import { ReplayAnalyzerPage } from './pages/ReplayAnalyzerPage'
 import { GameScraperPage } from './pages/GameScraperPage'
+import { GameHistoryPage } from './pages/GameHistoryPage'
+import { GameHistoryDetailPage } from './pages/GameHistoryDetailPage'
 
 export default function App() {
   return (
@@ -20,6 +22,8 @@ export default function App() {
         <Route path="/deck-insights" element={<DrawOddsPage />} />
         <Route path="/replay-analyzer" element={<ReplayAnalyzerPage />} />
         <Route path="/game-scraper" element={<GameScraperPage />} />
+        <Route path="/game-history" element={<GameHistoryPage />} />
+        <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
       </Routes>
     </BrowserRouter>
   )

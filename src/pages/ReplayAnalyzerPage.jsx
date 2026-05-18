@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 
 // --- Replay parsing ---
 
@@ -1727,6 +1727,21 @@ export function ReplayAnalyzerPage() {
     }
     setLoading(false)
   }, [])
+
+  // Pick up replays imported from the Match History page
+  useEffect(() => {
+    const pending = sessionStorage.getItem('lorcana_pending_replay')
+    if (!pending) return
+    sessionStorage.removeItem('lorcana_pending_replay')
+    try {
+      const { base64, filename } = JSON.parse(pending)
+      const binary = atob(base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const file = new File([bytes], filename, { type: 'application/gzip' })
+      processFiles([file])
+    } catch {}
+  }, [processFiles])
 
   const removeGame = (gameId) => {
     setGames(prev => {

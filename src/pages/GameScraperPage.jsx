@@ -590,10 +590,37 @@ export function GameScraperPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
               <h3 className="text-sm font-bold text-gray-700 mb-2">Game Actions ({game.log.length})</h3>
               <div className="max-h-96 overflow-y-auto">
-                {game.log.map((entry, i) => {
-                  const playerColors = entry.player === 1 ? game.p1InkColors : entry.player === 2 ? game.p2InkColors : []
-                  return <LogEntry key={i} entry={entry} playerColors={playerColors} />
-                })}
+                {(() => {
+                  const grouped = {}
+                  game.log.forEach(entry => {
+                    const turn = entry.turnNumber ?? 0
+                    if (!grouped[turn]) grouped[turn] = {}
+                    const player = entry.player ?? 'unknown'
+                    if (!grouped[turn][player]) grouped[turn][player] = []
+                    grouped[turn][player].push(entry)
+                  })
+
+                  return Object.entries(grouped)
+                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                    .map(([turn, playerActions], turnIdx) => (
+                      <div key={turn}>
+                        {turnIdx > 0 && <div className="border-t-2 border-gray-300 my-2" />}
+                        <div className="text-xs font-bold text-gray-500 uppercase bg-gray-50 px-2 py-1 mb-1 rounded">
+                          Turn {turn}
+                        </div>
+                        {Object.entries(playerActions)
+                          .map(([player, entries], playerIdx) => (
+                            <div key={`${turn}-${player}`}>
+                              {playerIdx > 0 && <div className="border-t border-gray-200 my-1" />}
+                              {entries.map((entry, i) => {
+                                const playerColors = entry.player === 1 || entry.player === '1' ? game.p1InkColors : entry.player === 2 || entry.player === '2' ? game.p2InkColors : []
+                                return <LogEntry key={i} entry={entry} playerColors={playerColors} />
+                              })}
+                            </div>
+                          ))}
+                      </div>
+                    ))
+                })()}
               </div>
             </div>
           )}

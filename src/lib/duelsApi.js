@@ -1,5 +1,4 @@
 const TOKEN_KEY = 'duels_api_token'
-const BASE = 'https://duels.ink'
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) ?? ''
@@ -24,7 +23,7 @@ export async function fetchMatchHistory({ cursor, limit = 100, from, to, source 
   if (to) params.set('to', to)
   if (source) params.set('source', source)
 
-  const res = await fetch(`${BASE}/api/me/match-history?${params}`, {
+  const res = await fetch(`/api/duels-match-history?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 

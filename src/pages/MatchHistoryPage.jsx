@@ -91,13 +91,7 @@ export function MatchHistoryPage() {
       setGames(prev => append ? [...prev, ...(data.games ?? [])] : (data.games ?? []))
       setNextCursor(data.next_cursor ?? null)
     } catch (err) {
-      if (err instanceof TypeError) {
-        setError(
-          'Unable to reach duels.ink directly from the browser. This may be a CORS restriction — try using the browser extension or check the console.'
-        )
-      } else {
-        setError(err.message)
-      }
+      setError(err.message)
     } finally {
       setLoading(false)
       setLoadingMore(false)

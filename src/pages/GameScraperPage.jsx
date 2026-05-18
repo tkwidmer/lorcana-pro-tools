@@ -3,6 +3,33 @@ import { useSearchParams } from 'react-router-dom'
 
 const DUELS_ORIGIN = 'https://duels.ink'
 
+const INK_NAME_MAP = {
+  red: 'ruby', ruby: 'ruby',
+  blue: 'sapphire', sapphire: 'sapphire',
+  green: 'emerald', emerald: 'emerald',
+  yellow: 'amber', amber: 'amber',
+  purple: 'amethyst', amethyst: 'amethyst',
+  gray: 'steel', grey: 'steel', steel: 'steel',
+}
+
+// Returns the valid ink filename (without .png) or null if unknown
+function resolveInkName(color) {
+  if (!color) return null
+  return INK_NAME_MAP[color.toLowerCase()] ?? null
+}
+
+// Split "Emerald/Steel" style colors into individual resolved names
+function resolveColors(colors) {
+  const result = new Set()
+  for (const c of (colors ?? [])) {
+    for (const part of c.split('/')) {
+      const name = resolveInkName(part.trim())
+      if (name) result.add(name)
+    }
+  }
+  return Array.from(result)
+}
+
 // Cache for card data (name -> { color, etc })
 let cardDataCache = null
 async function loadCardData() {
@@ -48,7 +75,8 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
       // Extract ink color from card lookup (match by name)
       const cardDef = cardLookup[ref.name]
       if (cardDef?.color) {
-        colors.add(cardDef.color)
+        const name = resolveInkName(cardDef.color)
+        if (name) colors.add(name)
       }
     }
   }
@@ -62,7 +90,8 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
     // Match by name for color lookup
     const cardDef = cardLookup[card.fullName] || cardLookup[card.name]
     if (cardDef?.color) {
-      colors.add(cardDef.color)
+      const name = resolveInkName(cardDef.color)
+      if (name) colors.add(name)
     }
   }
 
@@ -278,39 +307,22 @@ function LoreBar({ lore, label, color }) {
 }
 
 function InkColors({ colors }) {
-  if (!colors?.length) return null
-
-  const colorNameMap = {
-    red: 'ruby',
-    ruby: 'ruby',
-    blue: 'sapphire',
-    sapphire: 'sapphire',
-    green: 'emerald',
-    emerald: 'emerald',
-    yellow: 'amber',
-    amber: 'amber',
-    purple: 'amethyst',
-    amethyst: 'amethyst',
-    gray: 'steel',
-    steel: 'steel',
-  }
+  const resolved = resolveColors(colors)
+  if (!resolved.length) return null
 
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs font-medium text-gray-600">Ink:</span>
       <div className="flex gap-1">
-        {colors.map((color, i) => {
-          const inkName = colorNameMap[color?.toLowerCase()] ?? color?.toLowerCase()
-          return (
-            <img
-              key={i}
-              src={`/ink/${inkName}.png`}
-              alt={color}
-              className="w-5 h-5"
-              title={color}
-            />
-          )
-        })}
+        {resolved.map((inkName) => (
+          <img
+            key={inkName}
+            src={`/ink/${inkName}.png`}
+            alt={inkName}
+            className="w-5 h-5"
+            title={inkName}
+          />
+        ))}
       </div>
     </div>
   )
@@ -411,37 +423,21 @@ function LogEntry({ entry, playerColors }) {
     return ref ? (ref.name ?? ref.id ?? '?') : '?'
   })
 
-  const colorNameMap = {
-    red: 'ruby',
-    ruby: 'ruby',
-    blue: 'sapphire',
-    sapphire: 'sapphire',
-    green: 'emerald',
-    emerald: 'emerald',
-    yellow: 'amber',
-    amber: 'amber',
-    purple: 'amethyst',
-    amethyst: 'amethyst',
-    gray: 'steel',
-    steel: 'steel',
-  }
+  const resolvedColors = resolveColors(playerColors)
 
   return (
     <div className="flex gap-2 py-1 text-xs border-b border-gray-50 last:border-0 items-center">
-      {playerColors && playerColors.length > 0 && (
+      {resolvedColors.length > 0 && (
         <div className="flex gap-0.5">
-          {playerColors.map((color, i) => {
-            const inkName = colorNameMap[color?.toLowerCase()] ?? color?.toLowerCase()
-            return (
-              <img
-                key={i}
-                src={`/ink/${inkName}.png`}
-                alt={color}
-                className="w-4 h-4 flex-shrink-0"
-                title={color}
-              />
-            )
-          })}
+          {resolvedColors.map((inkName) => (
+            <img
+              key={inkName}
+              src={`/ink/${inkName}.png`}
+              alt={inkName}
+              className="w-4 h-4 flex-shrink-0"
+              title={inkName}
+            />
+          ))}
         </div>
       )}
       <span className="text-gray-400 flex-shrink-0 w-12">T{turnNumber ?? '?'} P{player ?? '?'}</span>

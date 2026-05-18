@@ -12,34 +12,20 @@ function extractUuid(input) {
 
 const DUELS_ORIGIN = 'https://duels.ink'
 
-const ENDPOINTS = [
-  (id) => `/api/spectate/${id}`,
-  (id) => `/api/game/${id}`,
-  (id) => `/api/games/${id}`,
-  (id) => `/api/room/${id}`,
-  (id) => `/api/v1/spectate/${id}`,
-  (id) => `/api/v1/game/${id}`,
-]
-
 async function tryFetch(uuid) {
-  const errors = []
-  for (const ep of ENDPOINTS) {
-    const url = `${DUELS_ORIGIN}${ep(uuid)}`
-    try {
-      const res = await fetch(url, {
-        credentials: 'include',
-        headers: { Accept: 'application/json' },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        return { data, endpoint: url }
-      }
-      errors.push(`${url} → ${res.status}`)
-    } catch (e) {
-      errors.push(`${url} → ${e.message}`)
+  try {
+    const res = await fetch(`/api/proxy?uuid=${encodeURIComponent(uuid)}`)
+    if (res.ok) {
+      const data = await res.json()
+      return { data, endpoint: '/api/proxy' }
     }
+    if (res.status === 404) {
+      throw new Error('Game not found. Make sure you\'re logged into duels.ink and the spectate link is valid.')
+    }
+    throw new Error(`Server error: ${res.status}`)
+  } catch (e) {
+    throw new Error(`Could not fetch game data: ${e.message}`)
   }
-  throw new Error(`No endpoint responded.\n${errors.join('\n')}`)
 }
 
 // --- Game state parsers ---

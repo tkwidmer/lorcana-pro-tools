@@ -33,6 +33,20 @@ export async function fetchMatchHistory({ cursor, limit = 100, from, to, source 
   return res.json() // { games: MatchHistoryRow[], next_cursor: string | null }
 }
 
+export async function fetchGamelogBuffer(gameId) {
+  const token = getToken()
+  if (!token) throw new Error('No API token configured')
+
+  const res = await fetch(`/api/duels-gamelog?id=${encodeURIComponent(gameId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (res.status === 401) throw new Error('Invalid or expired API token')
+  if (!res.ok) throw new Error(`Failed to fetch gamelog: ${res.status}`)
+
+  return res.arrayBuffer()
+}
+
 export async function fetchReplayBuffer(replayId) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')

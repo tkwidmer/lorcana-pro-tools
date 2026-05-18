@@ -27,6 +27,7 @@ export function Nav() {
                 : pathname === '/settings' ? 'Settings'
                 : pathname === '/match-history' ? 'Match History'
                 : pathname === '/deck-comparison' ? 'Deck Comparison'
+                : pathname === '/gamelog' ? 'Gamelog'
                 : ''}
             </span>
           </>

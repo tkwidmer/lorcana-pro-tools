@@ -119,7 +119,18 @@ function GameRow({ game }) {
         <MmrDelta delta={game.mmr_delta} />
       </td>
       <td className="py-3 px-3 hidden sm:table-cell">
-        <ImportReplayButton game={game} />
+        <div className="flex flex-col gap-1">
+          <ImportReplayButton game={game} />
+          {game.gamelog_id && (
+            <Link
+              to={`/gamelog?id=${game.gamelog_id}`}
+              className="text-xs text-gray-400 hover:text-gray-900 transition-colors whitespace-nowrap"
+              title="View full gamelog"
+            >
+              ↗ Gamelog
+            </Link>
+          )}
+        </div>
       </td>
     </tr>
   )

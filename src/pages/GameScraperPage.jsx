@@ -5,6 +5,32 @@ const DUELS_ORIGIN = 'https://duels.ink'
 
 // --- Game state parsers ---
 
+function buildObservedDeck(logs, fieldCards, playerNum) {
+  // Track each (definitionId, logIndex) pair to avoid double-counting refs within one log entry
+  // Count max copies by tracking how many distinct log entries reference the same card
+  const seen = {} // definitionId → Set of log indices where it appeared
+  logs.forEach((log, logIdx) => {
+    if (log.player !== playerNum) return
+    for (const ref of (log.cardRefs ?? [])) {
+      if (!ref.id || !ref.name) continue
+      if (!seen[ref.id]) seen[ref.id] = { name: ref.name, logIndices: new Set() }
+      seen[ref.id].logIndices.add(logIdx)
+    }
+  })
+  // Also include field cards (they may not appear in logs yet)
+  for (const card of fieldCards) {
+    if (!card.definitionId) continue
+    if (!seen[card.definitionId]) seen[card.definitionId] = { name: card.name ?? card.definitionId, logIndices: new Set() }
+  }
+  return Object.entries(seen)
+    .map(([definitionId, { name, logIndices }]) => ({
+      definitionId,
+      name,
+      count: logIndices.size || 1,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 function parseLiveGame(data) {
   // data may be the full WS message { type, game } or just the game object
   const game = data.game ?? data
@@ -31,6 +57,9 @@ function parseLiveGame(data) {
     fullName: defIdToName[card.definitionId] ?? card.fullName ?? card.name ?? card.definitionId,
   }))
 
+  const p1Field = enrichField(p1.field)
+  const p2Field = enrichField(p2.field)
+
   return {
     p1Name,
     p2Name,
@@ -41,12 +70,14 @@ function parseLiveGame(data) {
     phase: null,
     status: game.status ?? null,
     winner: game.winner ?? null,
-    p1Field: enrichField(p1.field),
-    p2Field: enrichField(p2.field),
+    p1Field,
+    p2Field,
     p1Hand: p1.handCount ?? null,
     p2Hand: p2.handCount ?? null,
     p1Deck: p1.deckCount ?? null,
     p2Deck: p2.deckCount ?? null,
+    p1ObservedDeck: buildObservedDeck(logs, p1Field, 1),
+    p2ObservedDeck: buildObservedDeck(logs, p2Field, 2),
     log: logs,
     raw: data,
   }
@@ -191,7 +222,7 @@ function FieldCard({ card }) {
   )
 }
 
-function PlayerPanel({ name, lore, handCount, deckCount, field, loreColor, isActive }) {
+function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, loreColor, isActive }) {
   return (
     <div className={`bg-white rounded-xl border-2 p-4 flex flex-col gap-3 ${isActive ? 'border-blue-400 shadow-md' : 'border-gray-200'}`}>
       <div className="flex items-center gap-2">
@@ -214,6 +245,7 @@ function PlayerPanel({ name, lore, handCount, deckCount, field, loreColor, isAct
           </div>
         </div>
       )}
+      <ObservedDeck cards={observedDeck} />
     </div>
   )
 }
@@ -228,6 +260,31 @@ function LogEntry({ entry }) {
     <div className="flex gap-2 py-1 text-xs border-b border-gray-50 last:border-0">
       <span className="text-gray-400 flex-shrink-0 w-14">T{turnNumber ?? '?'} P{player ?? '?'}</span>
       <span className="text-gray-700 truncate">{resolved || type}</span>
+    </div>
+  )
+}
+
+function ObservedDeck({ cards }) {
+  const [open, setOpen] = useState(false)
+  if (!cards?.length) return null
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-700 transition-colors"
+      >
+        Observed Cards ({cards.length} unique) {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <div className="mt-1 max-h-48 overflow-y-auto">
+          {cards.map(card => (
+            <div key={card.definitionId} className="flex items-center justify-between py-0.5 text-xs border-b border-gray-50 last:border-0">
+              <span className="text-gray-700 truncate">{card.name}</span>
+              <span className="text-gray-400 flex-shrink-0 ml-2 tabular-nums">{card.count}×</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -311,6 +368,7 @@ export function GameScraperPage() {
               handCount={game.p1Hand}
               deckCount={game.p1Deck}
               field={game.p1Field}
+              observedDeck={game.p1ObservedDeck}
               loreColor="bg-amber-400"
               isActive={game.activePlayer === 1 || game.activePlayer === '1'}
             />
@@ -320,6 +378,7 @@ export function GameScraperPage() {
               handCount={game.p2Hand}
               deckCount={game.p2Deck}
               field={game.p2Field}
+              observedDeck={game.p2ObservedDeck}
               loreColor="bg-sapphire-400 bg-blue-400"
               isActive={game.activePlayer === 2 || game.activePlayer === '2'}
             />

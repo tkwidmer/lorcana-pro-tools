@@ -568,7 +568,7 @@ export function GameScraperPage() {
           </div>
 
           {/* Player panels */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 items-start">
             <PlayerPanel
               name={game.p1Name}
               lore={game.p1Lore}

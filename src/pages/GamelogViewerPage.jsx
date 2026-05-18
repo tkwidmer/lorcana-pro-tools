@@ -21,82 +21,163 @@ async function decompressGzip(arrayBuffer) {
   return new TextDecoder().decode(out)
 }
 
-function CardTable({ title, cards }) {
-  if (!cards || cards.length === 0) return null
+// Extract card objects from a log entry's data field
+function extractCards(entry) {
+  const d = entry.data ?? {}
+  const singles = [d.card, d.drawnCard, d.playedCard, d.inkedCard, d.discardedCard, d.attacker, d.defender].filter(c => c?.name)
+  const arrays = [...(d.cards ?? []), ...(d.initialHandCards ?? []), ...(d.keptCards ?? []), ...(d.mulliganCards ?? []), ...(d.returnedCards ?? [])].filter(c => c?.name)
+  return [...singles, ...arrays]
+}
+
+function parseGamelog(logs) {
+  const players = {
+    1: { initialHand: [], mulliganSent: [], mulliganKept: [], cards: {} },
+    2: { initialHand: [], mulliganSent: [], mulliganKept: [], cards: {} },
+  }
+  let p1Name = 'Player 1'
+  let p2Name = 'Player 2'
+  let winner = null
+  let turnCount = 0
+
+  for (const entry of logs) {
+    const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
+    const type = entry.type
+    const d = entry.data ?? {}
+
+    if (entry.turnNumber > turnCount) turnCount = entry.turnNumber
+
+    if (type === 'GAME_START') {
+      if (d.playerNames) {
+        p1Name = d.playerNames['1'] ?? d.playerNames.player1 ?? 'Player 1'
+        p2Name = d.playerNames['2'] ?? d.playerNames.player2 ?? 'Player 2'
+      }
+      if (d.players) {
+        p1Name = d.players[0]?.name ?? p1Name
+        p2Name = d.players[1]?.name ?? p2Name
+      }
+    }
+
+    if (type === 'GAME_END') {
+      winner = d.winner ?? null
+    }
+
+    if (!p) continue
+    const pData = players[p]
+
+    if (type === 'INITIAL_HAND') {
+      pData.initialHand = (d.initialHandCards ?? []).filter(c => c?.name)
+    }
+
+    if (type === 'MULLIGAN') {
+      pData.mulliganSent = (d.mulliganCards ?? d.sentBackCards ?? []).filter(c => c?.name)
+      pData.mulliganKept = (d.keptCards ?? []).filter(c => c?.name)
+    }
+
+    const cards = extractCards(entry)
+    for (const card of cards) {
+      if (!card.name) continue
+      if (!pData.cards[card.name]) {
+        pData.cards[card.name] = { name: card.name, id: card.id, drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0 }
+      }
+      const c = pData.cards[card.name]
+      if (type === 'CARD_DRAWN' || type === 'TURN_DRAW') c.drawn++
+      else if (type === 'INITIAL_HAND' || type === 'MULLIGAN') { /* handled separately */ }
+      else if (type === 'CARD_PLAYED') c.played++
+      else if (type === 'CARD_INKED') c.inked++
+      else if (type === 'CARD_DISCARDED') c.discarded++
+      else if (type === 'CARD_DESTROYED') c.destroyed++
+    }
+  }
+
+  const toList = (cardsMap) => Object.values(cardsMap).sort((a, b) => {
+    const aTotal = a.drawn + a.played + a.inked
+    const bTotal = b.drawn + b.played + b.inked
+    return bTotal - aTotal || a.name.localeCompare(b.name)
+  })
+
+  return {
+    p1Name, p2Name, winner, turnCount,
+    p1: { ...players[1], cardList: toList(players[1].cards) },
+    p2: { ...players[2], cardList: toList(players[2].cards) },
+  }
+}
+
+// --- Components ---
+
+function HandCards({ cards, label }) {
+  if (!cards?.length) return null
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-700 mb-2">{title}</h3>
-      <table className="w-full text-left text-sm border-collapse">
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="py-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Card</th>
-            <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Drawn</th>
-            <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Played</th>
-            <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Inked</th>
-            <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Discarded</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cards.sort((a, b) => b.drawn - a.drawn || a.name.localeCompare(b.name)).map(card => (
-            <tr key={card.name} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="py-1.5 pr-4 font-medium text-gray-800">{card.name}</td>
-              <td className="py-1.5 pr-3 text-center text-gray-600">{card.drawn || '—'}</td>
-              <td className="py-1.5 pr-3 text-center text-gray-600">{card.played || '—'}</td>
-              <td className="py-1.5 pr-3 text-center text-gray-600">{card.inked || '—'}</td>
-              <td className="py-1.5 pr-3 text-center text-gray-600">{card.discarded || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{label}</div>
+      <div className="flex flex-wrap gap-1">
+        {cards.map((c, i) => (
+          <span key={i} className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5">{c.name}</span>
+        ))}
+      </div>
     </div>
   )
 }
 
-function parseGamelog(data) {
-  // Handle both array-of-events and wrapped object formats
-  const logs = Array.isArray(data) ? data : (data.logs ?? data.events ?? data.actions ?? [])
-  const meta = Array.isArray(data) ? {} : data
+function PlayerSection({ name, data, isWinner }) {
+  const { initialHand, mulliganSent, mulliganKept, cardList } = data
+  const tookMulligan = mulliganSent.length > 0
 
-  const players = { 1: {}, 2: {} }
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-base font-bold text-gray-900">{name}</h2>
+        {isWinner && <span className="text-xs font-semibold px-2 py-0.5 rounded bg-green-100 text-green-800">Winner</span>}
+      </div>
 
-  for (const entry of logs) {
-    const p = entry.player ?? entry.playerNum ?? entry.playerId
-    if (p !== 1 && p !== 2 && p !== '1' && p !== '2') continue
-    const pKey = String(p) === '1' ? 1 : 2
-    const type = entry.type ?? entry.eventType ?? entry.action
+      <div className="space-y-3 mb-5">
+        <HandCards cards={initialHand} label="Opening hand" />
+        {tookMulligan ? (
+          <>
+            <HandCards cards={mulliganSent} label="Sent back (mulligan)" />
+            <HandCards cards={mulliganKept} label="Kept after mulligan" />
+          </>
+        ) : initialHand.length > 0 ? (
+          <div className="text-xs text-gray-400">Kept opening hand</div>
+        ) : null}
+      </div>
 
-    const refs = entry.cardRefs ?? entry.cards ?? entry.card ? [entry.card] : []
-    const names = refs.flatMap(r => {
-      const name = r?.fullName ?? r?.name ?? r?.cardName
-      return name ? [name] : []
-    })
-
-    for (const name of names) {
-      if (!players[pKey][name]) players[pKey][name] = { name, drawn: 0, played: 0, inked: 0, discarded: 0 }
-      if (type === 'CARD_DRAWN') players[pKey][name].drawn++
-      else if (type === 'CARD_PLAYED') players[pKey][name].played++
-      else if (type === 'CARD_INKED') players[pKey][name].inked++
-      else if (type === 'CARD_DISCARDED') players[pKey][name].discarded++
-    }
-  }
-
-  return {
-    meta,
-    logs,
-    p1Cards: Object.values(players[1]),
-    p2Cards: Object.values(players[2]),
-    topLevelKeys: Object.keys(Array.isArray(data) ? {} : data),
-    sampleEntry: logs[0] ?? null,
-    eventTypes: [...new Set(logs.map(l => l.type ?? l.eventType ?? l.action).filter(Boolean))].sort(),
-  }
+      {cardList.length > 0 && (
+        <table className="w-full text-left text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="py-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Card</th>
+              <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Drawn</th>
+              <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Played</th>
+              <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Inked</th>
+              <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Discarded</th>
+              <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Destroyed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cardList.map(card => (
+              <tr key={card.name} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="py-1.5 pr-4 font-medium text-gray-800 text-sm">{card.name}</td>
+                <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.drawn || '—'}</td>
+                <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.played || '—'}</td>
+                <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.inked || '—'}</td>
+                <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.discarded || '—'}</td>
+                <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.destroyed || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
 }
 
 export function GamelogViewerPage() {
   const [searchParams] = useSearchParams()
   const gameId = searchParams.get('id')
-  const [status, setStatus] = useState('idle') // idle | loading | done | error
+  const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const [parsed, setParsed] = useState(null)
+  const [rawLogs, setRawLogs] = useState(null)
 
   useEffect(() => {
     if (!gameId || !getToken()) return
@@ -104,8 +185,9 @@ export function GamelogViewerPage() {
     fetchGamelogBuffer(gameId)
       .then(buf => decompressGzip(buf))
       .then(text => {
-        const data = JSON.parse(text)
-        setParsed(parseGamelog(data))
+        const logs = JSON.parse(text)
+        setRawLogs(logs)
+        setParsed(parseGamelog(logs))
         setStatus('done')
       })
       .catch(e => {
@@ -124,9 +206,7 @@ export function GamelogViewerPage() {
 
   if (!gameId) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-12 text-sm text-gray-600">
-        No game ID specified.
-      </div>
+      <div className="max-w-5xl mx-auto px-6 py-12 text-sm text-gray-600">No game ID specified.</div>
     )
   }
 
@@ -146,53 +226,43 @@ export function GamelogViewerPage() {
 
       {status === 'done' && parsed && (
         <div className="space-y-10">
-          {/* Card tables */}
-          {(parsed.p1Cards.length > 0 || parsed.p2Cards.length > 0) ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <CardTable title="Player 1" cards={parsed.p1Cards} />
-              <CardTable title="Player 2" cards={parsed.p2Cards} />
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">No card events parsed — see raw structure below to check the format.</p>
-          )}
+          <div className="text-sm text-gray-500">
+            {parsed.turnCount} turns · {rawLogs?.length ?? 0} events
+          </div>
 
-          {/* Raw structure inspector */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <PlayerSection
+              name={parsed.p1Name}
+              data={parsed.p1}
+              isWinner={parsed.winner === 1 || parsed.winner === '1'}
+            />
+            <PlayerSection
+              name={parsed.p2Name}
+              data={parsed.p2}
+              isWinner={parsed.winner === 2 || parsed.winner === '2'}
+            />
+          </div>
+
+          {/* Raw inspector for format verification */}
           <details className="border border-dashed border-gray-300 rounded-lg p-4 text-xs text-gray-600">
-            <summary className="cursor-pointer font-medium text-gray-700 select-none">
-              Raw structure inspector
-            </summary>
+            <summary className="cursor-pointer font-medium text-gray-700 select-none">Raw structure inspector</summary>
             <div className="mt-3 space-y-3">
               <div>
-                <span className="font-semibold text-gray-700">Top-level keys: </span>
-                <span className="font-mono">{parsed.topLevelKeys.join(', ') || '(array)'}</span>
+                <span className="font-semibold text-gray-700">Event types ({[...new Set(rawLogs.map(l => l.type))].length}): </span>
+                <span className="font-mono">{[...new Set(rawLogs.map(l => l.type))].sort().join(', ')}</span>
               </div>
               <div>
-                <span className="font-semibold text-gray-700">Event types seen ({parsed.eventTypes.length}): </span>
-                <span className="font-mono">{parsed.eventTypes.join(', ')}</span>
+                <div className="font-semibold text-gray-700 mb-1">First CARD_DRAWN entry:</div>
+                <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+                  {JSON.stringify(rawLogs.find(l => l.type === 'CARD_DRAWN' || l.type === 'TURN_DRAW') ?? 'none', null, 2)}
+                </pre>
               </div>
               <div>
-                <span className="font-semibold text-gray-700">Total log entries: </span>
-                <span className="font-mono">{parsed.logs.length}</span>
+                <div className="font-semibold text-gray-700 mb-1">First MULLIGAN entry:</div>
+                <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+                  {JSON.stringify(rawLogs.find(l => l.type === 'MULLIGAN') ?? 'none', null, 2)}
+                </pre>
               </div>
-              {parsed.sampleEntry && (
-                <div>
-                  <div className="font-semibold text-gray-700 mb-1">First log entry:</div>
-                  <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
-                    {JSON.stringify(parsed.sampleEntry, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {parsed.meta && Object.keys(parsed.meta).length > 0 && (
-                <div>
-                  <div className="font-semibold text-gray-700 mb-1">Top-level metadata (non-logs fields):</div>
-                  <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
-                    {JSON.stringify(
-                      Object.fromEntries(Object.entries(parsed.meta).filter(([k]) => k !== 'logs' && k !== 'events' && k !== 'actions')),
-                      null, 2
-                    )}
-                  </pre>
-                </div>
-              )}
             </div>
           </details>
         </div>

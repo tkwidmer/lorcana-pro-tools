@@ -7,7 +7,6 @@ import { LimitedGuidePage } from './pages/LimitedGuidePage'
 import { DrawOddsPage } from './pages/DrawOddsPage'
 import { ReplayAnalyzerPage } from './pages/ReplayAnalyzerPage'
 import { GameScraperPage } from './pages/GameScraperPage'
-import { LegalityCheckerPage } from './pages/LegalityCheckerPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { GameHistoryDetailPage } from './pages/GameHistoryDetailPage'
 import { PlayerProfilePage } from './pages/PlayerProfilePage'
@@ -24,7 +23,6 @@ export default function App() {
         <Route path="/deck-insights" element={<DrawOddsPage />} />
         <Route path="/replay-analyzer" element={<ReplayAnalyzerPage />} />
         <Route path="/game-scraper" element={<GameScraperPage />} />
-        <Route path="/legality-checker" element={<LegalityCheckerPage />} />
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
         <Route path="/players/:name" element={<PlayerProfilePage />} />
@@ -32,6 +30,7 @@ export default function App() {
         <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />
         <Route path="/players" element={<Navigate to="/library?tab=players" replace />} />
         <Route path="/shared" element={<Navigate to="/library" replace />} />
+        <Route path="/legality-checker" element={<Navigate to="/deck-insights" replace />} />
       </Routes>
     </BrowserRouter>
   )

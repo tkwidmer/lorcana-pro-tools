@@ -22,6 +22,8 @@ export function Nav() {
                 : pathname === '/game-scraper' ? 'Game Scraper'
                 : pathname === '/game-history' ? 'Game History'
                 : pathname.startsWith('/game-history/') ? 'Game History'
+                : pathname === '/players' ? 'Players'
+                : pathname.startsWith('/players/') ? 'Players'
                 : ''}
             </span>
           </>

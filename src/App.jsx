@@ -9,6 +9,8 @@ import { ReplayAnalyzerPage } from './pages/ReplayAnalyzerPage'
 import { GameScraperPage } from './pages/GameScraperPage'
 import { GameHistoryPage } from './pages/GameHistoryPage'
 import { GameHistoryDetailPage } from './pages/GameHistoryDetailPage'
+import { PlayersPage } from './pages/PlayersPage'
+import { PlayerProfilePage } from './pages/PlayerProfilePage'
 
 export default function App() {
   return (
@@ -24,6 +26,8 @@ export default function App() {
         <Route path="/game-scraper" element={<GameScraperPage />} />
         <Route path="/game-history" element={<GameHistoryPage />} />
         <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
+        <Route path="/players" element={<PlayersPage />} />
+        <Route path="/players/:name" element={<PlayerProfilePage />} />
       </Routes>
     </BrowserRouter>
   )

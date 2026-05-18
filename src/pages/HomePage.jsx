@@ -43,6 +43,12 @@ const TOOLS = [
     description: 'Review past games scraped on this browser. Stats dashboard tracks most-played cards, ink color win rates, average game length, and matchups.',
     label: 'Open Tool',
   },
+  {
+    path: '/players',
+    name: 'Players',
+    description: 'Per-player profiles with inferred decklists across multiple games, play patterns (quest/challenge rate, ink rate), and head-to-head records.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

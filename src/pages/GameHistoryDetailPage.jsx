@@ -36,7 +36,13 @@ export function GameHistoryDetailPage() {
         <>
           <div className="mb-2">
             <h1 className="text-xl font-bold text-gray-900">
-              {record.game.p1Name} vs {record.game.p2Name}
+              <Link to={`/players/${encodeURIComponent(record.game.p1Name)}`} className="hover:underline">
+                {record.game.p1Name}
+              </Link>
+              <span className="text-gray-400 mx-2">vs</span>
+              <Link to={`/players/${encodeURIComponent(record.game.p2Name)}`} className="hover:underline">
+                {record.game.p2Name}
+              </Link>
             </h1>
             <div className="text-xs text-gray-500 mt-1">
               Last updated {new Date(record.lastUpdated).toLocaleString()} · UUID {uuid}

@@ -541,17 +541,24 @@ export function GameScraperPage() {
 
   // Load card data once
   useEffect(() => {
-    loadCardData().then(lookup => {
-      console.log('[GameScraper] Loaded card lookup:', Object.keys(lookup).length, 'cards')
-      if (Object.keys(lookup).length > 0) {
-        const sampleIds = Object.keys(lookup).slice(0, 5)
-        console.log('[GameScraper] Sample card IDs from API:', sampleIds)
-        sampleIds.forEach(id => {
-          console.log('[GameScraper]   ID:', id, '→', lookup[id])
+    fetch('/api/cards')
+      .then(r => r.json())
+      .then(data => {
+        const sampleCard = data.cards?.[0]
+        console.log('[GameScraper] Full card structure from API:')
+        console.log(sampleCard)
+        loadCardData().then(lookup => {
+          console.log('[GameScraper] Loaded card lookup:', Object.keys(lookup).length, 'cards')
+          if (Object.keys(lookup).length > 0) {
+            const sampleKeys = Object.keys(lookup).slice(0, 3)
+            console.log('[GameScraper] Sample card lookup keys:', sampleKeys)
+            sampleKeys.forEach(key => {
+              console.log('[GameScraper]   Key:', key, '→', lookup[key])
+            })
+          }
+          setCardLookup(lookup)
         })
-      }
-      setCardLookup(lookup)
-    })
+      })
   }, [])
 
   // Handshake with bookmarklet: signal ready, then receive game data

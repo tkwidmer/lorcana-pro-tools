@@ -24,3 +24,6 @@ public/lorcana-extension.zip
 *.njsproj
 *.sln
 *.sw?
+
+# Extracted extension directory (zip is committed instead)
+public/lorcana-extension/

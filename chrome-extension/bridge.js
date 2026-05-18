@@ -54,9 +54,10 @@ let cardLookup = null
 async function getCardLookup() {
   if (cardLookup) return cardLookup
 
-  // Try extension storage cache first
-  const cached = await new Promise(resolve => chrome.storage.local.get('lorcana_card_lookup', resolve))
-  if (cached.lorcana_card_lookup && Object.keys(cached.lorcana_card_lookup).length > 0) {
+  // Try extension storage cache first (24-hour TTL)
+  const cached = await new Promise(resolve => chrome.storage.local.get(['lorcana_card_lookup', 'lorcana_card_lookup_ts'], resolve))
+  const age = Date.now() - (cached.lorcana_card_lookup_ts ?? 0)
+  if (cached.lorcana_card_lookup && Object.keys(cached.lorcana_card_lookup).length > 0 && age < 86_400_000) {
     cardLookup = cached.lorcana_card_lookup
     return cardLookup
   }
@@ -73,7 +74,7 @@ async function getCardLookup() {
       if (card.name) lookup[card.name] = entry
     }
     cardLookup = lookup
-    chrome.storage.local.set({ lorcana_card_lookup: lookup })
+    chrome.storage.local.set({ lorcana_card_lookup: lookup, lorcana_card_lookup_ts: Date.now() })
     return lookup
   } catch {
     return {}
@@ -83,7 +84,7 @@ async function getCardLookup() {
 // --- Game parsing (mirrors parseLiveGame / buildObservedDeck in GameScraperPage) ---
 
 function buildObservedDeck(logs, fieldCards, playerNum, lookup) {
-  const RELEVANT = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED'])
+  const RELEVANT = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED', 'CARD_DRAWN'])
   const cards = {}
   const colors = new Set()
 

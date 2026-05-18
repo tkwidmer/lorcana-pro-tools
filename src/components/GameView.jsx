@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { resolveColors } from '../lib/inkColors'
+import { HandPredictor } from './HandPredictor'
 
 function LoreBar({ lore, label, color }) {
   const pct = Math.min(100, ((lore ?? 0) / 20) * 100)
@@ -149,6 +150,13 @@ function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, lo
           </div>
         </div>
       )}
+      <HandPredictor
+        playerName={name}
+        inkColors={inkColors}
+        observedDeck={observedDeck}
+        handCount={handCount}
+        deckCount={deckCount}
+      />
       <ObservedDeck cards={observedDeck} />
     </div>
   )

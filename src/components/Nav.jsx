@@ -19,6 +19,7 @@ export function Nav() {
                 : pathname === '/limited-guide' ? 'Limited Guide'
                 : pathname === '/deck-insights' ? 'Deck Insights'
                 : pathname === '/replay-analyzer' ? 'Replay Analyzer'
+                : pathname === '/game-scraper' ? 'Game Scraper'
                 : ''}
             </span>
           </>

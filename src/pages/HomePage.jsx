@@ -31,6 +31,12 @@ const TOOLS = [
     description: 'Upload Lorcana Duels replay files to review your gameplay, track lore progression, and reconstruct your opponent\'s decklist.',
     label: 'Open Tool',
   },
+  {
+    path: '/game-scraper',
+    name: 'Game Scraper',
+    description: 'Paste a duels.ink spectate URL to view live game state: player lore, board, hand counts, and action log with auto-refresh.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

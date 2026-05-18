@@ -6,35 +6,40 @@ const DUELS_ORIGIN = 'https://duels.ink'
 // --- Game state parsers ---
 
 function buildObservedDeck(logs, fieldCards, playerNum) {
-  const cards = {} // definitionId → { name, actions: { PLAY: 0, INK: 0, DISCARD: 0, VANQUISH: 0, BANISH: 0, ... } }
+  // Track only actions that confirm deck composition
+  const RELEVANT_ACTIONS = new Set(['PLAY', 'INK', 'DISCARD', 'DRAW'])
+  const cards = {} // definitionId → { name, plays: 0, inked: 0, discarded: 0 }
 
   for (const log of logs) {
     if (log.player !== playerNum) continue
-    const actionType = log.type || 'OTHER'
+    if (!RELEVANT_ACTIONS.has(log.type)) continue
+
     for (const ref of (log.cardRefs ?? [])) {
       if (!ref.id || !ref.name) continue
       if (!cards[ref.id]) {
-        cards[ref.id] = { name: ref.name, actions: {} }
+        cards[ref.id] = { name: ref.name, plays: 0, inked: 0, discarded: 0 }
       }
-      cards[ref.id].actions[actionType] = (cards[ref.id].actions[actionType] ?? 0) + 1
+      if (log.type === 'PLAY') cards[ref.id].plays++
+      else if (log.type === 'INK') cards[ref.id].inked++
+      else if (log.type === 'DISCARD') cards[ref.id].discarded++
     }
   }
 
-  // Include field cards
+  // Include field cards (may not have explicit PLAY action)
   for (const card of fieldCards) {
     if (!card.definitionId) continue
     if (!cards[card.definitionId]) {
-      cards[card.definitionId] = { name: card.name ?? card.definitionId, actions: {} }
+      cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
     }
   }
 
   return Object.entries(cards)
-    .map(([definitionId, { name, actions }]) => ({
+    .map(([definitionId, { name, plays, inked, discarded }]) => ({
       definitionId,
       name,
-      actions,
-      // Total observed = sum of significant actions (PLAY, INK, DISCARD, etc)
-      total: Object.values(actions).reduce((a, b) => a + b, 0) || 1,
+      plays: Math.max(plays, 1), // at least 1 if observed at all
+      inked,
+      discarded,
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -276,8 +281,6 @@ function ObservedDeck({ cards }) {
   const [open, setOpen] = useState(false)
   if (!cards?.length) return null
 
-  const keyActions = ['PLAY', 'INK', 'DISCARD', 'VANQUISH', 'BANISH']
-
   return (
     <div className="mt-2">
       <button
@@ -289,12 +292,17 @@ function ObservedDeck({ cards }) {
       {open && (
         <div className="mt-1 max-h-48 overflow-y-auto text-xs">
           {cards.map(card => {
-            const actions = keyActions.filter(a => card.actions[a]).map(a => `${card.actions[a]} ${a.toLowerCase()}`)
-            const summary = actions.length ? actions.join(', ') : 'observed'
+            const notes = []
+            if (card.inked > 0) notes.push(`${card.inked} inked`)
+            if (card.discarded > 0) notes.push(`${card.discarded} discarded`)
+            const noteText = notes.length ? ` (${notes.join(', ')})` : ''
             return (
-              <div key={card.definitionId} className="py-1 border-b border-gray-50 last:border-0">
-                <div className="text-gray-700 font-medium">{card.name}</div>
-                <div className="text-gray-500">{summary}</div>
+              <div key={card.definitionId} className="flex items-center justify-between py-0.5 border-b border-gray-50 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <div className="text-gray-700 font-medium truncate">{card.name}</div>
+                  {noteText && <div className="text-gray-500 text-xs truncate">{noteText}</div>}
+                </div>
+                <span className="text-gray-600 font-medium ml-2 flex-shrink-0">{card.plays}×</span>
               </div>
             )
           })}

@@ -21,12 +21,18 @@ async function decompressGzip(arrayBuffer) {
   return new TextDecoder().decode(out)
 }
 
-// Extract card objects from a log entry's data field
+// Extract card objects from a log entry's data field.
+// Two formats exist:
+//   - Single-card events (CARD_DRAWN, CARD_PLAYED, etc.): data.cardName + data.cardId
+//   - Multi-card events (INITIAL_HAND, MULLIGAN): array fields with {id, name} objects
 function extractCards(entry) {
   const d = entry.data ?? {}
-  const singles = [d.card, d.drawnCard, d.playedCard, d.inkedCard, d.discardedCard, d.attacker, d.defender].filter(c => c?.name)
-  const arrays = [...(d.cards ?? []), ...(d.initialHandCards ?? []), ...(d.keptCards ?? []), ...(d.mulliganCards ?? []), ...(d.returnedCards ?? [])].filter(c => c?.name)
-  return [...singles, ...arrays]
+  const result = []
+  if (d.cardName) result.push({ name: d.cardName, id: d.cardId })
+  for (const arr of [d.initialHandCards, d.mulliganedCards, d.drawnCards, d.cards, d.keptCards, d.returnedCards]) {
+    if (Array.isArray(arr)) arr.forEach(c => { if (c?.name) result.push({ name: c.name, id: c.id }) })
+  }
+  return result
 }
 
 function parseGamelog(logs) {

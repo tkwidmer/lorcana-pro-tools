@@ -33,8 +33,8 @@ const addToZip = (dir, zipPath = '') => {
   })
 }
 
-// Add chrome-extension folder contents
-addToZip(extensionDir, 'chrome-extension')
+// Add extension files at root level (no chrome-extension prefix)
+addToZip(extensionDir)
 
 // Write zip files to both dist and public
 const zipPath = path.join(distDir, 'lorcana-extension.zip')

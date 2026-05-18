@@ -164,23 +164,6 @@ function makeBookmarkletCode(uuid, origin) {
 }
 
 function ExtensionPanel() {
-  const [copied, setCopied] = useState(false)
-
-  const copySteps = () => {
-    const steps = `1. Right-click chrome://extensions in your address bar and press Enter
-2. Turn on "Developer mode" in the top-right
-3. Click "Load unpacked"
-4. Navigate to: ${window.location.origin}/lorcana-extension
-5. Confirm the selection
-
-Now whenever you visit a duels.ink spectate page, the extension will automatically capture the game data!`
-
-    navigator.clipboard.writeText(steps).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
   return (
     <details className="mt-2" open>
       <summary className="text-xs font-medium text-green-700 cursor-pointer select-none">Chrome Extension (recommended)</summary>
@@ -190,27 +173,27 @@ Now whenever you visit a duels.ink spectate page, the extension will automatical
         </p>
 
         <div className="bg-green-50 border border-green-200 rounded p-3 space-y-2">
-          <div className="text-xs font-semibold text-green-900">Installation steps:</div>
+          <div className="text-xs font-semibold text-green-900">Quick install:</div>
           <ol className="text-xs text-green-800 space-y-1 ml-4 list-decimal">
-            <li>Right-click <code className="bg-white px-1 rounded text-xs">chrome://extensions</code> in your address bar</li>
-            <li>Press Enter to navigate there</li>
-            <li>Turn on <strong>Developer mode</strong> (toggle in top-right)</li>
-            <li>Click <strong>Load unpacked</strong> button</li>
-            <li>Select the <code className="bg-white px-1 rounded text-xs">lorcana-extension</code> folder</li>
-            <li>Confirm — you're done!</li>
+            <li>Download <code className="bg-white px-1 rounded text-xs">lorcana-extension.zip</code> from <a href="https://github.com/tkwidmer/lorcana-pro-tools/releases" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:text-green-900 underline">GitHub releases</a></li>
+            <li>Extract the zip file</li>
+            <li>Open <code className="bg-white px-1 rounded text-xs">chrome://extensions</code></li>
+            <li>Turn on <strong>Developer mode</strong> (top-right toggle)</li>
+            <li>Click <strong>Load unpacked</strong></li>
+            <li>Select the extracted <code className="bg-white px-1 rounded text-xs">lorcana-extension</code> folder</li>
           </ol>
         </div>
 
-        <p className="text-xs text-gray-600 italic">
-          The extension source folder can be found at: <code className="bg-gray-100 px-1 rounded text-xs">{window.location.origin}/lorcana-extension</code>
-        </p>
+        <div className="bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
+          <div className="text-xs font-semibold text-blue-900">Development:</div>
+          <p className="text-xs text-blue-800">
+            Clone the repo and load the <code className="bg-white px-1 rounded text-xs">chrome-extension</code> folder directly via Developer mode.
+          </p>
+        </div>
 
-        <button
-          onClick={copySteps}
-          className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-medium transition-colors"
-        >
-          {copied ? 'Copied steps!' : 'Copy installation steps'}
-        </button>
+        <p className="text-xs text-gray-500 italic">
+          Once installed, visiting any duels.ink spectate page automatically captures the game.
+        </p>
       </div>
     </details>
   )

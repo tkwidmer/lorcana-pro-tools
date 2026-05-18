@@ -5,28 +5,35 @@ const DUELS_ORIGIN = 'https://duels.ink'
 
 // --- Game state parsers ---
 
+// Action types that mean a card was played from hand (new copy entering play)
+const PLAY_ACTIONS = new Set(['PLAY', 'SING', 'PLAY_CARD', 'PLAY_CHARACTER', 'PLAY_ACTION', 'PLAY_ITEM'])
+
 function buildObservedDeck(logs, fieldCards, playerNum) {
-  // Track each (definitionId, logIndex) pair to avoid double-counting refs within one log entry
-  // Count max copies by tracking how many distinct log entries reference the same card
-  const seen = {} // definitionId → Set of log indices where it appeared
-  logs.forEach((log, logIdx) => {
-    if (log.player !== playerNum) return
+  const cards = {} // definitionId → { name, confirmed, seen }
+
+  for (const log of logs) {
+    if (log.player !== playerNum) continue
+    const isPlay = PLAY_ACTIONS.has(log.type)
     for (const ref of (log.cardRefs ?? [])) {
       if (!ref.id || !ref.name) continue
-      if (!seen[ref.id]) seen[ref.id] = { name: ref.name, logIndices: new Set() }
-      seen[ref.id].logIndices.add(logIdx)
+      if (!cards[ref.id]) cards[ref.id] = { name: ref.name, confirmed: 0, seen: true }
+      if (isPlay) cards[ref.id].confirmed++
     }
-  })
-  // Also include field cards (they may not appear in logs yet)
+  }
+
+  // Include field cards that may not have been logged with a PLAY action yet
   for (const card of fieldCards) {
     if (!card.definitionId) continue
-    if (!seen[card.definitionId]) seen[card.definitionId] = { name: card.name ?? card.definitionId, logIndices: new Set() }
+    if (!cards[card.definitionId]) cards[card.definitionId] = { name: card.name ?? card.definitionId, confirmed: 0, seen: true }
   }
-  return Object.entries(seen)
-    .map(([definitionId, { name, logIndices }]) => ({
+
+  return Object.entries(cards)
+    .map(([definitionId, { name, confirmed }]) => ({
       definitionId,
       name,
-      count: logIndices.size || 1,
+      // confirmed = copies we've seen played; show at least 1 if observed at all
+      count: Math.max(confirmed, 1),
+      confirmed,
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -280,7 +287,9 @@ function ObservedDeck({ cards }) {
           {cards.map(card => (
             <div key={card.definitionId} className="flex items-center justify-between py-0.5 text-xs border-b border-gray-50 last:border-0">
               <span className="text-gray-700 truncate">{card.name}</span>
-              <span className="text-gray-400 flex-shrink-0 ml-2 tabular-nums">{card.count}×</span>
+              <span className={`flex-shrink-0 ml-2 tabular-nums font-medium ${card.confirmed >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
+                {card.confirmed >= 2 ? `${card.confirmed}×` : '1×'}
+              </span>
             </div>
           ))}
         </div>

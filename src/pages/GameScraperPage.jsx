@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 
 const DUELS_ORIGIN = 'https://duels.ink'
 
-// Cache for card data (id -> { colors, etc })
+// Cache for card data (name -> { colors, etc })
 let cardDataCache = null
 async function loadCardData() {
   if (cardDataCache) return cardDataCache
@@ -12,7 +12,10 @@ async function loadCardData() {
     const data = await res.json()
     const lookup = {}
     for (const card of (data.cards ?? [])) {
-      lookup[card.id] = { colors: card.colors, id: card.id, name: card.name }
+      // Key by name since WebSocket IDs don't match API IDs
+      if (card.name) {
+        lookup[card.name] = { colors: card.colors, id: card.id, name: card.name }
+      }
     }
     cardDataCache = lookup
     return lookup
@@ -43,8 +46,8 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
       else if (log.type === 'CARD_INKED') cards[ref.id].inked++
       else if (log.type === 'CARD_DISCARDED') cards[ref.id].discarded++
 
-      // Extract ink colors from card lookup
-      const cardDef = cardLookup[ref.id]
+      // Extract ink colors from card lookup (match by name)
+      const cardDef = cardLookup[ref.name]
       if (cardDef?.colors) {
         if (Array.isArray(cardDef.colors)) cardDef.colors.forEach(c => colors.add(c))
         else colors.add(cardDef.colors)
@@ -58,7 +61,8 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
     if (!cards[card.definitionId]) {
       cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
     }
-    const cardDef = cardLookup[card.definitionId]
+    // Match by name for color lookup
+    const cardDef = cardLookup[card.name] || cardLookup[card.fullName]
     if (cardDef?.colors) {
       if (Array.isArray(cardDef.colors)) cardDef.colors.forEach(c => colors.add(c))
       else colors.add(cardDef.colors)

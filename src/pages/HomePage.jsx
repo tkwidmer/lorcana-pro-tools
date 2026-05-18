@@ -38,6 +38,24 @@ const TOOLS = [
     label: 'Open Tool',
   },
   {
+    path: '/game-history',
+    name: 'Game History',
+    description: 'Review past games scraped on this browser. Stats dashboard tracks most-played cards, ink color win rates, average game length, and matchups.',
+    label: 'Open Tool',
+  },
+  {
+    path: '/players',
+    name: 'Players',
+    description: 'Per-player profiles with inferred decklists across multiple games, play patterns (quest/challenge rate, ink rate), and head-to-head records.',
+    label: 'Open Tool',
+  },
+  {
+    path: '/shared',
+    name: 'Shared Game',
+    description: 'Load a game snapshot JSON file someone shared with you to view their board state, inferred hand, and full action log.',
+    label: 'Open Tool',
+  },
+  {
     path: '/legality-checker',
     name: 'Legality Checker',
     description: 'Paste a decklist to instantly see which cards are legal in Core (rotating) or Infinity (eternal) format.',

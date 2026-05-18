@@ -20,6 +20,10 @@ export function Nav() {
                 : pathname === '/deck-insights' ? 'Deck Insights'
                 : pathname === '/replay-analyzer' ? 'Replay Analyzer'
                 : pathname === '/game-scraper' ? 'Game Scraper'
+                : pathname === '/library' ? 'Library'
+                : pathname.startsWith('/game-history/') ? 'Library'
+                : pathname.startsWith('/players/') ? 'Players'
+                : pathname === '/legality-checker' ? 'Legality Checker'
                 : ''}
             </span>
           </>

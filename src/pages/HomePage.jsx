@@ -37,6 +37,24 @@ const TOOLS = [
     description: 'Paste a duels.ink spectate URL to view live game state: player lore, board, hand counts, and action log with auto-refresh.',
     label: 'Open Tool',
   },
+  {
+    path: '/library',
+    name: 'Library',
+    description: 'Review saved games, stats dashboards, and player profiles with inferred decklists. Import shared game snapshots to view or save them.',
+    label: 'Open Tool',
+  },
+  {
+    path: '/legality-checker',
+    name: 'Legality Checker',
+    description: 'Paste a decklist to instantly see which cards are legal in Core (rotating) or Infinity (eternal) format.',
+    label: 'Open Tool',
+  },
+  {
+    path: '/deck-comparison',
+    name: 'Deck Comparison',
+    description: 'Paste your paper deck and your updated online list to see exactly which cards to swap — no more mis-registrations when transitioning between testing and paper.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

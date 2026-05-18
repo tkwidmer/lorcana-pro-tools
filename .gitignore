@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+public/lorcana-extension
+public/lorcana-extension.zip
 
 # Editor directories and files
 .vscode/*

@@ -1,6 +1,29 @@
 import { useState, useMemo, useRef } from 'react'
 import { useCards } from '../hooks/useCards'
 
+// --- Legality constants ---
+const ROTATION_DATE = new Date('2026-07-01')
+const WARN_WINDOW_MS = 180 * 24 * 60 * 60 * 1000
+const SHOW_ROTATION_WARNING = (ROTATION_DATE - Date.now()) <= WARN_WINDOW_MS
+const ROTATING_SETS = new Set(['5', '6', '7', '8'])
+
+const SET_NAMES = {
+  '1': 'The First Chapter',
+  '2': 'Rise of the Floodborn',
+  '3': 'Into the Inklands',
+  '4': "Ursula's Return",
+  '5': 'Shimmering Skies',
+  '6': 'Azurite Sea',
+  '7': "Archazia's Island",
+  '8': 'Lorcana Anniversary',
+  '9': 'Destiny Awaits',
+  '10': 'Set 10',
+  '11': 'Set 11',
+  '12': 'Set 12',
+  'Q1': 'Quest 1',
+  'Q2': 'Quest 2',
+}
+
 // --- Math ---
 
 function logFact(n) {
@@ -350,6 +373,95 @@ function brickBarColor(p) {
   return 'bg-red-500'
 }
 
+// --- Legality helpers ---
+
+function setLabel(setCode) {
+  const name = SET_NAMES[setCode]
+  if (!name) return `Set ${setCode}`
+  const num = parseInt(setCode)
+  return isNaN(num) ? name : `${name} (Set ${setCode})`
+}
+
+function toSimpleName(str) {
+  return str
+    .toLowerCase()
+    .replace(/\s*-\s*/g, ' ')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function buildCardIndex(cards) {
+  const bySimpleName = new Map()
+  for (const card of cards) {
+    const key = toSimpleName(card.fullName)
+    const existing = bySimpleName.get(key)
+    if (!existing) {
+      bySimpleName.set(key, card)
+      continue
+    }
+    const score = c => {
+      if (c.allowedInFormats?.Core?.allowed) return 2
+      if (c.allowedInFormats?.Infinity?.allowed) return 1
+      return 0
+    }
+    const thisScore = score(card)
+    const existingScore = score(existing)
+    if (thisScore > existingScore) {
+      bySimpleName.set(key, card)
+    } else if (thisScore === existingScore) {
+      const existingSet = parseInt(existing.setCode) || 0
+      const thisSet = parseInt(card.setCode) || 0
+      if (thisSet > existingSet) bySimpleName.set(key, card)
+    }
+  }
+  return bySimpleName
+}
+
+function getLegality(card) {
+  if (!card) return { core: null, infinity: null, rotationRisk: false }
+  const formats = card.allowedInFormats ?? {}
+  const coreAllowed = formats.Core?.allowed === true
+  const infAllowed = formats.Infinity?.allowed === true
+  const isBanned = !infAllowed && !!formats.Infinity?.bannedSinceDate
+  const rotationRisk = coreAllowed && SHOW_ROTATION_WARNING && ROTATING_SETS.has(card.setCode)
+  return { core: coreAllowed, infinity: infAllowed, banned: isBanned, rotationRisk }
+}
+
+function Badge({ status, rotationRisk }) {
+  if (status === null) {
+    return (
+      <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-400">
+        —
+      </span>
+    )
+  }
+  if (status === 'banned') {
+    return (
+      <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+        Banned
+      </span>
+    )
+  }
+  if (status) {
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold border ${
+        rotationRisk
+          ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
+          : 'bg-green-50 text-green-700 border-green-200'
+      }`}>
+        Legal
+        {rotationRisk && <span title="Rotates with Set 13 (July 2026)">⚠</span>}
+      </span>
+    )
+  }
+  return (
+    <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+      Not legal
+    </span>
+  )
+}
+
 // --- Curve Probability Simulation ---
 // For each turn T1-T8: P(have at least one card with cost ≤ T in hand)
 // Accounts for mulligan: keeps playable cards, sends back up to maxMulligan non-playable ones.
@@ -681,6 +793,7 @@ export function DrawOddsPage() {
   const [targetTurnOverrides, setTargetTurnOverrides] = useState({})
   const [targetedOddsOpen, setTargetedOddsOpen] = useState(true)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
+  const [legalityOpen, setLegalityOpen] = useState(false)
   const [deckSize, setDeckSize] = useState(() => lsGet('drawOdds.deckSize', 60))
   const [goingFirst, setGoingFirst] = useState(() => lsGet('drawOdds.goingFirst', true))
   const [maxMulligan, setMaxMulligan] = useState(() => lsGet('drawOdds.maxMulligan', 7))
@@ -760,6 +873,32 @@ export function DrawOddsPage() {
     }
     return map
   }, [allApiCards])
+
+  const cardIndex = useMemo(() => buildCardIndex(allApiCards), [allApiCards])
+
+  const legalityEntries = useMemo(() => {
+    const entries = []
+    for (const raw of deckText.split('\n')) {
+      const line = raw.trim()
+      if (!line) continue
+      const m = line.match(/^(\d+)x?\s+(.+)$/i)
+      if (!m) continue
+      const count = parseInt(m[1])
+      const name = m[2].trim()
+      if (!name || count < 1) continue
+      entries.push({ name, count })
+    }
+    return entries
+  }, [deckText])
+
+  const legalityResults = useMemo(() => {
+    return legalityEntries.map(entry => {
+      const key = toSimpleName(entry.name)
+      const cardData = cardIndex.get(key)
+      const legality = getLegality(cardData)
+      return { entry, cardData, legality }
+    })
+  }, [legalityEntries, cardIndex])
 
   const cards = useMemo(() => parseDeckList(deckText), [deckText])
   const totalCards = useMemo(() => cards.reduce((s, c) => s + c.count, 0), [cards])
@@ -1175,6 +1314,159 @@ export function DrawOddsPage() {
           </div>
         )}
       </div>
+
+      {/* Format Legality — collapsible panel */}
+      {legalityResults.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setLegalityOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Format Legality</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${legalityOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {legalityOpen && (() => {
+            const totalNames = legalityResults.length
+            const coreIllegalNames = legalityResults.filter(r => !r.legality.core).length
+            const infIllegalNames = legalityResults.filter(r => !r.legality.infinity).length
+            const rotationRiskNames = legalityResults.filter(r => r.legality.rotationRisk).length
+            const notFoundNames = legalityResults.filter(r => !r.cardData).length
+            const coreLegal = coreIllegalNames === 0 && totalNames > 0
+            const infLegal = infIllegalNames === 0 && totalNames > 0
+            return (
+              <div className="mt-6 space-y-6">
+                {/* Format summary row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={`rounded-lg border px-4 py-3 ${
+                    coreLegal ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Core</span>
+                      <span className={`text-xs font-semibold ${coreLegal ? 'text-green-700' : 'text-red-700'}`}>
+                        {coreLegal ? 'Legal' : 'Not legal'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {coreIllegalNames > 0
+                        ? `${coreIllegalNames} of ${totalNames} card name${totalNames !== 1 ? 's' : ''} not legal`
+                        : `All ${totalNames} card name${totalNames !== 1 ? 's' : ''} legal`}
+                    </p>
+                    {rotationRiskNames > 0 && (
+                      <p className="text-xs text-yellow-700 mt-0.5">
+                        ⚠ {rotationRiskNames} name{rotationRiskNames !== 1 ? 's rotate' : ' rotates'} with Set 13 (July 2026)
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">Sets 5–12 currently legal</p>
+                  </div>
+
+                  <div className={`rounded-lg border px-4 py-3 ${
+                    infLegal ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Infinity</span>
+                      <span className={`text-xs font-semibold ${infLegal ? 'text-green-700' : 'text-red-700'}`}>
+                        {infLegal ? 'Legal' : 'Not legal'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {infIllegalNames > 0
+                        ? `${infIllegalNames} of ${totalNames} card name${totalNames !== 1 ? 's' : ''} not legal`
+                        : `All ${totalNames} card name${totalNames !== 1 ? 's' : ''} legal`}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">All sets · banned cards excluded</p>
+                  </div>
+                </div>
+
+                {notFoundNames > 0 && (
+                  <p className="text-xs text-gray-400">
+                    {notFoundNames} card name{notFoundNames !== 1 ? 's' : ''} not recognized — check spelling or subtitle.
+                  </p>
+                )}
+
+                {/* Card table */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="py-2 pl-4 pr-2 text-left text-xs font-semibold text-gray-500 w-10">Qty</th>
+                        <th className="py-2 pr-4 text-left text-xs font-semibold text-gray-500">Card</th>
+                        <th className="py-2 pr-4 text-left text-xs font-semibold text-gray-500 hidden sm:table-cell">Set</th>
+                        <th className="py-2 pr-4 text-center text-xs font-semibold text-gray-500 w-24">Core</th>
+                        <th className="py-2 pr-4 text-center text-xs font-semibold text-gray-500 w-24">Infinity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {legalityResults.map((r, i) => {
+                        const { entry, cardData, legality } = r
+                        const rowBg = (!legality.core || !legality.infinity)
+                          ? 'bg-red-50/20'
+                          : legality.rotationRisk
+                          ? 'bg-yellow-50/30'
+                          : ''
+                        return (
+                          <tr key={i} className={`border-b border-gray-100 last:border-0 ${rowBg}`}>
+                            <td className="py-2.5 pl-4 pr-2 text-sm font-medium text-gray-500 text-right">
+                              {entry.count}×
+                            </td>
+                            <td className="py-2.5 pr-4 text-sm text-gray-900">
+                              {entry.name}
+                              {!cardData && (
+                                <span className="ml-2 text-xs text-gray-400 italic">not found</span>
+                              )}
+                              {cardData && cardData.fullName !== entry.name && (
+                                <span className="ml-1.5 text-xs text-gray-400">→ {cardData.fullName}</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 pr-4 text-xs text-gray-400 hidden sm:table-cell">
+                              {cardData ? setLabel(cardData.setCode) : '—'}
+                            </td>
+                            <td className="py-2.5 pr-4 text-center">
+                              {!cardData ? (
+                                <Badge status={null} />
+                              ) : (
+                                <Badge status={legality.core} rotationRisk={legality.rotationRisk} />
+                              )}
+                            </td>
+                            <td className="py-2.5 pr-4 text-center">
+                              {!cardData ? (
+                                <Badge status={null} />
+                              ) : legality.banned ? (
+                                <Badge status="banned" />
+                              ) : (
+                                <Badge status={legality.infinity} />
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Legend */}
+                <div className="flex flex-wrap gap-4 text-xs text-gray-400">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-800 border border-yellow-200 font-semibold text-xs">Legal ⚠</span>
+                    Rotates with Set 13 (July 2026)
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200 font-semibold text-xs">Banned</span>
+                    Banned in Infinity
+                  </span>
+                  <span>
+                    Legality data sourced from{' '}
+                    <a href="https://lorcanajson.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
+                      lorcanajson.org
+                    </a>
+                  </span>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
 
       {/* Deck Insights — collapsible 2×2 tile grid */}
       {(curveCounts.size > 0 || curveProbability || brickability || questPressure) && (

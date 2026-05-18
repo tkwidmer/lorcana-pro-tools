@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Nav } from './components/Nav'
 import { HomePage } from './pages/HomePage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
@@ -7,6 +7,10 @@ import { LimitedGuidePage } from './pages/LimitedGuidePage'
 import { DrawOddsPage } from './pages/DrawOddsPage'
 import { ReplayAnalyzerPage } from './pages/ReplayAnalyzerPage'
 import { GameScraperPage } from './pages/GameScraperPage'
+import { LibraryPage } from './pages/LibraryPage'
+import { GameHistoryDetailPage } from './pages/GameHistoryDetailPage'
+import { PlayerProfilePage } from './pages/PlayerProfilePage'
+import { DeckComparisonPage } from './pages/DeckComparisonPage'
 
 export default function App() {
   return (
@@ -20,6 +24,15 @@ export default function App() {
         <Route path="/deck-insights" element={<DrawOddsPage />} />
         <Route path="/replay-analyzer" element={<ReplayAnalyzerPage />} />
         <Route path="/game-scraper" element={<GameScraperPage />} />
+        <Route path="/library" element={<LibraryPage />} />
+        <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
+        <Route path="/players/:name" element={<PlayerProfilePage />} />
+        <Route path="/deck-comparison" element={<DeckComparisonPage />} />
+        {/* Redirects from old routes */}
+        <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />
+        <Route path="/players" element={<Navigate to="/library?tab=players" replace />} />
+        <Route path="/shared" element={<Navigate to="/library" replace />} />
+        <Route path="/legality-checker" element={<Navigate to="/deck-insights" replace />} />
       </Routes>
     </BrowserRouter>
   )

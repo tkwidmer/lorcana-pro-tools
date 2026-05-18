@@ -567,6 +567,15 @@ export function GameScraperPage() {
             )}
           </div>
 
+          {/* Winner banner */}
+          {game.winner != null && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 text-center">
+              <div className="text-purple-800 font-bold">
+                {game.winner === 1 ? game.p1Name : game.winner === 2 ? game.p2Name : `Player ${game.winner}`} wins!
+              </div>
+            </div>
+          )}
+
           {/* Player panels */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 items-start">
             <PlayerPanel
@@ -598,15 +607,6 @@ export function GameScraperPage() {
               inkColors={game.p2InkColors}
             />
           </div>
-
-          {/* Winner banner */}
-          {game.winner != null && (
-            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 text-center">
-              <div className="text-purple-800 font-bold">
-                {game.winner === 1 ? game.p1Name : game.winner === 2 ? game.p2Name : `Player ${game.winner}`} wins!
-              </div>
-            </div>
-          )}
 
           {/* Full game log */}
           {game.log?.length > 0 && (

@@ -9,9 +9,10 @@ function buildObservedDeck(logs, fieldCards, playerNum) {
   // Track only actions that confirm deck composition
   const RELEVANT_ACTIONS = new Set(['PLAY', 'INK', 'DISCARD', 'DRAW'])
   const cards = {} // definitionId → { name, plays: 0, inked: 0, discarded: 0 }
+  const colors = new Set()
 
   for (const log of logs) {
-    if (log.player !== playerNum) continue
+    if (log.player !== playerNum && log.player !== String(playerNum)) continue
     if (!RELEVANT_ACTIONS.has(log.type)) continue
 
     for (const ref of (log.cardRefs ?? [])) {
@@ -22,18 +23,26 @@ function buildObservedDeck(logs, fieldCards, playerNum) {
       if (log.type === 'PLAY') cards[ref.id].plays++
       else if (log.type === 'INK') cards[ref.id].inked++
       else if (log.type === 'DISCARD') cards[ref.id].discarded++
+
+      // Extract ink color (try various field names)
+      if (ref.color) colors.add(ref.color)
+      if (ref.colours && Array.isArray(ref.colours)) ref.colours.forEach(c => colors.add(c))
+      if (ref.ink) colors.add(ref.ink)
     }
   }
 
-  // Include field cards (may not have explicit PLAY action)
+  // Include field cards (may not have explicit PLAY action) and extract colors
   for (const card of fieldCards) {
     if (!card.definitionId) continue
     if (!cards[card.definitionId]) {
       cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
     }
+    if (card.color) colors.add(card.color)
+    if (card.colours && Array.isArray(card.colours)) card.colours.forEach(c => colors.add(c))
+    if (card.ink) colors.add(card.ink)
   }
 
-  return Object.entries(cards)
+  const cardList = Object.entries(cards)
     .map(([definitionId, { name, plays, inked, discarded }]) => ({
       definitionId,
       name,
@@ -42,6 +51,8 @@ function buildObservedDeck(logs, fieldCards, playerNum) {
       discarded,
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
+
+  return { cards: cardList, colors: Array.from(colors).sort() }
 }
 
 function parseLiveGame(data) {
@@ -72,6 +83,10 @@ function parseLiveGame(data) {
 
   const p1Field = enrichField(p1.field)
   const p2Field = enrichField(p2.field)
+
+  // Build observed decks and extract ink colors
+  const p1Observed = buildObservedDeck(logs, p1Field, 1)
+  const p2Observed = buildObservedDeck(logs, p2Field, 2)
 
   // Ink pool: count INK actions per player for total pool size;
   // also try server-provided available/spent values
@@ -106,8 +121,10 @@ function parseLiveGame(data) {
     p2InkUsed,
     p1InkedCount,
     p2InkedCount,
-    p1ObservedDeck: buildObservedDeck(logs, p1Field, 1),
-    p2ObservedDeck: buildObservedDeck(logs, p2Field, 2),
+    p1ObservedDeck: p1Observed.cards,
+    p2ObservedDeck: p2Observed.cards,
+    p1InkColors: p1Observed.colors,
+    p2InkColors: p2Observed.colors,
     log: logs,
     raw: data,
   }
@@ -231,6 +248,45 @@ function LoreBar({ lore, label, color }) {
   )
 }
 
+function InkColors({ colors }) {
+  if (!colors?.length) return null
+
+  const colorNameMap = {
+    red: 'ruby',
+    ruby: 'ruby',
+    blue: 'sapphire',
+    sapphire: 'sapphire',
+    green: 'emerald',
+    emerald: 'emerald',
+    yellow: 'amber',
+    amber: 'amber',
+    purple: 'amethyst',
+    amethyst: 'amethyst',
+    gray: 'steel',
+    steel: 'steel',
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-gray-600">Ink:</span>
+      <div className="flex gap-1">
+        {colors.map((color, i) => {
+          const inkName = colorNameMap[color?.toLowerCase()] ?? color?.toLowerCase()
+          return (
+            <img
+              key={i}
+              src={`/ink/${inkName}.png`}
+              alt={color}
+              className="w-5 h-5"
+              title={color}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function InkMeter({ inkPool, inkUsed, inkedCount }) {
   if (inkPool == null && inkedCount == null) return null
   const total = inkPool ?? inkedCount
@@ -289,7 +345,7 @@ function FieldCard({ card }) {
   )
 }
 
-function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, loreColor, isActive, inkPool, inkUsed, inkedCount }) {
+function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, loreColor, isActive, inkPool, inkUsed, inkedCount, inkColors }) {
   return (
     <div className={`bg-white rounded-xl border-2 p-4 flex flex-col gap-3 ${isActive ? 'border-blue-400 shadow-md' : 'border-gray-200'}`}>
       <div className="flex items-center gap-2">
@@ -301,6 +357,7 @@ function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, lo
       </div>
       <LoreBar lore={lore} label="Lore" color={loreColor} />
       <InkMeter inkPool={inkPool} inkUsed={inkUsed} inkedCount={inkedCount} />
+      <InkColors colors={inkColors} />
       <div className="flex gap-4 text-xs text-gray-500">
         {handCount != null && <span><span className="font-semibold text-gray-700">{handCount}</span> in hand</span>}
         {deckCount != null && <span><span className="font-semibold text-gray-700">{deckCount}</span> in deck</span>}
@@ -318,15 +375,42 @@ function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, lo
   )
 }
 
-function LogEntry({ entry }) {
+function LogEntry({ entry, playerColors }) {
   const { type, message = '', player, turnNumber, cardRefs = [] } = entry
   const resolved = message.replace(/\{card:(\d+)\}/g, (_, i) => {
     const ref = cardRefs[parseInt(i)]
     return ref ? (ref.name ?? ref.id ?? '?') : '?'
   })
+
+  const colorNameMap = {
+    red: 'ruby',
+    ruby: 'ruby',
+    blue: 'sapphire',
+    sapphire: 'sapphire',
+    green: 'emerald',
+    emerald: 'emerald',
+    yellow: 'amber',
+    amber: 'amber',
+    purple: 'amethyst',
+    amethyst: 'amethyst',
+    gray: 'steel',
+    steel: 'steel',
+  }
+
+  const primaryColor = playerColors?.[0]
+  const inkName = primaryColor ? (colorNameMap[primaryColor?.toLowerCase()] ?? primaryColor?.toLowerCase()) : null
+
   return (
-    <div className="flex gap-2 py-1 text-xs border-b border-gray-50 last:border-0">
-      <span className="text-gray-400 flex-shrink-0 w-14">T{turnNumber ?? '?'} P{player ?? '?'}</span>
+    <div className="flex gap-2 py-1 text-xs border-b border-gray-50 last:border-0 items-center">
+      {inkName && (
+        <img
+          src={`/ink/${inkName}.png`}
+          alt={primaryColor}
+          className="w-4 h-4 flex-shrink-0"
+          title={primaryColor}
+        />
+      )}
+      <span className="text-gray-400 flex-shrink-0 w-12">T{turnNumber ?? '?'} P{player ?? '?'}</span>
       <span className="text-gray-700 truncate">{resolved || type}</span>
     </div>
   )
@@ -457,6 +541,7 @@ export function GameScraperPage() {
               inkPool={game.p1InkPool}
               inkUsed={game.p1InkUsed}
               inkedCount={game.p1InkedCount}
+              inkColors={game.p1InkColors}
             />
             <PlayerPanel
               name={game.p2Name}
@@ -470,6 +555,7 @@ export function GameScraperPage() {
               inkPool={game.p2InkPool}
               inkUsed={game.p2InkUsed}
               inkedCount={game.p2InkedCount}
+              inkColors={game.p2InkColors}
             />
           </div>
 
@@ -487,9 +573,10 @@ export function GameScraperPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
               <h3 className="text-sm font-bold text-gray-700 mb-2">Game Actions ({game.log.length})</h3>
               <div className="max-h-96 overflow-y-auto">
-                {game.log.map((entry, i) => (
-                  <LogEntry key={i} entry={entry} index={i} />
-                ))}
+                {game.log.map((entry, i) => {
+                  const playerColors = entry.player === 1 ? game.p1InkColors : entry.player === 2 ? game.p2InkColors : []
+                  return <LogEntry key={i} entry={entry} playerColors={playerColors} />
+                })}
               </div>
             </div>
           )}

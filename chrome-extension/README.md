@@ -4,26 +4,14 @@ Automatically capture live Lorcana Duels gameplay from duels.ink spectate pages.
 
 ## Installation
 
-### Option 1: Load from Local Repository (Development)
-
-1. Clone or download this repository
-2. Open `chrome://extensions` in your browser
-3. Turn on **Developer mode** (toggle in top-right)
-4. Click **Load unpacked**
-5. Navigate to the `chrome-extension` folder in this repository
-6. Click **Select Folder**
-
-### Option 2: Download from GitHub (Production)
-
-1. Go to [https://github.com/tkwidmer/lorcana-pro-tools/releases](https://github.com/tkwidmer/lorcana-pro-tools/releases)
-2. Find the latest release
-3. Download `lorcana-extension.zip`
-4. Extract the zip file to your computer
-5. Open `chrome://extensions` in your browser
-6. Turn on **Developer mode** (toggle in top-right)
-7. Click **Load unpacked**
-8. Select the extracted `lorcana-extension` folder
-9. Click **Select Folder**
+1. Download the repository from [GitHub](https://github.com/tkwidmer/lorcana-pro-tools) (Code → Download ZIP)
+2. Extract the zip file to your computer
+3. Navigate to the `chrome-extension` folder
+4. Open `chrome://extensions` in your browser
+5. Turn on **Developer mode** (toggle in top-right)
+6. Click **Load unpacked**
+7. Select the `chrome-extension` folder
+8. Done! The extension is now installed.
 
 ## Usage
 
@@ -31,6 +19,6 @@ Once installed, the extension automatically captures game data whenever you visi
 
 ## How It Works
 
-- Intercepts WebSocket messages from duels.ink
-- Stores game data in Chrome's local storage
-- Data can be accessed by any Lorcana Pro Tools page in your browser
+- Intercepts WebSocket messages from duels.ink spectate pages
+- Forwards game data to the Lorcana Pro Tools application
+- Works seamlessly with Game History, Player Profiles, and other tools

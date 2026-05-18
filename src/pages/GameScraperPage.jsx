@@ -173,22 +173,16 @@ function ExtensionPanel() {
         </p>
 
         <div className="bg-green-50 border border-green-200 rounded p-3 space-y-2">
-          <div className="text-xs font-semibold text-green-900">Quick install:</div>
+          <div className="text-xs font-semibold text-green-900">Installation:</div>
           <ol className="text-xs text-green-800 space-y-1 ml-4 list-decimal">
-            <li>Download <code className="bg-white px-1 rounded text-xs">lorcana-extension.zip</code> from <a href="https://github.com/tkwidmer/lorcana-pro-tools/releases" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:text-green-900 underline">GitHub releases</a></li>
+            <li>Download the repo from <a href="https://github.com/tkwidmer/lorcana-pro-tools" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:text-green-900 underline">GitHub</a> (Code → Download ZIP)</li>
             <li>Extract the zip file</li>
+            <li>Navigate to the <code className="bg-white px-1 rounded text-xs">chrome-extension</code> folder</li>
             <li>Open <code className="bg-white px-1 rounded text-xs">chrome://extensions</code></li>
             <li>Turn on <strong>Developer mode</strong> (top-right toggle)</li>
             <li>Click <strong>Load unpacked</strong></li>
-            <li>Select the extracted <code className="bg-white px-1 rounded text-xs">lorcana-extension</code> folder</li>
+            <li>Select the <code className="bg-white px-1 rounded text-xs">chrome-extension</code> folder from your download</li>
           </ol>
-        </div>
-
-        <div className="bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
-          <div className="text-xs font-semibold text-blue-900">Development:</div>
-          <p className="text-xs text-blue-800">
-            Clone the repo and load the <code className="bg-white px-1 rounded text-xs">chrome-extension</code> folder directly via Developer mode.
-          </p>
         </div>
 
         <p className="text-xs text-gray-500 italic">

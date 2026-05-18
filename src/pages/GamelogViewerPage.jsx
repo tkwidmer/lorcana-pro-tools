@@ -69,8 +69,11 @@ function parseGamelog(logs) {
     }
 
     if (type === 'MULLIGAN') {
-      pData.mulliganSent = (d.mulliganCards ?? d.sentBackCards ?? []).filter(c => c?.name)
-      pData.mulliganKept = (d.keptCards ?? []).filter(c => c?.name)
+      pData.mulliganSent = (d.mulliganedCards ?? []).filter(c => c?.name)
+      // Kept = initial hand minus sent back; replacements tracked separately
+      const sentIds = new Set(pData.mulliganSent.map(c => c.id))
+      pData.mulliganKept = pData.initialHand.filter(c => !sentIds.has(c.id))
+      pData.mulliganDrawn = (d.drawnCards ?? []).filter(c => c?.name)
     }
 
     const cards = extractCards(entry)
@@ -80,7 +83,8 @@ function parseGamelog(logs) {
         pData.cards[card.name] = { name: card.name, id: card.id, drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0 }
       }
       const c = pData.cards[card.name]
-      if (type === 'CARD_DRAWN' || type === 'TURN_DRAW') c.drawn++
+      // TURN_DRAW is the public "draw happened" event with no card data — skip it
+      if (type === 'CARD_DRAWN') c.drawn++
       else if (type === 'INITIAL_HAND' || type === 'MULLIGAN') { /* handled separately */ }
       else if (type === 'CARD_PLAYED') c.played++
       else if (type === 'CARD_INKED') c.inked++
@@ -97,8 +101,8 @@ function parseGamelog(logs) {
 
   return {
     p1Name, p2Name, winner, turnCount,
-    p1: { ...players[1], cardList: toList(players[1].cards) },
-    p2: { ...players[2], cardList: toList(players[2].cards) },
+    p1: { ...players[1], mulliganDrawn: players[1].mulliganDrawn ?? [], cardList: toList(players[1].cards) },
+    p2: { ...players[2], mulliganDrawn: players[2].mulliganDrawn ?? [], cardList: toList(players[2].cards) },
   }
 }
 
@@ -120,6 +124,7 @@ function HandCards({ cards, label }) {
 
 function PlayerSection({ name, data, isWinner }) {
   const { initialHand, mulliganSent, mulliganKept, cardList } = data
+  const { mulliganDrawn = [] } = data
   const tookMulligan = mulliganSent.length > 0
 
   return (
@@ -133,8 +138,9 @@ function PlayerSection({ name, data, isWinner }) {
         <HandCards cards={initialHand} label="Opening hand" />
         {tookMulligan ? (
           <>
-            <HandCards cards={mulliganSent} label="Sent back (mulligan)" />
-            <HandCards cards={mulliganKept} label="Kept after mulligan" />
+            <HandCards cards={mulliganSent} label="Sent back" />
+            <HandCards cards={mulliganKept} label="Kept" />
+            <HandCards cards={mulliganDrawn} label="Drew as replacements" />
           </>
         ) : initialHand.length > 0 ? (
           <div className="text-xs text-gray-400">Kept opening hand</div>
@@ -252,9 +258,15 @@ export function GamelogViewerPage() {
                 <span className="font-mono">{[...new Set(rawLogs.map(l => l.type))].sort().join(', ')}</span>
               </div>
               <div>
-                <div className="font-semibold text-gray-700 mb-1">First CARD_DRAWN entry:</div>
+                <div className="font-semibold text-gray-700 mb-1">First CARD_DRAWN entry (private draw event with card name):</div>
                 <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
-                  {JSON.stringify(rawLogs.find(l => l.type === 'CARD_DRAWN' || l.type === 'TURN_DRAW') ?? 'none', null, 2)}
+                  {JSON.stringify(rawLogs.find(l => l.type === 'CARD_DRAWN') ?? 'none — no CARD_DRAWN events found', null, 2)}
+                </pre>
+              </div>
+              <div>
+                <div className="font-semibold text-gray-700 mb-1">First TURN_DRAW entry (public draw announcement, no card data):</div>
+                <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+                  {JSON.stringify(rawLogs.find(l => l.type === 'TURN_DRAW') ?? 'none', null, 2)}
                 </pre>
               </div>
               <div>

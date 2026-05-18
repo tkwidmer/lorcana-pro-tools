@@ -286,6 +286,7 @@ function BookmarkletPanel({ uuid }) {
 export function GameScraperPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [uuid, setUuid] = useState(null)
+  const [rawGame, setRawGame] = useState(null)   // buffered raw WS game object
   const [gameData, setGameData] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [cardLookup, setCardLookup] = useState({})
@@ -303,17 +304,22 @@ export function GameScraperPage() {
     loadCardData().then(lookup => setCardLookup(lookup))
   }, [])
 
+  // Re-parse whenever cardLookup is populated or rawGame changes
+  useEffect(() => {
+    if (!rawGame) return
+    setGameData(parseLiveGame(rawGame.game, cardLookup))
+  }, [rawGame, cardLookup])
+
   useEffect(() => {
     const handler = (event) => {
       if (event.data?.type === 'lorcana_game_data' && event.data?.game) {
         setExtensionActive(true)
-        // Extension sends the UUID from the spectate URL — use it if we don't have one
         const incomingUuid = event.data.uuid ?? null
         if (incomingUuid && !uuid) setUuid(incomingUuid)
         const activeUuid = uuid || incomingUuid
-        const parsed = parseLiveGame(event.data.game, cardLookup)
-        setGameData(parsed)
+        setRawGame({ game: event.data.game, uuid: activeUuid })
         setLastUpdated(new Date())
+        const parsed = parseLiveGame(event.data.game, cardLookup)
         if (activeUuid) saveGame(activeUuid, parsed).catch(e => console.error('Failed to save game:', e))
       }
     }

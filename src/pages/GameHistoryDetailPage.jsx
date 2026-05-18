@@ -48,7 +48,7 @@ export function GameHistoryDetailPage() {
               Last updated {new Date(record.lastUpdated).toLocaleString()} · UUID {uuid}
             </div>
           </div>
-          <GameView game={record.game} lastUpdated={new Date(record.lastUpdated)} />
+          <GameView game={record.game} lastUpdated={new Date(record.lastUpdated)} uuid={uuid} />
         </>
       )}
     </div>

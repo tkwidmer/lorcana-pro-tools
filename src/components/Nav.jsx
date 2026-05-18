@@ -24,6 +24,7 @@ export function Nav() {
                 : pathname.startsWith('/game-history/') ? 'Game History'
                 : pathname === '/players' ? 'Players'
                 : pathname.startsWith('/players/') ? 'Players'
+                : pathname === '/shared' ? 'Shared Game'
                 : ''}
             </span>
           </>

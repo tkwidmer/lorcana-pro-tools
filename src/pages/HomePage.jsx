@@ -49,6 +49,12 @@ const TOOLS = [
     description: 'Per-player profiles with inferred decklists across multiple games, play patterns (quest/challenge rate, ink rate), and head-to-head records.',
     label: 'Open Tool',
   },
+  {
+    path: '/shared',
+    name: 'Shared Game',
+    description: 'Load a game snapshot JSON file someone shared with you to view their board state, inferred hand, and full action log.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

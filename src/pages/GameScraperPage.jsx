@@ -300,7 +300,7 @@ export function GameScraperPage() {
 
       <BookmarkletPanel uuid={uuid} />
 
-      {gameData && <GameView game={gameData} lastUpdated={lastUpdated} />}
+      {gameData && <GameView game={gameData} lastUpdated={lastUpdated} uuid={uuid} />}
 
       {!gameData && (
         <div className="text-center py-12 text-gray-400">

@@ -11,6 +11,7 @@ import { GameHistoryPage } from './pages/GameHistoryPage'
 import { GameHistoryDetailPage } from './pages/GameHistoryDetailPage'
 import { PlayersPage } from './pages/PlayersPage'
 import { PlayerProfilePage } from './pages/PlayerProfilePage'
+import { SharedGamePage } from './pages/SharedGamePage'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/game-history" element={<GameHistoryPage />} />
         <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
         <Route path="/players" element={<PlayersPage />} />
+        <Route path="/shared" element={<SharedGamePage />} />
         <Route path="/players/:name" element={<PlayerProfilePage />} />
       </Routes>
     </BrowserRouter>

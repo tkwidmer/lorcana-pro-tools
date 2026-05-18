@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { resolveColors } from '../lib/inkColors'
 import { HandPredictor } from './HandPredictor'
+import { downloadSnapshot } from '../lib/gameSnapshot'
 
 function LoreBar({ lore, label, color }) {
   const pct = Math.min(100, ((lore ?? 0) / 20) * 100)
@@ -236,7 +237,7 @@ function GameLog({ game }) {
   )
 }
 
-export function GameView({ game, lastUpdated, headerExtra }) {
+export function GameView({ game, lastUpdated, headerExtra, uuid }) {
   const [showRaw, setShowRaw] = useState(false)
   if (!game) return null
 
@@ -248,8 +249,15 @@ export function GameView({ game, lastUpdated, headerExtra }) {
           <span className="text-gray-500">Turn <span className="font-semibold text-gray-800">{game.currentTurn}</span></span>
         )}
         {headerExtra}
+        <button
+          onClick={() => downloadSnapshot(uuid, game)}
+          className="text-xs text-gray-500 hover:text-gray-900 underline ml-auto"
+          title="Download this game state as a shareable JSON file"
+        >
+          Export JSON
+        </button>
         {lastUpdated && (
-          <span className="text-gray-400 text-xs ml-auto">Updated {lastUpdated.toLocaleTimeString()}</span>
+          <span className="text-gray-400 text-xs">Updated {lastUpdated.toLocaleTimeString()}</span>
         )}
       </div>
 

@@ -1,63 +1,41 @@
 /* eslint-disable no-undef */
-const GAME_DATA_STORE_KEY = 'lorcana_pending_games'
 
-// Listen for game data from content script
+const APP_ORIGINS = [
+  'https://lorcana-pro-tools.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:4173',
+]
+
+// Extract game UUID from a duels.ink spectate URL
+function extractUuid(url) {
+  const match = (url ?? '').match(/spectate\/([a-f0-9-]+)/i)
+  return match ? match[1] : null
+}
+
+// Listen for game data from the duels.ink content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'GAME_DATA') {
-    // Store messages in local storage for the app to pick up
-    chrome.storage.local.get(GAME_DATA_STORE_KEY, (result) => {
-      const games = result[GAME_DATA_STORE_KEY] || {}
-      const gameId = request.payload.gameId || 'unknown'
+  if (request.type !== 'GAME_DATA') return
 
-      if (!games[gameId]) {
-        games[gameId] = {
-          messages: [],
-          lastUpdate: Date.now(),
-          sourceTab: sender.tab.id,
-          sourceUrl: request.url
-        }
-      }
+  const uuid = extractUuid(request.url)
+  const payload = request.payload
 
-      games[gameId].messages.push({
-        data: request.payload,
-        timestamp: request.timestamp
-      })
-      games[gameId].lastUpdate = Date.now()
+  // Forward to all open lorcana-pro-tools tabs
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (!tab.url) return
+      const isAppTab = APP_ORIGINS.some(origin => tab.url.startsWith(origin))
+      if (!isAppTab) return
 
-      chrome.storage.local.set({ [GAME_DATA_STORE_KEY]: games })
-    })
-
-    // Notify all tabs that new data is available
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'GAME_DATA_AVAILABLE'
-        }).catch(() => {
-          // Tab may not have content script
-        })
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'GAME_DATA',
+        payload,
+        uuid,
+        url: request.url,
+      }).catch(() => {
+        // Tab may not have bridge.js loaded yet
       })
     })
-
-    sendResponse({ success: true })
-  }
-})
-
-// Clean up old games after 1 hour of inactivity
-setInterval(() => {
-  const oneHourAgo = Date.now() - (60 * 60 * 1000)
-  chrome.storage.local.get(GAME_DATA_STORE_KEY, (result) => {
-    const games = result[GAME_DATA_STORE_KEY] || {}
-    let modified = false
-
-    Object.keys(games).forEach(gameId => {
-      if (games[gameId].lastUpdate < oneHourAgo) {
-        delete games[gameId]
-        modified = true
-      }
-    })
-
-    if (modified) {
-      chrome.storage.local.set({ [GAME_DATA_STORE_KEY]: games })
-    }
   })
-}, 5 * 60 * 1000) // Check every 5 minutes
+
+  sendResponse({ success: true })
+})

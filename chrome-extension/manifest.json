@@ -1,14 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Lorcana Game Scraper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Automatically capture live Lorcana Duels gameplay for analysis",
   "permissions": [
-    "scripting",
-    "webRequest"
+    "tabs",
+    "storage"
   ],
   "host_permissions": [
-    "https://duels.ink/*"
+    "https://duels.ink/*",
+    "https://lorcana-pro-tools.vercel.app/*",
+    "http://localhost:5173/*",
+    "http://localhost:4173/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -22,6 +25,17 @@
         "content.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://lorcana-pro-tools.vercel.app/*",
+        "http://localhost:5173/*",
+        "http://localhost:4173/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "action": {

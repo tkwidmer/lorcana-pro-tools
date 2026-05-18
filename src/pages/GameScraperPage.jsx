@@ -163,12 +163,14 @@ function makeBookmarkletCode(uuid, origin) {
   return `javascript:(function(){ var done=false; var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); Object.defineProperty(WebSocket.prototype,'onmessage',{set:function(h){ var self=this; var wrapped=function(ev){ if(!done){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game){ done=true; window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank'); return; } }catch(e){} } if(h) h.call(self,ev); }; if(origDesc&&origDesc.set){ origDesc.set.call(this,wrapped); } else { this.addEventListener('message',wrapped); } }, get:function(){ return origDesc&&origDesc.get ? origDesc.get.call(this) : this._onmessage; }}); alert('Waiting for next game update...'); })();`
 }
 
-function ExtensionPanel() {
+function ExtensionPanel({ active }) {
   const downloadUrl = `${window.location.origin}/lorcana-extension.zip`
 
   return (
     <details className="mt-2" open>
-      <summary className="text-xs font-medium text-green-700 cursor-pointer select-none">Chrome Extension (recommended)</summary>
+      <summary className="text-xs font-medium text-green-700 cursor-pointer select-none flex items-center gap-2">
+        Chrome Extension {active && <span className="inline-block bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full">● Connected</span>}
+      </summary>
       <div className="mt-2 space-y-3">
         <p className="text-xs text-gray-600">
           Install the Lorcana Game Scraper extension for automatic game capture. No setup per game — just visit a spectate link and the data loads automatically.
@@ -287,6 +289,7 @@ export function GameScraperPage() {
   const [gameData, setGameData] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [cardLookup, setCardLookup] = useState({})
+  const [extensionActive, setExtensionActive] = useState(false)
 
   useEffect(() => {
     const paramUuid = searchParams.get('uuid')
@@ -303,10 +306,15 @@ export function GameScraperPage() {
   useEffect(() => {
     const handler = (event) => {
       if (event.data?.type === 'lorcana_game_data' && event.data?.game) {
+        setExtensionActive(true)
+        // Extension sends the UUID from the spectate URL — use it if we don't have one
+        const incomingUuid = event.data.uuid ?? null
+        if (incomingUuid && !uuid) setUuid(incomingUuid)
+        const activeUuid = uuid || incomingUuid
         const parsed = parseLiveGame(event.data.game, cardLookup)
         setGameData(parsed)
         setLastUpdated(new Date())
-        if (uuid) saveGame(uuid, parsed).catch(e => console.error('Failed to save game:', e))
+        if (activeUuid) saveGame(activeUuid, parsed).catch(e => console.error('Failed to save game:', e))
       }
     }
     window.addEventListener('message', handler)
@@ -329,14 +337,18 @@ export function GameScraperPage() {
         </p>
       </div>
 
-      <ExtensionPanel />
+      <ExtensionPanel active={extensionActive} />
       <BookmarkletPanel uuid={uuid} />
 
       {gameData && <GameView game={gameData} lastUpdated={lastUpdated} uuid={uuid} />}
 
       {!gameData && (
         <div className="text-center py-12 text-gray-400">
-          <div className="text-sm">Waiting for game data from the bookmarklet…</div>
+          <div className="text-sm">
+            {extensionActive
+              ? 'Extension connected — open a duels.ink spectate page to load a game.'
+              : 'Waiting for game data… open a duels.ink spectate page with the extension installed.'}
+          </div>
         </div>
       )}
     </div>

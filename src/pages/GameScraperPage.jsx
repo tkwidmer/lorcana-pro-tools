@@ -56,7 +56,7 @@ function parseLiveGame(data) {
 
 function makeGenericBookmarkletCode(origin, newTab = true) {
   const navigate = newTab
-    ? `var tab=window.open('${origin}/game-scraper?uuid='+uuid,'_blank'); var tries=0; var iv=setInterval(function(){ try{ tab.postMessage({type:'lorcana_game_data',game:d.game},'${origin}'); clearInterval(iv); }catch(e){ if(++tries>20) clearInterval(iv); } },300);`
+    ? `var tab=window.open('${origin}/game-scraper?uuid='+uuid,'_blank'); window.addEventListener('message',function onReady(e){ if(e.source===tab&&e.data&&e.data.type==='lorcana_ready'){ window.removeEventListener('message',onReady); tab.postMessage({type:'lorcana_game_data',game:d.game},'${origin}'); } });`
     : `window.__lorcanaGameData=d.game; window.location.href='${origin}/game-scraper?uuid='+uuid;`
   return `javascript:(function(){ if(window.__lorcanaActive){ console.log('[Lorcana] Already active'); return; } window.__lorcanaActive=true; var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); var origAEL=WebSocket.prototype.addEventListener; var done=false; function intercept(ev){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game&&!done){ var match=window.location.href.match(/spectate\\/([a-f0-9-]+)/i); var uuid=match?match[1]:'unknown'; console.log('[Lorcana] Found game! Opening tool...'); done=true; ${navigate} } }catch(e){} } Object.defineProperty(WebSocket.prototype,'onmessage',{ set:function(h){ var self=this; origDesc.set.call(this,function(ev){ intercept.call(self,ev); if(h) h.call(self,ev); }); }, get:function(){ return origDesc.get.call(this); } }); WebSocket.prototype.addEventListener=function(type,listener){ if(type==='message'){ var self=this; return origAEL.call(this,type,function(ev){ intercept.call(self,ev); listener.call(self,ev); }); } return origAEL.call(this,type,listener); }; console.log('[Lorcana] Ready! Now navigate to a spectate page and the tool will open automatically.'); })();`
 }
@@ -258,7 +258,7 @@ export function GameScraperPage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Receive game data sent via postMessage from the bookmarklet
+  // Handshake with bookmarklet: signal ready, then receive game data
   useEffect(() => {
     const handler = (event) => {
       if (event.data?.type === 'lorcana_game_data' && event.data?.game) {
@@ -268,6 +268,10 @@ export function GameScraperPage() {
       }
     }
     window.addEventListener('message', handler)
+    // Tell the opener we're ready to receive data
+    if (window.opener) {
+      window.opener.postMessage({ type: 'lorcana_ready' }, '*')
+    }
     return () => window.removeEventListener('message', handler)
   }, [])
 

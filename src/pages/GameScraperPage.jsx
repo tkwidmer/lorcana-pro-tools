@@ -281,6 +281,54 @@ function BookmarkletPanel({ uuid }) {
   )
 }
 
+// --- Raw Payload Inspector (debug) ---
+
+function RawPayloadInspector({ entry }) {
+  const { game, meta, uuid } = entry
+  const topLevelKeys = meta ? Object.keys(meta) : []
+  const gameKeys = game ? Object.keys(game) : []
+
+  return (
+    <details className="mt-6 border border-dashed border-gray-300 rounded-lg p-4 text-xs text-gray-600">
+      <summary className="cursor-pointer font-medium text-gray-700 select-none">
+        Raw payload inspector — click to expand
+        {topLevelKeys.length > 0 && (
+          <span className="ml-2 text-amber-600">
+            ({topLevelKeys.length} extra top-level field{topLevelKeys.length > 1 ? 's' : ''} outside game: {topLevelKeys.join(', ')})
+          </span>
+        )}
+      </summary>
+      <div className="mt-3 space-y-3">
+        <div>
+          <div className="font-semibold text-gray-700 mb-1">UUID</div>
+          <code className="font-mono">{uuid}</code>
+        </div>
+        <div>
+          <div className="font-semibold text-gray-700 mb-1">
+            Top-level payload fields (outside <code>game</code>)
+          </div>
+          {topLevelKeys.length === 0
+            ? <span className="text-gray-400 italic">none — only game field present</span>
+            : <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+                {JSON.stringify(meta, null, 2)}
+              </pre>
+          }
+        </div>
+        <div>
+          <div className="font-semibold text-gray-700 mb-1">
+            Keys inside <code>game</code> ({gameKeys.length})
+          </div>
+          <div className="font-mono flex flex-wrap gap-1">
+            {gameKeys.map(k => (
+              <span key={k} className="bg-gray-100 rounded px-1">{k}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </details>
+  )
+}
+
 // --- Main Page ---
 
 export function GameScraperPage() {
@@ -395,6 +443,10 @@ export function GameScraperPage() {
       )}
 
       {gameData && <GameView game={gameData} lastUpdated={lastUpdated} uuid={activeUuid} />}
+
+      {activeUuid && activeGames[activeUuid] && (
+        <RawPayloadInspector entry={activeGames[activeUuid]} />
+      )}
 
       {!gameData && (
         <div className="text-center py-12 text-gray-400">

@@ -540,8 +540,11 @@ export function GameScraperPage() {
     loadCardData().then(lookup => {
       console.log('[GameScraper] Loaded card lookup:', Object.keys(lookup).length, 'cards')
       if (Object.keys(lookup).length > 0) {
-        const sampleId = Object.keys(lookup)[0]
-        console.log('[GameScraper] Sample card:', sampleId, lookup[sampleId])
+        const sampleIds = Object.keys(lookup).slice(0, 5)
+        console.log('[GameScraper] Sample card IDs from API:', sampleIds)
+        sampleIds.forEach(id => {
+          console.log('[GameScraper]   ID:', id, '→', lookup[id])
+        })
       }
       setCardLookup(lookup)
     })

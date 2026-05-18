@@ -183,9 +183,10 @@ async function forwardGames(games) {
 
   const lookup = await getCardLookup()
 
-  Object.values(games).forEach(({ uuid, game }) => {
+  Object.values(games).forEach(({ uuid, game, meta }) => {
     const parsed = parseGame(game, lookup)
     dbSave(uuid, parsed)
+    if (meta) games[uuid] = { ...games[uuid], meta }
   })
 
   window.postMessage({ type: 'lorcana_active_games', games }, '*')

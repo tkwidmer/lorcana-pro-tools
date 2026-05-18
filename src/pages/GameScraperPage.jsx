@@ -7,7 +7,7 @@ const DUELS_ORIGIN = 'https://duels.ink'
 
 function buildObservedDeck(logs, fieldCards, playerNum) {
   // Track only actions that confirm deck composition
-  const RELEVANT_ACTIONS = new Set(['PLAY', 'INK', 'DISCARD', 'DRAW'])
+  const RELEVANT_ACTIONS = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED', 'CARD_DRAWN'])
   const cards = {} // definitionId → { name, plays: 0, inked: 0, discarded: 0 }
   const colors = new Set()
 
@@ -20,9 +20,9 @@ function buildObservedDeck(logs, fieldCards, playerNum) {
       if (!cards[ref.id]) {
         cards[ref.id] = { name: ref.name, plays: 0, inked: 0, discarded: 0 }
       }
-      if (log.type === 'PLAY') cards[ref.id].plays++
-      else if (log.type === 'INK') cards[ref.id].inked++
-      else if (log.type === 'DISCARD') cards[ref.id].discarded++
+      if (log.type === 'CARD_PLAYED') cards[ref.id].plays++
+      else if (log.type === 'CARD_INKED') cards[ref.id].inked++
+      else if (log.type === 'CARD_DISCARDED') cards[ref.id].discarded++
 
       // Extract ink color (try various field names)
       if (ref.color) colors.add(ref.color)
@@ -88,9 +88,9 @@ function parseLiveGame(data) {
   const p1Observed = buildObservedDeck(logs, p1Field, 1)
   const p2Observed = buildObservedDeck(logs, p2Field, 2)
 
-  // Ink pool: count INK actions per player for total pool size;
+  // Ink pool: count CARD_INKED actions per player for total pool size;
   // also try server-provided available/spent values
-  const countInked = (playerNum) => logs.filter(l => (l.player === playerNum || l.player === String(playerNum)) && l.type === 'INK').length
+  const countInked = (playerNum) => logs.filter(l => (l.player === playerNum || l.player === String(playerNum)) && l.type === 'CARD_INKED').length
   const p1InkedCount = countInked(1)
   const p2InkedCount = countInked(2)
 

@@ -49,6 +49,12 @@ const TOOLS = [
     description: 'Paste a decklist to instantly see which cards are legal in Core (rotating) or Infinity (eternal) format.',
     label: 'Open Tool',
   },
+  {
+    path: '/deck-comparison',
+    name: 'Deck Comparison',
+    description: 'Paste your paper deck and your updated online list to see exactly which cards to swap — no more mis-registrations when transitioning between testing and paper.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

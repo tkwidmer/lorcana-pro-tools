@@ -93,8 +93,11 @@ function parseLiveGame(data) {
 
 // --- Bookmarklet generator ---
 
-function makeGenericBookmarkletCode(origin) {
-  return `javascript:(function(){ console.log('%cLorcana Game Scraper Bookmarklet Activated','color:green;font-weight:bold'); var origAddEventListener=WebSocket.prototype.addEventListener; var done=false; WebSocket.prototype.addEventListener=function(type,listener){ if(type==='message'){ var self=this; var wrapped=function(ev){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game&&!done){ var match=window.location.href.match(/spectate\\/([a-f0-9-]+)/i); var uuid=match?match[1]:'unknown'; console.log('%c✓ Found spectator_update! Opening tool...','color:green;font-weight:bold'); done=true; window.open('${origin}/game-scraper?uuid='+uuid+'&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank'); } }catch(e){} listener.call(self,ev); }; return origAddEventListener.call(this,type,wrapped); } return origAddEventListener.call(this,type,listener); }; console.log('%cWaiting for next game update... Watch this console for ✓ Found spectator_update!','color:blue'); })();`
+function makeGenericBookmarkletCode(origin, newTab = true) {
+  const open = newTab
+    ? `window.open('${origin}/game-scraper?uuid='+uuid+'&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank')`
+    : `window.location.href='${origin}/game-scraper?uuid='+uuid+'&data='+encodeURIComponent(JSON.stringify(d.game))`
+  return `javascript:(function(){ var origAddEventListener=WebSocket.prototype.addEventListener; var done=false; WebSocket.prototype.addEventListener=function(type,listener){ if(type==='message'){ var self=this; var wrapped=function(ev){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game&&!done){ var match=window.location.href.match(/spectate\\/([a-f0-9-]+)/i); var uuid=match?match[1]:'unknown'; done=true; ${open}; } }catch(e){} listener.call(self,ev); }; return origAddEventListener.call(this,type,wrapped); } return origAddEventListener.call(this,type,listener); }; })();`
 }
 
 function makeBookmarkletCode(uuid, origin) {
@@ -104,10 +107,11 @@ function makeBookmarkletCode(uuid, origin) {
 function BookmarkletPanel({ uuid }) {
   const [copied, setCopied] = useState(false)
   const [genericCopied, setGenericCopied] = useState(false)
-  const [showGeneric, setShowGeneric] = useState(false)
+  const [showSpecific, setShowSpecific] = useState(false)
+  const [newTab, setNewTab] = useState(true)
   const origin = window.location.origin
   const specificCode = makeBookmarkletCode(uuid, origin)
-  const genericCode = makeGenericBookmarkletCode(origin)
+  const genericCode = makeGenericBookmarkletCode(origin, newTab)
 
   const copy = (code, setType) => {
     navigator.clipboard.writeText(code).then(() => {
@@ -125,13 +129,23 @@ function BookmarkletPanel({ uuid }) {
           2. Create a new bookmark in your browser (right-click bookmarks bar → Add page).<br />
           3. Edit it and paste this as the <strong>URL / Address</strong> field.<br />
           4. Go to the duels.ink spectate page and click the bookmark.<br />
-          5. An alert will appear saying "Waiting for next game update…" — dismiss it.<br />
-          6. Within a few seconds the server will send the next live update and this tool will open automatically in a new tab with the game data.
+          5. The tool will open automatically when the server sends the next update (usually within a few seconds).
         </p>
 
         <div>
-          <div className="text-xs font-semibold text-gray-700 mb-1">Option 1: Generic Bookmarklet (Recommended)</div>
-          <p className="text-xs text-gray-500 mb-2">Works for any spectate game. Save once, use forever.</p>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-semibold text-gray-700">Generic Bookmarklet (works for any game)</div>
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={newTab}
+                onChange={e => setNewTab(e.target.checked)}
+                className="rounded"
+              />
+              Open in new tab
+              <span className="text-gray-400">(uncheck for mobile)</span>
+            </label>
+          </div>
           <div className="flex items-start gap-2">
             <code className="flex-1 block text-xs bg-gray-100 border border-gray-200 rounded p-2 font-mono break-all select-all">
               {genericCode}
@@ -146,15 +160,15 @@ function BookmarkletPanel({ uuid }) {
         </div>
 
         <button
-          onClick={() => setShowGeneric(!showGeneric)}
+          onClick={() => setShowSpecific(!showSpecific)}
           className="text-xs text-gray-500 hover:text-gray-700 underline"
         >
-          {showGeneric ? 'Hide' : 'Show'} specific game bookmarklet
+          {showSpecific ? 'Hide' : 'Show'} game-specific bookmarklet
         </button>
 
-        {showGeneric && (
+        {showSpecific && (
           <div>
-            <div className="text-xs font-semibold text-gray-700 mb-1">Option 2: Game-Specific Bookmarklet</div>
+            <div className="text-xs font-semibold text-gray-700 mb-1">Game-Specific Bookmarklet</div>
             <p className="text-xs text-gray-500 mb-2">Pre-filled with this game's UUID. Need a new one for each game.</p>
             <div className="flex items-start gap-2">
               <code className="flex-1 block text-xs bg-gray-100 border border-gray-200 rounded p-2 font-mono break-all select-all">

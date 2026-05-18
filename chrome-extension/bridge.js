@@ -2,6 +2,8 @@
 // Runs on all lorcana-pro-tools pages. Saves every game update to IndexedDB
 // and forwards the active games map to GameScraperPage for live viewing.
 
+// --- IndexedDB ---
+
 const DB_NAME = 'lorcana_pro_tools'
 const DB_VERSION = 1
 const STORE = 'games'
@@ -20,26 +22,128 @@ function openDB() {
   })
 }
 
-// Parse what we can from raw WebSocket game data without card lookup.
-// GameScraperPage will overwrite this with a richer version (including ink
-// colors and observed deck) once card data has loaded.
-function parseMinimal(rawGame) {
+function dbSave(uuid, game) {
+  if (!uuid || !game) return
+  openDB().then(d => {
+    const tx = d.transaction(STORE, 'readwrite')
+    const store = tx.objectStore(STORE)
+    const getReq = store.get(uuid)
+    getReq.onsuccess = () => {
+      store.put({ uuid, savedAt: getReq.result?.savedAt ?? Date.now(), lastUpdated: Date.now(), game })
+    }
+  }).catch(() => {})
+}
+
+// --- Card lookup (fetched once, cached in extension storage) ---
+
+const INK_NAME_MAP = {
+  red: 'ruby', ruby: 'ruby',
+  blue: 'sapphire', sapphire: 'sapphire',
+  green: 'emerald', emerald: 'emerald',
+  yellow: 'amber', amber: 'amber',
+  purple: 'amethyst', amethyst: 'amethyst',
+  gray: 'steel', grey: 'steel', steel: 'steel',
+}
+
+function resolveInkName(color) {
+  return color ? (INK_NAME_MAP[color.toLowerCase()] ?? null) : null
+}
+
+let cardLookup = null
+
+async function getCardLookup() {
+  if (cardLookup) return cardLookup
+
+  // Try extension storage cache first
+  const cached = await new Promise(resolve => chrome.storage.local.get('lorcana_card_lookup', resolve))
+  if (cached.lorcana_card_lookup && Object.keys(cached.lorcana_card_lookup).length > 0) {
+    cardLookup = cached.lorcana_card_lookup
+    return cardLookup
+  }
+
+  // Fetch from same-origin API
+  try {
+    const res = await fetch('/api/cards')
+    if (!res.ok) return {}
+    const data = await res.json()
+    const lookup = {}
+    for (const card of (data.cards ?? [])) {
+      const entry = { color: card.color }
+      if (card.fullName) lookup[card.fullName] = entry
+      if (card.name) lookup[card.name] = entry
+    }
+    cardLookup = lookup
+    chrome.storage.local.set({ lorcana_card_lookup: lookup })
+    return lookup
+  } catch {
+    return {}
+  }
+}
+
+// --- Game parsing (mirrors parseLiveGame / buildObservedDeck in GameScraperPage) ---
+
+function buildObservedDeck(logs, fieldCards, playerNum, lookup) {
+  const RELEVANT = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED'])
+  const cards = {}
+  const colors = new Set()
+
+  for (const log of logs) {
+    if (log.player !== playerNum && log.player !== String(playerNum)) continue
+    if (!RELEVANT.has(log.type)) continue
+    for (const ref of (log.cardRefs ?? [])) {
+      if (!ref.id || !ref.name) continue
+      if (!cards[ref.id]) cards[ref.id] = { name: ref.name, plays: 0, inked: 0, discarded: 0 }
+      if (log.type === 'CARD_PLAYED') cards[ref.id].plays++
+      else if (log.type === 'CARD_INKED') cards[ref.id].inked++
+      else if (log.type === 'CARD_DISCARDED') cards[ref.id].discarded++
+      const ink = resolveInkName(lookup[ref.name]?.color)
+      if (ink) colors.add(ink)
+    }
+  }
+
+  for (const card of fieldCards) {
+    if (!card.definitionId) continue
+    if (!cards[card.definitionId]) cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
+    const ink = resolveInkName((lookup[card.fullName] ?? lookup[card.name])?.color)
+    if (ink) colors.add(ink)
+  }
+
+  const cardList = Object.entries(cards)
+    .map(([definitionId, { name, plays, inked, discarded }]) => ({
+      definitionId, name, plays: Math.max(plays, 1), inked, discarded,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  return { cards: cardList, colors: Array.from(colors).sort() }
+}
+
+function parseGame(rawGame, lookup) {
   const names = rawGame.playerNames ?? {}
   const p1 = rawGame.player1 ?? {}
   const p2 = rawGame.player2 ?? {}
   const logs = rawGame.logs ?? []
 
-  // Build a name map from log cardRefs so field cards have names
   const defIdToName = {}
   for (const log of logs) {
     for (const ref of (log.cardRefs ?? [])) {
       if (ref.id && ref.name) defIdToName[ref.id] = ref.name
     }
   }
+
   const enrichField = (field) => (field ?? []).map(c => ({
     ...c,
     name: defIdToName[c.definitionId] ?? c.name ?? c.definitionId,
+    fullName: defIdToName[c.definitionId] ?? c.fullName ?? c.name ?? c.definitionId,
   }))
+
+  const p1Field = enrichField(p1.field)
+  const p2Field = enrichField(p2.field)
+  const p1Obs = buildObservedDeck(logs, p1Field, 1, lookup)
+  const p2Obs = buildObservedDeck(logs, p2Field, 2, lookup)
+
+  const countInked = (n) => logs.filter(l => (l.player === n || l.player === String(n)) && l.type === 'CARD_INKED').length
+  const p1InkedCount = countInked(1)
+  const p2InkedCount = countInked(2)
 
   return {
     p1Name: names.player1 ?? names['1'] ?? 'Player 1',
@@ -50,15 +154,20 @@ function parseMinimal(rawGame) {
     p2Hand: p2.handCount ?? null,
     p1Deck: p1.deckCount ?? null,
     p2Deck: p2.deckCount ?? null,
-    p1Field: enrichField(p1.field),
-    p2Field: enrichField(p2.field),
-    p1InkColors: [],  // requires card lookup — GameScraperPage fills these in
-    p2InkColors: [],
-    p1ObservedDeck: [],
-    p2ObservedDeck: [],
-    p1InkPool: p1.inkCount ?? p1.inkAvailable ?? null,
-    p2InkPool: p2.inkCount ?? p2.inkAvailable ?? null,
+    p1Field,
+    p2Field,
+    p1InkColors: p1Obs.colors,
+    p2InkColors: p2Obs.colors,
+    p1ObservedDeck: p1Obs.cards,
+    p2ObservedDeck: p2Obs.cards,
+    p1InkPool: p1.inkCount ?? p1.inkAvailable ?? (p1InkedCount > 0 ? p1InkedCount : null),
+    p2InkPool: p2.inkCount ?? p2.inkAvailable ?? (p2InkedCount > 0 ? p2InkedCount : null),
+    p1InkUsed: p1.inkUsed ?? p1.inkSpent ?? null,
+    p2InkUsed: p2.inkUsed ?? p2.inkSpent ?? null,
+    p1InkedCount,
+    p2InkedCount,
     currentTurn: rawGame.turnNumber ?? null,
+    activePlayer: rawGame.currentPlayer ?? rawGame.timerView?.activePlayer ?? null,
     winner: rawGame.winner ?? null,
     status: rawGame.status ?? null,
     log: logs,
@@ -66,32 +175,18 @@ function parseMinimal(rawGame) {
   }
 }
 
-function saveGame(uuid, rawGame) {
-  if (!uuid || !rawGame) return
-  openDB().then(d => {
-    const tx = d.transaction(STORE, 'readwrite')
-    const store = tx.objectStore(STORE)
-    const getReq = store.get(uuid)
-    getReq.onsuccess = () => {
-      const existing = getReq.result
-      // Don't overwrite a richer record (one with ink colors populated by
-      // GameScraperPage's full parse) with our minimal version.
-      const existingIsRich = existing?.game?.p1InkColors?.length > 0
-      if (existingIsRich) return
+// --- Main forwarding logic ---
 
-      store.put({
-        uuid,
-        savedAt: existing?.savedAt ?? Date.now(),
-        lastUpdated: Date.now(),
-        game: parseMinimal(rawGame),
-      })
-    }
-  }).catch(() => {})
-}
-
-function forwardGames(games) {
+async function forwardGames(games) {
   if (!games || typeof games !== 'object') return
-  Object.values(games).forEach(({ uuid, game }) => saveGame(uuid, game))
+
+  const lookup = await getCardLookup()
+
+  Object.values(games).forEach(({ uuid, game }) => {
+    const parsed = parseGame(game, lookup)
+    dbSave(uuid, parsed)
+  })
+
   window.postMessage({ type: 'lorcana_active_games', games }, '*')
 }
 

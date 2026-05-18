@@ -722,6 +722,12 @@ export function GameScraperPage() {
                 <div className="text-xs">{Object.keys(cardLookup).length} cards loaded</div>
               </div>
               <div className="mt-2">
+                <div className="font-bold">P1 Ink Colors (for log):</div>
+                <div className="text-xs">{game.p1InkColors?.join(', ') || 'none'}</div>
+                <div className="font-bold">P2 Ink Colors (for log):</div>
+                <div className="text-xs">{game.p2InkColors?.join(', ') || 'none'}</div>
+              </div>
+              <div className="mt-2">
                 <div className="font-bold">Sample observed deck card IDs:</div>
                 <div className="font-mono text-xs bg-white p-1 rounded mt-1">
                   {game._debug?.sampleObservedCard?.definitionId ? game._debug.sampleObservedCard.definitionId : 'none'}

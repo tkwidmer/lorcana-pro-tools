@@ -102,12 +102,19 @@ function parseLiveGame(data) {
   // Debug: analyze logs to understand structure
   const actionCounts = {}
   const playerNumbers = new Set()
+  const sampleCardRefs = []
+  const sampleFieldCards = []
   for (const log of logs) {
     const type = log.type ?? 'unknown'
     const player = log.player ?? 'unknown'
     playerNumbers.add(player)
     actionCounts[type] = (actionCounts[type] ?? 0) + 1
+    if (sampleCardRefs.length < 3 && log.cardRefs?.length > 0) {
+      sampleCardRefs.push(log.cardRefs[0])
+    }
   }
+  if (p1Field?.length > 0) sampleFieldCards.push(p1Field[0])
+  if (p2Field?.length > 0) sampleFieldCards.push(p2Field[0])
 
   return {
     p1Name,
@@ -143,6 +150,10 @@ function parseLiveGame(data) {
       totalLogs: logs.length,
       p1InkedCount,
       p2InkedCount,
+      p1InkColors: p1Observed.colors,
+      p2InkColors: p2Observed.colors,
+      sampleCardRef: sampleCardRefs[0],
+      sampleFieldCard: sampleFieldCards[0],
     },
   }
 }
@@ -634,6 +645,20 @@ export function GameScraperPage() {
               <div>Action types: {Object.entries(game._debug?.actionCounts ?? {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'none'}</div>
               <div>P1 inked actions counted: {game._debug?.p1InkedCount ?? 0}</div>
               <div>P2 inked actions counted: {game._debug?.p2InkedCount ?? 0}</div>
+              <div>P1 ink colors extracted: {game._debug?.p1InkColors?.join(', ') || 'none'}</div>
+              <div>P2 ink colors extracted: {game._debug?.p2InkColors?.join(', ') || 'none'}</div>
+              <div className="mt-2 pt-2 border-t border-gray-300">
+                <div className="font-bold">Sample Card Ref fields:</div>
+                <div className="font-mono text-xs bg-white p-1 rounded mt-1">
+                  {game._debug?.sampleCardRef ? Object.keys(game._debug.sampleCardRef).join(', ') : 'none'}
+                </div>
+              </div>
+              <div className="mt-2">
+                <div className="font-bold">Sample Field Card fields:</div>
+                <div className="font-mono text-xs bg-white p-1 rounded mt-1">
+                  {game._debug?.sampleFieldCard ? Object.keys(game._debug.sampleFieldCard).join(', ') : 'none'}
+                </div>
+              </div>
             </div>
           </div>
 

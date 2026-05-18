@@ -73,6 +73,17 @@ function parseLiveGame(data) {
   const p1Field = enrichField(p1.field)
   const p2Field = enrichField(p2.field)
 
+  // Ink pool: count INK actions per player for total pool size;
+  // also try server-provided available/spent values
+  const countInked = (playerNum) => logs.filter(l => l.player === playerNum && l.type === 'INK').length
+  const p1InkedCount = countInked(1)
+  const p2InkedCount = countInked(2)
+
+  const p1InkPool = p1.inkCount ?? p1.inkAvailable ?? p1.inkPool ?? p1.ink ?? (p1InkedCount > 0 ? p1InkedCount : null)
+  const p2InkPool = p2.inkCount ?? p2.inkAvailable ?? p2.inkPool ?? p2.ink ?? (p2InkedCount > 0 ? p2InkedCount : null)
+  const p1InkUsed = p1.inkUsed ?? p1.inkSpent ?? null
+  const p2InkUsed = p2.inkUsed ?? p2.inkSpent ?? null
+
   return {
     p1Name,
     p2Name,
@@ -89,6 +100,12 @@ function parseLiveGame(data) {
     p2Hand: p2.handCount ?? null,
     p1Deck: p1.deckCount ?? null,
     p2Deck: p2.deckCount ?? null,
+    p1InkPool,
+    p2InkPool,
+    p1InkUsed,
+    p2InkUsed,
+    p1InkedCount,
+    p2InkedCount,
     p1ObservedDeck: buildObservedDeck(logs, p1Field, 1),
     p2ObservedDeck: buildObservedDeck(logs, p2Field, 2),
     log: logs,
@@ -214,6 +231,37 @@ function LoreBar({ lore, label, color }) {
   )
 }
 
+function InkMeter({ inkPool, inkUsed, inkedCount }) {
+  if (inkPool == null && inkedCount == null) return null
+  const total = inkPool ?? inkedCount
+  const available = inkUsed != null ? total - inkUsed : null
+  const dots = Math.min(total, 20)
+
+  return (
+    <div>
+      <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <span className="font-medium text-gray-700">Ink</span>
+        <span className="font-semibold text-gray-700">
+          {available != null ? `${available} / ${total}` : `${total} pooled`}
+        </span>
+      </div>
+      <div className="flex gap-0.5 flex-wrap">
+        {Array.from({ length: dots }).map((_, i) => (
+          <div
+            key={i}
+            className={`w-3 h-3 rounded-full border ${
+              available != null && i >= available
+                ? 'bg-gray-100 border-gray-200'
+                : 'bg-amber-300 border-amber-400'
+            }`}
+          />
+        ))}
+        {total > 20 && <span className="text-xs text-gray-400 ml-1">+{total - 20}</span>}
+      </div>
+    </div>
+  )
+}
+
 function FieldCard({ card }) {
   const name = card.fullName ?? card.name ?? 'Unknown'
   const exerted = card.exerted ?? card.tapped ?? false
@@ -241,7 +289,7 @@ function FieldCard({ card }) {
   )
 }
 
-function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, loreColor, isActive }) {
+function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, loreColor, isActive, inkPool, inkUsed, inkedCount }) {
   return (
     <div className={`bg-white rounded-xl border-2 p-4 flex flex-col gap-3 ${isActive ? 'border-blue-400 shadow-md' : 'border-gray-200'}`}>
       <div className="flex items-center gap-2">
@@ -252,6 +300,7 @@ function PlayerPanel({ name, lore, handCount, deckCount, field, observedDeck, lo
         {isActive && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium ml-auto">Active</span>}
       </div>
       <LoreBar lore={lore} label="Lore" color={loreColor} />
+      <InkMeter inkPool={inkPool} inkUsed={inkUsed} inkedCount={inkedCount} />
       <div className="flex gap-4 text-xs text-gray-500">
         {handCount != null && <span><span className="font-semibold text-gray-700">{handCount}</span> in hand</span>}
         {deckCount != null && <span><span className="font-semibold text-gray-700">{deckCount}</span> in deck</span>}
@@ -405,6 +454,9 @@ export function GameScraperPage() {
               observedDeck={game.p1ObservedDeck}
               loreColor="bg-amber-400"
               isActive={game.activePlayer === 1 || game.activePlayer === '1'}
+              inkPool={game.p1InkPool}
+              inkUsed={game.p1InkUsed}
+              inkedCount={game.p1InkedCount}
             />
             <PlayerPanel
               name={game.p2Name}
@@ -415,6 +467,9 @@ export function GameScraperPage() {
               observedDeck={game.p2ObservedDeck}
               loreColor="bg-sapphire-400 bg-blue-400"
               isActive={game.activePlayer === 2 || game.activePlayer === '2'}
+              inkPool={game.p2InkPool}
+              inkUsed={game.p2InkUsed}
+              inkedCount={game.p2InkedCount}
             />
           </div>
 

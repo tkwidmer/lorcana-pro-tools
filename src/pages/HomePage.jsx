@@ -37,6 +37,12 @@ const TOOLS = [
     description: 'Paste a duels.ink spectate URL to view live game state: player lore, board, hand counts, and action log with auto-refresh.',
     label: 'Open Tool',
   },
+  {
+    path: '/legality-checker',
+    name: 'Legality Checker',
+    description: 'Paste a decklist to instantly see which cards are legal in Core (rotating) or Infinity (eternal) format.',
+    label: 'Open Tool',
+  },
 ]
 
 function ToolCard({ tool }) {

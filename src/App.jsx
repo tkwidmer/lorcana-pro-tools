@@ -7,6 +7,7 @@ import { LimitedGuidePage } from './pages/LimitedGuidePage'
 import { DrawOddsPage } from './pages/DrawOddsPage'
 import { ReplayAnalyzerPage } from './pages/ReplayAnalyzerPage'
 import { GameScraperPage } from './pages/GameScraperPage'
+import { LegalityCheckerPage } from './pages/LegalityCheckerPage'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/deck-insights" element={<DrawOddsPage />} />
         <Route path="/replay-analyzer" element={<ReplayAnalyzerPage />} />
         <Route path="/game-scraper" element={<GameScraperPage />} />
+        <Route path="/legality-checker" element={<LegalityCheckerPage />} />
       </Routes>
     </BrowserRouter>
   )

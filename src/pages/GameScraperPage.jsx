@@ -99,6 +99,16 @@ function parseLiveGame(data) {
   const p1InkUsed = p1.inkUsed ?? p1.inkSpent ?? null
   const p2InkUsed = p2.inkUsed ?? p2.inkSpent ?? null
 
+  // Debug: analyze logs to understand structure
+  const actionCounts = {}
+  const playerNumbers = new Set()
+  for (const log of logs) {
+    const type = log.type ?? 'unknown'
+    const player = log.player ?? 'unknown'
+    playerNumbers.add(player)
+    actionCounts[type] = (actionCounts[type] ?? 0) + 1
+  }
+
   return {
     p1Name,
     p2Name,
@@ -127,6 +137,13 @@ function parseLiveGame(data) {
     p2InkColors: p2Observed.colors,
     log: logs,
     raw: data,
+    _debug: {
+      actionCounts,
+      playerNumbers: Array.from(playerNumbers),
+      totalLogs: logs.length,
+      p1InkedCount,
+      p2InkedCount,
+    },
   }
 }
 
@@ -580,6 +597,18 @@ export function GameScraperPage() {
               </div>
             </div>
           )}
+
+          {/* Debug info */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
+            <h3 className="text-sm font-bold text-gray-700 mb-2">Debug Info</h3>
+            <div className="text-xs text-gray-600 space-y-1">
+              <div>Total logs: {game._debug?.totalLogs ?? 0}</div>
+              <div>Player numbers in logs: {game._debug?.playerNumbers?.join(', ') ?? 'none'}</div>
+              <div>Action types: {Object.entries(game._debug?.actionCounts ?? {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'none'}</div>
+              <div>P1 inked actions counted: {game._debug?.p1InkedCount ?? 0}</div>
+              <div>P2 inked actions counted: {game._debug?.p2InkedCount ?? 0}</div>
+            </div>
+          </div>
 
           {/* Raw data toggle */}
           <div>

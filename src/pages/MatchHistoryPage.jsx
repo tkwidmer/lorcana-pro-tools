@@ -36,6 +36,18 @@ function MmrDelta({ delta }) {
   return <span className="text-gray-500">0</span>
 }
 
+function InkIcons({ colors }) {
+  if (!colors) return <span className="text-gray-400">—</span>
+  const names = colors.split('/').map(c => c.trim().toLowerCase()).filter(Boolean)
+  return (
+    <span className="flex items-center gap-1">
+      {names.map(name => (
+        <img key={name} src={`/ink/${name}.png`} alt={name} title={name} className="w-5 h-5" />
+      ))}
+    </span>
+  )
+}
+
 function GameRow({ game }) {
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
@@ -48,14 +60,16 @@ function GameRow({ game }) {
       <td className="py-3 px-3">
         <ResultBadge result={game.result} />
       </td>
-      <td className="py-3 px-3 text-sm text-gray-700 hidden sm:table-cell">
-        {game.your_deck_colors ?? '—'}
+      <td className="py-3 px-3 hidden sm:table-cell">
+        <InkIcons colors={game.your_deck_colors} />
       </td>
       <td className="py-3 px-3 text-sm text-gray-700 hidden sm:table-cell">
         <span className="font-medium">{game.opp_display_name ?? '—'}</span>
-        {game.opp_deck_colors ? (
-          <span className="ml-1 text-gray-400">{game.opp_deck_colors}</span>
-        ) : null}
+        {game.opp_deck_colors && (
+          <span className="ml-2 inline-flex items-center gap-1">
+            <InkIcons colors={game.opp_deck_colors} />
+          </span>
+        )}
       </td>
       <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
         {game.your_lore ?? '?'} – {game.opp_lore ?? '?'}

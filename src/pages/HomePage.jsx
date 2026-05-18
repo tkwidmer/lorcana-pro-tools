@@ -50,6 +50,12 @@ const TOOLS = [
     label: 'Open Tool',
   },
   {
+    path: '/match-history',
+    name: 'Match History',
+    description: 'Connect your duels.ink account to import your complete match history — results, deck colors, lore scores, turns, and MMR changes for every ranked game.',
+    label: 'Open Tool',
+  },
+  {
     path: '/deck-comparison',
     name: 'Deck Comparison',
     description: 'Paste your paper deck and your updated online list to see exactly which cards to swap — no more mis-registrations when transitioning between testing and paper.',

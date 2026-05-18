@@ -5,7 +5,27 @@ const DUELS_ORIGIN = 'https://duels.ink'
 
 // --- Game state parsers ---
 
-function buildObservedDeck(logs, fieldCards, playerNum) {
+function buildCardLookup(data) {
+  const map = {}
+  function walk(obj) {
+    if (!obj || typeof obj !== 'object') return
+    if (Array.isArray(obj)) { obj.forEach(walk); return }
+    // Look for card objects with id and colors
+    if ('id' in obj && 'colors' in obj) {
+      map[obj.id] = {
+        id: obj.id,
+        name: obj.name,
+        fullName: obj.fullName,
+        colors: obj.colors,
+      }
+    }
+    Object.values(obj).forEach(walk)
+  }
+  walk(data)
+  return map
+}
+
+function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
   // Track only actions that confirm deck composition
   const RELEVANT_ACTIONS = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED', 'CARD_DRAWN'])
   const cards = {} // definitionId → { name, plays: 0, inked: 0, discarded: 0 }
@@ -24,10 +44,12 @@ function buildObservedDeck(logs, fieldCards, playerNum) {
       else if (log.type === 'CARD_INKED') cards[ref.id].inked++
       else if (log.type === 'CARD_DISCARDED') cards[ref.id].discarded++
 
-      // Extract ink color (try various field names)
-      if (ref.color) colors.add(ref.color)
-      if (ref.colours && Array.isArray(ref.colours)) ref.colours.forEach(c => colors.add(c))
-      if (ref.ink) colors.add(ref.ink)
+      // Extract ink colors from card lookup
+      const cardDef = cardLookup[ref.id]
+      if (cardDef?.colors) {
+        if (Array.isArray(cardDef.colors)) cardDef.colors.forEach(c => colors.add(c))
+        else colors.add(cardDef.colors)
+      }
     }
   }
 
@@ -37,9 +59,11 @@ function buildObservedDeck(logs, fieldCards, playerNum) {
     if (!cards[card.definitionId]) {
       cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
     }
-    if (card.color) colors.add(card.color)
-    if (card.colours && Array.isArray(card.colours)) card.colours.forEach(c => colors.add(c))
-    if (card.ink) colors.add(card.ink)
+    const cardDef = cardLookup[card.definitionId]
+    if (cardDef?.colors) {
+      if (Array.isArray(cardDef.colors)) cardDef.colors.forEach(c => colors.add(c))
+      else colors.add(cardDef.colors)
+    }
   }
 
   const cardList = Object.entries(cards)
@@ -84,9 +108,12 @@ function parseLiveGame(data) {
   const p1Field = enrichField(p1.field)
   const p2Field = enrichField(p2.field)
 
+  // Build card lookup for color information
+  const cardLookup = buildCardLookup(data)
+
   // Build observed decks and extract ink colors
-  const p1Observed = buildObservedDeck(logs, p1Field, 1)
-  const p2Observed = buildObservedDeck(logs, p2Field, 2)
+  const p1Observed = buildObservedDeck(logs, p1Field, 1, cardLookup)
+  const p2Observed = buildObservedDeck(logs, p2Field, 2, cardLookup)
 
   // Ink pool: count CARD_INKED actions per player for total pool size;
   // also try server-provided available/spent values

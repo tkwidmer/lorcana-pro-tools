@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Nav } from './components/Nav'
 import { HomePage } from './pages/HomePage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
@@ -8,11 +8,9 @@ import { DrawOddsPage } from './pages/DrawOddsPage'
 import { ReplayAnalyzerPage } from './pages/ReplayAnalyzerPage'
 import { GameScraperPage } from './pages/GameScraperPage'
 import { LegalityCheckerPage } from './pages/LegalityCheckerPage'
-import { GameHistoryPage } from './pages/GameHistoryPage'
+import { LibraryPage } from './pages/LibraryPage'
 import { GameHistoryDetailPage } from './pages/GameHistoryDetailPage'
-import { PlayersPage } from './pages/PlayersPage'
 import { PlayerProfilePage } from './pages/PlayerProfilePage'
-import { SharedGamePage } from './pages/SharedGamePage'
 
 export default function App() {
   return (
@@ -26,12 +24,14 @@ export default function App() {
         <Route path="/deck-insights" element={<DrawOddsPage />} />
         <Route path="/replay-analyzer" element={<ReplayAnalyzerPage />} />
         <Route path="/game-scraper" element={<GameScraperPage />} />
-        <Route path="/game-history" element={<GameHistoryPage />} />
-        <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
-        <Route path="/players" element={<PlayersPage />} />
-        <Route path="/players/:name" element={<PlayerProfilePage />} />
-        <Route path="/shared" element={<SharedGamePage />} />
         <Route path="/legality-checker" element={<LegalityCheckerPage />} />
+        <Route path="/library" element={<LibraryPage />} />
+        <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
+        <Route path="/players/:name" element={<PlayerProfilePage />} />
+        {/* Redirects from old routes */}
+        <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />
+        <Route path="/players" element={<Navigate to="/library?tab=players" replace />} />
+        <Route path="/shared" element={<Navigate to="/library" replace />} />
       </Routes>
     </BrowserRouter>
   )

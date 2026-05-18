@@ -20,11 +20,10 @@ export function Nav() {
                 : pathname === '/deck-insights' ? 'Deck Insights'
                 : pathname === '/replay-analyzer' ? 'Replay Analyzer'
                 : pathname === '/game-scraper' ? 'Game Scraper'
-                : pathname === '/game-history' ? 'Game History'
-                : pathname.startsWith('/game-history/') ? 'Game History'
-                : pathname === '/players' ? 'Players'
+                : pathname === '/library' ? 'Library'
+                : pathname.startsWith('/game-history/') ? 'Library'
                 : pathname.startsWith('/players/') ? 'Players'
-                : pathname === '/shared' ? 'Shared Game'
+                : pathname === '/legality-checker' ? 'Legality Checker'
                 : ''}
             </span>
           </>

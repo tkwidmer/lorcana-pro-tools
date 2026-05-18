@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { saveGamelog, getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 
-// --- Parsing helpers ---
+const MY_NAME_KEY = 'lorcana_my_name'
+
+// --- Parsing ---
 
 async function decompressGzip(arrayBuffer) {
   const ds = new DecompressionStream('gzip')
@@ -23,34 +24,36 @@ async function decompressGzip(arrayBuffer) {
   return new TextDecoder().decode(out)
 }
 
-function extractCards(entry) {
-  const d = entry.data ?? {}
-  const result = []
-  if (d.cardName) result.push({ name: d.cardName, id: d.cardId })
-  for (const arr of [d.initialHandCards, d.mulliganedCards, d.drawnCards, d.cards, d.keptCards, d.returnedCards]) {
-    if (Array.isArray(arr)) arr.forEach(c => { if (c?.name) result.push({ name: c.name, id: c.id }) })
-  }
-  return result
-}
-
 function parseGamelog(id, logs) {
   const players = {
     1: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
     2: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
   }
-  let p1Name = 'Player 1'
-  let p2Name = 'Player 2'
-  let winner = null
-  let turnCount = 0
-  let p1FinalLore = null
-  let p2FinalLore = null
+  let p1Name = 'Player 1', p2Name = 'Player 2'
+  let winner = null, turnCount = 0
+  let p1FinalLore = null, p2FinalLore = null
+  const challenges = []
+  const trackedLore = { 1: 0, 2: 0 }
+
+  const ensureCard = (p, name, id) => {
+    const pData = players[p]
+    if (!pData.cards[name]) {
+      pData.cards[name] = {
+        name, id,
+        drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0,
+        loreGained: 0,
+        effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
+      }
+    }
+    return pData.cards[name]
+  }
 
   for (const entry of logs) {
     const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
     const type = entry.type
     const d = entry.data ?? {}
-
-    if (entry.turnNumber > turnCount) turnCount = entry.turnNumber
+    const message = entry.message ?? ''
+    if ((entry.turnNumber ?? 0) > turnCount) turnCount = entry.turnNumber ?? 0
 
     if (type === 'GAME_START') {
       if (d.playerNames) {
@@ -83,18 +86,58 @@ function parseGamelog(id, logs) {
       pData.mulliganDrawn = (d.drawnCards ?? []).filter(c => c?.name)
     }
 
-    const cards = extractCards(entry)
-    for (const card of cards) {
+    // Build card refs from all possible data fields
+    const cardRefs = []
+    if (d.cardName) cardRefs.push({ name: d.cardName, id: d.cardId })
+    for (const arr of [d.initialHandCards, d.mulliganedCards, d.drawnCards, d.cards, d.keptCards, d.returnedCards]) {
+      if (Array.isArray(arr)) arr.forEach(c => { if (c?.name) cardRefs.push({ name: c.name, id: c.id }) })
+    }
+
+    for (const card of cardRefs) {
       if (!card.name) continue
-      if (!pData.cards[card.name]) {
-        pData.cards[card.name] = { name: card.name, id: card.id, drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0 }
-      }
-      const c = pData.cards[card.name]
+      const c = ensureCard(p, card.name, card.id)
       if (type === 'CARD_DRAWN') c.drawn++
       else if (type === 'CARD_PLAYED') c.played++
       else if (type === 'CARD_INKED') c.inked++
       else if (type === 'CARD_DISCARDED') c.discarded++
       else if (type === 'CARD_DESTROYED') c.destroyed++
+    }
+
+    if (type === 'CARD_QUEST') {
+      const questCardName = d.cardName ?? cardRefs[0]?.name
+      const loreMatch = message.match(/\+(\d+) lore/)
+      const gain = loreMatch ? parseInt(loreMatch[1]) : (d.loreGained ?? d.lore ?? 0)
+      if (questCardName) {
+        ensureCard(p, questCardName, d.cardId)
+        players[p].cards[questCardName].loreGained += gain
+      }
+      trackedLore[p] += gain
+    }
+
+    if (type === 'CARD_ATTACK' && d.attackerBanished !== undefined) {
+      challenges.push({
+        turn: entry.turnNumber,
+        player: p,
+        attackerName: d.attackerName ?? cardRefs[0]?.name,
+        defenderName: d.defenderName ?? cardRefs[1]?.name,
+        attackerBanished: d.attackerBanished,
+        defenderBanished: d.defenderBanished,
+      })
+    }
+
+    if (type === 'ABILITY_TRIGGERED' && cardRefs[0]) {
+      const cardName = cardRefs[0].name
+      const c = ensureCard(p, cardName, cardRefs[0].id)
+      for (const ek of (d.effectDescriptionKeys ?? [])) {
+        if (ek.key === 'drawsACard' || ek.key === 'eachPlayerDrawsToHandSize') c.effectDraws++
+        else if (ek.key === 'drawsCards') c.effectDraws += (ek.params?.count ?? 1)
+        else if (ek.key === 'discardedCard') c.oppForcedDiscards++
+        else if (ek.key === 'opponentDiscardsCards') c.oppForcedDiscards += (ek.params?.count ?? 1)
+        else if (ek.key === 'grantsAnAdditionalInk') c.extraInks++
+        else if (ek.key === 'movesDamageDetailedBanished' || ek.key === 'banishesTarget') c.effectRemovals++
+        else if (ek.key === 'exertsCharacter') c.exerts++
+        else if (ek.key === 'returnedFromDiscard') c.cardsRecovered += (d.returnedCardRefs?.length ?? 1)
+      }
     }
   }
 
@@ -106,19 +149,642 @@ function parseGamelog(id, logs) {
 
   return {
     id,
-    p1Name,
-    p2Name,
+    p1Name, p2Name,
     winner,
     turnCount,
     eventCount: logs.length,
-    p1FinalLore,
-    p2FinalLore,
+    p1FinalLore: p1FinalLore ?? (trackedLore[1] > 0 ? trackedLore[1] : null),
+    p2FinalLore: p2FinalLore ?? (trackedLore[2] > 0 ? trackedLore[2] : null),
+    challenges,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }
 }
 
-// --- Sub-components ---
+// --- Data adapter ---
+
+function getMyPlayerNum(gamelog, myName) {
+  if (!myName?.trim()) return null
+  const n = myName.trim().toLowerCase()
+  if (gamelog.p1Name?.toLowerCase() === n) return 1
+  if (gamelog.p2Name?.toLowerCase() === n) return 2
+  if (gamelog.p1Name?.toLowerCase().includes(n)) return 1
+  if (gamelog.p2Name?.toLowerCase().includes(n)) return 2
+  return null
+}
+
+function enrichGame(gamelog, myName) {
+  const myPlayerNum = getMyPlayerNum(gamelog, myName)
+  if (!myPlayerNum) return null
+
+  const myP = myPlayerNum === 1 ? gamelog.p1 : gamelog.p2
+  const opponentName = myPlayerNum === 1 ? gamelog.p2Name : gamelog.p1Name
+  const won = gamelog.winner === myPlayerNum || gamelog.winner === String(myPlayerNum)
+
+  const myCards = {}
+  for (const [name, card] of Object.entries(myP.cards ?? {})) {
+    myCards[name] = {
+      fullName: name,
+      name,
+      id: card.id,
+      playedCount: card.played ?? 0,
+      inkedCount: card.inked ?? 0,
+      loreGained: card.loreGained ?? 0,
+      effectDraws: card.effectDraws ?? 0,
+      oppForcedDiscards: card.oppForcedDiscards ?? 0,
+      extraInks: card.extraInks ?? 0,
+      effectRemovals: card.effectRemovals ?? 0,
+      exerts: card.exerts ?? 0,
+      cardsRecovered: card.cardsRecovered ?? 0,
+    }
+  }
+
+  const challenges = (gamelog.challenges ?? []).map(c => ({
+    ...c,
+    isMe: c.player === myPlayerNum,
+  }))
+
+  return {
+    ...gamelog,
+    myPlayerNum,
+    opponentName,
+    won,
+    wentFirst: myPlayerNum === 1,
+    myCards,
+    challenges,
+    mulligan: {
+      openingHand: (myP.initialHand ?? []).map(c => ({ ...c, fullName: c.name })),
+      sentBack: (myP.mulliganSent ?? []).map(c => ({ ...c, fullName: c.name })),
+      kept: (myP.mulliganKept ?? []).map(c => ({ ...c, fullName: c.name })),
+      replacements: (myP.mulliganDrawn ?? []).map(c => ({ ...c, fullName: c.name })),
+      tookMulligan: (myP.mulliganSent?.length ?? 0) > 0,
+      wentFirst: myPlayerNum === 1,
+    },
+  }
+}
+
+// --- Aggregate helpers ---
+
+function aggregateMyCards(games) {
+  const map = {}
+  for (const game of games) {
+    for (const card of Object.values(game.myCards ?? {})) {
+      const key = card.fullName
+      if (!map[key]) {
+        map[key] = {
+          fullName: key, name: key,
+          playedCount: 0, inkedCount: 0, loreGained: 0,
+          effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
+        }
+      }
+      const m = map[key]
+      m.playedCount += card.playedCount
+      m.inkedCount += card.inkedCount
+      m.loreGained += card.loreGained
+      m.effectDraws += card.effectDraws
+      m.oppForcedDiscards += card.oppForcedDiscards
+      m.extraInks += card.extraInks
+      m.effectRemovals += card.effectRemovals
+      m.exerts += card.exerts ?? 0
+      m.cardsRecovered += card.cardsRecovered ?? 0
+    }
+  }
+  return Object.values(map)
+}
+
+function aggregateMulliganSentBack(games) {
+  const map = {}
+  for (const game of games) {
+    const openingHand = game.mulligan?.openingHand ?? []
+    const sentBack = game.mulligan?.sentBack ?? []
+    const handCounts = {}
+    for (const card of openingHand) {
+      const key = card.fullName || card.name
+      handCounts[key] = { key, count: (handCounts[key]?.count ?? 0) + 1 }
+    }
+    const sentBackCounts = {}
+    for (const card of sentBack) {
+      const key = card.fullName || card.name
+      sentBackCounts[key] = (sentBackCounts[key] ?? 0) + 1
+    }
+    for (const [key, { count: inHand }] of Object.entries(handCounts)) {
+      if (!map[key]) map[key] = { fullName: key, sentBackCount: 0, openingHandCount: 0 }
+      map[key].openingHandCount++
+      if ((sentBackCounts[key] ?? 0) >= inHand) map[key].sentBackCount++
+    }
+  }
+  return Object.values(map)
+}
+
+function aggregateCardWinRates(games) {
+  const map = {}
+  for (const game of games) {
+    for (const card of Object.values(game.myCards ?? {})) {
+      if (card.playedCount === 0 && card.inkedCount === 0) continue
+      const key = card.fullName
+      if (!map[key]) map[key] = { fullName: key, wins: 0, losses: 0 }
+      if (game.won) map[key].wins++
+      else map[key].losses++
+    }
+  }
+  return Object.values(map)
+}
+
+// --- Shared UI primitives ---
+
+function Section({ title, subtitle, children, collapsible, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen)
+  if (!collapsible) {
+    return (
+      <div className="mb-8">
+        <div className="mb-3">
+          <h2 className="text-base font-bold text-gray-900">{title}</h2>
+          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+        </div>
+        {children}
+      </div>
+    )
+  }
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+      >
+        <div className="text-left">
+          <span className="text-base font-bold text-gray-800 group-hover:text-gray-900 transition-colors">{title}</span>
+          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+        </div>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-4 ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && <div className="mt-3">{children}</div>}
+    </div>
+  )
+}
+
+function WinRateRow({ label, wins, losses }) {
+  const total = wins + losses
+  const pct = total > 0 ? Math.round((wins / total) * 100) : null
+  return (
+    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100 last:border-0">
+      <span className="flex-1 text-sm text-gray-700">{label}</span>
+      <span className="text-sm font-bold text-gray-900 w-12 text-right">{wins}–{losses}</span>
+      {pct !== null && (
+        <span className={`text-xs font-semibold w-10 text-right ${pct >= 50 ? 'text-emerald-600' : 'text-red-500'}`}>{pct}%</span>
+      )}
+    </div>
+  )
+}
+
+function StatTable({ rows, valueKey, emptyText }) {
+  if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      {rows.map(c => (
+        <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
+          <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c[valueKey]}</span>
+          <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MulliganTable({ rows, emptyText }) {
+  if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      {rows.map(c => {
+        const pct = c.openingHandCount > 0 ? Math.round((c.sentBackCount / c.openingHandCount) * 100) : 100
+        return (
+          <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
+            <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.sentBackCount}</span>
+            <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+            <span className="text-xs text-gray-400 flex-shrink-0">{pct}%</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// --- Aggregate stat components ---
+
+function WinRateStats({ enrichedGames }) {
+  if (!enrichedGames.length) return null
+  const tally = (subset) => ({ wins: subset.filter(g => g.won).length, losses: subset.filter(g => !g.won).length })
+  const first = enrichedGames.filter(g => g.wentFirst)
+  const second = enrichedGames.filter(g => !g.wentFirst)
+
+  const byOpp = {}
+  for (const g of enrichedGames) {
+    const key = g.opponentName || 'Unknown'
+    if (!byOpp[key]) byOpp[key] = []
+    byOpp[key].push(g)
+  }
+
+  return (
+    <Section collapsible title="Win Rate" subtitle={`${enrichedGames.length} game${enrichedGames.length !== 1 ? 's' : ''} recorded`}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Overall</h3>
+          <WinRateRow label="All games" {...tally(enrichedGames)} />
+          <WinRateRow label="Going first" {...tally(first)} />
+          <WinRateRow label="Going second" {...tally(second)} />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">vs Opponent</h3>
+          {Object.entries(byOpp).map(([name, games]) => (
+            <WinRateRow key={name} label={name} {...tally(games)} />
+          ))}
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+function CardWinRateTable({ games }) {
+  const [minGames, setMinGames] = useState(2)
+  const cards = aggregateCardWinRates(games)
+  const filtered = cards
+    .filter(c => c.wins + c.losses >= minGames)
+    .sort((a, b) => {
+      const pctA = a.wins / (a.wins + a.losses)
+      const pctB = b.wins / (b.wins + b.losses)
+      return pctB - pctA || (b.wins + b.losses) - (a.wins + a.losses)
+    })
+
+  return (
+    <div className="mt-6 pt-5 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Card Win Rate</h3>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-gray-400">Min appearances:</span>
+          {[2, 3, 5].map(n => (
+            <button
+              key={n}
+              onClick={() => setMinGames(n)}
+              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                minGames === n ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-500'
+              }`}
+            >{n}+</button>
+          ))}
+        </div>
+      </div>
+      {filtered.length === 0 ? (
+        <p className="text-sm text-gray-400">Not enough data — import more gamelogs.</p>
+      ) : (
+        <div className="text-sm">
+          <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 2.5rem 2.5rem 2.5rem 5rem' }}>
+            <span>Card</span>
+            <span className="text-center">W</span>
+            <span className="text-center">L</span>
+            <span className="text-right">Win%</span>
+            <span></span>
+          </div>
+          {filtered.map(c => {
+            const total = c.wins + c.losses
+            const pct = Math.round((c.wins / total) * 100)
+            return (
+              <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 2.5rem 2.5rem 2.5rem 5rem' }}>
+                <span className="text-gray-800 truncate">{c.fullName}</span>
+                <span className="text-center font-semibold text-emerald-600">{c.wins}</span>
+                <span className="text-center font-semibold text-red-400">{c.losses}</span>
+                <span className={`text-right font-bold text-xs ${pct >= 70 ? 'text-emerald-600' : pct >= 50 ? 'text-gray-700' : 'text-red-500'}`}>{pct}%</span>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${pct >= 70 ? 'bg-emerald-400' : pct >= 50 ? 'bg-gray-400' : 'bg-red-400'}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DrawEffectsTable({ games }) {
+  const cards = aggregateMyCards(games)
+  const rows = cards
+    .filter(c => (c.effectDraws + c.oppForcedDiscards + c.extraInks + c.effectRemovals + c.exerts + c.cardsRecovered) > 0)
+    .sort((a, b) => {
+      const score = c => c.effectDraws * 2 + c.oppForcedDiscards * 1.5 + c.extraInks + c.effectRemovals * 2 + c.exerts * 1.5 + c.cardsRecovered * 1.5
+      return score(b) - score(a)
+    })
+    .slice(0, 10)
+
+  if (!rows.length) return <p className="text-sm text-gray-400">No effect data in these gamelogs.</p>
+
+  return (
+    <div className="text-sm">
+      <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem' }}>
+        <span>Card</span>
+        <span className="text-center text-blue-500">Draw</span>
+        <span className="text-center text-purple-500">Discard</span>
+        <span className="text-center text-amber-500">+Ink</span>
+        <span className="text-center text-red-500">Remove</span>
+        <span className="text-center text-orange-500">Exert</span>
+        <span className="text-center text-teal-500">Recover</span>
+      </div>
+      {rows.map(c => (
+        <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem' }}>
+          <span className="text-gray-700 truncate">{c.fullName}</span>
+          <span className="text-center font-semibold text-blue-500">{c.effectDraws || '—'}</span>
+          <span className="text-center font-semibold text-purple-500">{c.oppForcedDiscards || '—'}</span>
+          <span className="text-center font-semibold text-amber-500">{c.extraInks || '—'}</span>
+          <span className="text-center font-semibold text-red-500">{c.effectRemovals || '—'}</span>
+          <span className="text-center font-semibold text-orange-500">{c.exerts || '—'}</span>
+          <span className="text-center font-semibold text-teal-500">{c.cardsRecovered || '—'}</span>
+        </div>
+      ))}
+      <p className="text-[10px] text-gray-400 mt-1.5">Draw = effect draws · Discard = forced opp discards · +Ink = extra ink · Remove = banished/inkwelled · Exert = opp exerted · Recover = from discard</p>
+    </div>
+  )
+}
+
+function ImpactTable({ games, order }) {
+  const cards = aggregateMyCards(games)
+
+  const challengeMap = {}
+  for (const c of games.flatMap(g => (g.challenges ?? []).filter(c => c.isMe && c.attackerName))) {
+    if (!challengeMap[c.attackerName]) challengeMap[c.attackerName] = { kills: 0, survived: 0 }
+    if (c.defenderBanished) challengeMap[c.attackerName].kills++
+    if (!c.attackerBanished) challengeMap[c.attackerName].survived++
+  }
+
+  const scored = cards
+    .filter(c => c.playedCount >= 3)
+    .map(c => {
+      const ch = challengeMap[c.fullName] ?? { kills: 0, survived: 0 }
+      const impactScore =
+        c.loreGained +
+        c.effectDraws * 2 +
+        c.oppForcedDiscards * 1.5 +
+        c.extraInks +
+        c.effectRemovals * 2 +
+        c.exerts * 1.5 +
+        c.cardsRecovered * 1.5 +
+        ch.kills * 2 +
+        ch.survived * 0.5
+      return { ...c, impactScore, ch }
+    })
+
+  const rows = (order === 'asc'
+    ? scored.sort((a, b) => a.impactScore - b.impactScore || b.playedCount - a.playedCount)
+    : scored.sort((a, b) => b.impactScore - a.impactScore || b.playedCount - a.playedCount)
+  ).slice(0, 8)
+
+  if (!rows.length) return <p className="text-sm text-gray-400">Not enough data (need 3+ plays per card).</p>
+
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      {rows.map(c => {
+        const tags = []
+        if (c.loreGained > 0) tags.push(`${c.loreGained} lore`)
+        if (c.effectDraws > 0) tags.push(`${c.effectDraws} draw`)
+        if (c.oppForcedDiscards > 0) tags.push(`${c.oppForcedDiscards} discard`)
+        if (c.extraInks > 0) tags.push(`${c.extraInks} +ink`)
+        if (c.effectRemovals > 0) tags.push(`${c.effectRemovals} remove`)
+        if (c.ch.kills > 0) tags.push(`${c.ch.kills} kills`)
+        return (
+          <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
+            <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.playedCount}</span>
+            <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+            <span className="text-[10px] text-gray-400 flex-shrink-0 text-right whitespace-nowrap">
+              {tags.length ? tags.join(' · ') : 'no impact tracked'}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function DeckStats({ filteredGames, subtitle }) {
+  const cards = aggregateMyCards(filteredGames)
+  const mulliganCards = aggregateMulliganSentBack(filteredGames)
+
+  const topPlayed = [...cards].filter(c => c.playedCount > 0).sort((a, b) => b.playedCount - a.playedCount).slice(0, 8)
+  const topInked = [...cards].filter(c => c.inkedCount > 0).sort((a, b) => b.inkedCount - a.inkedCount).slice(0, 8)
+  const topLore = [...cards].filter(c => c.loreGained > 0).sort((a, b) => b.loreGained - a.loreGained).slice(0, 8)
+  const topSentBack = [...mulliganCards].filter(c => c.sentBackCount > 0).sort((a, b) => b.sentBackCount - a.sentBackCount).slice(0, 8)
+
+  return (
+    <Section collapsible defaultOpen title="Deck Stats" subtitle={subtitle}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-1">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Played</h3>
+          <StatTable rows={topPlayed} valueKey="playedCount" emptyText="No plays recorded." />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Inked</h3>
+          <StatTable rows={topInked} valueKey="inkedCount" emptyText="No inks recorded." />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Lore Gained</h3>
+          <StatTable rows={topLore} valueKey="loreGained" emptyText="No quest data in these gamelogs." />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Mulliganed</h3>
+          <p className="text-[10px] text-gray-400 mb-1.5">Count · % of opening hand appearances</p>
+          <MulliganTable rows={topSentBack} emptyText="No mulligan data." />
+        </div>
+      </div>
+      {filteredGames.length > 1 && <CardWinRateTable games={filteredGames} />}
+      {filteredGames.length > 1 && (
+        <div className="mt-6 pt-5 border-t border-gray-100">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Card Effects</h3>
+          <DrawEffectsTable games={filteredGames} />
+        </div>
+      )}
+      {filteredGames.length > 1 && (
+        <div className="mt-6 pt-5 border-t border-gray-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Most Impactful Cards</h3>
+              <p className="text-[10px] text-gray-400 mb-2">Plays · score: lore + draws + kills + removal</p>
+              <ImpactTable games={filteredGames} order="desc" />
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Least Impactful Cards</h3>
+              <p className="text-[10px] text-gray-400 mb-2">Plays · score: lore + draws + kills + removal</p>
+              <ImpactTable games={filteredGames} order="asc" />
+            </div>
+          </div>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+function CrossGameChallengers({ games }) {
+  const mine = games.flatMap(g => (g.challenges ?? []).filter(c => c.isMe))
+  if (!mine.length) return null
+
+  const map = {}
+  for (const c of mine) {
+    const key = c.attackerName
+    if (!key) continue
+    if (!map[key]) map[key] = { name: key, challenged: 0, survived: 0, traded: 0, banishedNoKill: 0 }
+    map[key].challenged++
+    if (!c.attackerBanished) map[key].survived++
+    else if (c.defenderBanished) map[key].traded++
+    else map[key].banishedNoKill++
+  }
+
+  const rows = Object.values(map).filter(r => r.challenged >= 2).sort((a, b) => b.challenged - a.challenged)
+  if (!rows.length) return null
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Challenger Stats</h3>
+      <div className="text-sm">
+        <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 4rem' }}>
+          <span>Character</span>
+          <span className="text-center">Total</span>
+          <span className="text-center text-emerald-600">Survived</span>
+          <span className="text-center text-yellow-600">Traded</span>
+          <span className="text-center text-red-500">No kill</span>
+          <span className="text-right text-emerald-600">Surv%</span>
+        </div>
+        {rows.map(r => {
+          const pct = Math.round((r.survived / r.challenged) * 100)
+          return (
+            <div key={r.name} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 4rem' }}>
+              <span className="text-gray-800 truncate">{r.name}</span>
+              <span className="text-center font-bold text-gray-700">{r.challenged}</span>
+              <span className="text-center font-semibold text-emerald-600">{r.survived || '—'}</span>
+              <span className="text-center font-semibold text-yellow-600">{r.traded || '—'}</span>
+              <span className="text-center font-semibold text-red-500">{r.banishedNoKill || '—'}</span>
+              <span className={`text-xs font-bold text-right ${pct >= 75 ? 'text-emerald-600' : pct >= 50 ? 'text-gray-600' : 'text-red-500'}`}>{pct}%</span>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1.5">Cards with 2+ challenges shown · Surv% = attacker survived</p>
+    </div>
+  )
+}
+
+function CrossGameDefenders({ games }) {
+  const opp = games.flatMap(g => (g.challenges ?? []).filter(c => !c.isMe))
+  if (!opp.length) return null
+
+  const map = {}
+  for (const c of opp) {
+    const key = c.defenderName
+    if (!key) continue
+    if (!map[key]) map[key] = { name: key, seq: [] }
+    map[key].seq.push(c)
+  }
+
+  const rows = Object.values(map).map(({ name, seq }) => {
+    let hits = 0, tanked = 0, killedInOne = 0, killedMultiple = 0
+    for (const c of seq) {
+      hits++
+      if (c.defenderBanished) {
+        if (hits === 1) killedInOne++
+        else killedMultiple++
+        hits = 0
+      } else {
+        tanked++
+      }
+    }
+    return { name, timesTargeted: seq.length, tanked, killedInOne, killedMultiple }
+  }).filter(r => r.timesTargeted >= 2).sort((a, b) => b.timesTargeted - a.timesTargeted)
+
+  if (!rows.length) return null
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Your Characters as Defenders</h3>
+      <div className="text-sm">
+        <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+          <span>Character</span>
+          <span className="text-center">Targeted</span>
+          <span className="text-center text-emerald-600">Tanked</span>
+          <span className="text-center text-yellow-600">1-shot</span>
+          <span className="text-center text-red-500">Multi</span>
+        </div>
+        {rows.map(r => (
+          <div key={r.name} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
+            <span className="text-gray-800 truncate">{r.name}</span>
+            <span className="text-center font-bold text-gray-700">{r.timesTargeted}</span>
+            <span className="text-center font-semibold text-emerald-600">{r.tanked || '—'}</span>
+            <span className="text-center font-semibold text-yellow-600">{r.killedInOne || '—'}</span>
+            <span className="text-center font-semibold text-red-500">{r.killedMultiple || '—'}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1.5">Targeted 2+ times · Tanked = survived · 1-shot = banished in one · Multi = required 2+</p>
+    </div>
+  )
+}
+
+function ChallengeStats({ filteredGames, subtitle }) {
+  const hasChallenges = filteredGames.some(g => (g.challenges ?? []).length > 0)
+  if (!hasChallenges) return null
+  return (
+    <Section collapsible defaultOpen title="Challenge Stats" subtitle={subtitle}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-1">
+        <CrossGameChallengers games={filteredGames} />
+        <CrossGameDefenders games={filteredGames} />
+      </div>
+    </Section>
+  )
+}
+
+function AggregateView({ enrichedGames }) {
+  const [oppFilter, setOppFilter] = useState(null)
+  if (!enrichedGames.length) return null
+
+  const opponents = []
+  const seenOpps = new Set()
+  for (const g of enrichedGames) {
+    const key = g.opponentName || 'Unknown'
+    if (!seenOpps.has(key)) { seenOpps.add(key); opponents.push(key) }
+  }
+  const showFilter = opponents.length > 1
+
+  const filtered = oppFilter
+    ? enrichedGames.filter(g => (g.opponentName || 'Unknown') === oppFilter)
+    : enrichedGames
+
+  const subtitle = oppFilter
+    ? `${filtered.length} game${filtered.length !== 1 ? 's' : ''} vs ${oppFilter} · ${enrichedGames.length} total`
+    : `Aggregated across ${enrichedGames.length} game${enrichedGames.length !== 1 ? 's' : ''}`
+
+  return (
+    <div className="mt-2">
+      {showFilter && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="text-xs text-gray-500 font-medium">Filter by opponent:</span>
+          <button
+            onClick={() => setOppFilter(null)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              oppFilter === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+            }`}
+          >All</button>
+          {opponents.map(name => (
+            <button
+              key={name}
+              onClick={() => setOppFilter(oppFilter === name ? null : name)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                oppFilter === name ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+              }`}
+            >{name}</button>
+          ))}
+        </div>
+      )}
+      <DeckStats filteredGames={filtered} subtitle={subtitle} />
+      <ChallengeStats filteredGames={filtered} subtitle={subtitle} />
+    </div>
+  )
+}
+
+// --- Individual game view ---
 
 function HandCards({ cards, label }) {
   if (!cards?.length) return null
@@ -138,9 +804,9 @@ function PlayerSection({ name, data, isWinner, finalLore }) {
   const { initialHand, mulliganSent, mulliganKept, cardList } = data
   const mulliganDrawn = data.mulliganDrawn ?? []
   const tookMulligan = mulliganSent.length > 0
-
   const anyDiscarded = cardList.some(c => c.discarded > 0)
   const anyDestroyed = cardList.some(c => c.destroyed > 0)
+  const anyLore = cardList.some(c => (c.loreGained ?? 0) > 0)
 
   return (
     <div>
@@ -171,6 +837,7 @@ function PlayerSection({ name, data, isWinner, finalLore }) {
               <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Drawn</th>
               <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Played</th>
               <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Inked</th>
+              {anyLore && <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Lore</th>}
               {anyDiscarded && <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Discarded</th>}
               {anyDestroyed && <th className="py-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Destroyed</th>}
             </tr>
@@ -182,6 +849,7 @@ function PlayerSection({ name, data, isWinner, finalLore }) {
                 <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.drawn || '—'}</td>
                 <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.played || '—'}</td>
                 <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.inked || '—'}</td>
+                {anyLore && <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.loreGained || '—'}</td>}
                 {anyDiscarded && <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.discarded || '—'}</td>}
                 {anyDestroyed && <td className="py-1.5 pr-3 text-center text-gray-600 text-sm">{card.destroyed || '—'}</td>}
               </tr>
@@ -193,7 +861,7 @@ function PlayerSection({ name, data, isWinner, finalLore }) {
   )
 }
 
-function GamelogDetail({ gamelog }) {
+function GamelogDetail({ gamelog, myPlayerNum }) {
   const { p1Name, p2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2 } = gamelog
   const p1IsWinner = winner === 1 || winner === '1'
   const p2IsWinner = winner === 2 || winner === '2'
@@ -213,18 +881,18 @@ function GamelogDetail({ gamelog }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        <PlayerSection
-          name={p1Name}
-          data={p1}
-          isWinner={p1IsWinner}
-          finalLore={p1FinalLore}
-        />
-        <PlayerSection
-          name={p2Name}
-          data={p2}
-          isWinner={p2IsWinner}
-          finalLore={p2FinalLore}
-        />
+        <div>
+          {myPlayerNum === 1 && (
+            <div className="inline-flex items-center text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded mb-2">You</div>
+          )}
+          <PlayerSection name={p1Name} data={p1} isWinner={p1IsWinner} finalLore={p1FinalLore} />
+        </div>
+        <div>
+          {myPlayerNum === 2 && (
+            <div className="inline-flex items-center text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded mb-2">You</div>
+          )}
+          <PlayerSection name={p2Name} data={p2} isWinner={p2IsWinner} finalLore={p2FinalLore} />
+        </div>
       </div>
     </div>
   )
@@ -233,19 +901,27 @@ function GamelogDetail({ gamelog }) {
 // --- Main page ---
 
 export function GamelogAnalyzerPage() {
-  const navigate = useNavigate()
   const [gamelogs, setGamelogs] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
+  const [myName, setMyName] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
+  const [nameInput, setNameInput] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
 
   const activeGamelog = gamelogs.find(g => g.id === activeId) ?? null
+  const enrichedGames = gamelogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
+  const activeMyPlayerNum = activeGamelog ? getMyPlayerNum(activeGamelog, myName) : null
+
+  function saveName(name) {
+    const trimmed = name.trim()
+    setMyName(trimmed)
+    localStorage.setItem(MY_NAME_KEY, trimmed)
+  }
 
   async function processBuffer(arrayBuffer, filename) {
     const text = await decompressGzip(arrayBuffer)
     const logs = JSON.parse(text)
-    // Extract UUID from filename: e.g. "abc123.logs.gz" → "abc123"
     const id = filename.replace(/\.logs\.gz$/i, '').replace(/\.gz$/i, '') || crypto.randomUUID()
     const parsed = parseGamelog(id, logs)
     const record = await saveGamelog(id, parsed)
@@ -274,11 +950,8 @@ export function GamelogAnalyzerPage() {
   }
 
   useEffect(() => {
-    getAllGamelogs().then(all => {
-      setGamelogs(all)
-    }).catch(() => {})
+    getAllGamelogs().then(all => setGamelogs(all)).catch(() => {})
 
-    // Check sessionStorage for a pending gamelog (e.g. sent from Match History)
     const pending = sessionStorage.getItem('lorcana_pending_gamelog')
     if (pending) {
       sessionStorage.removeItem('lorcana_pending_gamelog')
@@ -308,20 +981,34 @@ export function GamelogAnalyzerPage() {
     if (files.length) processFiles(files)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault()
-    setDragOver(true)
-  }, [])
-
-  const handleDragLeave = useCallback(() => {
-    setDragOver(false)
-  }, [])
+  const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true) }, [])
+  const handleDragLeave = useCallback(() => setDragOver(false), [])
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Gamelog Analyzer</h1>
         <p className="text-sm text-gray-500">Import .logs.gz files or use the ↗ Gamelog button from Match History.</p>
+      </div>
+
+      {/* Player name setting */}
+      <div className="mb-5 flex items-center gap-3 flex-wrap">
+        <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Your player name:</label>
+        <input
+          type="text"
+          value={nameInput}
+          onChange={e => setNameInput(e.target.value)}
+          onBlur={() => saveName(nameInput)}
+          onKeyDown={e => { if (e.key === 'Enter') { saveName(nameInput); e.currentTarget.blur() } }}
+          placeholder="Enter your name to enable win rate stats"
+          className="flex-1 min-w-48 text-sm border border-gray-200 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder:text-gray-300"
+        />
+        {myName && gamelogs.length > 0 && enrichedGames.length === 0 && (
+          <span className="text-xs text-orange-600">Name not found in any gamelogs</span>
+        )}
+        {enrichedGames.length > 0 && (
+          <span className="text-xs text-emerald-600">{enrichedGames.length}/{gamelogs.length} games matched</span>
+        )}
       </div>
 
       {/* Drop zone */}
@@ -351,6 +1038,14 @@ export function GamelogAnalyzerPage() {
       {loading && <div className="mt-4 text-sm text-gray-500">Parsing gamelogs…</div>}
       {error && <div className="mt-4 text-sm text-red-600">{error}</div>}
 
+      {/* Aggregate stats */}
+      {enrichedGames.length > 0 && (
+        <div className="mt-8">
+          <WinRateStats enrichedGames={enrichedGames} />
+          {enrichedGames.length > 1 && <AggregateView enrichedGames={enrichedGames} />}
+        </div>
+      )}
+
       {/* Saved list */}
       {gamelogs.length > 0 && (
         <div className="mt-6 space-y-1">
@@ -367,16 +1062,13 @@ export function GamelogAnalyzerPage() {
                 onClick={(e) => { e.stopPropagation(); handleDelete(g.id) }}
                 className="text-xs opacity-40 hover:opacity-100 transition-opacity"
                 title="Delete gamelog"
-              >
-                ✕
-              </button>
+              >✕</button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Detail view */}
-      {activeGamelog && <GamelogDetail gamelog={activeGamelog} />}
+      {activeGamelog && <GamelogDetail gamelog={activeGamelog} myPlayerNum={activeMyPlayerNum} />}
 
       {gamelogs.length === 0 && !loading && (
         <div className="text-center py-12 text-gray-400 text-sm">No gamelogs yet — import a .logs.gz file to get started.</div>

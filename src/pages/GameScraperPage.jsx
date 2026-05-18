@@ -217,13 +217,19 @@ function LoreBar({ lore, label, color }) {
 function FieldCard({ card }) {
   const name = card.fullName ?? card.name ?? 'Unknown'
   const exerted = card.exerted ?? card.tapped ?? false
+  const instanceId = card.instanceId
   return (
     <div className={`flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0 ${exerted ? 'opacity-60' : ''}`}>
       {card.imageSmallUrl && (
         <img src={card.imageSmallUrl} alt={name} className="w-8 h-11 rounded object-cover border border-gray-200 flex-shrink-0" loading="lazy" />
       )}
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="text-xs font-semibold text-gray-800 truncate">{name}</div>
+        {instanceId && (
+          <div className="text-xs text-gray-400 font-mono truncate" title={instanceId}>
+            {instanceId.substring(0, 12)}…
+          </div>
+        )}
         <div className="flex gap-2 text-xs text-gray-500 mt-0.5 flex-wrap">
           {card.strength != null && <span>STR {card.strength}</span>}
           {card.willpower != null && <span>WP {card.willpower}</span>}

@@ -1,6 +1,123 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getToken, fetchMatchHistory, fetchReplayBuffer } from '../lib/duelsApi'
+import { getToken, fetchMatchHistory, fetchReplayBuffer, fetchGamelogBuffer } from '../lib/duelsApi'
+import { saveGamelog } from '../lib/gamelogHistory'
+
+// --- Inline helpers for gamelog import ---
+
+async function decompressGzip(arrayBuffer) {
+  const ds = new DecompressionStream('gzip')
+  const writer = ds.writable.getWriter()
+  writer.write(arrayBuffer)
+  writer.close()
+  const chunks = []
+  const reader = ds.readable.getReader()
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+  }
+  const total = chunks.reduce((n, c) => n + c.length, 0)
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const c of chunks) { out.set(c, offset); offset += c.length }
+  return new TextDecoder().decode(out)
+}
+
+function extractCards(entry) {
+  const d = entry.data ?? {}
+  const result = []
+  if (d.cardName) result.push({ name: d.cardName, id: d.cardId })
+  for (const arr of [d.initialHandCards, d.mulliganedCards, d.drawnCards, d.cards, d.keptCards, d.returnedCards]) {
+    if (Array.isArray(arr)) arr.forEach(c => { if (c?.name) result.push({ name: c.name, id: c.id }) })
+  }
+  return result
+}
+
+function parseGamelog(id, logs) {
+  const players = {
+    1: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
+    2: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
+  }
+  let p1Name = 'Player 1'
+  let p2Name = 'Player 2'
+  let winner = null
+  let turnCount = 0
+  let p1FinalLore = null
+  let p2FinalLore = null
+
+  for (const entry of logs) {
+    const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
+    const type = entry.type
+    const d = entry.data ?? {}
+
+    if (entry.turnNumber > turnCount) turnCount = entry.turnNumber
+
+    if (type === 'GAME_START') {
+      if (d.playerNames) {
+        p1Name = d.playerNames['1'] ?? d.playerNames.player1 ?? p1Name
+        p2Name = d.playerNames['2'] ?? d.playerNames.player2 ?? p2Name
+      }
+      if (Array.isArray(d.players)) {
+        p1Name = d.players[0]?.name ?? p1Name
+        p2Name = d.players[1]?.name ?? p2Name
+      }
+    }
+
+    if (type === 'GAME_END') {
+      winner = d.winner ?? null
+      p1FinalLore = d.p1Lore ?? d.lore?.['1'] ?? null
+      p2FinalLore = d.p2Lore ?? d.lore?.['2'] ?? null
+    }
+
+    if (!p) continue
+    const pData = players[p]
+
+    if (type === 'INITIAL_HAND') {
+      pData.initialHand = (d.initialHandCards ?? []).filter(c => c?.name)
+    }
+
+    if (type === 'MULLIGAN') {
+      pData.mulliganSent = (d.mulliganedCards ?? []).filter(c => c?.name)
+      const sentIds = new Set(pData.mulliganSent.map(c => c.id))
+      pData.mulliganKept = pData.initialHand.filter(c => !sentIds.has(c.id))
+      pData.mulliganDrawn = (d.drawnCards ?? []).filter(c => c?.name)
+    }
+
+    const cards = extractCards(entry)
+    for (const card of cards) {
+      if (!card.name) continue
+      if (!pData.cards[card.name]) {
+        pData.cards[card.name] = { name: card.name, id: card.id, drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0 }
+      }
+      const c = pData.cards[card.name]
+      if (type === 'CARD_DRAWN') c.drawn++
+      else if (type === 'CARD_PLAYED') c.played++
+      else if (type === 'CARD_INKED') c.inked++
+      else if (type === 'CARD_DISCARDED') c.discarded++
+      else if (type === 'CARD_DESTROYED') c.destroyed++
+    }
+  }
+
+  const toList = (cardsMap) => Object.values(cardsMap).sort((a, b) => {
+    const aTotal = a.drawn + a.played + a.inked
+    const bTotal = b.drawn + b.played + b.inked
+    return bTotal - aTotal || a.name.localeCompare(b.name)
+  })
+
+  return {
+    id,
+    p1Name,
+    p2Name,
+    winner,
+    turnCount,
+    eventCount: logs.length,
+    p1FinalLore,
+    p2FinalLore,
+    p1: { ...players[1], cardList: toList(players[1].cards) },
+    p2: { ...players[2], cardList: toList(players[2].cards) },
+  }
+}
 
 function formatDate(isoString) {
   if (!isoString) return '—'
@@ -80,6 +197,41 @@ function ImportReplayButton({ game }) {
       title="Import replay into Replay Analyzer"
     >
       {status === 'loading' ? 'Importing…' : status === 'error' ? 'Failed' : '↗ Replay'}
+    </button>
+  )
+}
+
+function ImportGamelogButton({ game }) {
+  const navigate = useNavigate()
+  const [status, setStatus] = useState(null) // null | 'loading' | 'done' | 'error'
+
+  if (!game.gamelog_id) return null
+
+  async function handleImport() {
+    setStatus('loading')
+    try {
+      const buf = await fetchGamelogBuffer(game.gamelog_id)
+      const text = await decompressGzip(buf)
+      const logs = JSON.parse(text)
+      const id = game.gamelog_id
+      const parsed = parseGamelog(id, logs)
+      await saveGamelog(id, parsed)
+      setStatus('done')
+      navigate('/gamelog-analyzer')
+    } catch {
+      setStatus('error')
+      setTimeout(() => setStatus(null), 3000)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleImport}
+      disabled={status === 'loading'}
+      className="text-xs text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-40 whitespace-nowrap"
+      title="Import gamelog into Gamelog Analyzer"
+    >
+      {status === 'loading' ? 'Importing…' : status === 'error' ? 'Failed' : '↗ Gamelog'}
     </button>
   )
 }

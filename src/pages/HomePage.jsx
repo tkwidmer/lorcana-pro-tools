@@ -56,6 +56,12 @@ const TOOLS = [
     label: 'Open Tool',
   },
   {
+    path: '/gamelog-analyzer',
+    name: 'Gamelog Analyzer',
+    description: 'Import complete server-side game logs to see both players\' full draw sequences, opening hands, mulligan decisions, and every card interaction — richer than replays.',
+    label: 'Open Tool',
+  },
+  {
     path: '/deck-comparison',
     name: 'Deck Comparison',
     description: 'Paste your paper deck and your updated online list to see exactly which cards to swap — no more mis-registrations when transitioning between testing and paper.',

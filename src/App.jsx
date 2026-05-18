@@ -14,6 +14,7 @@ import { DeckComparisonPage } from './pages/DeckComparisonPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { MatchHistoryPage } from './pages/MatchHistoryPage'
 import { GamelogViewerPage } from './pages/GamelogViewerPage'
+import { GamelogAnalyzerPage } from './pages/GamelogAnalyzerPage'
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/match-history" element={<MatchHistoryPage />} />
         <Route path="/gamelog" element={<GamelogViewerPage />} />
+        <Route path="/gamelog-analyzer" element={<GamelogAnalyzerPage />} />
         {/* Redirects from old routes */}
         <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />
         <Route path="/players" element={<Navigate to="/library?tab=players" replace />} />

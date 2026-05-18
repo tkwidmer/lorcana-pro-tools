@@ -80,10 +80,10 @@ function parseLiveGame(data) {
 // --- Bookmarklet generator ---
 
 function makeGenericBookmarkletCode(origin, newTab = true) {
-  const open = newTab
-    ? `window.open('${origin}/game-scraper?uuid='+uuid+'&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank')`
-    : `window.location.href='${origin}/game-scraper?uuid='+uuid+'&data='+encodeURIComponent(JSON.stringify(d.game))`
-  return `javascript:(function(){ if(window.__lorcanaActive){ console.log('[Lorcana] Already active'); return; } window.__lorcanaActive=true; var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); var origAEL=WebSocket.prototype.addEventListener; var done=false; function intercept(ev){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game&&!done){ var match=window.location.href.match(/spectate\\/([a-f0-9-]+)/i); var uuid=match?match[1]:'unknown'; console.log('[Lorcana] Found game! Opening tool...'); done=true; ${open}; } }catch(e){} } Object.defineProperty(WebSocket.prototype,'onmessage',{ set:function(h){ var self=this; origDesc.set.call(this,function(ev){ intercept.call(self,ev); if(h) h.call(self,ev); }); }, get:function(){ return origDesc.get.call(this); } }); WebSocket.prototype.addEventListener=function(type,listener){ if(type==='message'){ var self=this; return origAEL.call(this,type,function(ev){ intercept.call(self,ev); listener.call(self,ev); }); } return origAEL.call(this,type,listener); }; console.log('[Lorcana] Ready! Now navigate to a spectate page and the tool will open automatically.'); })();`
+  const navigate = newTab
+    ? `var tab=window.open('${origin}/game-scraper?uuid='+uuid,'_blank'); var tries=0; var iv=setInterval(function(){ try{ tab.postMessage({type:'lorcana_game_data',game:d.game},'${origin}'); clearInterval(iv); }catch(e){ if(++tries>20) clearInterval(iv); } },300);`
+    : `window.__lorcanaGameData=d.game; window.location.href='${origin}/game-scraper?uuid='+uuid;`
+  return `javascript:(function(){ if(window.__lorcanaActive){ console.log('[Lorcana] Already active'); return; } window.__lorcanaActive=true; var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); var origAEL=WebSocket.prototype.addEventListener; var done=false; function intercept(ev){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game&&!done){ var match=window.location.href.match(/spectate\\/([a-f0-9-]+)/i); var uuid=match?match[1]:'unknown'; console.log('[Lorcana] Found game! Opening tool...'); done=true; ${navigate} } }catch(e){} } Object.defineProperty(WebSocket.prototype,'onmessage',{ set:function(h){ var self=this; origDesc.set.call(this,function(ev){ intercept.call(self,ev); if(h) h.call(self,ev); }); }, get:function(){ return origDesc.get.call(this); } }); WebSocket.prototype.addEventListener=function(type,listener){ if(type==='message'){ var self=this; return origAEL.call(this,type,function(ev){ intercept.call(self,ev); listener.call(self,ev); }); } return origAEL.call(this,type,listener); }; console.log('[Lorcana] Ready! Now navigate to a spectate page and the tool will open automatically.'); })();`
 }
 
 function makeBookmarkletCode(uuid, origin) {
@@ -280,29 +280,29 @@ export function GameScraperPage() {
   const [showRaw, setShowRaw] = useState(false)
   const intervalRef = useRef(null)
 
-  // Read data injected by the bookmarklet via URL params
+  // Read UUID from URL params (set by bookmarklet when opening this tab)
   useEffect(() => {
     const paramUuid = searchParams.get('uuid')
-    const paramData = searchParams.get('data')
-    if (paramUuid && paramData) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(paramData))
-        if (parsed.error) {
-          setError(`Bookmarklet error: ${parsed.error}`)
-        } else {
-          setUuid(paramUuid)
-          setUrlInput(`https://duels.ink/spectate/${paramUuid}`)
-          setGameData(parseLiveGame(parsed))
-          setEndpoint('bookmarklet')
-          setLastUpdated(new Date())
-        }
-      } catch {
-        setError('Could not parse data from bookmarklet.')
-      }
-      // Clear params from URL so a refresh doesn't re-apply stale data
+    if (paramUuid) {
+      setUuid(paramUuid)
+      setUrlInput(`https://duels.ink/spectate/${paramUuid}`)
       setSearchParams({}, { replace: true })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Receive game data sent via postMessage from the bookmarklet
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.data?.type === 'lorcana_game_data' && event.data?.game) {
+        setGameData(parseLiveGame(event.data.game))
+        setEndpoint('bookmarklet')
+        setLastUpdated(new Date())
+        setError(null)
+      }
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [])
 
   const scrape = useCallback(async (id) => {
     if (!id) return

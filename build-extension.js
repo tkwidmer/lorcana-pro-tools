@@ -1,46 +1,48 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import AdmZip from 'adm-zip'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const extensionDir = path.join(__dirname, 'chrome-extension')
+const distDir = path.join(__dirname, 'dist')
 const publicDir = path.join(__dirname, 'public')
 
-// Ensure public directory exists
+// Ensure directories exist
+if (!fs.existsSync(distDir)) {
+  fs.mkdirSync(distDir, { recursive: true })
+}
 if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true })
 }
 
-// Copy extension files to public directory for hosting
-const extensionPublicDir = path.join(publicDir, 'lorcana-extension')
-if (fs.existsSync(extensionPublicDir)) {
-  fs.rmSync(extensionPublicDir, { recursive: true })
-}
-fs.mkdirSync(extensionPublicDir, { recursive: true })
+// Create zip file of the extension
+const zip = new AdmZip()
 
-// Copy all extension files
-const copy = (src, dest) => {
-  const stat = fs.statSync(src)
-  if (stat.isDirectory()) {
-    fs.mkdirSync(dest, { recursive: true })
-    fs.readdirSync(src).forEach(file => {
-      copy(path.join(src, file), path.join(dest, file))
-    })
-  } else {
-    fs.copyFileSync(src, dest)
-  }
+const addToZip = (dir, zipPath = '') => {
+  fs.readdirSync(dir).forEach(file => {
+    const filePath = path.join(dir, file)
+    const zipFilePath = zipPath ? `${zipPath}/${file}` : file
+    const stat = fs.statSync(filePath)
+
+    if (stat.isDirectory()) {
+      addToZip(filePath, zipFilePath)
+    } else {
+      zip.addFile(zipFilePath, fs.readFileSync(filePath))
+    }
+  })
 }
 
-copy(extensionDir, extensionPublicDir)
+// Add chrome-extension folder contents
+addToZip(extensionDir, 'chrome-extension')
 
-// Create manifest.json for download
-const manifest = JSON.parse(fs.readFileSync(path.join(extensionDir, 'manifest.json'), 'utf8'))
-manifest.update_url = 'https://lorcana-pro-tools.vercel.app/extension-updates.xml'
+// Write zip files to both dist and public
+const zipPath = path.join(distDir, 'lorcana-extension.zip')
+const publicZipPath = path.join(publicDir, 'lorcana-extension.zip')
 
-fs.writeFileSync(
-  path.join(extensionPublicDir, 'manifest.json'),
-  JSON.stringify(manifest, null, 2)
-)
+zip.writeZip(zipPath)
+zip.writeZip(publicZipPath)
 
-console.log('✓ Extension copied to public/lorcana-extension')
-console.log('  Users can now load this unpacked extension from chrome://extensions')
+console.log('✓ Extension zipped to dist/lorcana-extension.zip')
+console.log('✓ Extension zip also copied to public/lorcana-extension.zip for download')
+console.log('  Download link: /lorcana-extension.zip')

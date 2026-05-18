@@ -164,6 +164,8 @@ function makeBookmarkletCode(uuid, origin) {
 }
 
 function ExtensionPanel() {
+  const downloadUrl = `${window.location.origin}/lorcana-extension.zip`
+
   return (
     <details className="mt-2" open>
       <summary className="text-xs font-medium text-green-700 cursor-pointer select-none">Chrome Extension (recommended)</summary>
@@ -175,13 +177,12 @@ function ExtensionPanel() {
         <div className="bg-green-50 border border-green-200 rounded p-3 space-y-2">
           <div className="text-xs font-semibold text-green-900">Installation:</div>
           <ol className="text-xs text-green-800 space-y-1 ml-4 list-decimal">
-            <li>Download the repo from <a href="https://github.com/tkwidmer/lorcana-pro-tools" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:text-green-900 underline">GitHub</a> (Code → Download ZIP)</li>
+            <li><a href={downloadUrl} download className="text-green-700 hover:text-green-900 underline font-medium">Download the extension</a></li>
             <li>Extract the zip file</li>
-            <li>Navigate to the <code className="bg-white px-1 rounded text-xs">chrome-extension</code> folder</li>
             <li>Open <code className="bg-white px-1 rounded text-xs">chrome://extensions</code></li>
             <li>Turn on <strong>Developer mode</strong> (top-right toggle)</li>
             <li>Click <strong>Load unpacked</strong></li>
-            <li>Select the <code className="bg-white px-1 rounded text-xs">chrome-extension</code> folder from your download</li>
+            <li>Select the extracted <code className="bg-white px-1 rounded text-xs">chrome-extension</code> folder</li>
           </ol>
         </div>
 

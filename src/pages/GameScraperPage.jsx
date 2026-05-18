@@ -3,27 +3,26 @@ import { useSearchParams } from 'react-router-dom'
 
 const DUELS_ORIGIN = 'https://duels.ink'
 
-// --- Game state parsers ---
-
-function buildCardLookup(data) {
-  const map = {}
-  function walk(obj) {
-    if (!obj || typeof obj !== 'object') return
-    if (Array.isArray(obj)) { obj.forEach(walk); return }
-    // Look for card objects with id and colors
-    if ('id' in obj && 'colors' in obj) {
-      map[obj.id] = {
-        id: obj.id,
-        name: obj.name,
-        fullName: obj.fullName,
-        colors: obj.colors,
-      }
+// Cache for card data (id -> { colors, etc })
+let cardDataCache = null
+async function loadCardData() {
+  if (cardDataCache) return cardDataCache
+  try {
+    const res = await fetch('/api/cards')
+    const data = await res.json()
+    const lookup = {}
+    for (const card of (data.cards ?? [])) {
+      lookup[card.id] = { colors: card.colors, id: card.id, name: card.name }
     }
-    Object.values(obj).forEach(walk)
+    cardDataCache = lookup
+    return lookup
+  } catch (e) {
+    console.error('Failed to load card data:', e)
+    return {}
   }
-  walk(data)
-  return map
 }
+
+// --- Game state parsers ---
 
 function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
   // Track only actions that confirm deck composition
@@ -79,17 +78,21 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
   return { cards: cardList, colors: Array.from(colors).sort() }
 }
 
-function parseLiveGame(data) {
+function parseLiveGame(data, cardLookup = {}) {
   // data may be the full WS message { type, game } or just the game object
   const game = data.game ?? data
 
-  // Build definitionId → name lookup from log cardRefs
+  // Build definitionId → name lookup from log cardRefs and card lookup
   const defIdToName = {}
   const logs = game.logs ?? []
   for (const log of logs) {
     for (const ref of (log.cardRefs ?? [])) {
       if (ref.id && ref.name) defIdToName[ref.id] = ref.name
     }
+  }
+  // Also add from card lookup
+  for (const [id, card] of Object.entries(cardLookup)) {
+    if (card.name && !defIdToName[id]) defIdToName[id] = card.name
   }
 
   const p1 = game.player1 ?? {}
@@ -107,9 +110,6 @@ function parseLiveGame(data) {
 
   const p1Field = enrichField(p1.field)
   const p2Field = enrichField(p2.field)
-
-  // Build card lookup for color information
-  const cardLookup = buildCardLookup(data)
 
   // Build observed decks and extract ink colors
   const p1Observed = buildObservedDeck(logs, p1Field, 1, cardLookup)
@@ -522,6 +522,7 @@ export function GameScraperPage() {
   const [endpoint, setEndpoint] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [showRaw, setShowRaw] = useState(false)
+  const [cardLookup, setCardLookup] = useState({})
 
   // Read UUID from URL params (set by bookmarklet when opening this tab)
   useEffect(() => {
@@ -532,11 +533,16 @@ export function GameScraperPage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load card data once
+  useEffect(() => {
+    loadCardData().then(lookup => setCardLookup(lookup))
+  }, [])
+
   // Handshake with bookmarklet: signal ready, then receive game data
   useEffect(() => {
     const handler = (event) => {
       if (event.data?.type === 'lorcana_game_data' && event.data?.game) {
-        setGameData(parseLiveGame(event.data.game))
+        setGameData(parseLiveGame(event.data.game, cardLookup))
         setEndpoint('bookmarklet')
         setLastUpdated(new Date())
       }
@@ -547,7 +553,7 @@ export function GameScraperPage() {
       window.opener.postMessage({ type: 'lorcana_ready' }, '*')
     }
     return () => window.removeEventListener('message', handler)
-  }, [])
+  }, [cardLookup])
 
   // Expose game data to console for debugging
   useEffect(() => {

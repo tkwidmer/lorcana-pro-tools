@@ -26,9 +26,11 @@ chrome.runtime.onMessage.addListener((request) => {
       if (now - games[id].timestamp > MAX_AGE_MS) delete games[id]
     })
 
-    // Store full payload so callers can inspect top-level fields (e.g. mmr, rating)
+    // Store full payload so callers can inspect top-level fields (e.g. mmr, rating).
+    // Merge with previous meta so any field that ever appeared is retained.
     const { game, ...rest } = payload
-    games[uuid] = { game, meta: rest, uuid, timestamp: now }
+    const prevMeta = games[uuid]?.meta ?? {}
+    games[uuid] = { game, meta: { ...prevMeta, ...rest }, uuid, timestamp: now }
     chrome.storage.local.set({ [ACTIVE_GAMES_KEY]: games })
   })
 })

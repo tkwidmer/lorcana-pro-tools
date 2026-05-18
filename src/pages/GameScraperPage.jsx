@@ -163,6 +163,59 @@ function makeBookmarkletCode(uuid, origin) {
   return `javascript:(function(){ var done=false; var origDesc=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage'); Object.defineProperty(WebSocket.prototype,'onmessage',{set:function(h){ var self=this; var wrapped=function(ev){ if(!done){ try{ var d=JSON.parse(ev.data); if(d.type==='spectator_update'&&d.game){ done=true; window.open('${origin}/game-scraper?uuid=${uuid}&data='+encodeURIComponent(JSON.stringify(d.game)),'_blank'); return; } }catch(e){} } if(h) h.call(self,ev); }; if(origDesc&&origDesc.set){ origDesc.set.call(this,wrapped); } else { this.addEventListener('message',wrapped); } }, get:function(){ return origDesc&&origDesc.get ? origDesc.get.call(this) : this._onmessage; }}); alert('Waiting for next game update...'); })();`
 }
 
+function ExtensionPanel() {
+  const [copied, setCopied] = useState(false)
+
+  const copySteps = () => {
+    const steps = `1. Right-click chrome://extensions in your address bar and press Enter
+2. Turn on "Developer mode" in the top-right
+3. Click "Load unpacked"
+4. Navigate to: ${window.location.origin}/lorcana-extension
+5. Confirm the selection
+
+Now whenever you visit a duels.ink spectate page, the extension will automatically capture the game data!`
+
+    navigator.clipboard.writeText(steps).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <details className="mt-2" open>
+      <summary className="text-xs font-medium text-green-700 cursor-pointer select-none">Chrome Extension (recommended)</summary>
+      <div className="mt-2 space-y-3">
+        <p className="text-xs text-gray-600">
+          Install the Lorcana Game Scraper extension for automatic game capture. No setup per game — just visit a spectate link and the data loads automatically.
+        </p>
+
+        <div className="bg-green-50 border border-green-200 rounded p-3 space-y-2">
+          <div className="text-xs font-semibold text-green-900">Installation steps:</div>
+          <ol className="text-xs text-green-800 space-y-1 ml-4 list-decimal">
+            <li>Right-click <code className="bg-white px-1 rounded text-xs">chrome://extensions</code> in your address bar</li>
+            <li>Press Enter to navigate there</li>
+            <li>Turn on <strong>Developer mode</strong> (toggle in top-right)</li>
+            <li>Click <strong>Load unpacked</strong> button</li>
+            <li>Select the <code className="bg-white px-1 rounded text-xs">lorcana-extension</code> folder</li>
+            <li>Confirm — you're done!</li>
+          </ol>
+        </div>
+
+        <p className="text-xs text-gray-600 italic">
+          The extension source folder can be found at: <code className="bg-gray-100 px-1 rounded text-xs">{window.location.origin}/lorcana-extension</code>
+        </p>
+
+        <button
+          onClick={copySteps}
+          className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-medium transition-colors"
+        >
+          {copied ? 'Copied steps!' : 'Copy installation steps'}
+        </button>
+      </div>
+    </details>
+  )
+}
+
 function BookmarkletPanel({ uuid }) {
   const [copied, setCopied] = useState(false)
   const [genericCopied, setGenericCopied] = useState(false)
@@ -298,6 +351,7 @@ export function GameScraperPage() {
         </p>
       </div>
 
+      <ExtensionPanel />
       <BookmarkletPanel uuid={uuid} />
 
       {gameData && <GameView game={gameData} lastUpdated={lastUpdated} uuid={uuid} />}

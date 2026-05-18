@@ -455,18 +455,23 @@ function LogEntry({ entry, playerColors }) {
     steel: 'steel',
   }
 
-  const primaryColor = playerColors?.[0]
-  const inkName = primaryColor ? (colorNameMap[primaryColor?.toLowerCase()] ?? primaryColor?.toLowerCase()) : null
-
   return (
     <div className="flex gap-2 py-1 text-xs border-b border-gray-50 last:border-0 items-center">
-      {inkName && (
-        <img
-          src={`/ink/${inkName}.png`}
-          alt={primaryColor}
-          className="w-4 h-4 flex-shrink-0"
-          title={primaryColor}
-        />
+      {playerColors && playerColors.length > 0 && (
+        <div className="flex gap-0.5">
+          {playerColors.map((color, i) => {
+            const inkName = colorNameMap[color?.toLowerCase()] ?? color?.toLowerCase()
+            return (
+              <img
+                key={i}
+                src={`/ink/${inkName}.png`}
+                alt={color}
+                className="w-4 h-4 flex-shrink-0"
+                title={color}
+              />
+            )
+          })}
+        </div>
       )}
       <span className="text-gray-400 flex-shrink-0 w-12">T{turnNumber ?? '?'} P{player ?? '?'}</span>
       <span className="text-gray-700 truncate">{resolved || type}</span>

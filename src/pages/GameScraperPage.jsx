@@ -75,7 +75,7 @@ function parseLiveGame(data) {
 
   // Ink pool: count INK actions per player for total pool size;
   // also try server-provided available/spent values
-  const countInked = (playerNum) => logs.filter(l => l.player === playerNum && l.type === 'INK').length
+  const countInked = (playerNum) => logs.filter(l => (l.player === playerNum || l.player === String(playerNum)) && l.type === 'INK').length
   const p1InkedCount = countInked(1)
   const p2InkedCount = countInked(2)
 
@@ -482,12 +482,12 @@ export function GameScraperPage() {
             </div>
           )}
 
-          {/* Recent log */}
+          {/* Full game log */}
           {game.log?.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
-              <h3 className="text-sm font-bold text-gray-700 mb-2">Recent Actions ({game.log.length})</h3>
-              <div className="max-h-48 overflow-y-auto">
-                {[...game.log].reverse().slice(0, 50).map((entry, i) => (
+              <h3 className="text-sm font-bold text-gray-700 mb-2">Game Actions ({game.log.length})</h3>
+              <div className="max-h-96 overflow-y-auto">
+                {game.log.map((entry, i) => (
                   <LogEntry key={i} entry={entry} index={i} />
                 ))}
               </div>

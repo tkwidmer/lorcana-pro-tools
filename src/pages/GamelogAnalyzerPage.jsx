@@ -968,8 +968,16 @@ function PlayerSection({ name, data, isWinner, finalLore }) {
   )
 }
 
-function GamelogDetail({ gamelog, myPlayerNum }) {
-  const { p1Name, p2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2 } = gamelog
+function resolveDisplayName(storedName, isMe, myName) {
+  if (storedName !== 'Player 1' && storedName !== 'Player 2') return storedName
+  if (isMe && myName) return myName
+  return storedName
+}
+
+function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
+  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2 } = gamelog
+  const p1Name = resolveDisplayName(rawP1Name, myPlayerNum === 1, myName)
+  const p2Name = resolveDisplayName(rawP2Name, myPlayerNum === 2, myName)
   const p1IsWinner = winner === 1 || winner === '1'
   const p2IsWinner = winner === 2 || winner === '2'
 
@@ -1164,7 +1172,9 @@ export function GamelogAnalyzerPage() {
               onClick={() => setActiveId(g.id)}
               className={`cursor-pointer flex items-center gap-3 px-3 py-2 rounded transition-colors ${activeId === g.id ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}
             >
-              <span className="font-medium text-sm">{g.p1Name} vs {g.p2Name}</span>
+              <span className="font-medium text-sm">
+                {resolveDisplayName(g.p1Name, g.myPlayerNum === 1, myName)} vs {resolveDisplayName(g.p2Name, g.myPlayerNum === 2, myName)}
+              </span>
               <span className="text-xs opacity-60">{g.turnCount} turns · {g.eventCount} events</span>
               <span className="ml-auto text-xs opacity-60">{new Date(g.savedAt).toLocaleDateString()}</span>
               <button
@@ -1177,7 +1187,7 @@ export function GamelogAnalyzerPage() {
         </div>
       )}
 
-      {activeGamelog && <GamelogDetail gamelog={activeGamelog} myPlayerNum={activeMyPlayerNum} />}
+      {activeGamelog && <GamelogDetail gamelog={activeGamelog} myPlayerNum={activeMyPlayerNum} myName={myName} />}
 
       {gamelogs.length === 0 && !loading && (
         <div className="text-center py-12 text-gray-400 text-sm">No gamelogs yet — import a .logs.gz file to get started.</div>

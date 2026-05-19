@@ -259,10 +259,11 @@ function ImportGamelogButton({ game }) {
       const text = await decompressGzip(buf)
       const logs = JSON.parse(text)
       const id = game.gamelog_id
+      const storedMyName = localStorage.getItem('lorcana_my_name') ?? ''
       const parsed = parseGamelog(id, logs, {
         yourResult: game.result,
         opponentName: game.opp_display_name,
-        yourDisplayName: game.your_display_name,
+        yourDisplayName: game.your_display_name || storedMyName || undefined,
         yourColors: game.your_deck_colors,
         oppColors: game.opp_deck_colors,
       })

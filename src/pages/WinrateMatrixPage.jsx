@@ -170,55 +170,57 @@ export function WinrateMatrixPage() {
         <p className="text-gray-500">Head-to-head matchup winrates for {stats.meta?.queue?.name || selectedQueue}</p>
       </div>
 
-      <div className="mb-8 flex flex-col sm:flex-row gap-6">
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-3">Queue</label>
-          <div className="flex gap-2 flex-wrap">
-            {QUEUES.map(q => (
-              <button
-                key={q.id}
-                onClick={() => setSelectedQueue(q.id)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  selectedQueue === q.id
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {q.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-3">Period</label>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setSelectedPeriod('all_time')}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedPeriod === 'all_time'
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All Time
-            </button>
-            {availableWeeks.map(week => {
-              const periodKey = `week:${week.startDate}`
-              return (
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row gap-6 mb-6">
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-3">Queue</label>
+            <div className="flex gap-2 flex-wrap">
+              {QUEUES.map(q => (
                 <button
-                  key={periodKey}
-                  onClick={() => setSelectedPeriod(periodKey)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedPeriod === periodKey
+                  key={q.id}
+                  onClick={() => setSelectedQueue(q.id)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    selectedQueue === q.id
                       ? 'bg-gray-900 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {week.label}
+                  {q.name}
                 </button>
-              )
-            })}
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-3">Period</label>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setSelectedPeriod('all_time')}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  selectedPeriod === 'all_time'
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                All Time
+              </button>
+              {availableWeeks.map(week => {
+                const periodKey = `week:${week.startDate}`
+                return (
+                  <button
+                    key={periodKey}
+                    onClick={() => setSelectedPeriod(periodKey)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      selectedPeriod === periodKey
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {week.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
 

@@ -408,6 +408,9 @@ export function MatchHistoryPage() {
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(new Set())
   const [bulkOp, setBulkOp] = useState(null) // null | { done, total, errors, label }
+  const [filterQueue, setFilterQueue] = useState(null)
+  const [filterMyColors, setFilterMyColors] = useState(null)
+  const [filterOppColors, setFilterOppColors] = useState(null)
 
   async function load({ cursor = null, append = false } = {}) {
     if (append) setLoadingMore(true)
@@ -438,10 +441,10 @@ export function MatchHistoryPage() {
   }
 
   function toggleSelectAll() {
-    if (selected.size === games.length) {
+    if (filteredGames.every(g => selected.has(g.game_id))) {
       setSelected(new Set())
     } else {
-      setSelected(new Set(games.map(g => g.game_id)))
+      setSelected(new Set(filteredGames.map(g => g.game_id)))
     }
   }
 
@@ -509,11 +512,23 @@ export function MatchHistoryPage() {
     navigate('/replay-analyzer')
   }
 
-  const selectedGames = games.filter(g => selected.has(g.game_id))
+  // Derive unique filter options from all loaded games
+  const queues = [...new Set(games.map(g => g.queue_name).filter(Boolean))].sort()
+  const myColorOptions = [...new Set(games.map(g => g.your_deck_colors).filter(Boolean))].sort()
+  const oppColorOptions = [...new Set(games.map(g => g.opp_deck_colors).filter(Boolean))].sort()
+
+  const filteredGames = games.filter(g => {
+    if (filterQueue && g.queue_name !== filterQueue) return false
+    if (filterMyColors && g.your_deck_colors !== filterMyColors) return false
+    if (filterOppColors && g.opp_deck_colors !== filterOppColors) return false
+    return true
+  })
+
+  const selectedGames = filteredGames.filter(g => selected.has(g.game_id))
   const hasGamelogs = selectedGames.some(g => g.gamelog_id)
   const hasReplays = selectedGames.some(g => g.replay_id)
-  const allSelected = games.length > 0 && selected.size === games.length
-  const someSelected = selected.size > 0 && !allSelected
+  const allSelected = filteredGames.length > 0 && filteredGames.every(g => selected.has(g.game_id))
+  const someSelected = selectedGames.length > 0 && !allSelected
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
@@ -593,6 +608,64 @@ export function MatchHistoryPage() {
         </div>
       )}
 
+      {/* Filters */}
+      {games.length > 0 && (queues.length > 1 || myColorOptions.length > 1 || oppColorOptions.length > 1) && (
+        <div className="mb-4 flex flex-wrap gap-4 items-start">
+          {queues.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Queue</span>
+              {queues.map(q => (
+                <button
+                  key={q}
+                  onClick={() => setFilterQueue(prev => prev === q ? null : q)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterQueue === q ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+          {myColorOptions.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">My Colors</span>
+              {myColorOptions.map(colors => (
+                <button
+                  key={colors}
+                  onClick={() => setFilterMyColors(prev => prev === colors ? null : colors)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${filterMyColors === colors ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'}`}
+                  title={colors}
+                >
+                  <InkIcons colors={colors} />
+                </button>
+              ))}
+            </div>
+          )}
+          {oppColorOptions.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Opp Colors</span>
+              {oppColorOptions.map(colors => (
+                <button
+                  key={colors}
+                  onClick={() => setFilterOppColors(prev => prev === colors ? null : colors)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${filterOppColors === colors ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'}`}
+                  title={colors}
+                >
+                  <InkIcons colors={colors} />
+                </button>
+              ))}
+            </div>
+          )}
+          {(filterQueue || filterMyColors || filterOppColors) && (
+            <button
+              onClick={() => { setFilterQueue(null); setFilterMyColors(null); setFilterOppColors(null) }}
+              className="text-xs text-gray-400 hover:text-gray-700 transition-colors self-center"
+            >
+              Clear filters · {filteredGames.length}/{games.length} shown
+            </button>
+          )}
+        </div>
+      )}
+
       {games.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -620,7 +693,7 @@ export function MatchHistoryPage() {
               </tr>
             </thead>
             <tbody>
-              {games.map((game, i) => (
+              {filteredGames.map((game, i) => (
                 <GameRow
                   key={game.game_id ?? i}
                   game={game}

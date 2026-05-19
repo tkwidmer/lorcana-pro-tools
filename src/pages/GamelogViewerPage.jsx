@@ -264,21 +264,33 @@ export function GamelogViewerPage() {
                 <span className="font-mono">{[...new Set(rawLogs.map(l => l.type))].sort().join(', ')}</span>
               </div>
               <div>
-                <div className="font-semibold text-gray-700 mb-1">First CARD_DRAWN entry (private draw event with card name):</div>
+                <div className="font-semibold text-gray-700 mb-1">GAME_START entry (player names, setup):</div>
                 <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
-                  {JSON.stringify(rawLogs.find(l => l.type === 'CARD_DRAWN') ?? 'none — no CARD_DRAWN events found', null, 2)}
+                  {JSON.stringify(rawLogs.find(l => l.type === 'GAME_START') ?? 'none — no GAME_START event found', null, 2)}
                 </pre>
               </div>
               <div>
-                <div className="font-semibold text-gray-700 mb-1">First TURN_DRAW entry (public draw announcement, no card data):</div>
+                <div className="font-semibold text-gray-700 mb-1">GAME_END entry (winner, final lore):</div>
                 <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
-                  {JSON.stringify(rawLogs.find(l => l.type === 'TURN_DRAW') ?? 'none', null, 2)}
+                  {JSON.stringify(rawLogs.find(l => l.type === 'GAME_END') ?? 'none', null, 2)}
+                </pre>
+              </div>
+              <div>
+                <div className="font-semibold text-gray-700 mb-1">First CARD_DRAWN entry:</div>
+                <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+                  {JSON.stringify(rawLogs.find(l => l.type === 'CARD_DRAWN') ?? 'none — no CARD_DRAWN events found', null, 2)}
                 </pre>
               </div>
               <div>
                 <div className="font-semibold text-gray-700 mb-1">First MULLIGAN entry:</div>
                 <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
                   {JSON.stringify(rawLogs.find(l => l.type === 'MULLIGAN') ?? 'none', null, 2)}
+                </pre>
+              </div>
+              <div>
+                <div className="font-semibold text-gray-700 mb-1">First 3 raw entries (top-level structure):</div>
+                <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-64 font-mono whitespace-pre-wrap break-all">
+                  {JSON.stringify(rawLogs.slice(0, 3), null, 2)}
                 </pre>
               </div>
             </div>

@@ -13,6 +13,13 @@ npm run preview    # Preview production build locally
 
 There is no test suite — validation is manual.
 
+## Pull Requests
+
+When creating a pull request:
+
+1. **Include Vercel preview link** — Add the live preview URL in the PR description so reviewers can test changes without building locally. Preview links follow the pattern `https://<branch-name>.<project>.vercel.app`
+2. **Include screenshots for UI changes** — For any updates or new features affecting the user interface, capture and attach relevant screenshots in the PR body. Include before/after pairs when applicable
+
 ## Stack
 
 React 19 + React Router 7 + Tailwind CSS 4 + Vite 8, deployed on Vercel. Serverless API routes live in `/api/*.ts` (TypeScript). No backend database — all user data is stored client-side in IndexedDB or localStorage.

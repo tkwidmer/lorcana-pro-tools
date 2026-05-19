@@ -18,7 +18,6 @@ export function Nav() {
                 : pathname === '/cut-calculator' ? 'Cut Calculator'
                 : pathname === '/limited-guide' ? 'Limited Guide'
                 : pathname === '/deck-insights' ? 'Deck Insights'
-                : pathname === '/replay-analyzer' ? 'Replay Analyzer'
                 : pathname === '/game-scraper' ? 'Game Scraper'
                 : pathname === '/library' ? 'Library'
                 : pathname.startsWith('/game-history/') ? 'Library'

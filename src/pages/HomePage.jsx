@@ -35,11 +35,6 @@ const SECTIONS = [
     title: 'Coaching Tools',
     tools: [
       {
-        path: '/replay-analyzer',
-        name: 'Replay Analyzer',
-        description: 'Upload Lorcana Duels replay files to review your gameplay, track lore progression, and reconstruct your opponent\'s decklist.',
-      },
-      {
         path: '/gamelog-analyzer',
         name: 'Gamelog Analyzer',
         description: 'Import complete server-side game logs to see both players\' full draw sequences, opening hands, mulligan decisions, and every card interaction — richer than replays.',

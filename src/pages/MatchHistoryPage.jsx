@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getToken, fetchMatchHistory, fetchReplayBuffer, fetchGamelogBuffer } from '../lib/duelsApi'
+import { getToken, fetchMatchHistory, fetchGamelogBuffer } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 
@@ -66,42 +66,6 @@ function InkIcons({ colors }) {
         <img key={name} src={`/ink/${name}.png`} alt={name} title={name} className="w-5 h-5" />
       ))}
     </span>
-  )
-}
-
-function ImportReplayButton({ game }) {
-  const navigate = useNavigate()
-  const [status, setStatus] = useState(null) // null | 'loading' | 'done' | 'error'
-
-  if (!game.replay_id) return null
-
-  async function handleImport() {
-    setStatus('loading')
-    try {
-      const buf = await fetchReplayBuffer(game.replay_id)
-      const bytes = new Uint8Array(buf)
-      const binary = Array.from(bytes).map(b => String.fromCharCode(b)).join('')
-      const base64 = btoa(binary)
-      sessionStorage.setItem('lorcana_pending_replay', JSON.stringify({
-        base64,
-        filename: game.replay_filename ?? `${game.replay_id}.replay.gz`,
-      }))
-      navigate('/replay-analyzer')
-    } catch {
-      setStatus('error')
-      setTimeout(() => setStatus(null), 3000)
-    }
-  }
-
-  return (
-    <button
-      onClick={handleImport}
-      disabled={status === 'loading'}
-      className="text-xs text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-40 whitespace-nowrap"
-      title="Import replay into Replay Analyzer"
-    >
-      {status === 'loading' ? 'Importing…' : status === 'error' ? 'Failed' : '↗ Replay'}
-    </button>
   )
 }
 
@@ -194,10 +158,7 @@ function GameRow({ game, selected, onToggle }) {
         <MmrDelta delta={game.mmr_delta} />
       </td>
       <td className="py-3 px-3 hidden sm:table-cell" onClick={e => e.stopPropagation()}>
-        <div className="flex flex-col gap-1">
-          <ImportReplayButton game={game} />
-          <ImportGamelogButton game={game} />
-        </div>
+        <ImportGamelogButton game={game} />
       </td>
     </tr>
   )
@@ -364,31 +325,6 @@ export function MatchHistoryPage() {
     }
   }
 
-  async function handleBulkImportReplays() {
-    const toImport = games.filter(g => selected.has(g.game_id) && g.replay_id)
-    if (!toImport.length) return
-    setBulkOp({ done: 0, total: toImport.length, errors: 0, label: 'Importing replays' })
-    let done = 0, errors = 0
-    for (const game of toImport) {
-      try {
-        const buf = await fetchReplayBuffer(game.replay_id)
-        const bytes = new Uint8Array(buf)
-        const binary = Array.from(bytes).map(b => String.fromCharCode(b)).join('')
-        const base64 = btoa(binary)
-        // Queue replays in sessionStorage as an array for the replay analyzer to process
-        const existing = JSON.parse(sessionStorage.getItem('lorcana_replay_queue') ?? '[]')
-        existing.push({ base64, filename: game.replay_filename ?? `${game.replay_id}.replay.gz` })
-        sessionStorage.setItem('lorcana_replay_queue', JSON.stringify(existing))
-        done++
-      } catch {
-        errors++
-      }
-      setBulkOp({ done, total: toImport.length, errors, label: 'Importing replays' })
-    }
-    setSelected(new Set())
-    navigate('/replay-analyzer')
-  }
-
   function saveDeckName(fp, name) {
     const updated = { ...deckNames, [fp]: name.trim() }
     setDeckNames(updated)
@@ -453,7 +389,6 @@ export function MatchHistoryPage() {
 
   const selectedGames = filteredGames.filter(g => selected.has(g.game_id))
   const hasGamelogs = selectedGames.some(g => g.gamelog_id)
-  const hasReplays = selectedGames.some(g => g.replay_id)
   const allSelected = filteredGames.length > 0 && filteredGames.every(g => selected.has(g.game_id))
   const someSelected = selectedGames.length > 0 && !allSelected
 
@@ -500,14 +435,6 @@ export function MatchHistoryPage() {
                 className="px-3 py-1 bg-white text-gray-900 rounded text-xs font-semibold hover:bg-gray-100 transition-colors"
               >
                 Import Gamelogs ({selectedGames.filter(g => g.gamelog_id).length})
-              </button>
-            )}
-            {hasReplays && (
-              <button
-                onClick={handleBulkImportReplays}
-                className="px-3 py-1 bg-white text-gray-900 rounded text-xs font-semibold hover:bg-gray-100 transition-colors"
-              >
-                Import Replays ({selectedGames.filter(g => g.replay_id).length})
               </button>
             )}
             <button

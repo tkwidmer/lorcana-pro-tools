@@ -39,6 +39,11 @@ const SECTIONS = [
         name: 'Gamelog Analyzer',
         description: 'Import complete server-side game logs to see both players\' full draw sequences, opening hands, mulligan decisions, and every card interaction — richer than replays.',
       },
+      {
+        path: '/winrate-matrix',
+        name: 'Winrate Matrix',
+        description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
+      },
     ],
   },
   {

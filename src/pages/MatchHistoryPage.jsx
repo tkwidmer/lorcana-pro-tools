@@ -384,20 +384,14 @@ function GameRow({ game, selected, onToggle }) {
       <td className="py-3 px-3 hidden sm:table-cell">
         {isSealed ? <span className="text-gray-400 text-sm">Sealed</span> : <InkIcons colors={game.your_deck_colors} />}
       </td>
-      <td className="py-3 px-3 text-sm text-gray-700 hidden sm:table-cell">
-        <span className="inline-flex items-center gap-2">
-          {!isSealed && game.opp_deck_colors && <InkIcons colors={game.opp_deck_colors} />}
-          <span className="font-medium">{game.opp_display_name ?? '—'}</span>
-        </span>
+      <td className="py-3 px-3 hidden sm:table-cell">
+        {!isSealed && game.opp_deck_colors ? <InkIcons colors={game.opp_deck_colors} /> : <span className="text-gray-400">—</span>}
+      </td>
+      <td className="py-3 px-3 text-sm text-gray-700 font-medium">
+        {game.opp_display_name ?? '—'}
       </td>
       <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
         {game.your_lore ?? '?'} – {game.opp_lore ?? '?'}
-      </td>
-      <td className="py-3 px-3 text-sm text-gray-500 hidden sm:table-cell text-center">
-        {game.turns ?? '—'}
-      </td>
-      <td className="py-3 px-3 text-sm text-gray-500 hidden sm:table-cell whitespace-nowrap">
-        {formatDuration(game.duration_seconds)}
       </td>
       <td className="py-3 px-3 text-sm hidden sm:table-cell text-center">
         <MmrDelta delta={game.mmr_delta} />
@@ -785,10 +779,9 @@ export function MatchHistoryPage() {
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Queue</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Result</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Your Colors</th>
-                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Opponent</th>
+                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Opp Colors</th>
+                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Opponent</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Score</th>
-                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell text-center">Turns</th>
-                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Duration</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell text-center">MMR Δ</th>
                 <th className="py-2 px-3 hidden sm:table-cell" />
               </tr>

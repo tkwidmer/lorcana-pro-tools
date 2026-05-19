@@ -137,7 +137,7 @@ export function WinrateMatrixPage() {
   // Build final sorted list of 2-color pairs that have matchup data
   const matrixColorPairs = [...twoColorPairs]
     .filter(cp => colorPairSet.has(JSON.stringify(cp.colors)))
-    .sort((a, b) => b.playRate - a.playRate)
+    .sort((a, b) => b.winRate - a.winRate)
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">

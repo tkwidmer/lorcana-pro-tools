@@ -583,27 +583,13 @@ export function MatchHistoryPage() {
     navigate('/replay-analyzer')
   }
 
-  // Derive unique filter options from all loaded games
-  const queues = [...new Set(games.map(g => g.queue_name).filter(Boolean))].sort()
-  const myColorOptions = [...new Set(games.map(g => g.your_deck_colors).filter(Boolean))].sort()
-  const oppColorOptions = [...new Set(games.map(g => g.opp_deck_colors).filter(Boolean))].sort()
-
-  // Derive unique decks by fingerprint
-  const deckOptions = []
-  const seenFingerprints = new Set()
-  for (const g of games) {
-    const fp = deckFingerprint(g.your_decklist)
-    if (fp && !seenFingerprints.has(fp)) {
-      seenFingerprints.add(fp)
-      deckOptions.push({ fp, colors: g.your_deck_colors })
-    }
-  }
-
   function saveDeckName(fp, name) {
     const updated = { ...deckNames, [fp]: name.trim() }
     setDeckNames(updated)
     localStorage.setItem(DECK_NAMES_KEY, JSON.stringify(updated))
   }
+
+  // Cascading filters — each layer narrows options for the next
 
   const dateFilterBounds = (() => {
     const now = new Date()
@@ -621,18 +607,40 @@ export function MatchHistoryPage() {
     return null
   })()
 
-  const filteredGames = games.filter(g => {
-    if (filterQueue && g.queue_name !== filterQueue) return false
-    if (filterMyColors && g.your_deck_colors !== filterMyColors) return false
-    if (filterOppColors && g.opp_deck_colors !== filterOppColors) return false
-    if (filterDeck && deckFingerprint(g.your_decklist) !== filterDeck) return false
-    if (dateFilterBounds && g.started_at) {
-      const t = new Date(g.started_at)
-      if (dateFilterBounds.from && t < dateFilterBounds.from) return false
-      if (dateFilterBounds.to && t > dateFilterBounds.to) return false
-    }
+  const afterDate = games.filter(g => {
+    if (!dateFilterBounds || !g.started_at) return true
+    const t = new Date(g.started_at)
+    if (dateFilterBounds.from && t < dateFilterBounds.from) return false
+    if (dateFilterBounds.to && t > dateFilterBounds.to) return false
     return true
   })
+
+  const queues = [...new Set(afterDate.map(g => g.queue_name).filter(Boolean))].sort()
+  const afterQueue = afterDate.filter(g => !filterQueue || g.queue_name === filterQueue)
+
+  const myColorOptions = [...new Set(afterQueue.map(g => g.your_deck_colors).filter(Boolean))].sort()
+  const afterMyColors = afterQueue.filter(g => !filterMyColors || g.your_deck_colors === filterMyColors)
+
+  const oppColorOptions = [...new Set(afterMyColors.map(g => g.opp_deck_colors).filter(Boolean))].sort()
+  const afterOppColors = afterMyColors.filter(g => !filterOppColors || g.opp_deck_colors === filterOppColors)
+
+  const deckOptions = []
+  const seenFingerprints = new Set()
+  for (const g of afterOppColors) {
+    const fp = deckFingerprint(g.your_decklist)
+    if (fp && !seenFingerprints.has(fp)) {
+      seenFingerprints.add(fp)
+      deckOptions.push({ fp, colors: g.your_deck_colors })
+    }
+  }
+
+  const filteredGames = afterOppColors.filter(g => !filterDeck || deckFingerprint(g.your_decklist) === filterDeck)
+
+  // Auto-clear downstream filters that are no longer valid
+  useEffect(() => { if (filterQueue && !queues.includes(filterQueue)) setFilterQueue(null) }, [queues, filterQueue])
+  useEffect(() => { if (filterMyColors && !myColorOptions.includes(filterMyColors)) setFilterMyColors(null) }, [myColorOptions, filterMyColors])
+  useEffect(() => { if (filterOppColors && !oppColorOptions.includes(filterOppColors)) setFilterOppColors(null) }, [oppColorOptions, filterOppColors])
+  useEffect(() => { if (filterDeck && !seenFingerprints.has(filterDeck)) setFilterDeck(null) }, [filterDeck, seenFingerprints])
 
   const selectedGames = filteredGames.filter(g => selected.has(g.game_id))
   const hasGamelogs = selectedGames.some(g => g.gamelog_id)

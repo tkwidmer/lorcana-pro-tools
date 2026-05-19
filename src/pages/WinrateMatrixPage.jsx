@@ -103,11 +103,21 @@ export function WinrateMatrixPage() {
     .filter(cp => cp.games >= 20) // Minimum sample size
     .sort((a, b) => b.playRate - a.playRate) // Sort by play rate, not games
 
-  // Create a map for quick matchup lookup
+  // Create a map for quick matchup lookup (both directions)
   const matchupMap = new Map()
   matchups.forEach(m => {
-    const key = `${JSON.stringify(m.colorsA)}-${JSON.stringify(m.colorsB)}`
-    matchupMap.set(key, m)
+    const keyForward = `${JSON.stringify(m.colorsA)}-${JSON.stringify(m.colorsB)}`
+    const keyReverse = `${JSON.stringify(m.colorsB)}-${JSON.stringify(m.colorsA)}`
+    matchupMap.set(keyForward, { ...m, isReverse: false })
+    // For reverse, we flip the winrate (if A won 1208/2609, then B won 1401/2609)
+    matchupMap.set(keyReverse, {
+      ...m,
+      colorsA: m.colorsB,
+      colorsB: m.colorsA,
+      winsA: m.games - m.winsA,
+      winRate: 100 - m.winRate,
+      isReverse: true,
+    })
   })
 
   const getMatchup = (colorsA, colorsB) => {

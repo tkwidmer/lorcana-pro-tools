@@ -24,7 +24,12 @@ async function decompressGzip(arrayBuffer) {
   return new TextDecoder().decode(out)
 }
 
-function parseGamelog(id, logs) {
+function parseColors(str) {
+  if (!str) return []
+  return str.split('/').map(c => c.trim().toLowerCase()).filter(Boolean)
+}
+
+function parseGamelog(id, logs, meta = {}) {
   const players = {
     1: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
     2: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
@@ -34,6 +39,7 @@ function parseGamelog(id, logs) {
   let p1FinalLore = null, p2FinalLore = null
   const challenges = []
   const trackedLore = { 1: 0, 2: 0 }
+  const nameByPlayer = {}
 
   const ensureCard = (p, name, id) => {
     const pData = players[p]
@@ -55,15 +61,21 @@ function parseGamelog(id, logs) {
     const message = entry.message ?? ''
     if ((entry.turnNumber ?? 0) > turnCount) turnCount = entry.turnNumber ?? 0
 
+    if (p && entry.playerName && !nameByPlayer[p]) nameByPlayer[p] = entry.playerName
+
     if (type === 'GAME_START') {
       if (d.playerNames) {
         p1Name = d.playerNames['1'] ?? d.playerNames.player1 ?? p1Name
         p2Name = d.playerNames['2'] ?? d.playerNames.player2 ?? p2Name
       }
       if (Array.isArray(d.players)) {
-        p1Name = d.players[0]?.name ?? p1Name
-        p2Name = d.players[1]?.name ?? p2Name
+        p1Name = d.players[0]?.name ?? d.players[0]?.displayName ?? p1Name
+        p2Name = d.players[1]?.name ?? d.players[1]?.displayName ?? p2Name
       }
+      if (d.player1Name) p1Name = d.player1Name
+      if (d.player2Name) p2Name = d.player2Name
+      if (d.player1?.name) p1Name = d.player1.name
+      if (d.player2?.name) p2Name = d.player2.name
     }
 
     if (type === 'GAME_END') {
@@ -147,6 +159,34 @@ function parseGamelog(id, logs) {
     return bTotal - aTotal || a.name.localeCompare(b.name)
   })
 
+  // Apply names from top-level playerName fields if GAME_START didn't yield them
+  if (nameByPlayer[1] && p1Name === 'Player 1') p1Name = nameByPlayer[1]
+  if (nameByPlayer[2] && p2Name === 'Player 2') p2Name = nameByPlayer[2]
+
+  // Determine myPlayerNum from match history metadata (win/loss + winner field)
+  let myPlayerNum = null
+  if (meta.yourResult && winner !== null) {
+    const winnerNum = winner === 1 || winner === '1' ? 1 : 2
+    myPlayerNum = meta.yourResult === 'win' ? winnerNum : (winnerNum === 1 ? 2 : 1)
+  }
+
+  // Override player names from match history API (authoritative)
+  if (myPlayerNum && meta.opponentName) {
+    if (myPlayerNum === 1) p2Name = meta.opponentName
+    else p1Name = meta.opponentName
+  }
+  if (myPlayerNum && meta.yourDisplayName) {
+    if (myPlayerNum === 1) p1Name = meta.yourDisplayName
+    else p2Name = meta.yourDisplayName
+  }
+
+  const myInkCombo = myPlayerNum
+    ? parseColors(myPlayerNum === 1 ? meta.yourColors : meta.oppColors)
+    : []
+  const oppInkCombo = myPlayerNum
+    ? parseColors(myPlayerNum === 1 ? meta.oppColors : meta.yourColors)
+    : []
+
   return {
     id,
     p1Name, p2Name,
@@ -156,6 +196,9 @@ function parseGamelog(id, logs) {
     p1FinalLore: p1FinalLore ?? (trackedLore[1] > 0 ? trackedLore[1] : null),
     p2FinalLore: p2FinalLore ?? (trackedLore[2] > 0 ? trackedLore[2] : null),
     challenges,
+    myPlayerNum,
+    myInkCombo,
+    oppInkCombo,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }
@@ -174,7 +217,8 @@ function getMyPlayerNum(gamelog, myName) {
 }
 
 function enrichGame(gamelog, myName) {
-  const myPlayerNum = getMyPlayerNum(gamelog, myName)
+  // Prefer the myPlayerNum stored at import time (from Match History metadata)
+  const myPlayerNum = gamelog.myPlayerNum ?? getMyPlayerNum(gamelog, myName)
   if (!myPlayerNum) return null
 
   const myP = myPlayerNum === 1 ? gamelog.p1 : gamelog.p2
@@ -212,6 +256,8 @@ function enrichGame(gamelog, myName) {
     wentFirst: myPlayerNum === 1,
     myCards,
     challenges,
+    myInkCombo: gamelog.myInkCombo ?? [],
+    oppInkCombo: gamelog.oppInkCombo ?? [],
     mulligan: {
       openingHand: (myP.initialHand ?? []).map(c => ({ ...c, fullName: c.name })),
       sentBack: (myP.mulliganSent ?? []).map(c => ({ ...c, fullName: c.name })),
@@ -378,11 +424,14 @@ function WinRateStats({ enrichedGames }) {
   const first = enrichedGames.filter(g => g.wentFirst)
   const second = enrichedGames.filter(g => !g.wentFirst)
 
-  const byOpp = {}
+  const hasInkData = enrichedGames.some(g => g.oppInkCombo?.length > 0)
+
+  // Group by opponent ink combo when available, else by opponent name
+  const byMatchup = {}
   for (const g of enrichedGames) {
-    const key = g.opponentName || 'Unknown'
-    if (!byOpp[key]) byOpp[key] = []
-    byOpp[key].push(g)
+    const key = g.oppInkCombo?.length ? g.oppInkCombo.join('/') : (g.opponentName || 'Unknown')
+    if (!byMatchup[key]) byMatchup[key] = { label: key, colors: g.oppInkCombo ?? [], games: [] }
+    byMatchup[key].games.push(g)
   }
 
   return (
@@ -395,9 +444,22 @@ function WinRateStats({ enrichedGames }) {
           <WinRateRow label="Going second" {...tally(second)} />
         </div>
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">vs Opponent</h3>
-          {Object.entries(byOpp).map(([name, games]) => (
-            <WinRateRow key={name} label={name} {...tally(games)} />
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+            {hasInkData ? 'vs Matchup' : 'vs Opponent'}
+          </h3>
+          {Object.values(byMatchup).map(({ label, colors, games }) => (
+            <WinRateRow
+              key={label}
+              label={
+                colors.length > 0 ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    {colors.map(c => <InkDot key={c} color={c} />)}
+                    <span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span>
+                  </span>
+                ) : label
+              }
+              {...tally(games)}
+            />
           ))}
         </div>
       </div>
@@ -736,48 +798,93 @@ function ChallengeStats({ filteredGames, subtitle }) {
   )
 }
 
+function InkDot({ color }) {
+  const DOT = { amber: 'bg-amber-400', amethyst: 'bg-purple-500', emerald: 'bg-emerald-500', ruby: 'bg-red-500', sapphire: 'bg-blue-500', steel: 'bg-gray-400' }
+  const c = DOT[color?.toLowerCase()]
+  if (!c) return null
+  return <span className={`inline-block w-3 h-3 rounded-full flex-shrink-0 ${c}`} title={color} />
+}
+
 function AggregateView({ enrichedGames }) {
+  const [matchupFilter, setMatchupFilter] = useState(null)
   const [oppFilter, setOppFilter] = useState(null)
   if (!enrichedGames.length) return null
 
+  // Build matchup filter entries (by opponent ink combo when available)
+  const hasInkData = enrichedGames.some(g => g.oppInkCombo?.length > 0)
+  const matchups = []
+  const seenMatchups = new Set()
+  for (const g of enrichedGames) {
+    const key = g.oppInkCombo?.length ? g.oppInkCombo.join('/') : null
+    if (key && !seenMatchups.has(key)) { seenMatchups.add(key); matchups.push({ key, colors: g.oppInkCombo }) }
+  }
+
+  // Build opponent name filter entries
   const opponents = []
   const seenOpps = new Set()
   for (const g of enrichedGames) {
     const key = g.opponentName || 'Unknown'
     if (!seenOpps.has(key)) { seenOpps.add(key); opponents.push(key) }
   }
-  const showFilter = opponents.length > 1
 
-  const filtered = oppFilter
-    ? enrichedGames.filter(g => (g.opponentName || 'Unknown') === oppFilter)
-    : enrichedGames
+  const filtered = enrichedGames.filter(g => {
+    if (matchupFilter && (g.oppInkCombo?.join('/') || null) !== matchupFilter) return false
+    if (oppFilter && (g.opponentName || 'Unknown') !== oppFilter) return false
+    return true
+  })
 
-  const subtitle = oppFilter
-    ? `${filtered.length} game${filtered.length !== 1 ? 's' : ''} vs ${oppFilter} · ${enrichedGames.length} total`
+  const activeFilters = [matchupFilter, oppFilter].filter(Boolean)
+  const subtitle = activeFilters.length
+    ? `${filtered.length} game${filtered.length !== 1 ? 's' : ''} filtered · ${enrichedGames.length} total`
     : `Aggregated across ${enrichedGames.length} game${enrichedGames.length !== 1 ? 's' : ''}`
 
   return (
     <div className="mt-2">
-      {showFilter && (
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs text-gray-500 font-medium">Filter by opponent:</span>
-          <button
-            onClick={() => setOppFilter(null)}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-              oppFilter === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
-            }`}
-          >All</button>
-          {opponents.map(name => (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
+        {hasInkData && matchups.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500 font-medium">vs matchup:</span>
             <button
-              key={name}
-              onClick={() => setOppFilter(oppFilter === name ? null : name)}
+              onClick={() => setMatchupFilter(null)}
               className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                oppFilter === name ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+                matchupFilter === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
               }`}
-            >{name}</button>
-          ))}
-        </div>
-      )}
+            >All</button>
+            {matchups.map(({ key, colors }) => (
+              <button
+                key={key}
+                onClick={() => setMatchupFilter(matchupFilter === key ? null : key)}
+                className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  matchupFilter === key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+                }`}
+              >
+                {colors.map(c => <InkDot key={c} color={matchupFilter === key ? null : c} />)}
+                <span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {opponents.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500 font-medium">vs opponent:</span>
+            <button
+              onClick={() => setOppFilter(null)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                oppFilter === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+              }`}
+            >All</button>
+            {opponents.map(name => (
+              <button
+                key={name}
+                onClick={() => setOppFilter(oppFilter === name ? null : name)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  oppFilter === name ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+                }`}
+              >{name}</button>
+            ))}
+          </div>
+        )}
+      </div>
       <DeckStats filteredGames={filtered} subtitle={subtitle} />
       <ChallengeStats filteredGames={filtered} subtitle={subtitle} />
     </div>
@@ -911,7 +1018,9 @@ export function GamelogAnalyzerPage() {
 
   const activeGamelog = gamelogs.find(g => g.id === activeId) ?? null
   const enrichedGames = gamelogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
-  const activeMyPlayerNum = activeGamelog ? getMyPlayerNum(activeGamelog, myName) : null
+  const activeMyPlayerNum = activeGamelog
+    ? (activeGamelog.myPlayerNum ?? getMyPlayerNum(activeGamelog, myName))
+    : null
 
   function saveName(name) {
     const trimmed = name.trim()
@@ -1004,10 +1113,10 @@ export function GamelogAnalyzerPage() {
           className="flex-1 min-w-48 text-sm border border-gray-200 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder:text-gray-300"
         />
         {myName && gamelogs.length > 0 && enrichedGames.length === 0 && (
-          <span className="text-xs text-orange-600">Name not found in any gamelogs</span>
+          <span className="text-xs text-orange-600">Name not found — try matching exactly as it appears in gamelogs</span>
         )}
         {enrichedGames.length > 0 && (
-          <span className="text-xs text-emerald-600">{enrichedGames.length}/{gamelogs.length} games matched</span>
+          <span className="text-xs text-emerald-600">{enrichedGames.length}/{gamelogs.length} games tracked</span>
         )}
       </div>
 

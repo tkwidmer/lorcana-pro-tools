@@ -34,7 +34,12 @@ function extractCards(entry) {
   return result
 }
 
-function parseGamelog(id, logs) {
+function parseColors(str) {
+  if (!str) return []
+  return str.split('/').map(c => c.trim().toLowerCase()).filter(Boolean)
+}
+
+function parseGamelog(id, logs, meta = {}) {
   const players = {
     1: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
     2: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
@@ -45,23 +50,32 @@ function parseGamelog(id, logs) {
   let turnCount = 0
   let p1FinalLore = null
   let p2FinalLore = null
+  const nameByPlayer = {}
 
   for (const entry of logs) {
     const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
     const type = entry.type
     const d = entry.data ?? {}
 
-    if (entry.turnNumber > turnCount) turnCount = entry.turnNumber
+    if ((entry.turnNumber ?? 0) > turnCount) turnCount = entry.turnNumber ?? 0
+
+    // Collect player names from any top-level playerName field on log entries
+    if (p && entry.playerName && !nameByPlayer[p]) nameByPlayer[p] = entry.playerName
 
     if (type === 'GAME_START') {
+      // Try every known field layout for player names
       if (d.playerNames) {
         p1Name = d.playerNames['1'] ?? d.playerNames.player1 ?? p1Name
         p2Name = d.playerNames['2'] ?? d.playerNames.player2 ?? p2Name
       }
       if (Array.isArray(d.players)) {
-        p1Name = d.players[0]?.name ?? p1Name
-        p2Name = d.players[1]?.name ?? p2Name
+        p1Name = d.players[0]?.name ?? d.players[0]?.displayName ?? p1Name
+        p2Name = d.players[1]?.name ?? d.players[1]?.displayName ?? p2Name
       }
+      if (d.player1Name) p1Name = d.player1Name
+      if (d.player2Name) p2Name = d.player2Name
+      if (d.player1?.name) p1Name = d.player1.name
+      if (d.player2?.name) p2Name = d.player2.name
     }
 
     if (type === 'GAME_END') {
@@ -105,6 +119,34 @@ function parseGamelog(id, logs) {
     return bTotal - aTotal || a.name.localeCompare(b.name)
   })
 
+  // Apply names collected from top-level playerName fields if GAME_START didn't yield names
+  if (nameByPlayer[1] && p1Name === 'Player 1') p1Name = nameByPlayer[1]
+  if (nameByPlayer[2] && p2Name === 'Player 2') p2Name = nameByPlayer[2]
+
+  // Determine which player is "you" using match history metadata (win/loss + winner field)
+  let myPlayerNum = null
+  if (meta.yourResult && winner !== null) {
+    const winnerNum = winner === 1 || winner === '1' ? 1 : 2
+    myPlayerNum = meta.yourResult === 'win' ? winnerNum : (winnerNum === 1 ? 2 : 1)
+  }
+
+  // Override names from match history API (authoritative source)
+  if (myPlayerNum && meta.opponentName) {
+    if (myPlayerNum === 1) p2Name = meta.opponentName
+    else p1Name = meta.opponentName
+  }
+  if (myPlayerNum && meta.yourDisplayName) {
+    if (myPlayerNum === 1) p1Name = meta.yourDisplayName
+    else p2Name = meta.yourDisplayName
+  }
+
+  const myInkCombo = myPlayerNum
+    ? parseColors(myPlayerNum === 1 ? meta.yourColors : meta.oppColors)
+    : []
+  const oppInkCombo = myPlayerNum
+    ? parseColors(myPlayerNum === 1 ? meta.oppColors : meta.yourColors)
+    : []
+
   return {
     id,
     p1Name,
@@ -114,6 +156,9 @@ function parseGamelog(id, logs) {
     eventCount: logs.length,
     p1FinalLore,
     p2FinalLore,
+    myPlayerNum,
+    myInkCombo,
+    oppInkCombo,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }
@@ -214,7 +259,13 @@ function ImportGamelogButton({ game }) {
       const text = await decompressGzip(buf)
       const logs = JSON.parse(text)
       const id = game.gamelog_id
-      const parsed = parseGamelog(id, logs)
+      const parsed = parseGamelog(id, logs, {
+        yourResult: game.result,
+        opponentName: game.opp_display_name,
+        yourDisplayName: game.your_display_name,
+        yourColors: game.your_deck_colors,
+        oppColors: game.opp_deck_colors,
+      })
       await saveGamelog(id, parsed)
       setStatus('done')
       navigate('/gamelog-analyzer')

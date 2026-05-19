@@ -8,7 +8,12 @@ const QUEUES = [
   { id: 'core-bo3', name: 'Core BO3' },
 ]
 
-function getWinrateColor(winRate) {
+function getWinrateColor(winRate, isMirror = false) {
+  if (isMirror) {
+    if (winRate >= 55) return 'bg-blue-100 border border-blue-300'
+    if (winRate >= 51) return 'bg-blue-50 border border-blue-200'
+    return 'bg-gray-50 border border-gray-200'
+  }
   if (winRate >= 55) return 'bg-green-50 border border-green-200'
   if (winRate >= 51) return 'bg-green-100 border border-green-300'
   if (winRate >= 49) return 'bg-gray-50 border border-gray-200'
@@ -232,13 +237,15 @@ export function WinrateMatrixPage() {
                     <div key={colIdx} className="w-16 h-16 flex-shrink-0 bg-gray-50 border border-gray-100" />
                   )
                 }
+                const isMirror = JSON.stringify(rowPair.colors) === JSON.stringify(colPair.colors)
+                const displayWinRate = isMirror ? matchup.firstPlayerWinRate : matchup.winRate
                 return (
                   <div
                     key={colIdx}
-                    className={`w-16 h-16 flex-shrink-0 rounded p-1 text-center cursor-help hover:opacity-80 transition-opacity flex flex-col items-center justify-center text-xs font-semibold text-gray-900 ${getWinrateColor(matchup.winRate)}`}
-                    title={`${matchup.games.toLocaleString()} games`}
+                    className={`w-16 h-16 flex-shrink-0 rounded p-1 text-center cursor-help hover:opacity-80 transition-opacity flex flex-col items-center justify-center text-xs font-semibold text-gray-900 ${getWinrateColor(displayWinRate, isMirror)}`}
+                    title={isMirror ? `${matchup.games.toLocaleString()} games (1st player advantage)` : `${matchup.games.toLocaleString()} games`}
                   >
-                    <div>{matchup.winRate.toFixed(0)}%</div>
+                    <div>{displayWinRate.toFixed(0)}%</div>
                     <div className="text-xs text-gray-600">{(matchup.games / 1000).toFixed(1)}k</div>
                   </div>
                 )

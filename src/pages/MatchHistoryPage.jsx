@@ -1,7 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getToken, fetchMatchHistory, fetchReplayBuffer, fetchGamelogBuffer } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
+
+const DECK_NAMES_KEY = 'lorcana_deck_names'
+
+function deckFingerprint(decklist) {
+  if (!decklist) return null
+  const cards = Array.isArray(decklist) ? decklist : Object.values(decklist)
+  const key = cards.map(c => (typeof c === 'string' ? c : (c?.name ?? c?.id ?? ''))).filter(Boolean).sort().join('|')
+  if (!key) return null
+  let h = 5381
+  for (let i = 0; i < key.length; i++) {
+    h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0
+  }
+  return String(Math.abs(h))
+}
 
 // --- Inline helpers for gamelog import ---
 
@@ -398,6 +412,62 @@ function GameRow({ game, selected, onToggle }) {
   )
 }
 
+function DeckFilterPills({ deckOptions, deckNames, filterDeck, onSelect, onRename }) {
+  const [editingFp, setEditingFp] = useState(null)
+  const [editValue, setEditValue] = useState('')
+  const inputRef = useRef(null)
+
+  function startEdit(fp, currentName) {
+    setEditingFp(fp)
+    setEditValue(currentName)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  function commitEdit() {
+    if (editingFp) onRename(editingFp, editValue)
+    setEditingFp(null)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">My Deck</span>
+      {deckOptions.map(({ fp, colors }, i) => {
+        const name = deckNames[fp] || null
+        const isActive = filterDeck === fp
+        const label = name ?? (deckOptions.length > 1 ? `Deck ${i + 1}` : 'My Deck')
+        return (
+          <div key={fp} className="flex items-center gap-0.5">
+            <button
+              onClick={() => onSelect(fp)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-colors text-xs ${isActive ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+            >
+              <InkIcons colors={colors} />
+              <span>{label}</span>
+            </button>
+            {editingFp === fp ? (
+              <input
+                ref={inputRef}
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingFp(null) }}
+                className="ml-1 text-xs border border-gray-300 rounded px-1.5 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                placeholder="Deck name…"
+              />
+            ) : (
+              <button
+                onClick={() => startEdit(fp, deckNames[fp] ?? '')}
+                className="ml-0.5 text-gray-300 hover:text-gray-600 transition-colors text-xs"
+                title="Rename deck"
+              >✎</button>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function MatchHistoryPage() {
   const navigate = useNavigate()
   const hasToken = Boolean(getToken())
@@ -411,6 +481,10 @@ export function MatchHistoryPage() {
   const [filterQueue, setFilterQueue] = useState(null)
   const [filterMyColors, setFilterMyColors] = useState(null)
   const [filterOppColors, setFilterOppColors] = useState(null)
+  const [filterDeck, setFilterDeck] = useState(null)
+  const [deckNames, setDeckNames] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(DECK_NAMES_KEY) ?? '{}') } catch { return {} }
+  })
 
   async function load({ cursor = null, append = false } = {}) {
     if (append) setLoadingMore(true)
@@ -517,10 +591,28 @@ export function MatchHistoryPage() {
   const myColorOptions = [...new Set(games.map(g => g.your_deck_colors).filter(Boolean))].sort()
   const oppColorOptions = [...new Set(games.map(g => g.opp_deck_colors).filter(Boolean))].sort()
 
+  // Derive unique decks by fingerprint
+  const deckOptions = []
+  const seenFingerprints = new Set()
+  for (const g of games) {
+    const fp = deckFingerprint(g.your_decklist)
+    if (fp && !seenFingerprints.has(fp)) {
+      seenFingerprints.add(fp)
+      deckOptions.push({ fp, colors: g.your_deck_colors })
+    }
+  }
+
+  function saveDeckName(fp, name) {
+    const updated = { ...deckNames, [fp]: name.trim() }
+    setDeckNames(updated)
+    localStorage.setItem(DECK_NAMES_KEY, JSON.stringify(updated))
+  }
+
   const filteredGames = games.filter(g => {
     if (filterQueue && g.queue_name !== filterQueue) return false
     if (filterMyColors && g.your_deck_colors !== filterMyColors) return false
     if (filterOppColors && g.opp_deck_colors !== filterOppColors) return false
+    if (filterDeck && deckFingerprint(g.your_decklist) !== filterDeck) return false
     return true
   })
 
@@ -609,7 +701,7 @@ export function MatchHistoryPage() {
       )}
 
       {/* Filters */}
-      {games.length > 0 && (queues.length > 1 || myColorOptions.length > 1 || oppColorOptions.length > 1) && (
+      {games.length > 0 && (queues.length > 1 || myColorOptions.length > 1 || oppColorOptions.length > 1 || deckOptions.length > 1) && (
         <div className="mb-4 flex flex-wrap gap-4 items-start">
           {queues.length > 1 && (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -655,9 +747,18 @@ export function MatchHistoryPage() {
               ))}
             </div>
           )}
-          {(filterQueue || filterMyColors || filterOppColors) && (
+          {deckOptions.length > 1 && (
+            <DeckFilterPills
+              deckOptions={deckOptions}
+              deckNames={deckNames}
+              filterDeck={filterDeck}
+              onSelect={fp => setFilterDeck(prev => prev === fp ? null : fp)}
+              onRename={saveDeckName}
+            />
+          )}
+          {(filterQueue || filterMyColors || filterOppColors || filterDeck) && (
             <button
-              onClick={() => { setFilterQueue(null); setFilterMyColors(null); setFilterOppColors(null) }}
+              onClick={() => { setFilterQueue(null); setFilterMyColors(null); setFilterOppColors(null); setFilterDeck(null) }}
               className="text-xs text-gray-400 hover:text-gray-700 transition-colors self-center"
             >
               Clear filters · {filteredGames.length}/{games.length} shown

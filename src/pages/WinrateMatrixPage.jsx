@@ -8,6 +8,17 @@ const QUEUES = [
   { id: 'core-bo3', name: 'Core BO3' },
 ]
 
+const RANKS = [
+  { id: 'Iconic', label: 'Iconic' },
+  { id: 'Enchanted', label: 'Enchanted' },
+  { id: 'Legendary', label: 'Legendary' },
+  { id: 'Epic', label: 'Epic' },
+  { id: 'Super Rare', label: 'Super Rare' },
+  { id: 'Rare', label: 'Rare' },
+  { id: 'Uncommon', label: 'Uncommon' },
+  { id: 'Common', label: 'Common' },
+]
+
 function getWinrateColor(winRate, isMirror = false) {
   if (isMirror) {
     if (winRate >= 60) return 'bg-blue-300 border border-blue-500'
@@ -48,6 +59,7 @@ function ColorPairIcons({ colors, size = 24 }) {
 export function WinrateMatrixPage() {
   const [selectedQueue, setSelectedQueue] = useState('infinity-bo1')
   const [selectedPeriod, setSelectedPeriod] = useState('all_time')
+  const [selectedRanks, setSelectedRanks] = useState([])
   const [availableWeeks, setAvailableWeeks] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -58,7 +70,11 @@ export function WinrateMatrixPage() {
       setLoading(true)
       setError(null)
       try {
-        const data = await fetchStats({ queue: selectedQueue, period: selectedPeriod })
+        const data = await fetchStats({
+          queue: selectedQueue,
+          period: selectedPeriod,
+          ranks: selectedRanks
+        })
         setStats(data)
         if (data.meta?.availableWeeks) {
           setAvailableWeeks(data.meta.availableWeeks)
@@ -71,7 +87,7 @@ export function WinrateMatrixPage() {
     }
 
     loadStats()
-  }, [selectedQueue, selectedPeriod])
+  }, [selectedQueue, selectedPeriod, selectedRanks])
 
   if (loading) {
     return (
@@ -203,6 +219,41 @@ export function WinrateMatrixPage() {
                 </button>
               )
             })}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-gray-900 mb-3">Rank</label>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setSelectedRanks([])}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedRanks.length === 0
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              All Ranks
+            </button>
+            {RANKS.map(rank => (
+              <button
+                key={rank.id}
+                onClick={() => {
+                  setSelectedRanks(prev =>
+                    prev.includes(rank.id)
+                      ? prev.filter(r => r !== rank.id)
+                      : [...prev, rank.id]
+                  )
+                }}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  selectedRanks.includes(rank.id)
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {rank.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>

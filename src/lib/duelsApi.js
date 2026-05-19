@@ -61,11 +61,16 @@ export async function fetchReplayBuffer(replayId) {
   return res.arrayBuffer()
 }
 
-export async function fetchStats({ queue, period }) {
+export async function fetchStats({ queue, period, ranks }) {
   if (!queue) throw new Error('Queue is required')
   if (!period) throw new Error('Period is required')
 
-  const res = await fetch(`/api/duels-stats?queue=${encodeURIComponent(queue)}&period=${encodeURIComponent(period)}`)
+  const params = new URLSearchParams({ queue, period })
+  if (ranks && ranks.length > 0) {
+    params.set('ranks', ranks.join(','))
+  }
+
+  const res = await fetch(`/api/duels-stats?${params}`)
 
   if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status}`)
 

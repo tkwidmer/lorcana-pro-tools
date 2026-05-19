@@ -242,11 +242,17 @@ export function WinrateMatrixPage() {
                 return (
                   <div
                     key={colIdx}
-                    className={`w-16 h-16 flex-shrink-0 rounded p-1 text-center cursor-help hover:opacity-80 transition-opacity flex flex-col items-center justify-center text-xs font-semibold text-gray-900 ${getWinrateColor(displayWinRate, isMirror)}`}
-                    title={isMirror ? `${matchup.games.toLocaleString()} games (1st player advantage)` : `${matchup.games.toLocaleString()} games`}
+                    className="w-16 h-16 flex-shrink-0 relative group"
                   >
-                    <div>{displayWinRate.toFixed(0)}%</div>
-                    <div className="text-xs text-gray-600">{(matchup.games / 1000).toFixed(1)}k</div>
+                    <div
+                      className={`w-16 h-16 rounded p-1 text-center flex flex-col items-center justify-center text-xs font-semibold text-gray-900 ${getWinrateColor(displayWinRate, isMirror)}`}
+                    >
+                      <div>{displayWinRate.toFixed(0)}%</div>
+                      <div className="text-xs text-gray-600">{(matchup.games / 1000).toFixed(1)}k</div>
+                    </div>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                      {matchup.games.toLocaleString()} games{isMirror ? ' (1st player)' : ''}
+                    </div>
                   </div>
                 )
               })}

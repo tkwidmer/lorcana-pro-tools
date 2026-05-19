@@ -98,10 +98,8 @@ export function WinrateMatrixPage() {
   const matchups = stats.matchups || []
   const colorPairs = stats.colorPairs || []
 
-  // Build a sorted list of unique color pairs by play rate (not limited)
-  const sortedColorPairs = [...colorPairs]
-    .filter(cp => cp.games >= 20) // Minimum sample size
-    .sort((a, b) => b.playRate - a.playRate) // Sort by play rate, not games
+  // Filter to only 2-color pairs (exclude single-color edge cases)
+  const twoColorPairs = colorPairs.filter(cp => cp.colors.length === 2)
 
   // Create a map for quick matchup lookup (both directions)
   const matchupMap = new Map()
@@ -125,15 +123,19 @@ export function WinrateMatrixPage() {
     return matchupMap.get(key)
   }
 
-  // Get all unique color pairs that appear in matchups (for complete matrix)
+  // Get all unique 2-color pairs that appear in matchups
   const colorPairSet = new Set()
   matchups.forEach(m => {
-    colorPairSet.add(JSON.stringify(m.colorsA))
-    colorPairSet.add(JSON.stringify(m.colorsB))
+    if (Array.isArray(m.colorsA) && m.colorsA.length === 2) {
+      colorPairSet.add(JSON.stringify(m.colorsA))
+    }
+    if (Array.isArray(m.colorsB) && m.colorsB.length === 2) {
+      colorPairSet.add(JSON.stringify(m.colorsB))
+    }
   })
 
-  // Build final sorted list of color pairs that have matchup data
-  const matrixColorPairs = [...colorPairs]
+  // Build final sorted list of 2-color pairs that have matchup data
+  const matrixColorPairs = [...twoColorPairs]
     .filter(cp => colorPairSet.has(JSON.stringify(cp.colors)))
     .sort((a, b) => b.playRate - a.playRate)
 

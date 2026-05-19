@@ -1320,23 +1320,28 @@ export function GamelogAnalyzerPage() {
       </div>
 
       {/* Player name setting */}
-      <div className="mb-5 flex items-center gap-3 flex-wrap">
-        <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Your player name:</label>
-        <input
-          type="text"
-          value={nameInput}
-          onChange={e => setNameInput(e.target.value)}
-          onBlur={() => saveName(nameInput)}
-          onKeyDown={e => { if (e.key === 'Enter') { saveName(nameInput); e.currentTarget.blur() } }}
-          placeholder="Enter your name to enable win rate stats"
-          className="flex-1 min-w-48 text-sm border border-gray-200 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder:text-gray-300"
-        />
-        {myName && gamelogs.length > 0 && enrichedGames.length === 0 && (
-          <span className="text-xs text-orange-600">Name not found — try matching exactly as it appears in gamelogs</span>
-        )}
-        {enrichedGames.length > 0 && (
-          <span className="text-xs text-emerald-600">{enrichedGames.length}/{gamelogs.length} games tracked</span>
-        )}
+      <div className="mb-5">
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Your player name:</label>
+          <input
+            type="text"
+            value={nameInput}
+            onChange={e => setNameInput(e.target.value)}
+            onBlur={() => saveName(nameInput)}
+            onKeyDown={e => { if (e.key === 'Enter') { saveName(nameInput); e.currentTarget.blur() } }}
+            placeholder="e.g. Teagan"
+            className="flex-1 min-w-48 text-sm border border-gray-200 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder:text-gray-300"
+          />
+          {myName && gamelogs.length > 0 && enrichedGames.length === 0 && (
+            <span className="text-xs text-orange-600">Name not found — try matching exactly as it appears in gamelogs</span>
+          )}
+          {enrichedGames.length > 0 && (
+            <span className="text-xs text-emerald-600">{enrichedGames.length}/{gamelogs.length} games tracked</span>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mt-1.5">
+          Only needed for <span className="font-medium">.logs.gz files imported directly</span> — games imported from Match History already know which side is you.
+        </p>
       </div>
 
       {/* Drop zone */}

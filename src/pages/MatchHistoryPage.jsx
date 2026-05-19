@@ -406,6 +406,15 @@ function GameRow({ game, selected, onToggle }) {
   )
 }
 
+function FilterRow({ label, children }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">{label}</span>
+      {children}
+    </div>
+  )
+}
+
 function DeckFilterPills({ deckOptions, deckNames, filterDeck, onSelect, onRename }) {
   const [editingFp, setEditingFp] = useState(null)
   const [editValue, setEditValue] = useState('')
@@ -423,8 +432,7 @@ function DeckFilterPills({ deckOptions, deckNames, filterDeck, onSelect, onRenam
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">My Deck</span>
+    <FilterRow label="My Deck">
       {deckOptions.map(({ fp, colors }, i) => {
         const name = deckNames[fp] || null
         const isActive = filterDeck === fp
@@ -458,7 +466,7 @@ function DeckFilterPills({ deckOptions, deckNames, filterDeck, onSelect, onRenam
           </div>
         )
       })}
-    </div>
+    </FilterRow>
   )
 }
 
@@ -728,10 +736,8 @@ export function MatchHistoryPage() {
 
       {/* Filters */}
       {games.length > 0 && (
-        <div className="mb-4 flex flex-col gap-3">
-          {/* Date filter — always shown when games are loaded */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Date</span>
+        <div className="mb-4 flex flex-col gap-2.5">
+          <FilterRow label="Date">
             {[
               { key: 'today', label: 'Today' },
               { key: '7d', label: 'Last 7 days' },
@@ -748,7 +754,7 @@ export function MatchHistoryPage() {
               </button>
             ))}
             {filterDatePreset === 'custom' && (
-              <span className="flex items-center gap-1.5 ml-1">
+              <>
                 <input
                   type="date"
                   value={filterDateFrom}
@@ -762,13 +768,11 @@ export function MatchHistoryPage() {
                   onChange={e => setFilterDateTo(e.target.value)}
                   className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-400"
                 />
-              </span>
+              </>
             )}
-          </div>
-          <div className="flex flex-wrap gap-4 items-start">
+          </FilterRow>
           {queues.length > 1 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Queue</span>
+            <FilterRow label="Queue">
               {queues.map(q => (
                 <button
                   key={q}
@@ -778,11 +782,10 @@ export function MatchHistoryPage() {
                   {q}
                 </button>
               ))}
-            </div>
+            </FilterRow>
           )}
           {myColorOptions.length > 1 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">My Colors</span>
+            <FilterRow label="My Colors">
               {myColorOptions.map(colors => (
                 <button
                   key={colors}
@@ -793,11 +796,10 @@ export function MatchHistoryPage() {
                   <InkIcons colors={colors} />
                 </button>
               ))}
-            </div>
+            </FilterRow>
           )}
           {oppColorOptions.length > 1 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Opp Colors</span>
+            <FilterRow label="Opp Colors">
               {oppColorOptions.map(colors => (
                 <button
                   key={colors}
@@ -808,7 +810,7 @@ export function MatchHistoryPage() {
                   <InkIcons colors={colors} />
                 </button>
               ))}
-            </div>
+            </FilterRow>
           )}
           {deckOptions.length > 1 && (
             <DeckFilterPills
@@ -820,14 +822,16 @@ export function MatchHistoryPage() {
             />
           )}
           {(filterQueue || filterMyColors || filterOppColors || filterDeck || filterDatePreset) && (
-            <button
-              onClick={() => { setFilterQueue(null); setFilterMyColors(null); setFilterOppColors(null); setFilterDeck(null); setFilterDatePreset(null); setFilterDateFrom(''); setFilterDateTo('') }}
-              className="text-xs text-gray-400 hover:text-gray-700 transition-colors self-center"
-            >
-              Clear filters · {filteredGames.length}/{games.length} shown
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setFilterQueue(null); setFilterMyColors(null); setFilterOppColors(null); setFilterDeck(null); setFilterDatePreset(null); setFilterDateFrom(''); setFilterDateTo('') }}
+                className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                Clear filters
+              </button>
+              <span className="text-xs text-gray-400">· {filteredGames.length}/{games.length} shown</span>
+            </div>
           )}
-          </div>
         </div>
       )}
 

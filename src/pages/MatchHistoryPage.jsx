@@ -335,10 +335,22 @@ function ImportGamelogButton({ game }) {
   )
 }
 
-function GameRow({ game }) {
+function GameRow({ game, selected, onToggle }) {
   const isSealed = game.queue_id?.toLowerCase().includes('sealed') || game.queue_name?.toLowerCase().includes('sealed')
+  const id = game.game_id
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+    <tr
+      className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${selected ? 'bg-blue-50 hover:bg-blue-50' : ''}`}
+      onClick={() => onToggle(id)}
+    >
+      <td className="py-3 pl-3 pr-1" onClick={e => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggle(id)}
+          className="rounded border-gray-300 text-gray-900 focus:ring-gray-400 cursor-pointer"
+        />
+      </td>
       <td className="py-3 px-3 text-sm text-gray-600 whitespace-nowrap">
         {formatDate(game.started_at)}
       </td>
@@ -369,7 +381,7 @@ function GameRow({ game }) {
       <td className="py-3 px-3 text-sm hidden sm:table-cell text-center">
         <MmrDelta delta={game.mmr_delta} />
       </td>
-      <td className="py-3 px-3 hidden sm:table-cell">
+      <td className="py-3 px-3 hidden sm:table-cell" onClick={e => e.stopPropagation()}>
         <div className="flex flex-col gap-1">
           <ImportReplayButton game={game} />
           <ImportGamelogButton game={game} />
@@ -380,18 +392,20 @@ function GameRow({ game }) {
 }
 
 export function MatchHistoryPage() {
+  const navigate = useNavigate()
   const hasToken = Boolean(getToken())
   const [games, setGames] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
+  const [selected, setSelected] = useState(new Set())
+  const [bulkOp, setBulkOp] = useState(null) // null | { done, total, errors, label }
 
   async function load({ cursor = null, append = false } = {}) {
     if (append) setLoadingMore(true)
     else setLoading(true)
     setError(null)
-
     try {
       const data = await fetchMatchHistory({ cursor: cursor ?? undefined, limit: 100 })
       setGames(prev => append ? [...prev, ...(data.games ?? [])] : (data.games ?? []))
@@ -407,6 +421,91 @@ export function MatchHistoryPage() {
   useEffect(() => {
     if (hasToken) load()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function toggleSelect(id) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === games.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(games.map(g => g.game_id)))
+    }
+  }
+
+  async function handleBulkImportGamelogs() {
+    const toImport = games.filter(g => selected.has(g.game_id) && g.gamelog_id)
+    if (!toImport.length) return
+    const storedMyName = localStorage.getItem('lorcana_my_name') ?? ''
+    setBulkOp({ done: 0, total: toImport.length, errors: 0, label: 'Importing gamelogs' })
+    let done = 0, errors = 0
+    for (const game of toImport) {
+      try {
+        const buf = await fetchGamelogBuffer(game.gamelog_id)
+        const text = await decompressGzip(buf)
+        const logs = JSON.parse(text)
+        const parsed = parseGamelog(game.gamelog_id, logs, {
+          yourResult: game.result,
+          yourPlayerNum: game.your_player,
+          opponentName: game.opp_display_name,
+          yourDisplayName: game.your_display_name || storedMyName || undefined,
+          yourColors: game.your_deck_colors,
+          oppColors: game.opp_deck_colors,
+          wentFirst: game.went_first,
+          endReason: game.end_reason,
+          yourDecklist: game.your_decklist,
+          oppDecklist: game.opp_decklist,
+        })
+        await saveGamelog(game.gamelog_id, parsed)
+        done++
+      } catch {
+        errors++
+      }
+      setBulkOp({ done, total: toImport.length, errors, label: 'Importing gamelogs' })
+    }
+    setSelected(new Set())
+    if (errors === 0) {
+      navigate('/gamelog-analyzer')
+    } else {
+      setTimeout(() => setBulkOp(null), 4000)
+    }
+  }
+
+  async function handleBulkImportReplays() {
+    const toImport = games.filter(g => selected.has(g.game_id) && g.replay_id)
+    if (!toImport.length) return
+    setBulkOp({ done: 0, total: toImport.length, errors: 0, label: 'Importing replays' })
+    let done = 0, errors = 0
+    for (const game of toImport) {
+      try {
+        const buf = await fetchReplayBuffer(game.replay_id)
+        const bytes = new Uint8Array(buf)
+        const binary = Array.from(bytes).map(b => String.fromCharCode(b)).join('')
+        const base64 = btoa(binary)
+        // Queue replays in sessionStorage as an array for the replay analyzer to process
+        const existing = JSON.parse(sessionStorage.getItem('lorcana_replay_queue') ?? '[]')
+        existing.push({ base64, filename: game.replay_filename ?? `${game.replay_id}.replay.gz` })
+        sessionStorage.setItem('lorcana_replay_queue', JSON.stringify(existing))
+        done++
+      } catch {
+        errors++
+      }
+      setBulkOp({ done, total: toImport.length, errors, label: 'Importing replays' })
+    }
+    setSelected(new Set())
+    navigate('/replay-analyzer')
+  }
+
+  const selectedGames = games.filter(g => selected.has(g.game_id))
+  const hasGamelogs = selectedGames.some(g => g.gamelog_id)
+  const hasReplays = selectedGames.some(g => g.replay_id)
+  const allSelected = games.length > 0 && selected.size === games.length
+  const someSelected = selected.size > 0 && !allSelected
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
@@ -439,11 +538,67 @@ export function MatchHistoryPage() {
         <p className="text-sm text-gray-500">No games found.</p>
       )}
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && !bulkOp && (
+        <div className="flex items-center gap-3 mb-4 px-3 py-2.5 bg-gray-900 text-white rounded-lg text-sm">
+          <span className="font-medium">{selected.size} selected</span>
+          <span className="text-gray-400">·</span>
+          <div className="flex items-center gap-2 ml-auto">
+            {hasGamelogs && (
+              <button
+                onClick={handleBulkImportGamelogs}
+                className="px-3 py-1 bg-white text-gray-900 rounded text-xs font-semibold hover:bg-gray-100 transition-colors"
+              >
+                Import Gamelogs ({selectedGames.filter(g => g.gamelog_id).length})
+              </button>
+            )}
+            {hasReplays && (
+              <button
+                onClick={handleBulkImportReplays}
+                className="px-3 py-1 bg-white text-gray-900 rounded text-xs font-semibold hover:bg-gray-100 transition-colors"
+              >
+                Import Replays ({selectedGames.filter(g => g.replay_id).length})
+              </button>
+            )}
+            <button
+              onClick={() => setSelected(new Set())}
+              className="px-3 py-1 text-gray-300 hover:text-white text-xs transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk progress */}
+      {bulkOp && (
+        <div className="flex items-center gap-3 mb-4 px-3 py-2.5 bg-gray-900 text-white rounded-lg text-sm">
+          <span className="font-medium">{bulkOp.label}…</span>
+          <span className="text-gray-300">{bulkOp.done}/{bulkOp.total}</span>
+          {bulkOp.errors > 0 && <span className="text-red-400">{bulkOp.errors} failed</span>}
+          <div className="ml-auto h-1.5 w-32 bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-white rounded-full transition-all"
+              style={{ width: `${(bulkOp.done / bulkOp.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {games.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-gray-200">
+                <th className="py-2 pl-3 pr-1">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={el => { if (el) el.indeterminate = someSelected }}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300 text-gray-900 focus:ring-gray-400 cursor-pointer"
+                  />
+                </th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Queue</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Result</th>
@@ -458,7 +613,12 @@ export function MatchHistoryPage() {
             </thead>
             <tbody>
               {games.map((game, i) => (
-                <GameRow key={game.game_id ?? i} game={game} />
+                <GameRow
+                  key={game.game_id ?? i}
+                  game={game}
+                  selected={selected.has(game.game_id)}
+                  onToggle={toggleSelect}
+                />
               ))}
             </tbody>
           </table>

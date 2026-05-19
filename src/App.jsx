@@ -15,6 +15,8 @@ import { MatchHistoryPage } from './pages/MatchHistoryPage'
 import { GamelogViewerPage } from './pages/GamelogViewerPage'
 import { GamelogAnalyzerPage } from './pages/GamelogAnalyzerPage'
 import { WinrateMatrixPage } from './pages/WinrateMatrixPage'
+import { LoginPage } from './pages/LoginPage'
+import { AuthCallbackPage } from './pages/AuthCallbackPage'
 
 export default function App() {
   return (
@@ -22,6 +24,8 @@ export default function App() {
       <Nav />
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
         <Route path="/cut-calculator" element={<TournamentCutPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />

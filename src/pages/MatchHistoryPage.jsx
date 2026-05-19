@@ -8,7 +8,12 @@ const DECK_NAMES_KEY = 'lorcana_deck_names'
 function deckFingerprint(decklist) {
   if (!decklist) return null
   const cards = Array.isArray(decklist) ? decklist : Object.values(decklist)
-  const key = cards.map(c => (typeof c === 'string' ? c : (c?.name ?? c?.id ?? ''))).filter(Boolean).sort().join('|')
+  // Each entry is { cardId, count } — include count so a different card quantity = different deck
+  const key = cards
+    .map(c => typeof c === 'string' ? c : `${c?.cardId ?? c?.name ?? c?.id ?? ''}x${c?.count ?? 1}`)
+    .filter(s => s && s !== 'x1')
+    .sort()
+    .join('|')
   if (!key) return null
   let h = 5381
   for (let i = 0; i < key.length; i++) {
@@ -498,7 +503,6 @@ export function MatchHistoryPage() {
     try {
       const data = await fetchMatchHistory({ cursor: cursor ?? undefined, limit: 100 })
       const incoming = data.games ?? []
-      if (incoming.length > 0) console.log('[MatchHistory] sample game keys:', Object.keys(incoming[0]), '\nyour_decklist sample:', incoming[0].your_decklist)
       setGames(prev => append ? [...prev, ...incoming] : incoming)
       setNextCursor(data.next_cursor ?? null)
     } catch (err) {
@@ -634,23 +638,25 @@ export function MatchHistoryPage() {
   const oppColorOptions = [...new Set(afterMyColors.map(g => g.opp_deck_colors).filter(Boolean))].sort()
   const afterOppColors = afterMyColors.filter(g => !filterOppColors || g.opp_deck_colors === filterOppColors)
 
+  const getDeckKey = (g) => g.your_deck_id ?? deckFingerprint(g.your_decklist)
+
   const deckOptions = []
-  const seenFingerprints = new Set()
+  const seenDeckKeys = new Set()
   for (const g of afterOppColors) {
-    const fp = deckFingerprint(g.your_decklist)
-    if (fp && !seenFingerprints.has(fp)) {
-      seenFingerprints.add(fp)
-      deckOptions.push({ fp, colors: g.your_deck_colors })
+    const key = getDeckKey(g)
+    if (key && !seenDeckKeys.has(key)) {
+      seenDeckKeys.add(key)
+      deckOptions.push({ fp: key, colors: g.your_deck_colors })
     }
   }
 
-  const filteredGames = afterOppColors.filter(g => !filterDeck || deckFingerprint(g.your_decklist) === filterDeck)
+  const filteredGames = afterOppColors.filter(g => !filterDeck || getDeckKey(g) === filterDeck)
 
   // Auto-clear downstream filters that are no longer valid
   useEffect(() => { if (filterQueue && !queues.includes(filterQueue)) setFilterQueue(null) }, [queues, filterQueue])
   useEffect(() => { if (filterMyColors && !myColorOptions.includes(filterMyColors)) setFilterMyColors(null) }, [myColorOptions, filterMyColors])
   useEffect(() => { if (filterOppColors && !oppColorOptions.includes(filterOppColors)) setFilterOppColors(null) }, [oppColorOptions, filterOppColors])
-  useEffect(() => { if (filterDeck && !seenFingerprints.has(filterDeck)) setFilterDeck(null) }, [filterDeck, seenFingerprints])
+  useEffect(() => { if (filterDeck && !seenDeckKeys.has(filterDeck)) setFilterDeck(null) }, [filterDeck, seenDeckKeys])
 
   const selectedGames = filteredGames.filter(g => selected.has(g.game_id))
   const hasGamelogs = selectedGames.some(g => g.gamelog_id)

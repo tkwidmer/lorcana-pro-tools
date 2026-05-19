@@ -75,6 +75,11 @@ function parseGamelog(id, logs, meta = {}) {
     return pData.cards[name]
   }
 
+  const ON_PLAY_DRAWS = { '10-66': 2 } // Junior Woodchuck Guidebook
+  const lastPlayedByPlayer = { 1: null, 2: null }
+  let pendingDrawSource = null
+  let pendingDrawCount = 0
+
   for (const entry of logs) {
     const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
     const type = entry.type
@@ -119,11 +124,31 @@ function parseGamelog(id, logs, meta = {}) {
     for (const card of cardRefs) {
       if (!card.name) continue
       const c = ensureCard(p, card.name, card.id)
-      if (type === 'CARD_DRAWN') c.drawn++
-      else if (type === 'CARD_PLAYED') c.played++
-      else if (type === 'CARD_INKED') c.inked++
-      else if (type === 'CARD_DISCARDED') c.discarded++
-      else if (type === 'CARD_DESTROYED') c.destroyed++
+      if (type === 'CARD_DRAWN') {
+        c.drawn++
+        if (pendingDrawCount > 0 && pendingDrawSource && pendingDrawSource.player === p) {
+          ensureCard(p, pendingDrawSource.name, pendingDrawSource.id).effectDraws++
+          pendingDrawCount--
+          if (pendingDrawCount <= 0) { pendingDrawSource = null; pendingDrawCount = 0 }
+        }
+      } else if (type === 'CARD_PLAYED') {
+        c.played++
+        lastPlayedByPlayer[p] = { name: card.name, id: card.id }
+        const drawCount = ON_PLAY_DRAWS[card.id]
+        if (drawCount) { pendingDrawSource = { ...card, player: p }; pendingDrawCount = drawCount }
+      } else if (type === 'CARD_INKED') {
+        c.inked++
+      } else if (type === 'CARD_DISCARDED') {
+        c.discarded++
+      } else if (type === 'CARD_DESTROYED') {
+        c.destroyed++
+      }
+    }
+
+    if (type === 'CARD_PUT_INTO_INKWELL' && (d.fromZone === 'field' || d.fromZone === 'board')) {
+      const causedBy = p === 1 ? 2 : 1
+      const src = lastPlayedByPlayer[causedBy]
+      if (src) ensureCard(causedBy, src.name, src.id).effectRemovals++
     }
 
     if (type === 'CARD_QUEST' && d.cardName) {
@@ -158,14 +183,24 @@ function parseGamelog(id, logs, meta = {}) {
     if (type === 'ABILITY_TRIGGERED' && d.abilitySourceCardName) {
       const c = ensureCard(p, d.abilitySourceCardName, d.abilitySourceCardId)
       for (const ek of (d.effectDescriptionKeys ?? [])) {
-        if (ek.key === 'drawsACard' || ek.key === 'eachPlayerDrawsToHandSize') c.effectDraws++
-        else if (ek.key === 'drawsCards') c.effectDraws += (ek.params?.count ?? 1)
-        else if (ek.key === 'discardedCard') c.oppForcedDiscards++
-        else if (ek.key === 'opponentDiscardsCards') c.oppForcedDiscards += (ek.params?.count ?? 1)
-        else if (ek.key === 'grantsAnAdditionalInk') c.extraInks++
-        else if (ek.key === 'movesDamageDetailedBanished' || ek.key === 'banishesTarget') c.effectRemovals++
-        else if (ek.key === 'exertsCharacter') c.exerts++
-        else if (ek.key === 'returnedFromDiscard') c.cardsRecovered += (d.returnedCardRefs?.length ?? 1)
+        const k = ek.key ?? ''
+        const count = ek.params?.count ?? 1
+        if (k === 'drawsACard' || k === 'eachPlayerDrawsToHandSize' || k === 'youMayDraw' || k === 'drawACard')
+          c.effectDraws++
+        else if (k === 'drawsCards' || k === 'youMayDrawCards' || k === 'drawCards')
+          c.effectDraws += count
+        else if (k === 'discardedCard' || k === 'opponentDiscardsACard')
+          c.oppForcedDiscards++
+        else if (k === 'opponentDiscardsCards')
+          c.oppForcedDiscards += count
+        else if (k === 'grantsAnAdditionalInk' || k === 'additionalInk')
+          c.extraInks++
+        else if (k === 'movesDamageDetailedBanished' || k === 'banishesTarget' || k === 'banishTarget' || k === 'banishesCharacter')
+          c.effectRemovals++
+        else if (k === 'exertsCharacter' || k === 'exertTarget' || k === 'exertsTarget')
+          c.exerts++
+        else if (k === 'returnedFromDiscard' || k === 'returnFromDiscard')
+          c.cardsRecovered += (d.returnedCardRefs?.length ?? count)
       }
     }
   }

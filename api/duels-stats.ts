@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { queue, period } = req.query
+  const { queue, period, ranks } = req.query
 
   if (!queue || typeof queue !== 'string') {
     return res.status(400).json({ error: 'Missing queue parameter' })
@@ -11,7 +11,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const url = `https://duels.ink/api/stats/meta?queue=${encodeURIComponent(queue)}&period=${encodeURIComponent(period)}&season=current`
+    let url = `https://duels.ink/api/stats/meta?queue=${encodeURIComponent(queue)}&period=${encodeURIComponent(period)}&season=current`
+    if (ranks && typeof ranks === 'string') {
+      url += `&ranks=${encodeURIComponent(ranks)}`
+    }
     const upstreamRes = await fetch(url)
 
     if (!upstreamRes.ok) {

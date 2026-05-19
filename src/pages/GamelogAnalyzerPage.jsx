@@ -38,8 +38,8 @@ function parseGamelog(id, logs, meta = {}) {
   let winner = null, turnCount = 0
   let victoryReason = null, concededBy = null
   let wentFirstFromLog = null
-  // Per-player lore tracked from CARD_QUEST.newLoreTotal (more reliable than GAME_END)
   const loreByPlayer = { 1: 0, 2: 0 }
+  const loreEvents = [] // {turn, player, total} for lore race chart
   const challenges = []
 
   const ensureCard = (p, name, cardId) => {
@@ -112,8 +112,10 @@ function parseGamelog(id, logs, meta = {}) {
     if (type === 'CARD_QUEST' && d.cardName) {
       const gain = d.loreGained ?? 0
       ensureCard(p, d.cardName, d.cardId).loreGained += gain
-      // newLoreTotal is the authoritative running lore for this player
-      if (d.newLoreTotal != null) loreByPlayer[p] = d.newLoreTotal
+      if (d.newLoreTotal != null) {
+        loreByPlayer[p] = d.newLoreTotal
+        loreEvents.push({ turn: entry.turnNumber ?? 0, player: p, total: d.newLoreTotal })
+      }
     }
 
     // CARD_ATTACK comes in two events per challenge: the first has names only,
@@ -206,6 +208,7 @@ function parseGamelog(id, logs, meta = {}) {
     myPlayerNum,
     myInkCombo,
     oppInkCombo,
+    loreEvents,
     yourDecklist: meta.yourDecklist ?? null,
     oppDecklist: meta.oppDecklist ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },
@@ -266,6 +269,7 @@ function enrichGame(gamelog, myName) {
     won,
     wentFirst: iWentFirst,
     victoryReason: gamelog.victoryReason ?? null,
+    loreEvents: gamelog.loreEvents ?? [],
     myCards,
     challenges,
     myInkCombo: gamelog.myInkCombo ?? [],
@@ -980,6 +984,146 @@ function PlayerSection({ name, data, isWinner, finalLore }) {
   )
 }
 
+function LoreChart({ loreEvents, turnCount, p1Name, p2Name }) {
+  if (!loreEvents?.length) return null
+
+  // Build per-turn lore totals for each player
+  const maxTurn = Math.max(turnCount, ...loreEvents.map(e => e.turn))
+  const p1Lore = new Array(maxTurn + 1).fill(0)
+  const p2Lore = new Array(maxTurn + 1).fill(0)
+
+  // Fill forward: each turn holds the highest lore total reached by that turn
+  for (const ev of loreEvents) {
+    if (ev.player === 1) p1Lore[ev.turn] = ev.total
+    else p2Lore[ev.turn] = ev.total
+  }
+  for (let t = 1; t <= maxTurn; t++) {
+    if (p1Lore[t] === 0 && p1Lore[t - 1] > 0) p1Lore[t] = p1Lore[t - 1]
+    if (p2Lore[t] === 0 && p2Lore[t - 1] > 0) p2Lore[t] = p2Lore[t - 1]
+  }
+
+  const maxLore = Math.max(20, ...p1Lore, ...p2Lore)
+  const W = 480, H = 120, PAD = { top: 8, right: 8, bottom: 20, left: 28 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+  const turns = Array.from({ length: maxTurn + 1 }, (_, i) => i)
+
+  const x = (t) => PAD.left + (t / maxTurn) * chartW
+  const y = (v) => PAD.top + chartH - (v / maxLore) * chartH
+
+  const pathFor = (arr) => arr.map((v, t) => `${t === 0 ? 'M' : 'L'}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+
+  // Win threshold line at 20
+  const winY = y(20)
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Lore Race</h3>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 140 }}>
+        {/* Grid lines */}
+        {[0, 5, 10, 15, 20].map(v => (
+          <g key={v}>
+            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} stroke="#e5e7eb" strokeWidth="0.5" />
+            <text x={PAD.left - 4} y={y(v) + 3.5} textAnchor="end" fontSize="7" fill="#9ca3af">{v}</text>
+          </g>
+        ))}
+        {/* Win line */}
+        <line x1={PAD.left} x2={W - PAD.right} y1={winY} y2={winY} stroke="#10b981" strokeWidth="1" strokeDasharray="3,3" opacity="0.6" />
+
+        {/* Lore lines */}
+        <path d={pathFor(p2Lore)} fill="none" stroke="#f87171" strokeWidth="2" strokeLinejoin="round" />
+        <path d={pathFor(p1Lore)} fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinejoin="round" />
+
+        {/* Turn labels */}
+        {turns.filter(t => t > 0 && t % Math.max(1, Math.floor(maxTurn / 8)) === 0).map(t => (
+          <text key={t} x={x(t)} y={H - 4} textAnchor="middle" fontSize="7" fill="#9ca3af">{t}</text>
+        ))}
+        <text x={PAD.left + chartW / 2} y={H - 4} textAnchor="middle" fontSize="7" fill="#d1d5db">turn</text>
+      </svg>
+      <div className="flex items-center gap-4 mt-1">
+        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-blue-400" />{p1Name}</span>
+        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-red-400" />{p2Name}</span>
+        <span className="flex items-center gap-1 text-xs text-gray-400 ml-auto"><span className="inline-block w-3 h-0.5 border-t border-dashed border-emerald-500" />win (20)</span>
+      </div>
+    </div>
+  )
+}
+
+function GameChallengeLog({ challenges, p1Name, p2Name, myPlayerNum }) {
+  if (!challenges?.length) return null
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Challenges ({challenges.length})</h3>
+      <div className="space-y-0.5 text-xs font-mono">
+        {challenges.map((c, i) => {
+          const attackerPlayer = c.player === 1 ? p1Name : p2Name
+          const isMe = c.player === myPlayerNum
+          return (
+            <div key={i} className={`flex items-center gap-2 py-1 border-b border-gray-100 last:border-0 ${isMe ? '' : 'opacity-60'}`}>
+              <span className="text-gray-400 w-12 flex-shrink-0">T{c.turn} {isMe ? '▶' : '◀'}</span>
+              <span className="font-medium text-gray-800 truncate flex-1">{c.attackerName ?? '?'}</span>
+              <span className="text-gray-400">→</span>
+              <span className="text-gray-700 truncate flex-1">{c.defenderName ?? '?'}</span>
+              <span className={`flex-shrink-0 font-semibold ${c.defenderBanished ? 'text-emerald-600' : 'text-gray-400'}`}>
+                {c.defenderBanished ? 'kill' : 'miss'}
+              </span>
+              <span className={`flex-shrink-0 ${c.attackerBanished ? 'text-red-400' : 'text-gray-400'}`}>
+                {c.attackerBanished ? '✕' : '✓'}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1">▶ = your challenge · ▶ kill = defender banished · ✕ = attacker banished</p>
+    </div>
+  )
+}
+
+function OppDecklistView({ oppDecklist, oppCards }) {
+  // Combine confirmed plays from gamelog with decklist from match history
+  const seen = new Set()
+  const rows = []
+
+  // First: cards from the match history decklist (authoritative)
+  if (oppDecklist?.length) {
+    for (const { cardId, count } of oppDecklist) {
+      if (!seen.has(cardId)) {
+        seen.add(cardId)
+        // Find the name from gamelog if we have it
+        const name = Object.values(oppCards ?? {}).find(c => c.id === cardId)?.name ?? cardId
+        rows.push({ cardId, name, count, seen: Object.values(oppCards ?? {}).find(c => c.id === cardId) != null })
+      }
+    }
+  }
+
+  // Add any observed opponent cards NOT in the decklist (e.g. gamelogs without decklist metadata)
+  for (const card of Object.values(oppCards ?? {})) {
+    if (!rows.find(r => r.name === card.name)) {
+      rows.push({ cardId: card.id, name: card.name, count: null, seen: true })
+    }
+  }
+
+  if (!rows.length) return null
+
+  rows.sort((a, b) => a.name.localeCompare(b.name))
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Opponent Decklist</h3>
+      <div className="grid grid-cols-2 gap-x-4 text-xs font-mono">
+        {rows.map(r => (
+          <div key={r.cardId} className={`flex items-center gap-1.5 py-0.5 border-b border-gray-50 ${r.seen ? 'text-gray-800' : 'text-gray-400'}`}>
+            <span className="w-5 text-right flex-shrink-0 font-semibold">{r.count ?? '?'}</span>
+            <span className="truncate">{r.name}</span>
+            {r.seen && <span className="text-emerald-500 flex-shrink-0 ml-auto">●</span>}
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1">● = observed in game</p>
+    </div>
+  )
+}
+
 function resolveDisplayName(storedName, isMe, myName) {
   if (storedName !== 'Player 1' && storedName !== 'Player 2') return storedName
   if (isMe && myName) return myName
@@ -987,21 +1131,24 @@ function resolveDisplayName(storedName, isMe, myName) {
 }
 
 function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
-  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst } = gamelog
+  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, savedAt } = gamelog
   const p1Name = resolveDisplayName(rawP1Name, myPlayerNum === 1, myName)
   const p2Name = resolveDisplayName(rawP2Name, myPlayerNum === 2, myName)
   const p1IsWinner = winner === 1 || winner === '1'
   const p2IsWinner = winner === 2 || winner === '2'
   const winnerName = p1IsWinner ? p1Name : p2IsWinner ? p2Name : null
+  const myWon = myPlayerNum != null && (winner === myPlayerNum || winner === String(myPlayerNum))
 
   const metaBits = []
   if (turnCount) metaBits.push(`${turnCount} turns`)
-  if (eventCount) metaBits.push(`${eventCount} events`)
   if (wentFirst != null) {
     const firstName = wentFirst === 1 ? p1Name : p2Name
     metaBits.push(`${firstName} went first`)
   }
   if (victoryReason && victoryReason !== 'normal') metaBits.push(victoryReason)
+  if (savedAt) metaBits.push(new Date(savedAt).toLocaleDateString())
+
+  const oppP = myPlayerNum === 1 ? p2 : myPlayerNum === 2 ? p1 : null
 
   return (
     <div className="mt-8">
@@ -1013,9 +1160,21 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
               {winnerName} wins
             </span>
           )}
+          {myPlayerNum != null && (
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded ${myWon ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>
+              {myWon ? 'Win' : 'Loss'}
+            </span>
+          )}
         </div>
         <div className="text-sm text-gray-500">{metaBits.join(' · ')}</div>
       </div>
+
+      {/* Lore Race */}
+      {loreEvents?.length > 0 && (
+        <div className="border border-gray-100 rounded-lg p-4 mb-6">
+          <LoreChart loreEvents={loreEvents} turnCount={turnCount} p1Name={p1Name} p2Name={p2Name} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <div>
@@ -1031,6 +1190,20 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
           <PlayerSection name={p2Name} data={p2} isWinner={p2IsWinner} finalLore={p2FinalLore} />
         </div>
       </div>
+
+      {/* Challenge log */}
+      {challenges?.length > 0 && (
+        <div className="mt-8 border border-gray-100 rounded-lg p-4">
+          <GameChallengeLog challenges={challenges} p1Name={p1Name} p2Name={p2Name} myPlayerNum={myPlayerNum} />
+        </div>
+      )}
+
+      {/* Opponent decklist */}
+      {(oppDecklist?.length > 0 || (oppP && Object.keys(oppP.cards ?? {}).length > 0)) && (
+        <div className="mt-6 border border-gray-100 rounded-lg p-4">
+          <OppDecklistView oppDecklist={oppDecklist} oppCards={oppP?.cards} />
+        </div>
+      )}
     </div>
   )
 }
@@ -1205,24 +1378,44 @@ export function GamelogAnalyzerPage() {
             </button>
           </div>
           <div className="space-y-1">
-          {gamelogs.map(g => (
-            <div
-              key={g.id}
-              onClick={() => setActiveId(g.id)}
-              className={`cursor-pointer flex items-center gap-3 px-3 py-2 rounded transition-colors ${activeId === g.id ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}
-            >
-              <span className="font-medium text-sm">
-                {resolveDisplayName(g.p1Name, g.myPlayerNum === 1, myName)} vs {resolveDisplayName(g.p2Name, g.myPlayerNum === 2, myName)}
-              </span>
-              <span className="text-xs opacity-60">{g.turnCount} turns · {g.eventCount} events</span>
-              <span className="ml-auto text-xs opacity-60">{new Date(g.savedAt).toLocaleDateString()}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(g.id) }}
-                className="text-xs opacity-40 hover:opacity-100 transition-opacity"
-                title="Delete gamelog"
-              >✕</button>
-            </div>
-          ))}
+          {gamelogs.map(g => {
+            const isActive = activeId === g.id
+            const myNum = g.myPlayerNum
+            const won = myNum != null && (g.winner === myNum || g.winner === String(myNum))
+            const myDisplayName = resolveDisplayName(myNum === 1 ? g.p1Name : g.p2Name, true, myName)
+            const oppDisplayName = myNum === 1 ? g.p2Name : myNum === 2 ? g.p1Name : null
+            const label = myNum
+              ? `${myDisplayName} vs ${oppDisplayName ?? '?'}`
+              : `${resolveDisplayName(g.p1Name, false, myName)} vs ${resolveDisplayName(g.p2Name, false, myName)}`
+            return (
+              <div
+                key={g.id}
+                onClick={() => setActiveId(g.id)}
+                className={`cursor-pointer flex items-center gap-2 px-3 py-2 rounded transition-colors ${isActive ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}
+              >
+                {myNum != null && (
+                  <span className={`text-[10px] font-bold w-6 text-center flex-shrink-0 ${isActive ? (won ? 'text-emerald-400' : 'text-red-400') : (won ? 'text-emerald-600' : 'text-red-500')}`}>
+                    {won ? 'W' : 'L'}
+                  </span>
+                )}
+                <span className="font-medium text-sm truncate flex-1">{label}</span>
+                {g.myInkCombo?.length > 0 && (
+                  <span className="flex items-center gap-0.5 flex-shrink-0">
+                    {g.myInkCombo.map(c => <InkDot key={c} color={isActive ? null : c} />)}
+                    {g.oppInkCombo?.length > 0 && <span className={`text-[10px] mx-0.5 ${isActive ? 'text-gray-400' : 'text-gray-300'}`}>vs</span>}
+                    {g.oppInkCombo?.map(c => <InkDot key={c} color={isActive ? null : c} />)}
+                  </span>
+                )}
+                <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{g.turnCount}T</span>
+                <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{new Date(g.savedAt).toLocaleDateString()}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDelete(g.id) }}
+                  className="text-xs opacity-40 hover:opacity-100 transition-opacity flex-shrink-0"
+                  title="Delete gamelog"
+                >✕</button>
+              </div>
+            )
+          })}
           </div>
         </div>
       )}

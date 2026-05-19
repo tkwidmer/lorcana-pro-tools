@@ -40,6 +40,7 @@ function parseGamelog(id, logs, meta = {}) {
   let victoryReason = null, concededBy = null
   let wentFirstFromLog = null
   const loreByPlayer = { 1: 0, 2: 0 }
+  const loreEvents = []
   const challenges = []
 
   const ensureCard = (p, name, cardId) => {
@@ -109,7 +110,10 @@ function parseGamelog(id, logs, meta = {}) {
     if (type === 'CARD_QUEST' && d.cardName) {
       const gain = d.loreGained ?? 0
       ensureCard(p, d.cardName, d.cardId).loreGained += gain
-      if (d.newLoreTotal != null) loreByPlayer[p] = d.newLoreTotal
+      if (d.newLoreTotal != null) {
+        loreByPlayer[p] = d.newLoreTotal
+        loreEvents.push({ turn: entry.turnNumber ?? 0, player: p, total: d.newLoreTotal })
+      }
     }
 
     if (type === 'CARD_ATTACK' && d.attackerBanished !== undefined) {
@@ -199,6 +203,7 @@ function parseGamelog(id, logs, meta = {}) {
     myPlayerNum,
     myInkCombo,
     oppInkCombo,
+    loreEvents,
     yourDecklist: meta.yourDecklist ?? null,
     oppDecklist: meta.oppDecklist ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },

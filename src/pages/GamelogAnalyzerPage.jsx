@@ -821,6 +821,14 @@ function InkDot({ color }) {
   return <span className={`inline-block w-3 h-3 rounded-full flex-shrink-0 ${c}`} title={color} />
 }
 
+function InkImg({ color, size = 'w-4 h-4' }) {
+  if (!color) return null
+  const name = color.toLowerCase()
+  const VALID = ['amber', 'amethyst', 'emerald', 'ruby', 'sapphire', 'steel']
+  if (!VALID.includes(name)) return null
+  return <img src={`/ink/${name}.png`} alt={name} title={name} className={`${size} flex-shrink-0`} />
+}
+
 function AggregateView({ enrichedGames }) {
   const [matchupFilter, setMatchupFilter] = useState(null)
   const [oppFilter, setOppFilter] = useState(null)
@@ -1401,9 +1409,9 @@ export function GamelogAnalyzerPage() {
                 <span className="font-medium text-sm truncate flex-1">{label}</span>
                 {g.myInkCombo?.length > 0 && (
                   <span className="flex items-center gap-0.5 flex-shrink-0">
-                    {g.myInkCombo.map(c => <InkDot key={c} color={isActive ? null : c} />)}
+                    {g.myInkCombo.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
                     {g.oppInkCombo?.length > 0 && <span className={`text-[10px] mx-0.5 ${isActive ? 'text-gray-400' : 'text-gray-300'}`}>vs</span>}
-                    {g.oppInkCombo?.map(c => <InkDot key={c} color={isActive ? null : c} />)}
+                    {g.oppInkCombo?.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
                   </span>
                 )}
                 <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{g.turnCount}T</span>

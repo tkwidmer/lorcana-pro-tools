@@ -1392,9 +1392,14 @@ export function GamelogAnalyzerPage() {
             const won = myNum != null && (g.winner === myNum || g.winner === String(myNum))
             const myDisplayName = resolveDisplayName(myNum === 1 ? g.p1Name : g.p2Name, true, myName)
             const oppDisplayName = myNum === 1 ? g.p2Name : myNum === 2 ? g.p1Name : null
-            const label = myNum
-              ? `${myDisplayName} vs ${oppDisplayName ?? '?'}`
-              : `${resolveDisplayName(g.p1Name, false, myName)} vs ${resolveDisplayName(g.p2Name, false, myName)}`
+            const myDisplayLabel = myNum
+              ? myDisplayName
+              : resolveDisplayName(g.p1Name, false, myName)
+            const oppDisplayLabel = myNum
+              ? (oppDisplayName ?? '?')
+              : resolveDisplayName(g.p2Name, false, myName)
+            const myColors = myNum ? g.myInkCombo : (g.myInkCombo ?? [])
+            const oppColors = myNum ? g.oppInkCombo : (g.oppInkCombo ?? [])
             return (
               <div
                 key={g.id}
@@ -1406,14 +1411,21 @@ export function GamelogAnalyzerPage() {
                     {won ? 'W' : 'L'}
                   </span>
                 )}
-                <span className="font-medium text-sm truncate flex-1">{label}</span>
-                {g.myInkCombo?.length > 0 && (
-                  <span className="flex items-center gap-0.5 flex-shrink-0">
-                    {g.myInkCombo.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
-                    {g.oppInkCombo?.length > 0 && <span className={`text-[10px] mx-0.5 ${isActive ? 'text-gray-400' : 'text-gray-300'}`}>vs</span>}
-                    {g.oppInkCombo?.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
-                  </span>
-                )}
+                <span className="flex items-center gap-1 font-medium text-sm flex-1 min-w-0">
+                  <span className="truncate">{myDisplayLabel}</span>
+                  {myColors?.length > 0 && (
+                    <span className="flex items-center gap-0.5 flex-shrink-0">
+                      {myColors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                    </span>
+                  )}
+                  <span className={`text-xs flex-shrink-0 ${isActive ? 'text-gray-400' : 'text-gray-400'}`}>vs</span>
+                  <span className="truncate">{oppDisplayLabel}</span>
+                  {oppColors?.length > 0 && (
+                    <span className="flex items-center gap-0.5 flex-shrink-0">
+                      {oppColors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                    </span>
+                  )}
+                </span>
                 <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{g.turnCount}T</span>
                 <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{new Date(g.savedAt).toLocaleDateString()}</span>
                 <button

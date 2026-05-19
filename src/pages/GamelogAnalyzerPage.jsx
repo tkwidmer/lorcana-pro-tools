@@ -163,9 +163,11 @@ function parseGamelog(id, logs, meta = {}) {
   if (nameByPlayer[1] && p1Name === 'Player 1') p1Name = nameByPlayer[1]
   if (nameByPlayer[2] && p2Name === 'Player 2') p2Name = nameByPlayer[2]
 
-  // Determine myPlayerNum from match history metadata (win/loss + winner field)
-  let myPlayerNum = null
-  if (meta.yourResult && winner !== null) {
+  // your_player directly identifies which seat is "you" — most reliable source
+  let myPlayerNum = meta.yourPlayerNum ? Number(meta.yourPlayerNum) : null
+
+  // Fallback: derive from win/loss + winner when your_player isn't available
+  if (!myPlayerNum && meta.yourResult && winner !== null) {
     const winnerNum = winner === 1 || winner === '1' ? 1 : 2
     myPlayerNum = meta.yourResult === 'win' ? winnerNum : (winnerNum === 1 ? 2 : 1)
   }
@@ -199,6 +201,10 @@ function parseGamelog(id, logs, meta = {}) {
     myPlayerNum,
     myInkCombo,
     oppInkCombo,
+    wentFirst: meta.wentFirst ?? null,
+    endReason: meta.endReason ?? null,
+    yourDecklist: meta.yourDecklist ?? null,
+    oppDecklist: meta.oppDecklist ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }

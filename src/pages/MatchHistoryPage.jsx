@@ -123,9 +123,11 @@ function parseGamelog(id, logs, meta = {}) {
   if (nameByPlayer[1] && p1Name === 'Player 1') p1Name = nameByPlayer[1]
   if (nameByPlayer[2] && p2Name === 'Player 2') p2Name = nameByPlayer[2]
 
-  // Determine which player is "you" using match history metadata (win/loss + winner field)
-  let myPlayerNum = null
-  if (meta.yourResult && winner !== null) {
+  // your_player directly identifies which seat is "you" — most reliable source
+  let myPlayerNum = meta.yourPlayerNum ? Number(meta.yourPlayerNum) : null
+
+  // Fallback: derive from win/loss + winner when your_player isn't available
+  if (!myPlayerNum && meta.yourResult && winner !== null) {
     const winnerNum = winner === 1 || winner === '1' ? 1 : 2
     myPlayerNum = meta.yourResult === 'win' ? winnerNum : (winnerNum === 1 ? 2 : 1)
   }
@@ -159,6 +161,10 @@ function parseGamelog(id, logs, meta = {}) {
     myPlayerNum,
     myInkCombo,
     oppInkCombo,
+    wentFirst: meta.wentFirst ?? null,
+    endReason: meta.endReason ?? null,
+    yourDecklist: meta.yourDecklist ?? null,
+    oppDecklist: meta.oppDecklist ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }
@@ -262,10 +268,15 @@ function ImportGamelogButton({ game }) {
       const storedMyName = localStorage.getItem('lorcana_my_name') ?? ''
       const parsed = parseGamelog(id, logs, {
         yourResult: game.result,
+        yourPlayerNum: game.your_player,
         opponentName: game.opp_display_name,
         yourDisplayName: game.your_display_name || storedMyName || undefined,
         yourColors: game.your_deck_colors,
         oppColors: game.opp_deck_colors,
+        wentFirst: game.went_first,
+        endReason: game.end_reason,
+        yourDecklist: game.your_decklist,
+        oppDecklist: game.opp_decklist,
       })
       await saveGamelog(id, parsed)
       setStatus('done')

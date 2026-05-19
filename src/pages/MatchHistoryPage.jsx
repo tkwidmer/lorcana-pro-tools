@@ -497,7 +497,9 @@ export function MatchHistoryPage() {
     setError(null)
     try {
       const data = await fetchMatchHistory({ cursor: cursor ?? undefined, limit: 100 })
-      setGames(prev => append ? [...prev, ...(data.games ?? [])] : (data.games ?? []))
+      const incoming = data.games ?? []
+      if (incoming.length > 0) console.log('[MatchHistory] sample game keys:', Object.keys(incoming[0]), '\nyour_decklist sample:', incoming[0].your_decklist)
+      setGames(prev => append ? [...prev, ...incoming] : incoming)
       setNextCursor(data.next_cursor ?? null)
     } catch (err) {
       setError(err.message)
@@ -812,7 +814,7 @@ export function MatchHistoryPage() {
               ))}
             </FilterRow>
           )}
-          {deckOptions.length > 1 && (
+          {deckOptions.length > 0 && (
             <DeckFilterPills
               deckOptions={deckOptions}
               deckNames={deckNames}

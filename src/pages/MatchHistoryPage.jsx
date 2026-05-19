@@ -24,15 +24,6 @@ async function decompressGzip(arrayBuffer) {
   return new TextDecoder().decode(out)
 }
 
-function extractCards(entry) {
-  const d = entry.data ?? {}
-  const result = []
-  if (d.cardName) result.push({ name: d.cardName, id: d.cardId })
-  for (const arr of [d.initialHandCards, d.mulliganedCards, d.drawnCards, d.cards, d.keptCards, d.returnedCards]) {
-    if (Array.isArray(arr)) arr.forEach(c => { if (c?.name) result.push({ name: c.name, id: c.id }) })
-  }
-  return result
-}
 
 function parseColors(str) {
   if (!str) return []
@@ -44,44 +35,45 @@ function parseGamelog(id, logs, meta = {}) {
     1: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
     2: { initialHand: [], mulliganSent: [], mulliganKept: [], mulliganDrawn: [], cards: {} },
   }
-  let p1Name = 'Player 1'
-  let p2Name = 'Player 2'
-  let winner = null
-  let turnCount = 0
-  let p1FinalLore = null
-  let p2FinalLore = null
-  const nameByPlayer = {}
+  let p1Name = 'Player 1', p2Name = 'Player 2'
+  let winner = null, turnCount = 0
+  let victoryReason = null, concededBy = null
+  let wentFirstFromLog = null
+  const loreByPlayer = { 1: 0, 2: 0 }
+  const challenges = []
+
+  const ensureCard = (p, name, cardId) => {
+    const pData = players[p]
+    if (!pData.cards[name]) {
+      pData.cards[name] = {
+        name, id: cardId,
+        drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0,
+        loreGained: 0, shiftPlays: 0,
+        effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
+      }
+    }
+    return pData.cards[name]
+  }
 
   for (const entry of logs) {
     const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
     const type = entry.type
     const d = entry.data ?? {}
-
     if ((entry.turnNumber ?? 0) > turnCount) turnCount = entry.turnNumber ?? 0
 
-    // Collect player names from any top-level playerName field on log entries
-    if (p && entry.playerName && !nameByPlayer[p]) nameByPlayer[p] = entry.playerName
+    if (type === 'TURN_START' && entry.turnNumber === 1 && wentFirstFromLog === null && p) {
+      wentFirstFromLog = p
+    }
 
-    if (type === 'GAME_START') {
-      // Try every known field layout for player names
-      if (d.playerNames) {
-        p1Name = d.playerNames['1'] ?? d.playerNames.player1 ?? p1Name
-        p2Name = d.playerNames['2'] ?? d.playerNames.player2 ?? p2Name
-      }
-      if (Array.isArray(d.players)) {
-        p1Name = d.players[0]?.name ?? d.players[0]?.displayName ?? p1Name
-        p2Name = d.players[1]?.name ?? d.players[1]?.displayName ?? p2Name
-      }
-      if (d.player1Name) p1Name = d.player1Name
-      if (d.player2Name) p2Name = d.player2Name
-      if (d.player1?.name) p1Name = d.player1.name
-      if (d.player2?.name) p2Name = d.player2.name
+    if (type === 'GAME_CONCEDED') {
+      winner = d.winner ?? winner
+      victoryReason = d.victoryReason ?? 'concession'
+      concededBy = d.concededBy ?? null
     }
 
     if (type === 'GAME_END') {
-      winner = d.winner ?? null
-      p1FinalLore = d.p1Lore ?? d.lore?.['1'] ?? null
-      p2FinalLore = d.p2Lore ?? d.lore?.['2'] ?? null
+      winner = d.winner ?? winner
+      if (!victoryReason) victoryReason = d.victoryReason ?? null
     }
 
     if (!p) continue
@@ -98,18 +90,60 @@ function parseGamelog(id, logs, meta = {}) {
       pData.mulliganDrawn = (d.drawnCards ?? []).filter(c => c?.name)
     }
 
-    const cards = extractCards(entry)
-    for (const card of cards) {
+    const cardRefs = []
+    if (d.cardName) cardRefs.push({ name: d.cardName, id: d.cardId })
+    for (const arr of [d.initialHandCards, d.mulliganedCards, d.drawnCards, d.cards, d.keptCards, d.returnedCards]) {
+      if (Array.isArray(arr)) arr.forEach(c => { if (c?.name) cardRefs.push({ name: c.name, id: c.id }) })
+    }
+
+    for (const card of cardRefs) {
       if (!card.name) continue
-      if (!pData.cards[card.name]) {
-        pData.cards[card.name] = { name: card.name, id: card.id, drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0 }
-      }
-      const c = pData.cards[card.name]
+      const c = ensureCard(p, card.name, card.id)
       if (type === 'CARD_DRAWN') c.drawn++
       else if (type === 'CARD_PLAYED') c.played++
       else if (type === 'CARD_INKED') c.inked++
       else if (type === 'CARD_DISCARDED') c.discarded++
       else if (type === 'CARD_DESTROYED') c.destroyed++
+    }
+
+    if (type === 'CARD_QUEST' && d.cardName) {
+      const gain = d.loreGained ?? 0
+      ensureCard(p, d.cardName, d.cardId).loreGained += gain
+      if (d.newLoreTotal != null) loreByPlayer[p] = d.newLoreTotal
+    }
+
+    if (type === 'CARD_ATTACK' && d.attackerBanished !== undefined) {
+      challenges.push({
+        turn: entry.turnNumber,
+        player: p,
+        attackerName: d.cardName,
+        defenderName: d.targetCardName,
+        attackerBanished: d.attackerBanished,
+        defenderBanished: d.defenderBanished,
+        attackerStrength: (d.attackerBaseStrength ?? 0) + (d.attackerChallengerBonus ?? 0),
+        challengerBonus: d.attackerChallengerBonus ?? 0,
+        defenderStrength: d.defenderBaseStrength ?? 0,
+        attackerWillpower: d.attackerWillpower ?? 0,
+        defenderWillpower: d.defenderWillpower ?? 0,
+      })
+    }
+
+    if (type === 'CARD_BOOSTED' && d.cardName) {
+      ensureCard(p, d.cardName, d.cardId).shiftPlays++
+    }
+
+    if (type === 'ABILITY_TRIGGERED' && d.abilitySourceCardName) {
+      const c = ensureCard(p, d.abilitySourceCardName, d.abilitySourceCardId)
+      for (const ek of (d.effectDescriptionKeys ?? [])) {
+        if (ek.key === 'drawsACard' || ek.key === 'eachPlayerDrawsToHandSize') c.effectDraws++
+        else if (ek.key === 'drawsCards') c.effectDraws += (ek.params?.count ?? 1)
+        else if (ek.key === 'discardedCard') c.oppForcedDiscards++
+        else if (ek.key === 'opponentDiscardsCards') c.oppForcedDiscards += (ek.params?.count ?? 1)
+        else if (ek.key === 'grantsAnAdditionalInk') c.extraInks++
+        else if (ek.key === 'movesDamageDetailedBanished' || ek.key === 'banishesTarget') c.effectRemovals++
+        else if (ek.key === 'exertsCharacter') c.exerts++
+        else if (ek.key === 'returnedFromDiscard') c.cardsRecovered += (d.returnedCardRefs?.length ?? 1)
+      }
     }
   }
 
@@ -118,10 +152,6 @@ function parseGamelog(id, logs, meta = {}) {
     const bTotal = b.drawn + b.played + b.inked
     return bTotal - aTotal || a.name.localeCompare(b.name)
   })
-
-  // Apply names collected from top-level playerName fields if GAME_START didn't yield names
-  if (nameByPlayer[1] && p1Name === 'Player 1') p1Name = nameByPlayer[1]
-  if (nameByPlayer[2] && p2Name === 'Player 2') p2Name = nameByPlayer[2]
 
   // your_player directly identifies which seat is "you" — most reliable source
   let myPlayerNum = meta.yourPlayerNum ? Number(meta.yourPlayerNum) : null
@@ -132,7 +162,7 @@ function parseGamelog(id, logs, meta = {}) {
     myPlayerNum = meta.yourResult === 'win' ? winnerNum : (winnerNum === 1 ? 2 : 1)
   }
 
-  // Override names from match history API (authoritative source)
+  // Override names from match history API (authoritative — gamelog has no names)
   if (myPlayerNum && meta.opponentName) {
     if (myPlayerNum === 1) p2Name = meta.opponentName
     else p1Name = meta.opponentName
@@ -149,6 +179,10 @@ function parseGamelog(id, logs, meta = {}) {
     ? parseColors(myPlayerNum === 1 ? meta.oppColors : meta.yourColors)
     : []
 
+  const wentFirst = meta.wentFirst != null
+    ? (meta.wentFirst ? myPlayerNum : (myPlayerNum === 1 ? 2 : 1))
+    : wentFirstFromLog
+
   return {
     id,
     p1Name,
@@ -156,13 +190,15 @@ function parseGamelog(id, logs, meta = {}) {
     winner,
     turnCount,
     eventCount: logs.length,
-    p1FinalLore,
-    p2FinalLore,
+    victoryReason,
+    concededBy,
+    wentFirst,
+    p1FinalLore: loreByPlayer[1] > 0 ? loreByPlayer[1] : null,
+    p2FinalLore: loreByPlayer[2] > 0 ? loreByPlayer[2] : null,
+    challenges,
     myPlayerNum,
     myInkCombo,
     oppInkCombo,
-    wentFirst: meta.wentFirst ?? null,
-    endReason: meta.endReason ?? null,
     yourDecklist: meta.yourDecklist ?? null,
     oppDecklist: meta.oppDecklist ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },

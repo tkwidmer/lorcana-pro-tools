@@ -476,6 +476,9 @@ export function MatchHistoryPage() {
   const [filterMyColors, setFilterMyColors] = useState(null)
   const [filterOppColors, setFilterOppColors] = useState(null)
   const [filterDeck, setFilterDeck] = useState(null)
+  const [filterDatePreset, setFilterDatePreset] = useState(null) // 'today' | '7d' | '30d' | 'month' | 'custom'
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const [deckNames, setDeckNames] = useState(() => {
     try { return JSON.parse(localStorage.getItem(DECK_NAMES_KEY) ?? '{}') } catch { return {} }
   })
@@ -602,11 +605,32 @@ export function MatchHistoryPage() {
     localStorage.setItem(DECK_NAMES_KEY, JSON.stringify(updated))
   }
 
+  const dateFilterBounds = (() => {
+    const now = new Date()
+    const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
+    if (filterDatePreset === 'today') return { from: startOfDay(now), to: null }
+    if (filterDatePreset === '7d') return { from: new Date(now - 7 * 864e5), to: null }
+    if (filterDatePreset === '30d') return { from: new Date(now - 30 * 864e5), to: null }
+    if (filterDatePreset === 'month') return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: null }
+    if (filterDatePreset === 'custom') {
+      return {
+        from: filterDateFrom ? new Date(filterDateFrom + 'T00:00:00') : null,
+        to: filterDateTo ? new Date(filterDateTo + 'T23:59:59') : null,
+      }
+    }
+    return null
+  })()
+
   const filteredGames = games.filter(g => {
     if (filterQueue && g.queue_name !== filterQueue) return false
     if (filterMyColors && g.your_deck_colors !== filterMyColors) return false
     if (filterOppColors && g.opp_deck_colors !== filterOppColors) return false
     if (filterDeck && deckFingerprint(g.your_decklist) !== filterDeck) return false
+    if (dateFilterBounds && g.started_at) {
+      const t = new Date(g.started_at)
+      if (dateFilterBounds.from && t < dateFilterBounds.from) return false
+      if (dateFilterBounds.to && t > dateFilterBounds.to) return false
+    }
     return true
   })
 
@@ -695,8 +719,45 @@ export function MatchHistoryPage() {
       )}
 
       {/* Filters */}
-      {games.length > 0 && (queues.length > 1 || myColorOptions.length > 1 || oppColorOptions.length > 1 || deckOptions.length > 1) && (
-        <div className="mb-4 flex flex-wrap gap-4 items-start">
+      {games.length > 0 && (
+        <div className="mb-4 flex flex-col gap-3">
+          {/* Date filter — always shown when games are loaded */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Date</span>
+            {[
+              { key: 'today', label: 'Today' },
+              { key: '7d', label: 'Last 7 days' },
+              { key: '30d', label: 'Last 30 days' },
+              { key: 'month', label: 'This month' },
+              { key: 'custom', label: 'Custom' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setFilterDatePreset(prev => prev === key ? null : key)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterDatePreset === key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+              >
+                {label}
+              </button>
+            ))}
+            {filterDatePreset === 'custom' && (
+              <span className="flex items-center gap-1.5 ml-1">
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={e => setFilterDateFrom(e.target.value)}
+                  className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                />
+                <span className="text-xs text-gray-400">to</span>
+                <input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={e => setFilterDateTo(e.target.value)}
+                  className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                />
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-4 items-start">
           {queues.length > 1 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Queue</span>
@@ -750,14 +811,15 @@ export function MatchHistoryPage() {
               onRename={saveDeckName}
             />
           )}
-          {(filterQueue || filterMyColors || filterOppColors || filterDeck) && (
+          {(filterQueue || filterMyColors || filterOppColors || filterDeck || filterDatePreset) && (
             <button
-              onClick={() => { setFilterQueue(null); setFilterMyColors(null); setFilterOppColors(null); setFilterDeck(null) }}
+              onClick={() => { setFilterQueue(null); setFilterMyColors(null); setFilterOppColors(null); setFilterDeck(null); setFilterDatePreset(null); setFilterDateFrom(''); setFilterDateTo('') }}
               className="text-xs text-gray-400 hover:text-gray-700 transition-colors self-center"
             >
               Clear filters · {filteredGames.length}/{games.length} shown
             </button>
           )}
+          </div>
         </div>
       )}
 

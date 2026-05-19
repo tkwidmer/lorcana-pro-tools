@@ -36,18 +36,19 @@ function parseGamelog(id, logs, meta = {}) {
   }
   let p1Name = 'Player 1', p2Name = 'Player 2'
   let winner = null, turnCount = 0
-  let p1FinalLore = null, p2FinalLore = null
+  let victoryReason = null, concededBy = null
+  let wentFirstFromLog = null
+  // Per-player lore tracked from CARD_QUEST.newLoreTotal (more reliable than GAME_END)
+  const loreByPlayer = { 1: 0, 2: 0 }
   const challenges = []
-  const trackedLore = { 1: 0, 2: 0 }
-  const nameByPlayer = {}
 
-  const ensureCard = (p, name, id) => {
+  const ensureCard = (p, name, cardId) => {
     const pData = players[p]
     if (!pData.cards[name]) {
       pData.cards[name] = {
-        name, id,
+        name, id: cardId,
         drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0,
-        loreGained: 0,
+        loreGained: 0, shiftPlays: 0,
         effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
       }
     }
@@ -58,30 +59,23 @@ function parseGamelog(id, logs, meta = {}) {
     const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
     const type = entry.type
     const d = entry.data ?? {}
-    const message = entry.message ?? ''
     if ((entry.turnNumber ?? 0) > turnCount) turnCount = entry.turnNumber ?? 0
 
-    if (p && entry.playerName && !nameByPlayer[p]) nameByPlayer[p] = entry.playerName
+    // Who went first — first TURN_START at turn 1
+    if (type === 'TURN_START' && entry.turnNumber === 1 && wentFirstFromLog === null && p) {
+      wentFirstFromLog = p
+    }
 
-    if (type === 'GAME_START') {
-      if (d.playerNames) {
-        p1Name = d.playerNames['1'] ?? d.playerNames.player1 ?? p1Name
-        p2Name = d.playerNames['2'] ?? d.playerNames.player2 ?? p2Name
-      }
-      if (Array.isArray(d.players)) {
-        p1Name = d.players[0]?.name ?? d.players[0]?.displayName ?? p1Name
-        p2Name = d.players[1]?.name ?? d.players[1]?.displayName ?? p2Name
-      }
-      if (d.player1Name) p1Name = d.player1Name
-      if (d.player2Name) p2Name = d.player2Name
-      if (d.player1?.name) p1Name = d.player1.name
-      if (d.player2?.name) p2Name = d.player2.name
+    // GAME_CONCEDED carries the full end state including victoryReason
+    if (type === 'GAME_CONCEDED') {
+      winner = d.winner ?? winner
+      victoryReason = d.victoryReason ?? 'concession'
+      concededBy = d.concededBy ?? null
     }
 
     if (type === 'GAME_END') {
-      winner = d.winner ?? null
-      p1FinalLore = d.p1Lore ?? d.lore?.['1'] ?? null
-      p2FinalLore = d.p2Lore ?? d.lore?.['2'] ?? null
+      winner = d.winner ?? winner
+      if (!victoryReason) victoryReason = d.victoryReason ?? null
     }
 
     if (!p) continue
@@ -98,7 +92,7 @@ function parseGamelog(id, logs, meta = {}) {
       pData.mulliganDrawn = (d.drawnCards ?? []).filter(c => c?.name)
     }
 
-    // Build card refs from all possible data fields
+    // Primary card ref from the event's own cardName field
     const cardRefs = []
     if (d.cardName) cardRefs.push({ name: d.cardName, id: d.cardId })
     for (const arr of [d.initialHandCards, d.mulliganedCards, d.drawnCards, d.cards, d.keptCards, d.returnedCards]) {
@@ -115,31 +109,38 @@ function parseGamelog(id, logs, meta = {}) {
       else if (type === 'CARD_DESTROYED') c.destroyed++
     }
 
-    if (type === 'CARD_QUEST') {
-      const questCardName = d.cardName ?? cardRefs[0]?.name
-      const loreMatch = message.match(/\+(\d+) lore/)
-      const gain = loreMatch ? parseInt(loreMatch[1]) : (d.loreGained ?? d.lore ?? 0)
-      if (questCardName) {
-        ensureCard(p, questCardName, d.cardId)
-        players[p].cards[questCardName].loreGained += gain
-      }
-      trackedLore[p] += gain
+    if (type === 'CARD_QUEST' && d.cardName) {
+      const gain = d.loreGained ?? 0
+      ensureCard(p, d.cardName, d.cardId).loreGained += gain
+      // newLoreTotal is the authoritative running lore for this player
+      if (d.newLoreTotal != null) loreByPlayer[p] = d.newLoreTotal
     }
 
+    // CARD_ATTACK comes in two events per challenge: the first has names only,
+    // the second has full combat stats including banished flags — only use the second.
     if (type === 'CARD_ATTACK' && d.attackerBanished !== undefined) {
       challenges.push({
         turn: entry.turnNumber,
         player: p,
-        attackerName: d.attackerName ?? cardRefs[0]?.name,
-        defenderName: d.defenderName ?? cardRefs[1]?.name,
+        attackerName: d.cardName,
+        defenderName: d.targetCardName,
         attackerBanished: d.attackerBanished,
         defenderBanished: d.defenderBanished,
+        attackerStrength: (d.attackerBaseStrength ?? 0) + (d.attackerChallengerBonus ?? 0),
+        challengerBonus: d.attackerChallengerBonus ?? 0,
+        defenderStrength: d.defenderBaseStrength ?? 0,
+        attackerWillpower: d.attackerWillpower ?? 0,
+        defenderWillpower: d.defenderWillpower ?? 0,
       })
     }
 
-    if (type === 'ABILITY_TRIGGERED' && cardRefs[0]) {
-      const cardName = cardRefs[0].name
-      const c = ensureCard(p, cardName, cardRefs[0].id)
+    // CARD_BOOSTED = Shift play (card played on top of another)
+    if (type === 'CARD_BOOSTED' && d.cardName) {
+      ensureCard(p, d.cardName, d.cardId).shiftPlays++
+    }
+
+    if (type === 'ABILITY_TRIGGERED' && d.abilitySourceCardName) {
+      const c = ensureCard(p, d.abilitySourceCardName, d.abilitySourceCardId)
       for (const ek of (d.effectDescriptionKeys ?? [])) {
         if (ek.key === 'drawsACard' || ek.key === 'eachPlayerDrawsToHandSize') c.effectDraws++
         else if (ek.key === 'drawsCards') c.effectDraws += (ek.params?.count ?? 1)
@@ -159,10 +160,6 @@ function parseGamelog(id, logs, meta = {}) {
     return bTotal - aTotal || a.name.localeCompare(b.name)
   })
 
-  // Apply names from top-level playerName fields if GAME_START didn't yield them
-  if (nameByPlayer[1] && p1Name === 'Player 1') p1Name = nameByPlayer[1]
-  if (nameByPlayer[2] && p2Name === 'Player 2') p2Name = nameByPlayer[2]
-
   // your_player directly identifies which seat is "you" — most reliable source
   let myPlayerNum = meta.yourPlayerNum ? Number(meta.yourPlayerNum) : null
 
@@ -172,7 +169,7 @@ function parseGamelog(id, logs, meta = {}) {
     myPlayerNum = meta.yourResult === 'win' ? winnerNum : (winnerNum === 1 ? 2 : 1)
   }
 
-  // Override player names from match history API (authoritative)
+  // Override player names from match history API (authoritative — gamelog has no names)
   if (myPlayerNum && meta.opponentName) {
     if (myPlayerNum === 1) p2Name = meta.opponentName
     else p1Name = meta.opponentName
@@ -189,20 +186,26 @@ function parseGamelog(id, logs, meta = {}) {
     ? parseColors(myPlayerNum === 1 ? meta.oppColors : meta.yourColors)
     : []
 
+  // wentFirst: prefer match history meta, fall back to first TURN_START in log
+  const wentFirst = meta.wentFirst != null
+    ? (meta.wentFirst ? myPlayerNum : (myPlayerNum === 1 ? 2 : 1))
+    : wentFirstFromLog
+
   return {
     id,
     p1Name, p2Name,
     winner,
     turnCount,
     eventCount: logs.length,
-    p1FinalLore: p1FinalLore ?? (trackedLore[1] > 0 ? trackedLore[1] : null),
-    p2FinalLore: p2FinalLore ?? (trackedLore[2] > 0 ? trackedLore[2] : null),
+    victoryReason,
+    concededBy,
+    wentFirst,
+    p1FinalLore: loreByPlayer[1] > 0 ? loreByPlayer[1] : null,
+    p2FinalLore: loreByPlayer[2] > 0 ? loreByPlayer[2] : null,
     challenges,
     myPlayerNum,
     myInkCombo,
     oppInkCombo,
-    wentFirst: meta.wentFirst ?? null,
-    endReason: meta.endReason ?? null,
     yourDecklist: meta.yourDecklist ?? null,
     oppDecklist: meta.oppDecklist ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },
@@ -254,12 +257,15 @@ function enrichGame(gamelog, myName) {
     isMe: c.player === myPlayerNum,
   }))
 
+  const iWentFirst = gamelog.wentFirst === myPlayerNum
+
   return {
     ...gamelog,
     myPlayerNum,
     opponentName,
     won,
-    wentFirst: myPlayerNum === 1,
+    wentFirst: iWentFirst,
+    victoryReason: gamelog.victoryReason ?? null,
     myCards,
     challenges,
     myInkCombo: gamelog.myInkCombo ?? [],
@@ -270,7 +276,7 @@ function enrichGame(gamelog, myName) {
       kept: (myP.mulliganKept ?? []).map(c => ({ ...c, fullName: c.name })),
       replacements: (myP.mulliganDrawn ?? []).map(c => ({ ...c, fullName: c.name })),
       tookMulligan: (myP.mulliganSent?.length ?? 0) > 0,
-      wentFirst: myPlayerNum === 1,
+      wentFirst: iWentFirst,
     },
   }
 }
@@ -981,24 +987,34 @@ function resolveDisplayName(storedName, isMe, myName) {
 }
 
 function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
-  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2 } = gamelog
+  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst } = gamelog
   const p1Name = resolveDisplayName(rawP1Name, myPlayerNum === 1, myName)
   const p2Name = resolveDisplayName(rawP2Name, myPlayerNum === 2, myName)
   const p1IsWinner = winner === 1 || winner === '1'
   const p2IsWinner = winner === 2 || winner === '2'
+  const winnerName = p1IsWinner ? p1Name : p2IsWinner ? p2Name : null
+
+  const metaBits = []
+  if (turnCount) metaBits.push(`${turnCount} turns`)
+  if (eventCount) metaBits.push(`${eventCount} events`)
+  if (wentFirst != null) {
+    const firstName = wentFirst === 1 ? p1Name : p2Name
+    metaBits.push(`${firstName} went first`)
+  }
+  if (victoryReason && victoryReason !== 'normal') metaBits.push(victoryReason)
 
   return (
     <div className="mt-8">
       <div className="border border-gray-200 rounded-lg p-5 mb-6">
         <div className="flex items-center gap-3 flex-wrap mb-1">
           <h2 className="text-lg font-bold text-gray-900">{p1Name} vs {p2Name}</h2>
-          {winner != null && (
+          {winnerName && (
             <span className="text-xs font-semibold px-2 py-0.5 rounded bg-green-100 text-green-800">
-              {p1IsWinner ? p1Name : p2IsWinner ? p2Name : 'Unknown'} wins
+              {winnerName} wins
             </span>
           )}
         </div>
-        <div className="text-sm text-gray-500">{turnCount} turns · {eventCount} events</div>
+        <div className="text-sm text-gray-500">{metaBits.join(' · ')}</div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">

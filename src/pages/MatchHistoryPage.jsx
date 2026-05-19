@@ -632,10 +632,11 @@ export function MatchHistoryPage() {
   const queues = [...new Set(afterDate.map(g => g.queue_name).filter(Boolean))].sort()
   const afterQueue = afterDate.filter(g => !filterQueue || g.queue_name === filterQueue)
 
-  const myColorOptions = [...new Set(afterQueue.map(g => g.your_deck_colors).filter(Boolean))].sort()
+  const colorCount = (colors) => colors ? colors.split('/').filter(Boolean).length : 0
+  const myColorOptions = [...new Set(afterQueue.map(g => g.your_deck_colors).filter(c => c && colorCount(c) <= 2))].sort()
   const afterMyColors = afterQueue.filter(g => !filterMyColors || g.your_deck_colors === filterMyColors)
 
-  const oppColorOptions = [...new Set(afterMyColors.map(g => g.opp_deck_colors).filter(Boolean))].sort()
+  const oppColorOptions = [...new Set(afterMyColors.map(g => g.opp_deck_colors).filter(c => c && colorCount(c) <= 2))].sort()
   const afterOppColors = afterMyColors.filter(g => !filterOppColors || g.opp_deck_colors === filterOppColors)
 
   const getDeckKey = (g) => g.your_deck_id ?? deckFingerprint(g.your_decklist)
@@ -644,7 +645,7 @@ export function MatchHistoryPage() {
   const seenDeckKeys = new Set()
   for (const g of afterOppColors) {
     const key = getDeckKey(g)
-    if (key && !seenDeckKeys.has(key)) {
+    if (key && !seenDeckKeys.has(key) && colorCount(g.your_deck_colors) <= 2) {
       seenDeckKeys.add(key)
       deckOptions.push({ fp: key, colors: g.your_deck_colors })
     }

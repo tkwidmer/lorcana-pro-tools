@@ -206,6 +206,7 @@ function parseGamelog(id, logs, meta = {}) {
     loreEvents,
     yourDecklist: meta.yourDecklist ?? null,
     oppDecklist: meta.oppDecklist ?? null,
+    playedAt: meta.startedAt ? new Date(meta.startedAt).getTime() : null,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }
@@ -318,6 +319,7 @@ function ImportGamelogButton({ game }) {
         endReason: game.end_reason,
         yourDecklist: game.your_decklist,
         oppDecklist: game.opp_decklist,
+        startedAt: game.started_at,
       })
       await saveGamelog(id, parsed)
       setStatus('done')
@@ -465,6 +467,7 @@ export function MatchHistoryPage() {
           endReason: game.end_reason,
           yourDecklist: game.your_decklist,
           oppDecklist: game.opp_decklist,
+          startedAt: game.started_at,
         })
         await saveGamelog(game.gamelog_id, parsed)
         done++

@@ -1154,7 +1154,8 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
     metaBits.push(`${firstName} went first`)
   }
   if (victoryReason && victoryReason !== 'normal') metaBits.push(victoryReason)
-  if (savedAt) metaBits.push(new Date(savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }))
+  const displayTime = gamelog.playedAt ?? savedAt
+  if (displayTime) metaBits.push(new Date(displayTime).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }))
 
   const oppP = myPlayerNum === 1 ? p2 : myPlayerNum === 2 ? p1 : null
 
@@ -1427,7 +1428,7 @@ export function GamelogAnalyzerPage() {
                   )}
                 </span>
                 <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{g.turnCount}T</span>
-                <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{new Date(g.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</span>
+                <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{new Date(g.playedAt ?? g.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDelete(g.id) }}
                   className="text-xs opacity-40 hover:opacity-100 transition-opacity flex-shrink-0"

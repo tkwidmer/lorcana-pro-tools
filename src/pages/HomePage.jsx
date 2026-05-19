@@ -35,14 +35,14 @@ const SECTIONS = [
     title: 'Coaching Tools',
     tools: [
       {
-        path: '/gamelog-analyzer',
-        name: 'Gamelog Analyzer',
-        description: 'Import complete server-side game logs to see both players\' full draw sequences, opening hands, mulligan decisions, and every card interaction — richer than replays.',
-      },
-      {
         path: '/match-history',
         name: 'Match History',
         description: 'Connect your duels.ink account to import your complete match history — results, deck colors, lore scores, turns, and MMR changes for every ranked game.',
+      },
+      {
+        path: '/gamelog-analyzer',
+        name: 'Gamelog Analyzer',
+        description: 'Import complete server-side game logs to see both players\' full draw sequences, opening hands, mulligan decisions, and every card interaction — richer than replays.',
       },
     ],
   },

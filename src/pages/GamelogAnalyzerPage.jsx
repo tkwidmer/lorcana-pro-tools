@@ -436,6 +436,13 @@ function MulliganTable({ rows, emptyText }) {
 
 function WinRateStats({ enrichedGames }) {
   if (!enrichedGames.length) return null
+  const [expanded, setExpanded] = useState(new Set())
+  const toggle = (key) => setExpanded(prev => {
+    const next = new Set(prev)
+    next.has(key) ? next.delete(key) : next.add(key)
+    return next
+  })
+
   const tally = (subset) => ({ wins: subset.filter(g => g.won).length, losses: subset.filter(g => !g.won).length })
   const first = enrichedGames.filter(g => g.wentFirst)
   const second = enrichedGames.filter(g => !g.wentFirst)
@@ -464,21 +471,35 @@ function WinRateStats({ enrichedGames }) {
             {hasInkData ? 'vs Matchup' : 'vs Opponent'}
           </h3>
           {Object.values(byMatchup).map(({ label, colors, games }) => {
-            const first = games.filter(g => g.wentFirst)
-            const second = games.filter(g => !g.wentFirst)
-            const matchupLabel = colors.length > 0 ? (
-              <span className="inline-flex items-center gap-1.5">
-                {colors.map(c => <InkDot key={c} color={c} />)}
-                <span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span>
-              </span>
-            ) : label
+            const isOpen = expanded.has(label)
+            const firstGames = games.filter(g => g.wentFirst)
+            const secondGames = games.filter(g => !g.wentFirst)
+            const hasBreakdown = firstGames.length > 0 || secondGames.length > 0
+            const matchupLabel = (
+              <button
+                onClick={() => hasBreakdown && toggle(label)}
+                className={`inline-flex items-center gap-1.5 ${hasBreakdown ? 'cursor-pointer hover:text-gray-900' : 'cursor-default'}`}
+              >
+                {colors.length > 0
+                  ? <>{colors.map(c => <InkDot key={c} color={c} />)}<span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span></>
+                  : <span>{label}</span>
+                }
+                {hasBreakdown && (
+                  <svg className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </button>
+            )
             return (
-              <div key={label} className="mb-2">
+              <div key={label}>
                 <WinRateRow label={matchupLabel} {...tally(games)} />
-                <div className="pl-4 border-l-2 border-gray-100 ml-1 mt-0.5 space-y-0">
-                  {first.length > 0 && <WinRateRow label={<span className="text-gray-400">Going first</span>} {...tally(first)} />}
-                  {second.length > 0 && <WinRateRow label={<span className="text-gray-400">Going second</span>} {...tally(second)} />}
-                </div>
+                {isOpen && (
+                  <div className="pl-4 border-l-2 border-gray-100 ml-1 mb-1">
+                    {firstGames.length > 0 && <WinRateRow label={<span className="text-gray-400">Going first</span>} {...tally(firstGames)} />}
+                    {secondGames.length > 0 && <WinRateRow label={<span className="text-gray-400">Going second</span>} {...tally(secondGames)} />}
+                  </div>
+                )}
               </div>
             )
           })}

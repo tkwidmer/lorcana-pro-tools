@@ -17,17 +17,12 @@ const SECTIONS = [
       {
         path: '/deck-insights',
         name: 'Deck Insights',
-        description: 'Paste a deck list to analyse your curve, consistency, lore pressure, and draw odds for every card.',
+        description: 'Paste a deck list to analyse your curve, consistency, lore pressure, draw odds, and check format legality for Core and Infinity formats.',
       },
       {
         path: '/deck-comparison',
         name: 'Deck Comparison',
         description: 'Paste your paper deck and your updated online list to see exactly which cards to swap — no more mis-registrations when transitioning between testing and paper.',
-      },
-      {
-        path: '/legality-checker',
-        name: 'Legality Checker',
-        description: 'Paste a decklist to instantly see which cards are legal in Core (rotating) or Infinity (eternal) format.',
       },
     ],
   },

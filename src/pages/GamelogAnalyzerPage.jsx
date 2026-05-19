@@ -463,20 +463,25 @@ function WinRateStats({ enrichedGames }) {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
             {hasInkData ? 'vs Matchup' : 'vs Opponent'}
           </h3>
-          {Object.values(byMatchup).map(({ label, colors, games }) => (
-            <WinRateRow
-              key={label}
-              label={
-                colors.length > 0 ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    {colors.map(c => <InkDot key={c} color={c} />)}
-                    <span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span>
-                  </span>
-                ) : label
-              }
-              {...tally(games)}
-            />
-          ))}
+          {Object.values(byMatchup).map(({ label, colors, games }) => {
+            const first = games.filter(g => g.wentFirst)
+            const second = games.filter(g => !g.wentFirst)
+            const matchupLabel = colors.length > 0 ? (
+              <span className="inline-flex items-center gap-1.5">
+                {colors.map(c => <InkDot key={c} color={c} />)}
+                <span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span>
+              </span>
+            ) : label
+            return (
+              <div key={label} className="mb-2">
+                <WinRateRow label={matchupLabel} {...tally(games)} />
+                <div className="pl-4 border-l-2 border-gray-100 ml-1 mt-0.5 space-y-0">
+                  {first.length > 0 && <WinRateRow label={<span className="text-gray-400">Going first</span>} {...tally(first)} />}
+                  {second.length > 0 && <WinRateRow label={<span className="text-gray-400">Going second</span>} {...tally(second)} />}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </Section>

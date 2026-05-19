@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { saveGamelog, getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
+import { saveGamelog, getAllGamelogs, deleteGamelog, clearAllGamelogs } from '../lib/gamelogHistory'
 
 const MY_NAME_KEY = 'lorcana_my_name'
 
@@ -1113,6 +1113,13 @@ export function GamelogAnalyzerPage() {
     if (activeId === id) setActiveId(null)
   }
 
+  async function handleClearAll() {
+    if (!window.confirm(`Delete all ${gamelogs.length} gamelogs? This cannot be undone.`)) return
+    await clearAllGamelogs()
+    setGamelogs([])
+    setActiveId(null)
+  }
+
   const handleDrop = useCallback((e) => {
     e.preventDefault()
     setDragOver(false)
@@ -1187,7 +1194,17 @@ export function GamelogAnalyzerPage() {
 
       {/* Saved list */}
       {gamelogs.length > 0 && (
-        <div className="mt-6 space-y-1">
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{gamelogs.length} game{gamelogs.length !== 1 ? 's' : ''}</span>
+            <button
+              onClick={handleClearAll}
+              className="text-xs text-red-400 hover:text-red-600 transition-colors"
+            >
+              Clear all
+            </button>
+          </div>
+          <div className="space-y-1">
           {gamelogs.map(g => (
             <div
               key={g.id}
@@ -1206,6 +1223,7 @@ export function GamelogAnalyzerPage() {
               >✕</button>
             </div>
           ))}
+          </div>
         </div>
       )}
 

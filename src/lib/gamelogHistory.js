@@ -55,3 +55,8 @@ export async function deleteGamelog(id) {
   const store = await tx('readwrite')
   return promisify(store.delete(id))
 }
+
+export async function clearAllGamelogs() {
+  const store = await tx('readwrite')
+  return promisify(store.clear())
+}

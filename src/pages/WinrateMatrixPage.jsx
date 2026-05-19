@@ -98,11 +98,10 @@ export function WinrateMatrixPage() {
   const matchups = stats.matchups || []
   const colorPairs = stats.colorPairs || []
 
-  // Build a sorted list of unique color pairs by play rate
+  // Build a sorted list of unique color pairs by play rate (not limited)
   const sortedColorPairs = [...colorPairs]
-    .filter(cp => cp.games >= 10)
-    .sort((a, b) => b.games - a.games)
-    .slice(0, 20) // Limit to top 20 for matrix size
+    .filter(cp => cp.games >= 20) // Minimum sample size
+    .sort((a, b) => b.playRate - a.playRate) // Sort by play rate, not games
 
   // Create a map for quick matchup lookup
   const matchupMap = new Map()
@@ -115,6 +114,18 @@ export function WinrateMatrixPage() {
     const key = `${JSON.stringify(colorsA)}-${JSON.stringify(colorsB)}`
     return matchupMap.get(key)
   }
+
+  // Get all unique color pairs that appear in matchups (for complete matrix)
+  const colorPairSet = new Set()
+  matchups.forEach(m => {
+    colorPairSet.add(JSON.stringify(m.colorsA))
+    colorPairSet.add(JSON.stringify(m.colorsB))
+  })
+
+  // Build final sorted list of color pairs that have matchup data
+  const matrixColorPairs = [...colorPairs]
+    .filter(cp => colorPairSet.has(JSON.stringify(cp.colors)))
+    .sort((a, b) => b.playRate - a.playRate)
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
@@ -189,7 +200,7 @@ export function WinrateMatrixPage() {
           {/* Header row */}
           <div className="inline-flex gap-1">
             <div className="w-16 h-16 flex-shrink-0" />
-            {sortedColorPairs.map((pair, idx) => (
+            {matrixColorPairs.map((pair, idx) => (
               <div key={idx} className="w-16 h-16 flex-shrink-0 flex justify-center items-center">
                 <ColorPairIcons colors={pair.colors} size={20} />
               </div>
@@ -197,12 +208,12 @@ export function WinrateMatrixPage() {
           </div>
 
           {/* Rows */}
-          {sortedColorPairs.map((rowPair, rowIdx) => (
+          {matrixColorPairs.map((rowPair, rowIdx) => (
             <div key={rowIdx} className="inline-flex gap-1">
               <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center border border-gray-100">
                 <ColorPairIcons colors={rowPair.colors} size={20} />
               </div>
-              {sortedColorPairs.map((colPair, colIdx) => {
+              {matrixColorPairs.map((colPair, colIdx) => {
                 const matchup = getMatchup(rowPair.colors, colPair.colors)
                 if (!matchup) {
                   return (

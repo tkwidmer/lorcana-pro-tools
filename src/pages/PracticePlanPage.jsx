@@ -307,14 +307,28 @@ export function PracticePlanPage() {
     return (pw / pg) - (dw / dg) // positive = play favored
   }, [games])
 
-  // Default meta % from public stats popularity (share of games played)
+  // Default meta % from public stats popularity (share of games played).
+  // Pairs below the rogue threshold default to 0; the rest are renormalized to sum to 100.
   const defaultMetaByKey = useMemo(() => {
     const totalGames = twoColorPairs.reduce((s, cp) => s + (cp.games ?? 0), 0)
-    const out = {}
+    if (totalGames <= 0) return {}
+    const raw = {}
+    let keptSum = 0
     for (const cp of twoColorPairs) {
-      out[cp.key] = totalGames > 0 ? (cp.games / totalGames) * 100 : 0
+      const share = (cp.games / totalGames) * 100
+      if (share >= ROGUE_THRESHOLD) {
+        raw[cp.key] = share
+        keptSum += share
+      } else {
+        raw[cp.key] = 0
+      }
     }
-    return out
+    if (keptSum <= 0) return raw
+    const scale = 100 / keptSum
+    for (const k of Object.keys(raw)) {
+      if (raw[k] > 0) raw[k] = raw[k] * scale
+    }
+    return raw
   }, [twoColorPairs])
 
   const effectiveMetaPct = (key) => metaOverrides[key] ?? defaultMetaByKey[key] ?? 0
@@ -928,7 +942,7 @@ export function PracticePlanPage() {
             <ul className="list-disc list-inside space-y-1">
               <li><strong>Public matrix:</strong> aggregate matchup win rates from duels.ink for the selected queue, all-time, all ranks. Each cell carries games played, overall WR, and first-player WR.</li>
               <li><strong>Personal history:</strong> your full match history pulled from duels.ink (up to 2,000 most recent games), filtered to the selected ink pair. Each row has result, opponent colors, and whether you went first.</li>
-              <li><strong>Meta distribution:</strong> defaults to public popularity of each ink pair on the selected queue. You can override any cell — values are renormalized so they always sum to 100% for planning math.</li>
+              <li><strong>Meta distribution:</strong> defaults to public popularity of each ink pair on the selected queue, with any pair below the {ROGUE_THRESHOLD}% rogue threshold set to 0 and the remaining pairs renormalized so the visible meta sums to 100%. You can override any cell — including bringing a rogue deck back in if you expect it to spike.</li>
             </ul>
           </section>
 
@@ -975,7 +989,7 @@ export function PracticePlanPage() {
           <section>
             <h3 className="font-semibold text-gray-800 mb-1">Filters & flags</h3>
             <ul className="list-disc list-inside space-y-1">
-              <li><strong>Rogue cutoff ({ROGUE_THRESHOLD}%):</strong> matchups below this meta share are zeroed for all planning math but rendered grayed-out for reference. Below this threshold you can't expect to face the deck in Swiss; better to ignore it than dilute reps.</li>
+              <li><strong>Rogue cutoff ({ROGUE_THRESHOLD}%):</strong> pairs whose public popularity is below this threshold default to 0% meta share (the remaining pairs are renormalized to sum to 100%) and are rendered grayed-out for reference. You can manually override a rogue deck back to a non-zero share if you expect it to show up at your event.</li>
               <li><strong>Low sample:</strong> &lt;5 personal games on the matchup. The estimate is dominated by the public prior.</li>
               <li><strong>Underperforming:</strong> personal WR trails public WR by ≥8 pp. Likely a knowledge gap — high ROI to practice.</li>
               <li><strong>Blind spot:</strong> ≥3% meta share with &lt;5 personal games. These matchups inject the most uncertainty into your projection.</li>

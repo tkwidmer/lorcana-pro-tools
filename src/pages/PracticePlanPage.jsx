@@ -38,6 +38,8 @@ function parseColorString(str) {
   return resolveColors([str])
 }
 
+const ROGUE_THRESHOLD = 5 // meta % below this is treated as a rogue deck and zeroed for planning
+
 // Wilson 95% confidence interval for a binomial proportion (0..1)
 function wilsonInterval(wins, n) {
   if (!n) return [0, 1]
@@ -234,8 +236,16 @@ export function PracticePlanPage() {
 
   const effectiveMetaPct = (key) => metaOverrides[key] ?? defaultMetaByKey[key] ?? 0
 
+  // Raw sum (for the "your % sums to N" message) and planning sum (rogue decks zeroed)
   const totalMetaPct = useMemo(() => {
     return twoColorPairs.reduce((s, cp) => s + (metaOverrides[cp.key] ?? defaultMetaByKey[cp.key] ?? 0), 0)
+  }, [twoColorPairs, metaOverrides, defaultMetaByKey])
+
+  const planningTotalMetaPct = useMemo(() => {
+    return twoColorPairs.reduce((s, cp) => {
+      const v = metaOverrides[cp.key] ?? defaultMetaByKey[cp.key] ?? 0
+      return s + (v >= ROGUE_THRESHOLD ? v : 0)
+    }, 0)
   }, [twoColorPairs, metaOverrides, defaultMetaByKey])
 
   // Build plan rows
@@ -243,7 +253,9 @@ export function PracticePlanPage() {
     if (!yourColors.length || !twoColorPairs.length) return []
     const rows = twoColorPairs.map(cp => {
       const metaPct = metaOverrides[cp.key] ?? defaultMetaByKey[cp.key] ?? 0
-      const normalizedMeta = totalMetaPct > 0 ? metaPct / totalMetaPct : 0
+      const isRogue = metaPct < ROGUE_THRESHOLD
+      const planningMetaPct = isRogue ? 0 : metaPct
+      const normalizedMeta = planningTotalMetaPct > 0 ? planningMetaPct / planningTotalMetaPct : 0
       const lookup = matchupLookup.get(`${yourColorsKey}|${cp.key}`)
       const publicWR = lookup?.winRate ?? null
       const personal = personalByOpp.get(cp.key)
@@ -274,6 +286,7 @@ export function PracticePlanPage() {
         key: cp.key,
         colors: cp.colors,
         metaPct,
+        isRogue,
         normalizedMeta,
         publicWR,
         publicGames: lookup?.games ?? 0,
@@ -296,7 +309,7 @@ export function PracticePlanPage() {
       r.recommendedReps = Math.round(raw)
     })
     return rows
-  }, [twoColorPairs, yourColors, yourColorsKey, matchupLookup, personalByOpp, totalMetaPct, practiceBudget, metaOverrides, defaultMetaByKey])
+  }, [twoColorPairs, yourColors, yourColorsKey, matchupLookup, personalByOpp, planningTotalMetaPct, practiceBudget, metaOverrides, defaultMetaByKey])
 
   const sortedPlanRows = useMemo(() => {
     const rows = planRows.slice()
@@ -391,7 +404,8 @@ export function PracticePlanPage() {
       let totalGames = 0
       for (const cp of twoColorPairs) {
         const metaPct = metaOverrides[cp.key] ?? defaultMetaByKey[cp.key] ?? 0
-        const normalizedMeta = totalMetaPct > 0 ? metaPct / totalMetaPct : 0
+        if (metaPct < ROGUE_THRESHOLD) continue
+        const normalizedMeta = planningTotalMetaPct > 0 ? metaPct / planningTotalMetaPct : 0
         if (!normalizedMeta) continue
         const lookup = matchupLookup.get(`${deckKey}|${cp.key}`)
         const publicWR = lookup?.winRate ?? null
@@ -402,7 +416,7 @@ export function PracticePlanPage() {
       }
       return { key: deckKey, colors, expectedWR: expWR * 100, totalGames, sampleN: myDeckGames.get(deckKey) }
     }).sort((a, b) => b.expectedWR - a.expectedWR)
-  }, [games, twoColorPairs, matchupLookup, metaOverrides, defaultMetaByKey, totalMetaPct])
+  }, [games, twoColorPairs, matchupLookup, metaOverrides, defaultMetaByKey, planningTotalMetaPct])
 
   const visibleRows = showAllMeta ? sortedPlanRows : sortedPlanRows.filter(r => r.metaPct >= 1)
 
@@ -678,7 +692,7 @@ export function PracticePlanPage() {
                 const lowSample = !row.personal || row.personal.games < 5
                 const underperforming = row.delta != null && row.delta <= -8
                 return (
-                  <tr key={row.key} className="border-t border-gray-100">
+                  <tr key={row.key} className={`border-t border-gray-100 ${row.isRogue ? 'opacity-50' : ''}`}>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <ColorPairIcons colors={row.colors} size={20} />
@@ -691,6 +705,11 @@ export function PracticePlanPage() {
                         {lowSample && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-gray-50 text-gray-600 border border-gray-200">
                             low sample
+                          </span>
+                        )}
+                        {row.isRogue && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200">
+                            rogue (&lt;{ROGUE_THRESHOLD}%)
                           </span>
                         )}
                       </div>
@@ -751,6 +770,7 @@ export function PracticePlanPage() {
       )}
 
       <div className="mt-8 text-xs text-gray-500 space-y-1">
+        <p><strong>Rogue cutoff:</strong> matchups below {ROGUE_THRESHOLD}% of the meta are excluded from planning math (reps, expected WR, top-cut odds). They're shown grayed-out for reference.</p>
         <p><strong>Effective WR (used for projections):</strong> Bayesian shrinkage — your personal record blended with the public matrix as a 10-game prior, so a 1-3 record doesn't dominate.</p>
         <p><strong>Lift if practiced:</strong> event-WR points you'd gain if this matchup reached its ceiling (max of public WR + 2pp or your current + 3pp). The reps column sorts by this — practice where the points are.</p>
         <p><strong>Round projection:</strong> binomial with p = expected WR, treats rounds as independent (Swiss has some autocorrelation, so real top-cut odds are slightly higher than shown).</p>

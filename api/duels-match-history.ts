@@ -59,6 +59,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(upstreamRes.status)
       .setHeader('Content-Type', contentType)
+      .setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      .setHeader('Pragma', 'no-cache')
+      .setHeader('Expires', '0')
       .send(body)
   } catch (e) {
     res.status(502).json({ error: 'Failed to reach duels.ink', detail: String(e) })

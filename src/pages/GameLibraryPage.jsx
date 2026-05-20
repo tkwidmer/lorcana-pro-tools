@@ -20,6 +20,8 @@ export function GameLibraryPage() {
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [importedIds, setImportedIds] = useState(getImportedGameIds())
+  const [importedExpanded, setImportedExpanded] = useState(true)
+  const [personalExpanded, setPersonalExpanded] = useState(true)
 
   useEffect(() => {
     loadGames()
@@ -102,6 +104,28 @@ export function GameLibraryPage() {
     setGames([])
   }
 
+  async function handleClearImported() {
+    const importedGames = games.filter(g => importedIds.has(g.id))
+    if (!window.confirm(`Delete all ${importedGames.length} imported games? This cannot be undone.`)) return
+    for (const game of importedGames) {
+      await deleteGamelog(game.id)
+    }
+    const newIds = new Set(importedIds)
+    importedGames.forEach(g => newIds.delete(g.id))
+    setImportedIds(newIds)
+    saveImportedGameIds(newIds)
+    await loadGames()
+  }
+
+  async function handleClearPersonal() {
+    const personalGames = games.filter(g => !importedIds.has(g.id))
+    if (!window.confirm(`Delete all ${personalGames.length} personal games? This cannot be undone.`)) return
+    for (const game of personalGames) {
+      await deleteGamelog(game.id)
+    }
+    await loadGames()
+  }
+
   const importedGames = games.filter(g => importedIds.has(g.id))
   const personalGames = games.filter(g => !importedIds.has(g.id))
 
@@ -177,27 +201,59 @@ export function GameLibraryPage() {
 
       {/* Imported games section */}
       {importedGames.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-lg font-bold text-gray-900 mb-3">Imported Games ({importedGames.length})</h2>
-          <GamesList games={importedGames} onDelete={async (id) => {
-            await deleteGamelog(id)
-            const newIds = new Set(importedIds)
-            newIds.delete(id)
-            setImportedIds(newIds)
-            saveImportedGameIds(newIds)
-            await loadGames()
-          }} />
+        <div className="mb-8 border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => setImportedExpanded(!importedExpanded)}
+              className="flex items-center gap-2 cursor-pointer flex-1 text-left"
+            >
+              <span className="text-lg font-bold text-gray-900">Imported Games ({importedGames.length})</span>
+              <span className="text-gray-500 text-sm">{importedExpanded ? '▼' : '▶'}</span>
+            </button>
+            <button
+              onClick={handleClearImported}
+              className="text-xs text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+            >
+              Clear
+            </button>
+          </div>
+          {importedExpanded && (
+            <GamesList games={importedGames} onDelete={async (id) => {
+              await deleteGamelog(id)
+              const newIds = new Set(importedIds)
+              newIds.delete(id)
+              setImportedIds(newIds)
+              saveImportedGameIds(newIds)
+              await loadGames()
+            }} />
+          )}
         </div>
       )}
 
       {/* Personal games section */}
       {personalGames.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-lg font-bold text-gray-900 mb-3">Personal Games ({personalGames.length})</h2>
-          <GamesList games={personalGames} onDelete={async (id) => {
-            await deleteGamelog(id)
-            await loadGames()
-          }} />
+        <div className="mb-8 border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => setPersonalExpanded(!personalExpanded)}
+              className="flex items-center gap-2 cursor-pointer flex-1 text-left"
+            >
+              <span className="text-lg font-bold text-gray-900">Personal Games ({personalGames.length})</span>
+              <span className="text-gray-500 text-sm">{personalExpanded ? '▼' : '▶'}</span>
+            </button>
+            <button
+              onClick={handleClearPersonal}
+              className="text-xs text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+            >
+              Clear
+            </button>
+          </div>
+          {personalExpanded && (
+            <GamesList games={personalGames} onDelete={async (id) => {
+              await deleteGamelog(id)
+              await loadGames()
+            }} />
+          )}
         </div>
       )}
 

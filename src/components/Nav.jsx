@@ -46,6 +46,7 @@ export function Nav() {
                 : pathname === '/deck-comparison' ? 'Deck Comparison'
                 : pathname === '/gamelog' ? 'Gamelog'
                 : pathname === '/gamelog-analyzer' ? 'Gamelog Analyzer'
+                : pathname === '/game-library' ? 'Game Library'
                 : ''}
             </span>
           </>

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { getToken, fetchMatchHistory, fetchGamelogBuffer } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
+import { createGameExportZip } from '../lib/gameExport'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
 

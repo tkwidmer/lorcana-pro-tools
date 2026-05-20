@@ -31,11 +31,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     }
 
+    // Validate that response is not empty
+    if (!body || body.trim().length === 0) {
+      return res.status(502).json({
+        error: 'Invalid response from duels.ink',
+        detail: 'Empty response body'
+      })
+    }
+
     // Validate that response is JSON before forwarding
     if (!contentType.includes('application/json')) {
       return res.status(502).json({
         error: 'Invalid response from duels.ink',
-        detail: 'Expected JSON response'
+        detail: `Expected JSON response, got ${contentType || 'unknown content-type'}`
+      })
+    }
+
+    // Try to parse as JSON to validate it's valid
+    try {
+      JSON.parse(body)
+    } catch {
+      return res.status(502).json({
+        error: 'Invalid JSON response from duels.ink',
+        detail: 'Response is not valid JSON'
       })
     }
 

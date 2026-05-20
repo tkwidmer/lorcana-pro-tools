@@ -120,6 +120,13 @@ export function GameLibraryPage() {
   const losses = gamesWithMyPlayer.length - wins
   const winRate = gamesWithMyPlayer.length > 0 ? (wins / gamesWithMyPlayer.length * 100).toFixed(0) : 0
 
+  const gamesFirst = gamesWithMyPlayer.filter(g => g.wentFirst === g.myPlayerNum || g.wentFirst === String(g.myPlayerNum))
+  const gamesSecond = gamesWithMyPlayer.filter(g => g.wentFirst != null && g.wentFirst !== g.myPlayerNum && g.wentFirst !== String(g.myPlayerNum))
+  const winsFirst = gamesFirst.filter(g => g.winner === g.myPlayerNum || g.winner === String(g.myPlayerNum)).length
+  const winsSecond = gamesSecond.filter(g => g.winner === g.myPlayerNum || g.winner === String(g.myPlayerNum)).length
+  const winRateFirst = gamesFirst.length > 0 ? Math.round(winsFirst / gamesFirst.length * 100) : null
+  const winRateSecond = gamesSecond.length > 0 ? Math.round(winsSecond / gamesSecond.length * 100) : null
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
@@ -194,13 +201,27 @@ export function GameLibraryPage() {
       {gamesWithMyPlayer.length > 0 && (
         <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Overall Record</div>
-          <div className="flex items-baseline gap-4">
+          <div className="flex items-baseline gap-6 flex-wrap">
             <div>
               <div className="text-3xl font-bold text-gray-900">{wins}-{losses}</div>
             </div>
             <div>
               <div className="text-2xl font-semibold text-green-600">{winRate}%</div>
             </div>
+            {winRateFirst != null && (
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs text-gray-500 font-medium">Going 1st</span>
+                <span className="text-lg font-semibold text-gray-700">{winRateFirst}%</span>
+                <span className="text-xs text-gray-400">({winsFirst}-{gamesFirst.length - winsFirst})</span>
+              </div>
+            )}
+            {winRateSecond != null && (
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs text-gray-500 font-medium">Going 2nd</span>
+                <span className="text-lg font-semibold text-gray-700">{winRateSecond}%</span>
+                <span className="text-xs text-gray-400">({winsSecond}-{gamesSecond.length - winsSecond})</span>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip, importGamelogFile } from '../lib/gameImport'
+import { analyzeOpponentMetagame } from '../lib/metagameAnalysis'
 import { InkImg } from './GamelogAnalyzerPage'
 
 const IMPORTED_GAMES_KEY = 'lorcana_imported_game_ids'
@@ -22,6 +23,7 @@ export function GameLibraryPage() {
   const [importedIds, setImportedIds] = useState(getImportedGameIds())
   const [importedOpen, setImportedOpen] = useState(true)
   const [personalOpen, setPersonalOpen] = useState(true)
+  const [metagameOpen, setMetagameOpen] = useState(true)
 
   useEffect(() => {
     loadGames()
@@ -199,6 +201,26 @@ export function GameLibraryPage() {
         </div>
       )}
 
+      {/* Opponent Metagame */}
+      {games.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setMetagameOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Opponent Metagame</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${metagameOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {metagameOpen && (
+            <div className="mt-6">
+              <OpponentMetagameView games={games} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Imported games section */}
       {importedGames.length > 0 && (
         <div className="mb-4">
@@ -322,6 +344,59 @@ function GameListItem({ game, onDelete }) {
       >
         ✕
       </button>
+    </div>
+  )
+}
+
+function OpponentMetagameView({ games }) {
+  const metagame = analyzeOpponentMetagame(games)
+
+  if (metagame.length === 0) {
+    return <div className="text-sm text-gray-500">No opponent deck data available</div>
+  }
+
+  const totalGames = games.length
+
+  return (
+    <div className="space-y-3">
+      {metagame.map(deck => (
+        <div key={deck.colorString} className="border border-gray-100 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-gray-900">{deck.colors.length > 0 ? deck.colors.map(c => c.charAt(0).toUpperCase()).join('/') : 'Unknown'}</span>
+              {deck.colors.length > 0 && (
+                <div className="flex items-center gap-1">
+                  {deck.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-gray-600">{deck.gameCount} games</span>
+              <span className="text-gray-600">{deck.percentage}%</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div
+                className={`h-full transition-all ${
+                  deck.winRate >= 60 ? 'bg-emerald-500' :
+                  deck.winRate >= 50 ? 'bg-blue-500' :
+                  'bg-red-500'
+                }`}
+                style={{ width: `${deck.winRate}%` }}
+              />
+            </div>
+            <span className={`text-sm font-medium w-16 text-right ${
+              deck.winRate >= 60 ? 'text-emerald-600' :
+              deck.winRate >= 50 ? 'text-blue-600' :
+              'text-red-600'
+            }`}>
+              {deck.winRate}%
+            </span>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">{deck.wins}W - {deck.losses}L</div>
+        </div>
+      ))}
     </div>
   )
 }

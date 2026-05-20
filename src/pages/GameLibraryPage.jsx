@@ -36,7 +36,7 @@ export function GameLibraryPage() {
 
   async function loadGames() {
     const allGames = await getAllGamelogs()
-    setGames(allGames)
+    setGames([...allGames].sort((a, b) => b.savedAt - a.savedAt))
   }
 
   async function processZipFile(file) {

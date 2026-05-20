@@ -4,6 +4,10 @@ export function buildWinrateMatrixFromGames(games) {
   const colorSet = new Set()
 
   for (const game of games) {
+    // Skip games without myPlayerNum
+    const myPlayerNum = game.myPlayerNum
+    if (myPlayerNum == null) continue
+
     const myColors = (game.myInkCombo ?? []).sort()
     const oppColors = (game.oppInkCombo ?? []).sort()
 
@@ -24,7 +28,6 @@ export function buildWinrateMatrixFromGames(games) {
     matchupData[key].games += 1
 
     // Check if we won (myPlayerNum matches winner)
-    const myPlayerNum = game.myPlayerNum
     const winner = game.winner === String(myPlayerNum) || game.winner === myPlayerNum
     if (winner) {
       matchupData[key].winsA += 1

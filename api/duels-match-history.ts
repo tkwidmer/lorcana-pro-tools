@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!contentType.includes('application/json')) {
       return res.status(502).json({
         error: 'Invalid response from duels.ink',
-        detail: `Expected JSON response, got ${contentType || 'unknown content-type'}`
+        detail: contentType ? 'Expected JSON response, got different content-type' : 'Expected JSON response, unknown content-type'
       })
     }
 

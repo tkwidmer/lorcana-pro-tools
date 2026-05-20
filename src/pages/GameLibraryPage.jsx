@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip, importGamelogFile } from '../lib/gameImport'
 import { analyzeOpponentMetagame } from '../lib/metagameAnalysis'
+import { buildWinrateMatrixFromGames } from '../lib/buildWinrateMatrix'
 import { InkImg } from './GamelogAnalyzerPage'
 
 const IMPORTED_GAMES_KEY = 'lorcana_imported_game_ids'
@@ -24,6 +25,7 @@ export function GameLibraryPage() {
   const [importedOpen, setImportedOpen] = useState(true)
   const [personalOpen, setPersonalOpen] = useState(true)
   const [metagameOpen, setMetagameOpen] = useState(true)
+  const [matrixOpen, setMatrixOpen] = useState(true)
 
   useEffect(() => {
     loadGames()
@@ -221,6 +223,26 @@ export function GameLibraryPage() {
         </div>
       )}
 
+      {/* Personal Winrate Matrix */}
+      {games.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setMatrixOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Personal Winrate Matrix</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${matrixOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {matrixOpen && (
+            <div className="mt-6">
+              <PersonalWinrateMatrixView games={games} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Imported games section */}
       {importedGames.length > 0 && (
         <div className="mb-4">
@@ -344,6 +366,133 @@ function GameListItem({ game, onDelete }) {
       >
         ✕
       </button>
+    </div>
+  )
+}
+
+function PersonalWinrateMatrixView({ games }) {
+  const { matchups, colorPairs } = buildWinrateMatrixFromGames(games)
+
+  if (matchups.length === 0 || colorPairs.length === 0) {
+    return <div className="text-sm text-gray-500">No matchup data available</div>
+  }
+
+  // Color helper for winrate cells (same as WinrateMatrixPage)
+  const getWinrateColor = (winRate, isMirror = false) => {
+    if (isMirror) {
+      if (winRate >= 60) return 'bg-blue-300 border border-blue-500'
+      if (winRate >= 55) return 'bg-blue-200 border border-blue-400'
+      if (winRate >= 51) return 'bg-blue-100 border border-blue-300'
+      return 'bg-gray-50 border border-gray-200'
+    }
+    if (winRate >= 60) return 'bg-green-300 border border-green-500'
+    if (winRate >= 55) return 'bg-green-200 border border-green-400'
+    if (winRate >= 51) return 'bg-green-100 border border-green-300'
+    if (winRate >= 49) return 'bg-gray-50 border border-gray-200'
+    if (winRate >= 45) return 'bg-red-100 border border-red-300'
+    if (winRate >= 40) return 'bg-red-200 border border-red-400'
+    return 'bg-red-300 border border-red-500'
+  }
+
+  // Get matchup with bidirectional lookup
+  const getMatchup = (colorsA, colorsB) => {
+    const key = `${JSON.stringify(colorsA)}-${JSON.stringify(colorsB)}`
+    return matchups.find(m =>
+      JSON.stringify(m.colorsA) === JSON.stringify(colorsA) &&
+      JSON.stringify(m.colorsB) === JSON.stringify(colorsB)
+    )
+  }
+
+  // Get matchup in reverse
+  const getReverseMatchup = (colorsA, colorsB) => {
+    const matchup = matchups.find(m =>
+      JSON.stringify(m.colorsB) === JSON.stringify(colorsA) &&
+      JSON.stringify(m.colorsA) === JSON.stringify(colorsB)
+    )
+    if (!matchup) return null
+    return {
+      ...matchup,
+      colorsA: matchup.colorsB,
+      colorsB: matchup.colorsA,
+      winsA: matchup.games - matchup.winsA,
+      winRate: 100 - matchup.winRate,
+    }
+  }
+
+  const getFullMatchup = (colorsA, colorsB) => {
+    return getMatchup(colorsA, colorsB) || getReverseMatchup(colorsA, colorsB)
+  }
+
+  // Sort color pairs by winrate
+  const sortedColorPairs = [...colorPairs].sort((a, b) => b.winRate - a.winRate)
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="inline-block min-w-full">
+        {sortedColorPairs.map((rowPair, rowIdx) => (
+          <div key={rowIdx} className="flex mb-2">
+            {rowIdx === 0 && (
+              <div className="flex">
+                <div className="w-16 h-16 flex-shrink-0" />
+                {sortedColorPairs.map((colPair, colIdx) => (
+                  <div
+                    key={colIdx}
+                    className="w-16 h-16 flex-shrink-0 flex items-center justify-center text-xs font-semibold"
+                  >
+                    <div className="flex items-center gap-0.5">
+                      {colPair.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {rowIdx > 0 && (
+              <div className="flex">
+                {rowIdx === 1 && (
+                  <div className="flex items-center justify-center w-16 h-16 flex-shrink-0 text-xs font-semibold">
+                    <div className="flex items-center gap-0.5">
+                      {sortedColorPairs[rowIdx].colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                    </div>
+                  </div>
+                )}
+                {rowIdx > 1 && (
+                  <div className="flex items-center justify-center w-16 h-16 flex-shrink-0 text-xs font-semibold">
+                    <div className="flex items-center gap-0.5">
+                      {rowPair.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                    </div>
+                  </div>
+                )}
+                {sortedColorPairs.map((colPair, colIdx) => {
+                  const matchup = getFullMatchup(rowPair.colors, colPair.colors)
+                  if (!matchup) {
+                    return (
+                      <div key={colIdx} className="w-16 h-16 flex-shrink-0 bg-gray-50 border border-gray-100" />
+                    )
+                  }
+                  const isMirror = JSON.stringify(rowPair.colors) === JSON.stringify(colPair.colors)
+                  const displayWinRate = isMirror ? matchup.winRate : matchup.winRate
+                  return (
+                    <div
+                      key={colIdx}
+                      className="w-16 h-16 flex-shrink-0 relative group"
+                    >
+                      <div
+                        className={`w-16 h-16 rounded p-1 text-center flex flex-col items-center justify-center text-xs font-semibold text-gray-900 ${getWinrateColor(displayWinRate, isMirror)}`}
+                      >
+                        <div>{displayWinRate.toFixed(0)}%</div>
+                        <div className="text-xs text-gray-600">{matchup.games}</div>
+                      </div>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        {matchup.games} games
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

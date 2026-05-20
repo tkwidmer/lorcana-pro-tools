@@ -20,8 +20,6 @@ export function GameLibraryPage() {
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [importedIds, setImportedIds] = useState(getImportedGameIds())
-  const [importedExpanded, setImportedExpanded] = useState(true)
-  const [personalExpanded, setPersonalExpanded] = useState(true)
 
   useEffect(() => {
     loadGames()
@@ -201,23 +199,17 @@ export function GameLibraryPage() {
 
       {/* Imported games section */}
       {importedGames.length > 0 && (
-        <div className="mb-8 border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
+        <details className="border border-gray-200 rounded-lg p-4 mb-6" open>
+          <summary className="cursor-pointer font-medium text-gray-700 select-none flex items-center justify-between">
+            <span>Imported Games ({importedGames.length})</span>
             <button
-              onClick={() => setImportedExpanded(!importedExpanded)}
-              className="flex items-center gap-2 cursor-pointer flex-1 text-left"
-            >
-              <span className="text-lg font-bold text-gray-900">Imported Games ({importedGames.length})</span>
-              <span className="text-gray-500 text-sm">{importedExpanded ? '▼' : '▶'}</span>
-            </button>
-            <button
-              onClick={handleClearImported}
+              onClick={(e) => { e.stopPropagation(); handleClearImported() }}
               className="text-xs text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
             >
               Clear
             </button>
-          </div>
-          {importedExpanded && (
+          </summary>
+          <div className="mt-4">
             <GamesList games={importedGames} onDelete={async (id) => {
               await deleteGamelog(id)
               const newIds = new Set(importedIds)
@@ -226,35 +218,29 @@ export function GameLibraryPage() {
               saveImportedGameIds(newIds)
               await loadGames()
             }} />
-          )}
-        </div>
+          </div>
+        </details>
       )}
 
       {/* Personal games section */}
       {personalGames.length > 0 && (
-        <div className="mb-8 border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
+        <details className="border border-gray-200 rounded-lg p-4 mb-6" open>
+          <summary className="cursor-pointer font-medium text-gray-700 select-none flex items-center justify-between">
+            <span>Personal Games ({personalGames.length})</span>
             <button
-              onClick={() => setPersonalExpanded(!personalExpanded)}
-              className="flex items-center gap-2 cursor-pointer flex-1 text-left"
-            >
-              <span className="text-lg font-bold text-gray-900">Personal Games ({personalGames.length})</span>
-              <span className="text-gray-500 text-sm">{personalExpanded ? '▼' : '▶'}</span>
-            </button>
-            <button
-              onClick={handleClearPersonal}
+              onClick={(e) => { e.stopPropagation(); handleClearPersonal() }}
               className="text-xs text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
             >
               Clear
             </button>
-          </div>
-          {personalExpanded && (
+          </summary>
+          <div className="mt-4">
             <GamesList games={personalGames} onDelete={async (id) => {
               await deleteGamelog(id)
               await loadGames()
             }} />
-          )}
-        </div>
+          </div>
+        </details>
       )}
 
       {games.length === 0 && !loading && (

@@ -92,6 +92,16 @@ export function GameLibraryPage() {
   const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true) }, [])
   const handleDragLeave = useCallback(() => setDragOver(false), [])
 
+  async function handleClearAll() {
+    if (!window.confirm(`Delete all ${games.length} games? This cannot be undone.`)) return
+    for (const game of games) {
+      await deleteGamelog(game.id)
+    }
+    setImportedIds(new Set())
+    saveImportedGameIds(new Set())
+    setGames([])
+  }
+
   const importedGames = games.filter(g => importedIds.has(g.id))
   const personalGames = games.filter(g => !importedIds.has(g.id))
 
@@ -150,6 +160,18 @@ export function GameLibraryPage() {
               {games.length > 0 ? Math.round(games.reduce((sum, g) => sum + (g.turnCount || 0), 0) / games.length) : '—'}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Control bar */}
+      {games.length > 0 && (
+        <div className="mb-6 flex justify-end">
+          <button
+            onClick={handleClearAll}
+            className="text-xs text-red-400 hover:text-red-600 transition-colors"
+          >
+            Clear all
+          </button>
         </div>
       )}
 

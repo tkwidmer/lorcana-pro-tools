@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { saveGamelog, getAllGamelogs, deleteGamelog, clearAllGamelogs } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog, parseColors } from '../lib/parseGamelog'
+import { createGameExportZip } from '../lib/gameExport'
 
 const MY_NAME_KEY = 'lorcana_my_name'
 
@@ -1369,12 +1370,20 @@ export function GamelogAnalyzerPage() {
         <div className="mt-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{gamelogs.length} game{gamelogs.length !== 1 ? 's' : ''}</span>
-            <button
-              onClick={handleClearAll}
-              className="text-xs text-red-400 hover:text-red-600 transition-colors"
-            >
-              Clear all
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => createGameExportZip(gamelogs, 'lorcana-games')}
+                className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
+              >
+                Export all
+              </button>
+              <button
+                onClick={handleClearAll}
+                className="text-xs text-red-400 hover:text-red-600 transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
           </div>
           <div className="space-y-1">
           {gamelogs.map(g => {
@@ -1419,6 +1428,11 @@ export function GamelogAnalyzerPage() {
                 </span>
                 <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{g.turnCount}T</span>
                 <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{new Date(g.playedAt ?? g.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); createGameExportZip([g], `lorcana-${g.id}`) }}
+                  className="text-xs opacity-40 hover:opacity-100 transition-opacity flex-shrink-0"
+                  title="Export game"
+                >⬇</button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDelete(g.id) }}
                   className="text-xs opacity-40 hover:opacity-100 transition-opacity flex-shrink-0"

@@ -952,8 +952,170 @@ function resolveDisplayName(storedName, isMe, myName) {
   return storedName
 }
 
+function RawStructureInspector({ rawLogs }) {
+  if (!rawLogs || rawLogs.length === 0) return null
+
+  const gameStart = rawLogs.find(l => l.type === 'GAME_START')
+  const gameEnd = rawLogs.find(l => l.type === 'GAME_END')
+  const firstCardDrawn = rawLogs.find(l => l.type === 'CARD_DRAWN')
+  const firstMulligan = rawLogs.find(l => l.type === 'MULLIGAN')
+  const firstThree = rawLogs.slice(0, 3)
+
+  const uniqueTypes = [...new Set(rawLogs.map(l => l.type))].sort()
+
+  return (
+    <details className="border border-dashed border-gray-300 rounded-lg p-4 text-xs text-gray-600 mb-6">
+      <summary className="cursor-pointer font-medium text-gray-700 select-none">Raw structure inspector</summary>
+      <div className="mt-3 space-y-3">
+        <div>
+          <span className="font-semibold text-gray-700">Event types ({uniqueTypes.length}): </span>
+          <span className="font-mono">{uniqueTypes.join(', ')}</span>
+        </div>
+        <div>
+          <div className="font-semibold text-gray-700 mb-1">GAME_START entry (player names, setup):</div>
+          <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+            {JSON.stringify(gameStart ?? 'none — no GAME_START event found', null, 2)}
+          </pre>
+        </div>
+        <div>
+          <div className="font-semibold text-gray-700 mb-1">GAME_END entry (winner, final lore):</div>
+          <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+            {JSON.stringify(gameEnd ?? 'none', null, 2)}
+          </pre>
+        </div>
+        <div>
+          <div className="font-semibold text-gray-700 mb-1">First CARD_DRAWN entry:</div>
+          <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+            {JSON.stringify(firstCardDrawn ?? 'none — no CARD_DRAWN events found', null, 2)}
+          </pre>
+        </div>
+        <div>
+          <div className="font-semibold text-gray-700 mb-1">First MULLIGAN entry:</div>
+          <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-all">
+            {JSON.stringify(firstMulligan ?? 'none', null, 2)}
+          </pre>
+        </div>
+        <div>
+          <div className="font-semibold text-gray-700 mb-1">First 3 raw entries (top-level structure):</div>
+          <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-64 font-mono whitespace-pre-wrap break-all">
+            {JSON.stringify(firstThree, null, 2)}
+          </pre>
+        </div>
+      </div>
+    </details>
+  )
+}
+
+function TurnByTurnLog({ rawLogs, turnCount }) {
+  if (!rawLogs || rawLogs.length === 0) return null
+
+  // Group events by turn
+  const eventsByTurn = {}
+  for (let i = 1; i <= (turnCount || 20); i++) {
+    eventsByTurn[i] = []
+  }
+  for (const log of rawLogs) {
+    const turn = log.turnNumber ?? 0
+    if (turn > 0) {
+      if (!eventsByTurn[turn]) eventsByTurn[turn] = []
+      eventsByTurn[turn].push(log)
+    }
+  }
+
+  const turns = Object.entries(eventsByTurn).filter(([_, events]) => events.length > 0)
+
+  if (turns.length === 0) return null
+
+  return (
+    <div className="border border-gray-100 rounded-lg p-4 mb-6">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Turn-by-Turn Events</h3>
+      <div className="space-y-2">
+        {turns.map(([turn, events]) => (
+          <details key={turn} className="border border-gray-200 rounded p-2">
+            <summary className="cursor-pointer font-medium text-sm text-gray-700 select-none">
+              Turn {turn} ({events.length} events)
+            </summary>
+            <div className="mt-2 space-y-1">
+              {events.map((event, idx) => (
+                <div key={idx} className="text-xs text-gray-600 ml-2 py-0.5 border-l-2 border-gray-200 pl-2">
+                  <span className="font-semibold text-gray-700">{event.type}</span>
+                  {event.player && <span className="text-gray-500"> (P{event.player})</span>}
+                  {event.data?.cardName && <span className="text-gray-700 font-mono"> — {event.data.cardName}</span>}
+                  {event.data?.loreGained && <span className="text-emerald-600"> +{event.data.loreGained} lore</span>}
+                </div>
+              ))}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CardEffectsTimeline({ p1, p2, p1Name, p2Name, turnCount }) {
+  if (!turnCount || ((!p1?.cards || Object.keys(p1.cards).length === 0) && (!p2?.cards || Object.keys(p2.cards).length === 0))) {
+    return null
+  }
+
+  const renderPlayerTimeline = (player, playerName) => {
+    if (!player?.cards || Object.keys(player.cards).length === 0) return null
+
+    // Create turn-wise breakdown: distribute actions across turns
+    const cardsArray = Object.values(player.cards)
+    const totalDraws = cardsArray.reduce((sum, c) => sum + (c.drawn || 0), 0)
+    const totalPlays = cardsArray.reduce((sum, c) => sum + (c.played || 0), 0)
+    const totalInked = cardsArray.reduce((sum, c) => sum + (c.inked || 0), 0)
+
+    const turnsPerCard = {}
+    for (const card of cardsArray) {
+      turnsPerCard[card.name] = {
+        drawn: Math.ceil((card.drawn || 0) / Math.max(turnCount / 3, 1)),
+        played: Math.ceil((card.played || 0) / Math.max(turnCount / 3, 1)),
+        inked: Math.ceil((card.inked || 0) / Math.max(turnCount / 3, 1)),
+      }
+    }
+
+    return (
+      <div key={playerName} className="mb-4">
+        <h4 className="text-xs font-semibold text-gray-600 mb-2">{playerName}</h4>
+        <div className="space-y-1 max-h-64 overflow-y-auto">
+          {cardsArray.slice(0, 10).map(card => (
+            <div key={card.name} className="text-xs text-gray-700">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="truncate font-medium flex-1">{card.name}</span>
+              </div>
+              <div className="flex gap-2 text-[11px]">
+                {card.drawn > 0 && <span className="text-blue-600">↓{card.drawn}</span>}
+                {card.played > 0 && <span className="text-amber-600">▶{card.played}</span>}
+                {card.inked > 0 && <span className="text-purple-600">◆{card.inked}</span>}
+                {card.discarded > 0 && <span className="text-gray-500">✕{card.discarded}</span>}
+              </div>
+            </div>
+          ))}
+          {cardsArray.length > 10 && (
+            <div className="text-xs text-gray-400 mt-2">+{cardsArray.length - 10} more cards</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border border-gray-100 rounded-lg p-4 mb-6">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Card Effects Timeline</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {renderPlayerTimeline(p1, p1Name)}
+        {renderPlayerTimeline(p2, p2Name)}
+      </div>
+      <div className="text-[11px] text-gray-500 mt-2 space-y-0.5">
+        <div>↓ = Drawn · ▶ = Played · ◆ = Inked · ✕ = Discarded</div>
+      </div>
+    </div>
+  )
+}
+
 function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
-  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, savedAt } = gamelog
+  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, savedAt, _rawLogs } = gamelog
   const p1Name = resolveDisplayName(rawP1Name, myPlayerNum === 1, myName)
   const p2Name = resolveDisplayName(rawP2Name, myPlayerNum === 2, myName)
   const p1IsWinner = winner === 1 || winner === '1'
@@ -992,12 +1154,18 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
         <div className="text-sm text-gray-500">{metaBits.join(' · ')}</div>
       </div>
 
+      {/* Raw structure inspector */}
+      <RawStructureInspector rawLogs={_rawLogs} />
+
       {/* Lore Race */}
       {loreEvents?.length > 0 && (
         <div className="border border-gray-100 rounded-lg p-4 mb-6">
           <LoreChart loreEvents={loreEvents} turnCount={turnCount} p1Name={p1Name} p2Name={p2Name} />
         </div>
       )}
+
+      {/* Turn-by-Turn Log */}
+      <TurnByTurnLog rawLogs={_rawLogs} turnCount={turnCount} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <div>
@@ -1013,6 +1181,9 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
           <PlayerSection name={p2Name} data={p2} isWinner={p2IsWinner} finalLore={p2FinalLore} />
         </div>
       </div>
+
+      {/* Card Effects Timeline */}
+      <CardEffectsTimeline p1={p1} p2={p2} p1Name={p1Name} p2Name={p2Name} turnCount={turnCount} />
 
       {/* Challenge log */}
       {challenges?.length > 0 && (
@@ -1059,7 +1230,7 @@ export function GamelogAnalyzerPage() {
     const logs = JSON.parse(text)
     const id = filename.replace(/\.logs\.gz$/i, '').replace(/\.gz$/i, '') || crypto.randomUUID()
     const parsed = parseGamelog(id, logs)
-    const record = await saveGamelog(id, parsed)
+    const record = await saveGamelog(id, parsed, logs)
     setGamelogs(prev => {
       const filtered = prev.filter(g => g.id !== id)
       return [record, ...filtered].sort((a, b) => b.savedAt - a.savedAt)

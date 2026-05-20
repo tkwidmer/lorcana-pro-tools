@@ -31,11 +31,35 @@ function promisify(req) {
   })
 }
 
-export async function saveGamelog(id, data) {
+function compressRawLogs(logs) {
+  if (!Array.isArray(logs)) return []
+  // Keep essential fields for inspection and turn-by-turn analysis
+  return logs.map(log => ({
+    type: log.type,
+    player: log.player,
+    turnNumber: log.turnNumber,
+    data: log.data ? {
+      cardName: log.data.cardName,
+      cardId: log.data.cardId,
+      cardFullName: log.data.cardFullName,
+      loreGained: log.data.loreGained,
+      playerNames: log.data.playerNames,
+      winner: log.data.winner,
+      victoryReason: log.data.victoryReason,
+    } : undefined,
+  }))
+}
+
+export async function saveGamelog(id, data, rawLogs) {
   if (!id || !data) return
   const store = await tx('readwrite')
   const existing = await promisify(store.get(id))
-  const record = { ...data, id, savedAt: existing?.savedAt ?? Date.now() }
+  const record = {
+    ...data,
+    id,
+    savedAt: existing?.savedAt ?? Date.now(),
+    _rawLogs: rawLogs ? compressRawLogs(rawLogs) : undefined,
+  }
   await promisify(store.put(record))
   return record
 }

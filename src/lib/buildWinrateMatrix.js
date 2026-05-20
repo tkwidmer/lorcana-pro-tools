@@ -22,15 +22,25 @@ export function buildWinrateMatrixFromGames(games) {
         colorsB: oppColors,
         games: 0,
         winsA: 0,
+        gamesFirst: 0,
+        winsFirst: 0,
+        gamesSecond: 0,
+        winsSecond: 0,
       }
     }
 
     matchupData[key].games += 1
 
-    // Check if we won (myPlayerNum matches winner)
-    const winner = game.winner === String(myPlayerNum) || game.winner === myPlayerNum
-    if (winner) {
-      matchupData[key].winsA += 1
+    const userWon = game.winner === String(myPlayerNum) || game.winner === myPlayerNum
+    if (userWon) matchupData[key].winsA += 1
+
+    const userWentFirst = game.wentFirst === myPlayerNum || game.wentFirst === String(myPlayerNum)
+    if (userWentFirst) {
+      matchupData[key].gamesFirst += 1
+      if (userWon) matchupData[key].winsFirst += 1
+    } else if (game.wentFirst != null) {
+      matchupData[key].gamesSecond += 1
+      if (userWon) matchupData[key].winsSecond += 1
     }
 
     // Track all color pairs that appear
@@ -42,7 +52,8 @@ export function buildWinrateMatrixFromGames(games) {
   const matchups = Object.values(matchupData).map(m => ({
     ...m,
     winRate: m.games > 0 ? (m.winsA / m.games * 100) : 50,
-    firstPlayerWinRate: m.games > 0 ? (m.winsA / m.games * 100) : 50,
+    winRateFirst: m.gamesFirst > 0 ? (m.winsFirst / m.gamesFirst * 100) : null,
+    winRateSecond: m.gamesSecond > 0 ? (m.winsSecond / m.gamesSecond * 100) : null,
   }))
 
   // Build colorPairs array from unique colors seen

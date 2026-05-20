@@ -26,6 +26,7 @@ export function GameLibraryPage() {
   const [personalOpen, setPersonalOpen] = useState(true)
   const [metagameOpen, setMetagameOpen] = useState(true)
   const [matchupOpen, setMatchupOpen] = useState(true)
+  const [trendOpen, setTrendOpen] = useState(true)
 
   useEffect(() => {
     loadGames()
@@ -201,6 +202,26 @@ export function GameLibraryPage() {
               <div className="text-2xl font-semibold text-green-600">{winRate}%</div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Win Rate Trend */}
+      {games.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setTrendOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Win Rate Trend</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${trendOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {trendOpen && (
+            <div className="mt-6">
+              <WinRateTrendView games={games} />
+            </div>
+          )}
         </div>
       )}
 
@@ -432,7 +453,7 @@ function MatchupMatrixView({ games }) {
     matchupMap.set(key, m)
   })
 
-  // Get matchup (with reverse lookup)
+  // Get matchup (with reverse lookup, flipping first/second perspective)
   const getMatchup = (playerColors, oppColors) => {
     const key = `${JSON.stringify(playerColors)}-${JSON.stringify(oppColors)}`
     let matchup = matchupMap.get(key)
@@ -441,11 +462,20 @@ function MatchupMatrixView({ games }) {
       const reverseKey = `${JSON.stringify(oppColors)}-${JSON.stringify(playerColors)}`
       const reverseMatchup = matchupMap.get(reverseKey)
       if (reverseMatchup) {
+        // Flip win counts and first/second perspective:
+        // original "first" = opponent went first = user went second (and vice versa)
+        const rf = reverseMatchup
         matchup = {
-          ...reverseMatchup,
-          colorsA: reverseMatchup.colorsB,
-          colorsB: reverseMatchup.colorsA,
-          winsA: reverseMatchup.games - reverseMatchup.winsA,
+          ...rf,
+          colorsA: rf.colorsB,
+          colorsB: rf.colorsA,
+          winsA: rf.games - rf.winsA,
+          gamesFirst: rf.gamesSecond,
+          winsFirst: rf.gamesSecond - rf.winsSecond,
+          gamesSecond: rf.gamesFirst,
+          winsSecond: rf.gamesFirst - rf.winsFirst,
+          winRateFirst: rf.gamesSecond > 0 ? ((rf.gamesSecond - rf.winsSecond) / rf.gamesSecond * 100) : null,
+          winRateSecond: rf.gamesFirst > 0 ? ((rf.gamesFirst - rf.winsFirst) / rf.gamesFirst * 100) : null,
         }
       }
     }
@@ -458,11 +488,11 @@ function MatchupMatrixView({ games }) {
       <div className="inline-block min-w-full">
         {/* Header row */}
         <div className="flex mb-2">
-          <div className="w-24 h-20 flex-shrink-0" />
+          <div className="w-24 h-16 flex-shrink-0" />
           {oppDecks.map((colPair, colIdx) => (
             <div
               key={colIdx}
-              className="w-24 h-20 flex-shrink-0 flex items-center justify-center text-xs font-semibold"
+              className="w-24 h-16 flex-shrink-0 flex items-center justify-center text-xs font-semibold"
             >
               <div className="flex flex-col items-center gap-0.5 text-center">
                 <span className="text-[10px] font-medium text-gray-600">OPP</span>
@@ -478,7 +508,7 @@ function MatchupMatrixView({ games }) {
         {userDecks.map((rowPair, rowIdx) => (
           <div key={rowIdx} className="flex mb-2">
             {/* Row header */}
-            <div className="w-24 h-20 flex-shrink-0 flex items-center justify-center text-xs font-semibold border-r border-gray-100">
+            <div className="w-24 h-28 flex-shrink-0 flex items-center justify-center text-xs font-semibold border-r border-gray-100">
               <div className="flex flex-col items-center gap-0.5 text-center">
                 <span className="text-[10px] font-medium text-gray-600">YOU</span>
                 <div className="flex items-center gap-0.5">
@@ -497,16 +527,26 @@ function MatchupMatrixView({ games }) {
               }
 
               const winRate = (matchup.winsA / matchup.games * 100).toFixed(0)
+              const firstStr = matchup.gamesFirst > 0
+                ? `${matchup.winsFirst}W-${matchup.gamesFirst - matchup.winsFirst}L`
+                : null
+              const secondStr = matchup.gamesSecond > 0
+                ? `${matchup.winsSecond}W-${matchup.gamesSecond - matchup.winsSecond}L`
+                : null
 
               return (
                 <div
                   key={colIdx}
-                  className={`w-24 h-20 flex-shrink-0 border border-gray-200 flex flex-col items-center justify-center text-center group relative cursor-help ${getWinrateColor(winRate)}`}
+                  className={`w-24 h-28 flex-shrink-0 border border-gray-200 flex flex-col items-center justify-center text-center group relative cursor-help px-1 ${getWinrateColor(winRate)}`}
                 >
                   <div className="text-sm font-bold text-gray-900">{winRate}%</div>
-                  <div className="text-xs text-gray-600">
-                    {matchup.winsA}W-{matchup.games - matchup.winsA}L
-                  </div>
+                  <div className="text-xs text-gray-600">{matchup.winsA}W-{matchup.games - matchup.winsA}L</div>
+                  {(firstStr || secondStr) && (
+                    <div className="mt-1 text-[10px] text-gray-500 leading-tight">
+                      {firstStr && <div>1st: {firstStr}</div>}
+                      {secondStr && <div>2nd: {secondStr}</div>}
+                    </div>
+                  )}
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                     {matchup.games} games
                   </div>
@@ -516,6 +556,90 @@ function MatchupMatrixView({ games }) {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function WinRateTrendView({ games }) {
+  const sorted = [...games]
+    .filter(g => g.myPlayerNum != null && g.playedAt != null)
+    .sort((a, b) => a.playedAt - b.playedAt)
+
+  if (sorted.length < 2) {
+    return <div className="text-sm text-gray-500">Not enough games to show a trend.</div>
+  }
+
+  const WINDOW = 10
+  const W = 1000
+  const H = 200
+  const PAD = { top: 16, right: 16, bottom: 32, left: 40 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+
+  // Rolling win rate at each game index
+  const points = sorted.map((game, i) => {
+    const slice = sorted.slice(Math.max(0, i - WINDOW + 1), i + 1)
+    const wins = slice.filter(g => g.winner === g.myPlayerNum || g.winner === String(g.myPlayerNum)).length
+    return wins / slice.length
+  })
+
+  const xPos = (i) => PAD.left + (i / (sorted.length - 1)) * chartW
+  const yPos = (rate) => PAD.top + (1 - rate) * chartH
+
+  const linePath = points.map((r, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(r).toFixed(1)}`).join(' ')
+
+  // X-axis date labels (first, middle, last)
+  const labelIdxs = [0, Math.floor((sorted.length - 1) / 2), sorted.length - 1]
+  const formatDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+  return (
+    <div>
+      <div className="text-xs text-gray-400 mb-2">Rolling {WINDOW}-game win rate</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+        {/* Grid lines */}
+        {[0.25, 0.5, 0.75].map(r => (
+          <g key={r}>
+            <line
+              x1={PAD.left} y1={yPos(r)} x2={W - PAD.right} y2={yPos(r)}
+              stroke={r === 0.5 ? '#9ca3af' : '#e5e7eb'} strokeWidth={r === 0.5 ? 1.5 : 1} strokeDasharray={r === 0.5 ? '6 3' : ''}
+            />
+            <text x={PAD.left - 6} y={yPos(r) + 4} textAnchor="end" fontSize={18} fill="#9ca3af">{r * 100}%</text>
+          </g>
+        ))}
+
+        {/* Individual game dots */}
+        {sorted.map((game, i) => {
+          const won = game.winner === game.myPlayerNum || game.winner === String(game.myPlayerNum)
+          return (
+            <circle
+              key={i}
+              cx={xPos(i)} cy={yPos(won ? 1 : 0)}
+              r={5}
+              fill={won ? '#86efac' : '#fca5a5'}
+              opacity={0.5}
+            />
+          )
+        })}
+
+        {/* Rolling win rate line */}
+        <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Dots on the line */}
+        {points.map((r, i) => (
+          <circle key={i} cx={xPos(i)} cy={yPos(r)} r={4} fill="#3b82f6" />
+        ))}
+
+        {/* X-axis date labels */}
+        {labelIdxs.map(i => (
+          <text
+            key={i} x={xPos(i)} y={H - 4}
+            textAnchor={i === 0 ? 'start' : i === sorted.length - 1 ? 'end' : 'middle'}
+            fontSize={16} fill="#9ca3af"
+          >
+            {formatDate(sorted[i].playedAt)}
+          </text>
+        ))}
+      </svg>
     </div>
   )
 }

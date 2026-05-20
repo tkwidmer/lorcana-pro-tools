@@ -355,48 +355,42 @@ function OpponentMetagameView({ games }) {
     return <div className="text-sm text-gray-500">No opponent deck data available</div>
   }
 
-  const totalGames = games.length
+  const maxPercentage = Math.max(...metagame.map(d => parseFloat(d.percentage)))
 
   return (
-    <div className="space-y-3">
-      {metagame.map(deck => (
-        <div key={deck.colorString} className="border border-gray-100 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900">{deck.colors.length > 0 ? deck.colors.map(c => c.charAt(0).toUpperCase()).join('/') : 'Unknown'}</span>
-              {deck.colors.length > 0 && (
-                <div className="flex items-center gap-1">
-                  {deck.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
-                </div>
-              )}
+    <div className="space-y-4">
+      {/* Horizontal bar chart */}
+      <div className="space-y-3">
+        {metagame.map(deck => (
+          <div key={deck.colorString}>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-medium text-gray-900 flex-shrink-0">{deck.colors.length > 0 ? deck.colors.map(c => c.charAt(0).toUpperCase()).join('/') : 'Unknown'}</span>
+                {deck.colors.length > 0 && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {deck.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 text-sm ml-4">
+                <span className="text-gray-600">{deck.gameCount}g</span>
+                <span className="font-semibold text-gray-900 w-12 text-right">{deck.percentage}%</span>
+              </div>
             </div>
-            <div className="flex items-center gap-4 text-sm">
-              <span className="text-gray-600">{deck.gameCount} games</span>
-              <span className="text-gray-600">{deck.percentage}%</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden">
               <div
-                className={`h-full transition-all ${
-                  deck.winRate >= 60 ? 'bg-emerald-500' :
-                  deck.winRate >= 50 ? 'bg-blue-500' :
-                  'bg-red-500'
-                }`}
-                style={{ width: `${deck.winRate}%` }}
-              />
+                className="h-full bg-blue-500 transition-all flex items-center justify-center"
+                style={{ width: `${(parseFloat(deck.percentage) / maxPercentage) * 100}%` }}
+              >
+                {parseFloat(deck.percentage) > 5 && (
+                  <span className="text-xs font-semibold text-white">{deck.percentage}%</span>
+                )}
+              </div>
             </div>
-            <span className={`text-sm font-medium w-16 text-right ${
-              deck.winRate >= 60 ? 'text-emerald-600' :
-              deck.winRate >= 50 ? 'text-blue-600' :
-              'text-red-600'
-            }`}>
-              {deck.winRate}%
-            </span>
+            <div className="text-xs text-gray-500 mt-1">{deck.wins}W - {deck.losses}L ({deck.winRate}%)</div>
           </div>
-          <div className="text-xs text-gray-500 mt-2">{deck.wins}W - {deck.losses}L</div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }

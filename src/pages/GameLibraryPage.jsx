@@ -376,18 +376,24 @@ function GameListItem({ game, onDelete }) {
   const p1IsWinner = game.winner === 1 || game.winner === '1'
   const p2IsWinner = game.winner === 2 || game.winner === '2'
 
+  // Determine your name and opponent name based on myPlayerNum
+  const myNum = game.myPlayerNum
+  const myName = myNum === 1 ? p1Name : myNum === 2 ? p2Name : null
+  const oppName = myNum === 1 ? p2Name : myNum === 2 ? p1Name : null
+  const myWon = myNum != null && (game.winner === myNum || game.winner === String(myNum))
+
   return (
     <div className="flex items-center gap-3 px-4 py-3 rounded border border-gray-100 hover:bg-gray-50 transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm text-gray-900 truncate">{p1Name}</span>
+          <span className="font-medium text-sm text-gray-900 truncate">{myName || p1Name}</span>
           {game.myInkCombo?.length > 0 && (
             <span className="flex items-center gap-0.5 flex-shrink-0">
               {game.myInkCombo.map(c => <InkImg key={c} color={c} size="w-3 h-3" />)}
             </span>
           )}
           <span className="text-xs text-gray-400">vs</span>
-          <span className="font-medium text-sm text-gray-900 truncate">{p2Name}</span>
+          <span className="font-medium text-sm text-gray-900 truncate">{oppName || p2Name}</span>
           {game.oppInkCombo?.length > 0 && (
             <span className="flex items-center gap-0.5 flex-shrink-0">
               {game.oppInkCombo.map(c => <InkImg key={c} color={c} size="w-3 h-3" />)}
@@ -395,8 +401,11 @@ function GameListItem({ game, onDelete }) {
           )}
         </div>
         <div className="flex items-center gap-2 mt-1">
-          {p1IsWinner && <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">{p1Name} wins</span>}
-          {p2IsWinner && <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">{p2Name} wins</span>}
+          {myNum != null && (
+            <span className={`text-xs px-2 py-0.5 rounded ${myWon ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>
+              {myWon ? 'Win' : 'Loss'}
+            </span>
+          )}
           <span className="text-xs text-gray-500">{game.turnCount} turns</span>
           <span className="text-xs text-gray-400">{new Date(game.playedAt ?? game.savedAt).toLocaleDateString()}</span>
         </div>

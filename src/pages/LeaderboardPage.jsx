@@ -26,14 +26,22 @@ function Histogram({ buckets, highlightMmr }) {
   )
 }
 
+function tierSlug(name) {
+  return name?.toLowerCase().replace(/\s+/g, '-')
+}
+
 function TierIcon({ tier }) {
-  if (!tier?.icon) return null
+  if (!tier?.name) return null
+  const slug = tierSlug(tier.name)
   return (
     <img
-      src={tier.icon}
+      src={`/tiers/${slug}.png`}
       alt={tier.name}
       title={tier.name}
       className="w-5 h-5 inline-block align-middle"
+      onError={e => {
+        e.currentTarget.style.visibility = 'hidden'
+      }}
     />
   )
 }

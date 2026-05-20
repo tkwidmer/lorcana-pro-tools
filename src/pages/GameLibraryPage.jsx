@@ -26,6 +26,7 @@ export function GameLibraryPage() {
   const [personalOpen, setPersonalOpen] = useState(true)
   const [metagameOpen, setMetagameOpen] = useState(true)
   const [matrixOpen, setMatrixOpen] = useState(true)
+  const [winLossOpen, setWinLossOpen] = useState(false)
 
   useEffect(() => {
     loadGames()
@@ -243,6 +244,26 @@ export function GameLibraryPage() {
         </div>
       )}
 
+      {/* Win-Loss Matrix */}
+      {games.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setWinLossOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Win-Loss Matrix</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${winLossOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {winLossOpen && (
+            <div className="mt-6">
+              <WinLossMatrixView games={games} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Imported games section */}
       {importedGames.length > 0 && (
         <div className="mb-4">
@@ -366,6 +387,110 @@ function GameListItem({ game, onDelete }) {
       >
         ✕
       </button>
+    </div>
+  )
+}
+
+function WinLossMatrixView({ games }) {
+  const { matchups, colorPairs } = buildWinrateMatrixFromGames(games)
+
+  if (matchups.length === 0 || colorPairs.length === 0) {
+    return <div className="text-sm text-gray-500">No matchup data available</div>
+  }
+
+  // Sort color pairs by winrate
+  const sortedColorPairs = [...colorPairs].sort((a, b) => b.winRate - a.winRate)
+
+  // Build lookup map for quick access
+  const matchupMap = new Map()
+  matchups.forEach(m => {
+    const key = `${JSON.stringify(m.colorsA)}-${JSON.stringify(m.colorsB)}`
+    matchupMap.set(key, m)
+  })
+
+  // Get matchup (with reverse lookup)
+  const getMatchup = (playerColors, oppColors) => {
+    const key = `${JSON.stringify(playerColors)}-${JSON.stringify(oppColors)}`
+    let matchup = matchupMap.get(key)
+
+    if (!matchup) {
+      // Try reverse
+      const reverseKey = `${JSON.stringify(oppColors)}-${JSON.stringify(playerColors)}`
+      const reverseMatchup = matchupMap.get(reverseKey)
+      if (reverseMatchup) {
+        matchup = {
+          ...reverseMatchup,
+          colorsA: reverseMatchup.colorsB,
+          colorsB: reverseMatchup.colorsA,
+          winsA: reverseMatchup.games - reverseMatchup.winsA,
+        }
+      }
+    }
+
+    return matchup
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="inline-block min-w-full">
+        {/* Header row */}
+        <div className="flex mb-2">
+          <div className="w-20 h-16 flex-shrink-0" />
+          {sortedColorPairs.map((colPair, colIdx) => (
+            <div
+              key={colIdx}
+              className="w-20 h-16 flex-shrink-0 flex items-center justify-center text-xs font-semibold"
+            >
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[10px] font-medium text-gray-600">OPP</span>
+                <div className="flex items-center gap-0.5">
+                  {colPair.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Data rows */}
+        {sortedColorPairs.map((rowPair, rowIdx) => (
+          <div key={rowIdx} className="flex mb-2">
+            {/* Row header */}
+            <div className="w-20 h-16 flex-shrink-0 flex items-center justify-center text-xs font-semibold border-r border-gray-100">
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[10px] font-medium text-gray-600">YOU</span>
+                <div className="flex items-center gap-0.5">
+                  {rowPair.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                </div>
+              </div>
+            </div>
+
+            {/* Data cells */}
+            {sortedColorPairs.map((colPair, colIdx) => {
+              const matchup = getMatchup(rowPair.colors, colPair.colors)
+              if (!matchup) {
+                return (
+                  <div key={colIdx} className="w-20 h-16 flex-shrink-0 bg-gray-50 border border-gray-100" />
+                )
+              }
+
+              return (
+                <div
+                  key={colIdx}
+                  className="w-20 h-16 flex-shrink-0 border border-gray-200 bg-white flex items-center justify-center text-center group relative"
+                >
+                  <div className="text-xs font-semibold text-gray-900">
+                    <div>{matchup.winsA}W</div>
+                    <div>{matchup.games - matchup.winsA}L</div>
+                  </div>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                    {matchup.games} games
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -534,7 +659,6 @@ function OpponentMetagameView({ games }) {
                 )}
               </div>
             </div>
-            <div className="text-xs text-gray-500 mt-1">{deck.wins}W - {deck.losses}L ({deck.winRate}%)</div>
           </div>
         ))}
       </div>

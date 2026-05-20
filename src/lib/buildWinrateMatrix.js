@@ -74,9 +74,31 @@ export function buildWinrateMatrixFromGames(games) {
     winRate: cp.games > 0 ? (cp.wins / cp.games * 100) : 50,
   }))
 
+  // Build a matrix structure for win-loss display
+  // Rows = player deck colors, Columns = opponent deck colors
+  const matrixMap = {}
+
+  matchups.forEach(m => {
+    const playerColorKey = JSON.stringify(m.colorsA)
+    const oppColorKey = JSON.stringify(m.colorsB)
+
+    if (!matrixMap[playerColorKey]) {
+      matrixMap[playerColorKey] = {}
+    }
+
+    matrixMap[playerColorKey][oppColorKey] = {
+      playerColors: m.colorsA,
+      oppColors: m.colorsB,
+      wins: m.winsA,
+      losses: m.games - m.winsA,
+      games: m.games,
+    }
+  })
+
   return {
     matchups,
     colorPairs,
     totalGames: games.length,
+    winLossMatrix: matrixMap,
   }
 }

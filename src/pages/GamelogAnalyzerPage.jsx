@@ -1234,7 +1234,7 @@ export function GamelogAnalyzerPage() {
     const record = await saveGamelog(id, parsed, logs)
     setGamelogs(prev => {
       const filtered = prev.filter(g => g.id !== id)
-      return [record, ...filtered].sort((a, b) => b.savedAt - a.savedAt)
+      return [record, ...filtered].sort((a, b) => (b.playedAt ?? b.savedAt) - (a.playedAt ?? a.savedAt))
     })
     setActiveId(id)
     return record

@@ -59,7 +59,7 @@ export async function getGamelog(id) {
 export async function getAllGamelogs() {
   const store = await tx('readonly')
   const all = await promisify(store.getAll())
-  return all.sort((a, b) => b.savedAt - a.savedAt)
+  return all.sort((a, b) => (b.playedAt ?? b.savedAt) - (a.playedAt ?? a.savedAt))
 }
 
 export async function deleteGamelog(id) {

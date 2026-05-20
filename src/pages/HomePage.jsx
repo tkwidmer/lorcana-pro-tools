@@ -49,6 +49,11 @@ const SECTIONS = [
         name: 'Game Library',
         description: 'Import shared game exports to build team-wide analytics — opponent metagame breakdown, card frequency by archetype, matchup matrix, and win rate trends.',
       },
+      {
+        path: '/practice-plan',
+        name: 'Practice Plan',
+        description: 'Pre-event prep: pick your deck and the expected meta, then see which matchups to focus on based on your personal win rates vs the public matrix.',
+      },
     ],
   },
   {

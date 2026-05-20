@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
-import { importGamesFromZip, importGamelogFile } from '../lib/gameImport'
+import { importGamesFromZip } from '../lib/gameImport'
 import { analyzeOpponentMetagame } from '../lib/metagameAnalysis'
 import { buildWinrateMatrixFromGames } from '../lib/buildWinrateMatrix'
 import { InkImg } from './GamelogAnalyzerPage'
@@ -60,30 +60,10 @@ export function GameLibraryPage() {
     }
   }
 
-  async function processGamelogFile(arrayBuffer, filename) {
-    setLoading(true)
-    setError(null)
-    try {
-      const record = await importGamelogFile(arrayBuffer, filename)
-      const newIds = new Set(importedIds)
-      newIds.add(record.id)
-      setImportedIds(newIds)
-      saveImportedGameIds(newIds)
-      await loadGames()
-    } catch (e) {
-      setError(`Failed to import gamelog: ${e.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function processFiles(files) {
     for (const file of files) {
       if (file.name.endsWith('.zip')) {
         await processZipFile(file)
-      } else if (file.name.endsWith('.gz')) {
-        const buf = await file.arrayBuffer()
-        await processGamelogFile(buf, file.name)
       }
     }
   }
@@ -156,7 +136,7 @@ export function GameLibraryPage() {
         <label className="cursor-pointer flex flex-col items-center gap-2">
           <input
             type="file"
-            accept=".zip,.gz"
+            accept=".zip"
             multiple
             className="sr-only"
             onChange={e => {
@@ -165,8 +145,8 @@ export function GameLibraryPage() {
               e.target.value = ''
             }}
           />
-          <span className="text-sm text-gray-600">Drop .zip exports or .logs.gz files here or click to upload</span>
-          <span className="text-xs text-gray-400">Accepts game exports (.zip) and raw gamelogs (.logs.gz)</span>
+          <span className="text-sm text-gray-600">Drop a .zip game export here or click to upload</span>
+          <span className="text-xs text-gray-400">Export your games from the Gamelog Analyzer, then share and import here</span>
         </label>
       </div>
 
@@ -332,7 +312,7 @@ export function GameLibraryPage() {
 
       {games.length === 0 && !loading && (
         <div className="text-center py-12 text-gray-400 text-sm">
-          No games yet — import a .zip export or .logs.gz file to get started.
+          No games yet — import a .zip game export to get started.
         </div>
       )}
     </div>

@@ -5,7 +5,7 @@
 // --- IndexedDB ---
 
 const DB_NAME = 'lorcana_pro_tools'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE = 'games'
 
 let db = null
@@ -15,7 +15,13 @@ function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const d = req.result
-      if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, { keyPath: 'uuid' })
+      const stores = ['games', 'cards']
+      for (const store of stores) {
+        if (!d.objectStoreNames.contains(store)) {
+          const keyPath = store === 'cards' ? 'version' : 'uuid'
+          d.createObjectStore(store, { keyPath })
+        }
+      }
     }
     req.onsuccess = () => { db = req.result; resolve(db) }
     req.onerror = () => reject(req.error)

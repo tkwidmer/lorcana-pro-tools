@@ -25,7 +25,7 @@ export function GameLibraryPage() {
   const [importedOpen, setImportedOpen] = useState(true)
   const [personalOpen, setPersonalOpen] = useState(true)
   const [metagameOpen, setMetagameOpen] = useState(true)
-  const [matchupOpen, setMatchupOpen] = useState(false)
+  const [matchupOpen, setMatchupOpen] = useState(true)
 
   useEffect(() => {
     loadGames()

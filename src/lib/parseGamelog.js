@@ -213,12 +213,10 @@ export function parseGamelog(id, logs, meta = {}) {
     else p2Name = meta.yourDisplayName
   }
 
-  const myInkCombo = myPlayerNum
-    ? parseColors(myPlayerNum === 1 ? meta.yourColors : meta.oppColors)
-    : []
-  const oppInkCombo = myPlayerNum
-    ? parseColors(myPlayerNum === 1 ? meta.oppColors : meta.yourColors)
-    : []
+  // yourColors/oppColors from the API always name the user and opponent respectively,
+  // regardless of which seat (1 or 2) myPlayerNum occupies.
+  const myInkCombo = parseColors(meta.yourColors ?? '')
+  const oppInkCombo = parseColors(meta.oppColors ?? '')
 
   const wentFirst = meta.wentFirst != null
     ? (meta.wentFirst ? myPlayerNum : (myPlayerNum === 1 ? 2 : 1))

@@ -614,25 +614,23 @@ function TurnDistributionView({ games }) {
 
   const turns = Object.keys(byTurn).map(Number).sort((a, b) => a - b)
   const maxGames = Math.max(...turns.map(t => byTurn[t].wins + byTurn[t].losses))
+  const CHART_H = 120
 
   return (
     <div>
       <div className="text-xs text-gray-400 mb-4">Green = wins, red = losses</div>
-      <div className="flex items-end gap-1.5 h-40">
+      <div className="flex items-end gap-1.5">
         {turns.map(t => {
           const { wins, losses } = byTurn[t]
           const total = wins + losses
-          const barH = (total / maxGames) * 100
-          const winH = (wins / total) * barH
-          const lossH = (losses / total) * barH
+          const winPx = Math.round((wins / maxGames) * CHART_H)
+          const lossPx = Math.round((losses / maxGames) * CHART_H)
           return (
             <div key={t} className="flex flex-col items-center gap-1 flex-1 min-w-0">
               <div className="text-[10px] text-gray-500 font-medium">{total}</div>
-              <div className="w-full flex flex-col justify-end" style={{ height: '120px' }}>
-                <div className="w-full rounded-sm overflow-hidden flex flex-col" style={{ height: `${barH}%` }}>
-                  <div className="w-full bg-emerald-400" style={{ height: `${winH}%` }} />
-                  <div className="w-full bg-red-300" style={{ height: `${lossH}%` }} />
-                </div>
+              <div className="w-full flex flex-col justify-end rounded-sm overflow-hidden" style={{ height: `${CHART_H}px` }}>
+                <div className="w-full bg-emerald-400" style={{ height: `${winPx}px` }} />
+                <div className="w-full bg-red-300" style={{ height: `${lossPx}px` }} />
               </div>
               <div className="text-[10px] text-gray-500">{t}</div>
             </div>

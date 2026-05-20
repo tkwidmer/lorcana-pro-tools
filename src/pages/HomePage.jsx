@@ -54,6 +54,11 @@ const SECTIONS = [
         name: 'Practice Plan',
         description: 'Pre-event prep: pick your deck and the expected meta, then see which matchups to focus on based on your personal win rates vs the public matrix.',
       },
+      {
+        path: '/leaderboard',
+        name: 'Leaderboard',
+        description: 'See the top 50 ranked duels.ink players for each queue, plus MMR distribution and current season info.',
+      },
     ],
   },
   {

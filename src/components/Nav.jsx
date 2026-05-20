@@ -48,6 +48,7 @@ export function Nav() {
                 : pathname === '/gamelog-analyzer' ? 'Gamelog Analyzer'
                 : pathname === '/game-library' ? 'Game Library'
                 : pathname === '/practice-plan' ? 'Practice Plan'
+                : pathname === '/leaderboard' ? 'Leaderboard'
                 : ''}
             </span>
           </>

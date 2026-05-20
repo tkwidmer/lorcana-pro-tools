@@ -134,6 +134,12 @@ export function GameLibraryPage() {
   const importedGames = games.filter(g => importedIds.has(g.id))
   const personalGames = games.filter(g => !importedIds.has(g.id))
 
+  // Calculate overall stats
+  const gamesWithMyPlayer = games.filter(g => g.myPlayerNum != null)
+  const wins = gamesWithMyPlayer.filter(g => g.winner === String(g.myPlayerNum) || g.winner === g.myPlayerNum).length
+  const losses = gamesWithMyPlayer.length - wins
+  const winRate = gamesWithMyPlayer.length > 0 ? (wins / gamesWithMyPlayer.length * 100).toFixed(0) : 0
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
@@ -201,6 +207,21 @@ export function GameLibraryPage() {
           >
             Clear all
           </button>
+        </div>
+      )}
+
+      {/* Overall Stats */}
+      {gamesWithMyPlayer.length > 0 && (
+        <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Overall Record</div>
+          <div className="flex items-baseline gap-4">
+            <div>
+              <div className="text-3xl font-bold text-gray-900">{wins}-{losses}</div>
+            </div>
+            <div>
+              <div className="text-2xl font-semibold text-green-600">{winRate}%</div>
+            </div>
+          </div>
         </div>
       )}
 

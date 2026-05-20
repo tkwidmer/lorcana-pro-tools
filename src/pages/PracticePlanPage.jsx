@@ -59,20 +59,79 @@ function shrinkWR(wins, n, publicWR, priorN = 10) {
   return (wins + priorMean * priorN) / (n + priorN)
 }
 
-// Binomial probability mass P(X = k | n, p)
-function binomPMF(n, k, p) {
-  if (k < 0 || k > n) return 0
-  // log-space for stability
-  let logC = 0
-  for (let i = 1; i <= k; i++) logC += Math.log((n - k + i) / i)
-  return Math.exp(logC + k * Math.log(p) + (n - k) * Math.log(1 - p))
+// Simulate a single best-of-1 game with given play/draw win rates.
+// Returns true if hero won. `heroPlay` decides who's on the play.
+function simGame(wrPlay, wrDraw, heroPlay) {
+  const p = heroPlay ? wrPlay : wrDraw
+  return Math.random() < p
 }
 
-// P(X >= k | n, p)
-function binomTail(n, k, p) {
-  let sum = 0
-  for (let i = k; i <= n; i++) sum += binomPMF(n, i, p)
-  return sum
+// Simulate a BO3 match. Lorcana rule: loser of previous game picks play/draw.
+// A rational loser picks play if wrPlay > wrDraw for them; for the hero this
+// means picking play (since wrPlay > wrDraw on hero's side typically) and
+// when opp lost, opp picks play → hero goes draw.
+function simBO3(wrPlay, wrDraw) {
+  // G1: coin flip
+  let heroPlay = Math.random() < 0.5
+  const heroPrefersPlay = wrPlay >= wrDraw
+  let heroWins = 0
+  let oppWins = 0
+  for (let i = 0; i < 3; i++) {
+    const heroWon = simGame(wrPlay, wrDraw, heroPlay)
+    if (heroWon) heroWins++; else oppWins++
+    if (heroWins === 2 || oppWins === 2) break
+    // Loser of this game picks for next.
+    if (heroWon) {
+      // hero won → opp lost → opp picks. Opp prefers play if (1 - wrDraw) > (1 - wrPlay)
+      // i.e. opp prefers play when wrDraw < wrPlay (hero is weaker on the draw).
+      // From hero's perspective: opp on the play means hero on the draw.
+      heroPlay = wrDraw >= wrPlay // opp picks draw when wrPlay < wrDraw for hero
+    } else {
+      // hero lost → hero picks
+      heroPlay = heroPrefersPlay
+    }
+  }
+  return heroWins === 2
+}
+
+function simBO1(wrPlay, wrDraw) {
+  return simGame(wrPlay, wrDraw, Math.random() < 0.5)
+}
+
+// Run Monte Carlo: rows = [{normalizedMeta, wrPlay, wrDraw}], returns record distribution.
+function runMonteCarlo({ rows, rounds, format, sims }) {
+  // Build CDF for opponent sampling
+  const cdf = []
+  let acc = 0
+  for (const r of rows) {
+    if (r.normalizedMeta <= 0) continue
+    acc += r.normalizedMeta
+    cdf.push({ acc, row: r })
+  }
+  if (cdf.length === 0) return null
+  const total = cdf[cdf.length - 1].acc
+  const recordCounts = new Array(rounds + 1).fill(0)
+  let totalMatchWins = 0
+  for (let s = 0; s < sims; s++) {
+    let wins = 0
+    for (let r = 0; r < rounds; r++) {
+      const x = Math.random() * total
+      let idx = 0
+      while (idx < cdf.length - 1 && cdf[idx].acc < x) idx++
+      const row = cdf[idx].row
+      const won = format === 'bo3'
+        ? simBO3(row.wrPlay, row.wrDraw)
+        : simBO1(row.wrPlay, row.wrDraw)
+      if (won) wins++
+    }
+    recordCounts[wins]++
+    totalMatchWins += wins
+  }
+  return {
+    recordCounts,
+    sims,
+    expectedMatchWR: (totalMatchWins / (sims * rounds)) * 100,
+  }
 }
 
 function getWinrateColor(wr) {
@@ -203,9 +262,9 @@ export function PracticePlanPage() {
     return map
   }, [stats])
 
-  // Personal record per opponent color pair (for selected deck)
+  // Personal record per opponent color pair (for selected deck), split by play/draw
   const personalByOpp = useMemo(() => {
-    const map = new Map() // key -> { wins, losses, games }
+    const map = new Map() // key -> { wins, losses, games, playWins, playGames, drawWins, drawGames }
     if (!yourColors.length) return map
     const myKey = yourColorsKey
     for (const g of games) {
@@ -214,15 +273,39 @@ export function PracticePlanPage() {
       const opp = parseColorString(g.opp_deck_colors)
       if (opp.length !== 2) continue
       const k = colorsKey(opp)
-      const cur = map.get(k) ?? { wins: 0, losses: 0, games: 0 }
+      const cur = map.get(k) ?? { wins: 0, losses: 0, games: 0, playWins: 0, playGames: 0, drawWins: 0, drawGames: 0 }
       const r = (g.result ?? '').toLowerCase()
-      if (r === 'win') cur.wins++
-      else if (r === 'loss') cur.losses++
-      cur.games++
+      const isWin = r === 'win'
+      const isLoss = r === 'loss'
+      if (isWin) cur.wins++
+      else if (isLoss) cur.losses++
+      if (isWin || isLoss) {
+        cur.games++
+        if (g.went_first === true) {
+          cur.playGames++; if (isWin) cur.playWins++
+        } else if (g.went_first === false) {
+          cur.drawGames++; if (isWin) cur.drawWins++
+        }
+      }
       map.set(k, cur)
     }
     return map
   }, [games, yourColors, yourColorsKey])
+
+  // Global personal play/draw delta (fallback when per-matchup data is thin)
+  const globalPlayDelta = useMemo(() => {
+    let pw = 0, pg = 0, dw = 0, dg = 0
+    for (const g of games) {
+      const r = (g.result ?? '').toLowerCase()
+      const isWin = r === 'win'
+      const isLoss = r === 'loss'
+      if (!isWin && !isLoss) continue
+      if (g.went_first === true) { pg++; if (isWin) pw++ }
+      else if (g.went_first === false) { dg++; if (isWin) dw++ }
+    }
+    if (pg < 30 || dg < 30) return null // need a decent sample
+    return (pw / pg) - (dw / dg) // positive = play favored
+  }, [games])
 
   // Default meta % from public stats popularity (share of games played)
   const defaultMetaByKey = useMemo(() => {
@@ -270,6 +353,37 @@ export function PracticePlanPage() {
       const effectiveWR = n > 0 ? shrunkWR : (publicWR ?? 50)
       const [ciLo, ciHi] = n > 0 ? wilsonInterval(wins, n).map(x => x * 100) : [null, null]
 
+      // Play/draw split (0..100). Priority:
+      //  1. Personal split if ≥5 games on each side (shrunk to overall effective)
+      //  2. Public matrix firstPlayerWinRate if present
+      //  3. Apply global personal play-delta to effective WR
+      //  4. Default: no split (both equal to effectiveWR)
+      let wrPlay = effectiveWR
+      let wrDraw = effectiveWR
+      let splitSource = 'flat'
+      const pubFirstWR = lookup?.firstPlayerWinRate ?? null
+      if (personal && personal.playGames >= 5 && personal.drawGames >= 5) {
+        // Shrink each side toward effective WR
+        const priorN = 8
+        wrPlay = ((personal.playWins + (effectiveWR / 100) * priorN) / (personal.playGames + priorN)) * 100
+        wrDraw = ((personal.drawWins + (effectiveWR / 100) * priorN) / (personal.drawGames + priorN)) * 100
+        splitSource = 'personal'
+      } else if (pubFirstWR != null && publicWR != null) {
+        // Public: firstPlayerWinRate is hero-on-play WR. wrDraw = 2*mean - play
+        const delta = pubFirstWR - publicWR
+        wrPlay = effectiveWR + delta
+        wrDraw = effectiveWR - delta
+        splitSource = 'public'
+      } else if (globalPlayDelta != null) {
+        const half = (globalPlayDelta * 100) / 2
+        wrPlay = effectiveWR + half
+        wrDraw = effectiveWR - half
+        splitSource = 'global'
+      }
+      // Clamp
+      wrPlay = Math.max(1, Math.min(99, wrPlay)) / 100
+      wrDraw = Math.max(1, Math.min(99, wrDraw)) / 100
+
       // Practice lift assumption: if you're below public, you can realistically
       // close the gap to public; if you're at/above, you can squeeze ~3pp more.
       const ceilingWR = publicWR != null
@@ -288,6 +402,9 @@ export function PracticePlanPage() {
         metaPct,
         isRogue,
         normalizedMeta,
+        wrPlay,
+        wrDraw,
+        splitSource,
         publicWR,
         publicGames: lookup?.games ?? 0,
         personal,
@@ -309,7 +426,7 @@ export function PracticePlanPage() {
       r.recommendedReps = Math.round(raw)
     })
     return rows
-  }, [twoColorPairs, yourColors, yourColorsKey, matchupLookup, personalByOpp, planningTotalMetaPct, practiceBudget, metaOverrides, defaultMetaByKey])
+  }, [twoColorPairs, yourColors, yourColorsKey, matchupLookup, personalByOpp, planningTotalMetaPct, practiceBudget, metaOverrides, defaultMetaByKey, globalPlayDelta])
 
   const sortedPlanRows = useMemo(() => {
     const rows = planRows.slice()
@@ -324,40 +441,50 @@ export function PracticePlanPage() {
     return rows
   }, [planRows, sortBy])
 
-  // Tournament outlook: expected match WR + round-by-round projection
+  // Tournament outlook: Monte Carlo over BO1 or BO3 matches against meta distribution
   const [tournamentRounds, setTournamentRounds] = useState(7)
+  const [matchFormat, setMatchFormat] = useState('bo3') // 'bo1' | 'bo3'
+  const MC_SIMS = 20000
 
   const outlook = useMemo(() => {
     if (!planRows.length) return null
-    let expectedWR = 0
-    let upliftedWR = 0
     let coveredMeta = 0
     let blindMeta = 0
     const blindMatchups = []
     for (const r of planRows) {
-      expectedWR += r.normalizedMeta * (r.effectiveWR / 100)
-      upliftedWR += r.normalizedMeta * (r.ceilingWR / 100)
       if (r.personal && r.personal.games >= 5) coveredMeta += r.normalizedMeta
       else if (r.normalizedMeta >= 0.03) {
         blindMeta += r.normalizedMeta
         blindMatchups.push(r)
       }
     }
-    const p = Math.max(0.01, Math.min(0.99, expectedWR))
-    // P(record) over Swiss rounds
-    const recordProbs = []
-    for (let w = 0; w <= tournamentRounds; w++) {
-      recordProbs.push({ w, l: tournamentRounds - w, prob: binomPMF(tournamentRounds, w, p) })
-    }
-    // Common top-cut thresholds
-    const cut51 = binomTail(tournamentRounds, Math.max(0, tournamentRounds - 1), p) // X-1 or better
-    const cut62 = binomTail(tournamentRounds, Math.max(0, tournamentRounds - 2), p) // X-2 or better
-    const xMinus0 = binomPMF(tournamentRounds, tournamentRounds, p)
+
+    const activeRows = planRows.filter(r => r.normalizedMeta > 0)
+    const mc = runMonteCarlo({ rows: activeRows, rounds: tournamentRounds, format: matchFormat, sims: MC_SIMS })
+    if (!mc) return null
+
+    // Ceiling sim: every matchup brought to its ceiling, preserving play/draw spread
+    const ceilingRows = activeRows.map(r => {
+      const lift = (r.ceilingWR - r.effectiveWR) / 100
+      return { ...r, wrPlay: Math.min(0.99, r.wrPlay + lift), wrDraw: Math.min(0.99, r.wrDraw + lift) }
+    })
+    const mcCeiling = runMonteCarlo({ rows: ceilingRows, rounds: tournamentRounds, format: matchFormat, sims: MC_SIMS })
+
+    const recordProbs = mc.recordCounts.map((count, w) => ({
+      w,
+      l: tournamentRounds - w,
+      prob: count / mc.sims,
+    }))
+    // Top-cut tail probs
+    let cut51 = 0, cut62 = 0
+    for (let w = tournamentRounds - 1; w <= tournamentRounds; w++) cut51 += recordProbs[w].prob
+    for (let w = tournamentRounds - 2; w <= tournamentRounds; w++) cut62 += recordProbs[w]?.prob ?? 0
+    const xMinus0 = recordProbs[tournamentRounds].prob
 
     return {
-      expectedWR: expectedWR * 100,
-      upliftedWR: upliftedWR * 100,
-      maxLiftPP: (upliftedWR - expectedWR) * 100,
+      expectedWR: mc.expectedMatchWR,
+      upliftedWR: mcCeiling?.expectedMatchWR ?? mc.expectedMatchWR,
+      maxLiftPP: (mcCeiling?.expectedMatchWR ?? mc.expectedMatchWR) - mc.expectedMatchWR,
       coveredMeta: coveredMeta * 100,
       blindMeta: blindMeta * 100,
       blindMatchups: blindMatchups.sort((a, b) => b.normalizedMeta - a.normalizedMeta).slice(0, 5),
@@ -365,8 +492,9 @@ export function PracticePlanPage() {
       cut51: cut51 * 100,
       cut62: cut62 * 100,
       xMinus0: xMinus0 * 100,
+      sims: mc.sims,
     }
-  }, [planRows, tournamentRounds])
+  }, [planRows, tournamentRounds, matchFormat])
 
   // Alternative decks: what's your expected WR with your other 2-color decks?
   const deckAlternatives = useMemo(() => {
@@ -518,10 +646,24 @@ export function PracticePlanPage() {
       {/* Tournament Outlook */}
       {outlook && (
         <div className="mb-6 border border-gray-200 rounded-lg p-5 bg-white">
-          <div className="flex items-baseline justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Tournament outlook</h2>
-            <div className="flex items-center gap-2 text-sm">
-              <label className="text-gray-600">Swiss rounds:</label>
+          <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Tournament outlook</h2>
+              <p className="text-xs text-gray-500">Monte Carlo: {outlook.sims.toLocaleString()} simulated tournaments, BO{matchFormat === 'bo3' ? '3' : '1'} with play/draw modeled per matchup</p>
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              <div className="inline-flex rounded border border-gray-200 overflow-hidden">
+                {['bo1', 'bo3'].map(fmt => (
+                  <button
+                    key={fmt}
+                    onClick={() => setMatchFormat(fmt)}
+                    className={`px-3 py-1 text-xs ${matchFormat === fmt ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    {fmt.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <label className="text-gray-600">Rounds:</label>
               <input
                 type="number" min="3" max="12"
                 value={tournamentRounds}
@@ -673,6 +815,7 @@ export function PracticePlanPage() {
                 >
                   Public WR {sortBy === 'public' && '↑'}
                 </th>
+                <th className="text-right px-3 py-2" title="Game-1 win rate on the play / on the draw">Play / Draw</th>
                 <th className="text-right px-3 py-2">Δ</th>
                 <th
                   className={`text-right px-3 py-2 cursor-pointer hover:text-gray-900 ${sortBy === 'lift' ? 'text-gray-900' : ''}`}
@@ -737,6 +880,9 @@ export function PracticePlanPage() {
                     <td className={`px-3 py-2 text-right ${getWinrateColor(row.publicWR)}`}>
                       {row.publicWR != null ? `${row.publicWR.toFixed(0)}%` : '—'}
                     </td>
+                    <td className="px-3 py-2 text-right text-xs text-gray-600" title={`source: ${row.splitSource}`}>
+                      {(row.wrPlay * 100).toFixed(0)} / {(row.wrDraw * 100).toFixed(0)}
+                    </td>
                     <td className={`px-3 py-2 text-right ${deltaColor(row.delta)}`}>
                       {row.delta != null ? `${row.delta > 0 ? '+' : ''}${row.delta.toFixed(0)}` : '—'}
                     </td>
@@ -775,7 +921,8 @@ export function PracticePlanPage() {
         <p><strong>Rogue cutoff:</strong> matchups below {ROGUE_THRESHOLD}% of the meta are excluded from planning math (reps, expected WR, top-cut odds). They're shown grayed-out for reference.</p>
         <p><strong>Effective WR (used for projections):</strong> Bayesian shrinkage — your personal record blended with the public matrix as a 10-game prior, so a 1-3 record doesn't dominate.</p>
         <p><strong>Lift if practiced:</strong> event-WR points you'd gain if this matchup reached its ceiling (max of public WR + 2pp or your current + 3pp). The reps column sorts by this — practice where the points are.</p>
-        <p><strong>Round projection:</strong> binomial with p = expected WR, treats rounds as independent (Swiss has some autocorrelation, so real top-cut odds are slightly higher than shown).</p>
+        <p><strong>Round projection:</strong> {MC_SIMS.toLocaleString()}-iteration Monte Carlo. Each round draws an opponent from the meta distribution and plays a {matchFormat.toUpperCase()} match modeling play/draw splits. In BO3, G1 is a coin flip and the loser of each game picks play/draw for the next (Lorcana rule); a rational loser picks the favored side. Swiss has some autocorrelation the sim doesn't model, so real top-cut odds may be slightly higher.</p>
+        <p><strong>Play/Draw column:</strong> game-1 WR going first vs going second. Source preference: personal split (≥5 each side) → public matrix first-player WR → global personal play advantage → flat.</p>
         <p><strong>Underperforming flag:</strong> appears when your personal WR trails the public matrix by 8+ pts — likely a knowledge gap, high ROI to practice.</p>
       </div>
     </div>

@@ -200,12 +200,10 @@ export function GameLibraryPage() {
       {/* Overall Stats */}
       {gamesWithMyPlayer.length > 0 && (
         <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="col-span-2 border border-gray-200 rounded-lg p-4 bg-gray-50 flex items-center gap-4">
-            <div>
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Overall</div>
-              <div className="text-3xl font-bold text-gray-900">{wins}–{losses}</div>
-            </div>
-            <div className="text-2xl font-semibold text-green-600">{winRate}%</div>
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Overall</div>
+            <div className="text-2xl font-bold text-gray-900">{winRate}%</div>
+            <div className="text-xs text-gray-400 mt-0.5">{wins}–{losses}</div>
           </div>
           {winRateFirst != null && (
             <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">

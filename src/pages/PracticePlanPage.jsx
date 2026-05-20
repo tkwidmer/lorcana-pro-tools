@@ -917,14 +917,78 @@ export function PracticePlanPage() {
         </div>
       )}
 
-      <div className="mt-8 text-xs text-gray-500 space-y-1">
-        <p><strong>Rogue cutoff:</strong> matchups below {ROGUE_THRESHOLD}% of the meta are excluded from planning math (reps, expected WR, top-cut odds). They're shown grayed-out for reference.</p>
-        <p><strong>Effective WR (used for projections):</strong> Bayesian shrinkage — your personal record blended with the public matrix as a 10-game prior, so a 1-3 record doesn't dominate.</p>
-        <p><strong>Lift if practiced:</strong> event-WR points you'd gain if this matchup reached its ceiling (max of public WR + 2pp or your current + 3pp). The reps column sorts by this — practice where the points are.</p>
-        <p><strong>Round projection:</strong> {MC_SIMS.toLocaleString()}-iteration Monte Carlo. Each round draws an opponent from the meta distribution and plays a {matchFormat.toUpperCase()} match modeling play/draw splits. In BO3, G1 is a coin flip and the loser of each game picks play/draw for the next (Lorcana rule); a rational loser picks the favored side. Swiss has some autocorrelation the sim doesn't model, so real top-cut odds may be slightly higher.</p>
-        <p><strong>Play/Draw column:</strong> game-1 WR going first vs going second. Source preference: personal split (≥5 each side) → public matrix first-player WR → global personal play advantage → flat.</p>
-        <p><strong>Underperforming flag:</strong> appears when your personal WR trails the public matrix by 8+ pts — likely a knowledge gap, high ROI to practice.</p>
-      </div>
+      <details className="mt-8 border-t border-gray-200 pt-6">
+        <summary className="text-sm font-semibold text-gray-700 cursor-pointer hover:text-gray-900">
+          Methodology
+        </summary>
+        <div className="mt-4 text-xs text-gray-600 space-y-4 max-w-3xl">
+
+          <section>
+            <h3 className="font-semibold text-gray-800 mb-1">Data sources</h3>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Public matrix:</strong> aggregate matchup win rates from duels.ink for the selected queue, all-time, all ranks. Each cell carries games played, overall WR, and first-player WR.</li>
+              <li><strong>Personal history:</strong> your full match history pulled from duels.ink (up to 2,000 most recent games), filtered to the selected ink pair. Each row has result, opponent colors, and whether you went first.</li>
+              <li><strong>Meta distribution:</strong> defaults to public popularity of each ink pair on the selected queue. You can override any cell — values are renormalized so they always sum to 100% for planning math.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="font-semibold text-gray-800 mb-1">Win-rate estimation (Bayesian shrinkage)</h3>
+            <p>Per matchup, the effective WR used for the sim is a weighted blend of your personal record and the public matrix:</p>
+            <pre className="bg-gray-50 border border-gray-200 rounded px-2 py-1 my-1 text-[11px] overflow-x-auto">effective_wr = (personal_wins + public_wr × N₀) / (personal_games + N₀),  N₀ = 10</pre>
+            <p>This treats the public matrix as a 10-game prior. A 1-3 record (25% raw) gets pulled most of the way back to the public WR; a 30-15 record (67% raw) barely moves. Without this, small samples dominate and recommendations whiplash from week to week.</p>
+          </section>
+
+          <section>
+            <h3 className="font-semibold text-gray-800 mb-1">Play/Draw modeling</h3>
+            <p>Going first has a meaningful edge in Lorcana, and the matrix reports first-player WR explicitly. For each matchup we split <code>effective_wr</code> into <code>wr_play</code> and <code>wr_draw</code> using the first available source:</p>
+            <ol className="list-decimal list-inside space-y-1 ml-1">
+              <li><strong>Personal split</strong> if you have ≥5 games each going first and going second (shrunk to the effective WR with N₀=8)</li>
+              <li><strong>Public matrix</strong> first-player WR delta applied symmetrically (<code>wr_play = effective + δ</code>, <code>wr_draw = effective − δ</code>)</li>
+              <li><strong>Global personal delta</strong> — your aggregate first-play advantage across all your games (needs ≥30 of each side)</li>
+              <li><strong>Flat</strong> — fall back to a 50/50 game-1 split when no signal exists</li>
+            </ol>
+          </section>
+
+          <section>
+            <h3 className="font-semibold text-gray-800 mb-1">Monte Carlo tournament simulation</h3>
+            <p>{MC_SIMS.toLocaleString()} simulated tournaments per render. Each tournament:</p>
+            <ol className="list-decimal list-inside space-y-1 ml-1">
+              <li>Plays {tournamentRounds} rounds. Each round draws a random opponent from the renormalized meta distribution (rogue decks &lt;{ROGUE_THRESHOLD}% excluded).</li>
+              <li>Plays a {matchFormat.toUpperCase()} match against that opponent using the matchup's <code>wr_play</code> / <code>wr_draw</code>.</li>
+              {matchFormat === 'bo3' && (
+                <li><strong>BO3 protocol:</strong> game 1 is a coin flip for who goes first. After each game, the loser picks play/draw for the next. A rational loser picks the side that's better for them (play if play-WR &gt; draw-WR on their side), which is exactly what the sim does. Match ends at 2 wins.</li>
+              )}
+              <li>Records the win count. The distribution across {MC_SIMS.toLocaleString()} tournaments produces the record probabilities and top-cut tail probabilities shown above.</li>
+            </ol>
+            <p className="mt-2"><strong>Known limitations:</strong> Swiss pairings cluster you with similar-record opponents (so your effective opponent strength rises as you win) and avoid rematches. The sim treats rounds as IID against the meta — close, but real top-cut odds skew slightly higher than shown.</p>
+          </section>
+
+          <section>
+            <h3 className="font-semibold text-gray-800 mb-1">Practice rep allocation</h3>
+            <p>For each matchup we estimate a realistic ceiling: <code>ceiling = max(public_wr + 2pp, effective_wr + 3pp)</code>. The <em>lift if practiced</em> column reports the event-WR points you'd gain if that matchup hit its ceiling:</p>
+            <pre className="bg-gray-50 border border-gray-200 rounded px-2 py-1 my-1 text-[11px] overflow-x-auto">lift_pp = normalized_meta_share × (ceiling_wr − effective_wr)</pre>
+            <p>Your {practiceBudget}-game budget is allocated proportionally to lift, so reps flow to matchups where practice actually moves the scoreboard — not just matchups where you're losing. A 70% win rate matchup with 30% meta share gets more reps than a 35% win rate matchup with 5% meta share.</p>
+            <p className="mt-2">The <strong>Practice ceiling</strong> headline runs a second Monte Carlo with every matchup lifted to its ceiling, giving you the true match-WR delta available from preparation.</p>
+          </section>
+
+          <section>
+            <h3 className="font-semibold text-gray-800 mb-1">Filters & flags</h3>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Rogue cutoff ({ROGUE_THRESHOLD}%):</strong> matchups below this meta share are zeroed for all planning math but rendered grayed-out for reference. Below this threshold you can't expect to face the deck in Swiss; better to ignore it than dilute reps.</li>
+              <li><strong>Low sample:</strong> &lt;5 personal games on the matchup. The estimate is dominated by the public prior.</li>
+              <li><strong>Underperforming:</strong> personal WR trails public WR by ≥8 pp. Likely a knowledge gap — high ROI to practice.</li>
+              <li><strong>Blind spot:</strong> ≥3% meta share with &lt;5 personal games. These matchups inject the most uncertainty into your projection.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="font-semibold text-gray-800 mb-1">Alternative deck comparison</h3>
+            <p>For each ink pair you've played ≥20 games on, we compute the expected match WR against the input meta by running the same per-matchup WR estimation (with that deck's personal data) against the active meta. The deck on top is the highest-projection option from your playable pool — not just the best matchup matrix, but the best one you actually have reps with.</p>
+          </section>
+
+        </div>
+      </details>
     </div>
   )
 }

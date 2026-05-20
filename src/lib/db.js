@@ -9,10 +9,11 @@ export function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const db = req.result
-      const stores = ['games', 'replays', 'cards']
+      const stores = ['games', 'cards']
       for (const store of stores) {
         if (!db.objectStoreNames.contains(store)) {
-          db.createObjectStore(store, { keyPath: store === 'cards' ? 'version' : 'gameId' === store ? 'gameId' : 'uuid' })
+          const keyPath = store === 'cards' ? 'version' : 'uuid'
+          db.createObjectStore(store, { keyPath })
         }
       }
     }

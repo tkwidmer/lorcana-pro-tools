@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { getAllReplays, saveReplay, deleteReplay, clearAllReplays } from '../lib/replaysCache'
 
 // --- Replay parsing ---
 
@@ -1668,36 +1669,23 @@ function AggregateView({ games }) {
 
 // --- Main page ---
 
-const LS_KEY = 'lorcana-replays-v1'
-
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(LS_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function saveToStorage(games) {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(games))
-  } catch {
-    // storage full — silently continue
-  }
-}
 
 export function ReplayAnalyzerPage() {
-  const [games, setGames] = useState(() => loadFromStorage())
+  const [games, setGames] = useState([])
+  const [initialLoading, setInitialLoading] = useState(true)
   const [activeId, setActiveId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
 
-  const persistGames = (updated) => {
-    setGames(updated)
-    saveToStorage(updated)
-  }
+  useEffect(() => {
+    getAllReplays().then(replays => {
+      setGames(replays)
+      setInitialLoading(false)
+    }).catch(() => {
+      setInitialLoading(false)
+    })
+  }, [])
 
   const processFiles = useCallback(async (files) => {
     setLoading(true)
@@ -1715,25 +1703,23 @@ export function ReplayAnalyzerPage() {
       }
     }
     if (results.length) {
+      const existingIds = new Set(games.map(g => g.gameId))
+      const fresh = results.filter(g => !existingIds.has(g.gameId))
+      for (const replay of fresh) {
+        await saveReplay(replay)
+      }
       setGames(prev => {
-        // Deduplicate by gameId
-        const existingIds = new Set(prev.map(g => g.gameId))
-        const fresh = results.filter(g => !existingIds.has(g.gameId))
         const updated = [...prev, ...fresh]
-        saveToStorage(updated)
         return updated
       })
       setActiveId(results[results.length - 1].gameId)
     }
     setLoading(false)
-  }, [])
+  }, [games])
 
-  const removeGame = (gameId) => {
-    setGames(prev => {
-      const updated = prev.filter(g => g.gameId !== gameId)
-      saveToStorage(updated)
-      return updated
-    })
+  const removeGame = async (gameId) => {
+    await deleteReplay(gameId)
+    setGames(prev => prev.filter(g => g.gameId !== gameId))
     setActiveId(id => id === gameId ? null : id)
   }
 
@@ -1759,6 +1745,8 @@ export function ReplayAnalyzerPage() {
           Upload Lorcana Duels replay files (<code className="bg-gray-100 px-1 rounded text-xs">.replay.gz</code>) to analyze gameplay and reconstruct opponent decklists. Replays are saved locally in your browser.
         </p>
       </div>
+
+      {initialLoading && <div className="text-sm text-gray-500 mb-4">Loading replays…</div>}
 
       {/* Drop zone */}
       <label
@@ -1787,7 +1775,7 @@ export function ReplayAnalyzerPage() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-gray-700">{games.length} saved replay{games.length !== 1 ? 's' : ''}</h2>
             <button
-              onClick={() => { persistGames([]); setActiveId(null) }}
+              onClick={async () => { await clearAllReplays(); setGames([]); setActiveId(null) }}
               className="text-xs text-gray-400 hover:text-red-500 transition-colors"
             >
               Clear all

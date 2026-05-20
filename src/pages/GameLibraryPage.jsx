@@ -27,6 +27,7 @@ export function GameLibraryPage() {
   const [metagameOpen, setMetagameOpen] = useState(true)
   const [matchupOpen, setMatchupOpen] = useState(true)
   const [trendOpen, setTrendOpen] = useState(true)
+  const [turnDistOpen, setTurnDistOpen] = useState(true)
 
   useEffect(() => {
     loadGames()
@@ -217,6 +218,26 @@ export function GameLibraryPage() {
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Going 2nd</div>
               <div className="text-2xl font-bold text-gray-900">{winRateSecond}%</div>
               <div className="text-xs text-gray-400 mt-0.5">{winsSecond}–{gamesSecond.length - winsSecond}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Turn Distribution */}
+      {games.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setTurnDistOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Turn Distribution</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${turnDistOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {turnDistOpen && (
+            <div className="mt-6">
+              <TurnDistributionView games={games} />
             </div>
           )}
         </div>
@@ -573,6 +594,52 @@ function MatchupMatrixView({ games }) {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function TurnDistributionView({ games }) {
+  const eligible = games.filter(g => g.myPlayerNum != null && g.turnCount > 0)
+  if (eligible.length === 0) return <div className="text-sm text-gray-500">No turn data available.</div>
+
+  // Group by turn count
+  const byTurn = {}
+  for (const g of eligible) {
+    const t = g.turnCount
+    if (!byTurn[t]) byTurn[t] = { wins: 0, losses: 0 }
+    const won = g.winner === g.myPlayerNum || g.winner === String(g.myPlayerNum)
+    if (won) byTurn[t].wins++
+    else byTurn[t].losses++
+  }
+
+  const turns = Object.keys(byTurn).map(Number).sort((a, b) => a - b)
+  const maxGames = Math.max(...turns.map(t => byTurn[t].wins + byTurn[t].losses))
+
+  return (
+    <div>
+      <div className="text-xs text-gray-400 mb-4">Green = wins, red = losses</div>
+      <div className="flex items-end gap-1.5 h-40">
+        {turns.map(t => {
+          const { wins, losses } = byTurn[t]
+          const total = wins + losses
+          const barH = (total / maxGames) * 100
+          const winH = (wins / total) * barH
+          const lossH = (losses / total) * barH
+          return (
+            <div key={t} className="flex flex-col items-center gap-1 flex-1 min-w-0">
+              <div className="text-[10px] text-gray-500 font-medium">{total}</div>
+              <div className="w-full flex flex-col justify-end" style={{ height: '120px' }}>
+                <div className="w-full rounded-sm overflow-hidden flex flex-col" style={{ height: `${barH}%` }}>
+                  <div className="w-full bg-red-300" style={{ height: `${lossH}%` }} />
+                  <div className="w-full bg-emerald-400" style={{ height: `${winH}%` }} />
+                </div>
+              </div>
+              <div className="text-[10px] text-gray-500">{t}</div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="text-xs text-gray-400 mt-1 text-center">Turn count</div>
     </div>
   )
 }

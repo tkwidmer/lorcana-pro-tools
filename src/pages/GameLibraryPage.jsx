@@ -20,6 +20,8 @@ export function GameLibraryPage() {
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [importedIds, setImportedIds] = useState(getImportedGameIds())
+  const [importedOpen, setImportedOpen] = useState(true)
+  const [personalOpen, setPersonalOpen] = useState(true)
 
   useEffect(() => {
     loadGames()
@@ -199,48 +201,68 @@ export function GameLibraryPage() {
 
       {/* Imported games section */}
       {importedGames.length > 0 && (
-        <details className="border border-gray-200 rounded-lg p-4 mb-6" open>
-          <summary className="cursor-pointer font-medium text-gray-700 select-none flex items-center justify-between">
-            <span>Imported Games ({importedGames.length})</span>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleClearImported() }}
-              className="text-xs text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
-            >
-              Clear
-            </button>
-          </summary>
-          <div className="mt-4">
-            <GamesList games={importedGames} onDelete={async (id) => {
-              await deleteGamelog(id)
-              const newIds = new Set(importedIds)
-              newIds.delete(id)
-              setImportedIds(newIds)
-              saveImportedGameIds(newIds)
-              await loadGames()
-            }} />
-          </div>
-        </details>
+        <div className="mb-4">
+          <button
+            onClick={() => setImportedOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Imported Games ({importedGames.length})</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleClearImported() }}
+                className="text-xs text-red-400 hover:text-red-600 transition-colors"
+              >
+                Clear
+              </button>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${importedOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+          {importedOpen && (
+            <div className="mt-6">
+              <GamesList games={importedGames} onDelete={async (id) => {
+                await deleteGamelog(id)
+                const newIds = new Set(importedIds)
+                newIds.delete(id)
+                setImportedIds(newIds)
+                saveImportedGameIds(newIds)
+                await loadGames()
+              }} />
+            </div>
+          )}
+        </div>
       )}
 
       {/* Personal games section */}
       {personalGames.length > 0 && (
-        <details className="border border-gray-200 rounded-lg p-4 mb-6" open>
-          <summary className="cursor-pointer font-medium text-gray-700 select-none flex items-center justify-between">
-            <span>Personal Games ({personalGames.length})</span>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleClearPersonal() }}
-              className="text-xs text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
-            >
-              Clear
-            </button>
-          </summary>
-          <div className="mt-4">
-            <GamesList games={personalGames} onDelete={async (id) => {
-              await deleteGamelog(id)
-              await loadGames()
-            }} />
-          </div>
-        </details>
+        <div className="mb-4">
+          <button
+            onClick={() => setPersonalOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Personal Games ({personalGames.length})</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleClearPersonal() }}
+                className="text-xs text-red-400 hover:text-red-600 transition-colors"
+              >
+                Clear
+              </button>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${personalOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+          {personalOpen && (
+            <div className="mt-6">
+              <GamesList games={personalGames} onDelete={async (id) => {
+                await deleteGamelog(id)
+                await loadGames()
+              }} />
+            </div>
+          )}
+        </div>
       )}
 
       {games.length === 0 && !loading && (

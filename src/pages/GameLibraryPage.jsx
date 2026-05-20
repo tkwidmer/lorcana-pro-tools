@@ -630,8 +630,8 @@ function TurnDistributionView({ games }) {
               <div className="text-[10px] text-gray-500 font-medium">{total}</div>
               <div className="w-full flex flex-col justify-end" style={{ height: '120px' }}>
                 <div className="w-full rounded-sm overflow-hidden flex flex-col" style={{ height: `${barH}%` }}>
-                  <div className="w-full bg-red-300" style={{ height: `${lossH}%` }} />
                   <div className="w-full bg-emerald-400" style={{ height: `${winH}%` }} />
+                  <div className="w-full bg-red-300" style={{ height: `${lossH}%` }} />
                 </div>
               </div>
               <div className="text-[10px] text-gray-500">{t}</div>

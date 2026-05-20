@@ -15,15 +15,15 @@ function InkIcon({ color, size = 20 }) {
     <img
       src={`/ink/${color}.png`}
       alt={color}
-      className="inline-block"
-      style={{ width: `${size}px`, height: `${size}px` }}
+      className="inline-block flex-shrink-0"
+      style={{ width: `${size}px`, height: `${size}px`, minWidth: `${size}px` }}
     />
   )
 }
 
 function ColorPairIcons({ colors, size = 20 }) {
   return (
-    <div className="inline-flex gap-1 align-middle">
+    <div className="inline-flex gap-1 align-middle flex-shrink-0">
       {colors.map(c => <InkIcon key={c} color={c} size={size} />)}
     </div>
   )
@@ -617,9 +617,11 @@ export function PracticePlanPage() {
               const barW = best.expectedWR > 0 ? (d.expectedWR / best.expectedWR) * 100 : 0
               return (
                 <div key={d.key} className={`flex items-center gap-3 text-sm ${isCurrent ? 'font-semibold' : ''}`}>
-                  <div className="w-32 flex items-center gap-2">
-                    <ColorPairIcons colors={d.colors} size={18} />
-                    <span className="text-gray-700">{d.colors.join('/')}</span>
+                  <div className="w-44 flex items-center gap-2 flex-shrink-0">
+                    <div className="flex-shrink-0">
+                      <ColorPairIcons colors={d.colors} size={18} />
+                    </div>
+                    <span className="text-gray-700 truncate">{d.colors.join('/')}</span>
                   </div>
                   <div className="flex-1 bg-gray-100 rounded h-5 relative overflow-hidden">
                     <div

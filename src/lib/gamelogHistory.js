@@ -33,21 +33,8 @@ function promisify(req) {
 
 function compressRawLogs(logs) {
   if (!Array.isArray(logs)) return []
-  // Keep essential fields for inspection and turn-by-turn analysis
-  return logs.map(log => ({
-    type: log.type,
-    player: log.player,
-    turnNumber: log.turnNumber,
-    data: log.data ? {
-      cardName: log.data.cardName,
-      cardId: log.data.cardId,
-      cardFullName: log.data.cardFullName,
-      loreGained: log.data.loreGained,
-      playerNames: log.data.playerNames,
-      winner: log.data.winner,
-      victoryReason: log.data.victoryReason,
-    } : undefined,
-  }))
+  // Keep full raw logs for inspection and debugging
+  return logs
 }
 
 export async function saveGamelog(id, data, rawLogs) {

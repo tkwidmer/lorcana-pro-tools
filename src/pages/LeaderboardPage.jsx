@@ -12,7 +12,7 @@ function Histogram({ buckets, highlightMmr }) {
         return (
           <div
             key={b.bucket}
-            className="flex-1 group relative"
+            className="flex-1 h-full flex items-end group"
             title={`${b.bucket}-${b.bucket + 49} MMR: ${b.count} players`}
           >
             <div

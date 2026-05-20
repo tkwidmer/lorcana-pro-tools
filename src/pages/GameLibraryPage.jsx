@@ -401,9 +401,9 @@ function GameListItem({ game, onDelete }) {
 }
 
 function MatchupMatrixView({ games }) {
-  const { matchups, colorPairs } = buildWinrateMatrixFromGames(games)
+  const { matchups } = buildWinrateMatrixFromGames(games)
 
-  if (matchups.length === 0 || colorPairs.length === 0) {
+  if (matchups.length === 0) {
     return <div className="text-sm text-gray-500">No matchup data available</div>
   }
 
@@ -418,8 +418,32 @@ function MatchupMatrixView({ games }) {
     return 'bg-red-300'
   }
 
-  // Sort color pairs by winrate
-  const sortedColorPairs = [...colorPairs].sort((a, b) => b.winRate - a.winRate)
+  // Extract unique user decks (rows) and opponent decks (columns) from matchups
+  const userDeckMap = new Map()
+  const oppDeckMap = new Map()
+
+  matchups.forEach(m => {
+    const userKey = JSON.stringify(m.colorsA)
+    const oppKey = JSON.stringify(m.colorsB)
+
+    if (!userDeckMap.has(userKey)) {
+      userDeckMap.set(userKey, { colors: m.colorsA, wins: 0, games: 0 })
+    }
+    if (!oppDeckMap.has(oppKey)) {
+      oppDeckMap.set(oppKey, { colors: m.colorsB, wins: 0, games: 0 })
+    }
+
+    // Aggregate stats for user decks (rows)
+    userDeckMap.get(userKey).wins += m.winsA
+    userDeckMap.get(userKey).games += m.games
+
+    // Aggregate stats for opponent decks (columns) - from opponent perspective
+    oppDeckMap.get(oppKey).wins += (m.games - m.winsA)
+    oppDeckMap.get(oppKey).games += m.games
+  })
+
+  const userDecks = Array.from(userDeckMap.values()).sort((a, b) => b.wins / b.games - a.wins / a.games)
+  const oppDecks = Array.from(oppDeckMap.values()).sort((a, b) => b.wins / b.games - a.wins / a.games)
 
   // Build lookup map for quick access
   const matchupMap = new Map()
@@ -455,7 +479,7 @@ function MatchupMatrixView({ games }) {
         {/* Header row */}
         <div className="flex mb-2">
           <div className="w-24 h-20 flex-shrink-0" />
-          {sortedColorPairs.map((colPair, colIdx) => (
+          {oppDecks.map((colPair, colIdx) => (
             <div
               key={colIdx}
               className="w-24 h-20 flex-shrink-0 flex items-center justify-center text-xs font-semibold"
@@ -471,7 +495,7 @@ function MatchupMatrixView({ games }) {
         </div>
 
         {/* Data rows */}
-        {sortedColorPairs.map((rowPair, rowIdx) => (
+        {userDecks.map((rowPair, rowIdx) => (
           <div key={rowIdx} className="flex mb-2">
             {/* Row header */}
             <div className="w-24 h-20 flex-shrink-0 flex items-center justify-center text-xs font-semibold border-r border-gray-100">
@@ -484,7 +508,7 @@ function MatchupMatrixView({ games }) {
             </div>
 
             {/* Data cells */}
-            {sortedColorPairs.map((colPair, colIdx) => {
+            {oppDecks.map((colPair, colIdx) => {
               const matchup = getMatchup(rowPair.colors, colPair.colors)
               if (!matchup) {
                 return (

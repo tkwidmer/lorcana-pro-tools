@@ -504,8 +504,6 @@ function OpponentMetagameView({ games }) {
     return <div className="text-sm text-gray-500">No opponent deck data available</div>
   }
 
-  const maxPercentage = Math.max(...metagame.map(d => parseFloat(d.percentage)))
-
   return (
     <div className="space-y-4">
       {/* Horizontal bar chart */}
@@ -529,9 +527,9 @@ function OpponentMetagameView({ games }) {
             <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden">
               <div
                 className="h-full bg-blue-500 transition-all flex items-center justify-center"
-                style={{ width: `${(parseFloat(deck.percentage) / maxPercentage) * 100}%` }}
+                style={{ width: `${parseFloat(deck.percentage)}%` }}
               >
-                {parseFloat(deck.percentage) > 5 && (
+                {parseFloat(deck.percentage) > 8 && (
                   <span className="text-xs font-semibold text-white">{deck.percentage}%</span>
                 )}
               </div>

@@ -636,7 +636,7 @@ function InkDot({ color }) {
   return <span className={`inline-block w-3 h-3 rounded-full flex-shrink-0 ${c}`} title={color} />
 }
 
-function InkImg({ color, size = 'w-4 h-4' }) {
+export function InkImg({ color, size = 'w-4 h-4' }) {
   if (!color) return null
   const name = color.toLowerCase()
   const VALID = ['amber', 'amethyst', 'emerald', 'ruby', 'sapphire', 'steel']

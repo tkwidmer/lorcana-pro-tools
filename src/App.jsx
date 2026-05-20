@@ -14,6 +14,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { MatchHistoryPage } from './pages/MatchHistoryPage'
 import { GamelogViewerPage } from './pages/GamelogViewerPage'
 import { GamelogAnalyzerPage } from './pages/GamelogAnalyzerPage'
+import { GameLibraryPage } from './pages/GameLibraryPage'
 import { WinrateMatrixPage } from './pages/WinrateMatrixPage'
 import { LoginPage } from './pages/LoginPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/match-history" element={<MatchHistoryPage />} />
         <Route path="/gamelog" element={<GamelogViewerPage />} />
         <Route path="/gamelog-analyzer" element={<GamelogAnalyzerPage />} />
+        <Route path="/game-library" element={<GameLibraryPage />} />
         <Route path="/winrate-matrix" element={<WinrateMatrixPage />} />
         {/* Redirects from old routes */}
         <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />

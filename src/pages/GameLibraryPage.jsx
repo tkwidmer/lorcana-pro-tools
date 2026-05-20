@@ -199,30 +199,28 @@ export function GameLibraryPage() {
 
       {/* Overall Stats */}
       {gamesWithMyPlayer.length > 0 && (
-        <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Overall Record</div>
-          <div className="flex items-baseline gap-6 flex-wrap">
+        <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="col-span-2 border border-gray-200 rounded-lg p-4 bg-gray-50 flex items-center gap-4">
             <div>
-              <div className="text-3xl font-bold text-gray-900">{wins}-{losses}</div>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Overall</div>
+              <div className="text-3xl font-bold text-gray-900">{wins}–{losses}</div>
             </div>
-            <div>
-              <div className="text-2xl font-semibold text-green-600">{winRate}%</div>
-            </div>
-            {winRateFirst != null && (
-              <div className="flex items-baseline gap-1">
-                <span className="text-xs text-gray-500 font-medium">Going 1st</span>
-                <span className="text-lg font-semibold text-gray-700">{winRateFirst}%</span>
-                <span className="text-xs text-gray-400">({winsFirst}-{gamesFirst.length - winsFirst})</span>
-              </div>
-            )}
-            {winRateSecond != null && (
-              <div className="flex items-baseline gap-1">
-                <span className="text-xs text-gray-500 font-medium">Going 2nd</span>
-                <span className="text-lg font-semibold text-gray-700">{winRateSecond}%</span>
-                <span className="text-xs text-gray-400">({winsSecond}-{gamesSecond.length - winsSecond})</span>
-              </div>
-            )}
+            <div className="text-2xl font-semibold text-green-600">{winRate}%</div>
           </div>
+          {winRateFirst != null && (
+            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Going 1st</div>
+              <div className="text-2xl font-bold text-gray-900">{winRateFirst}%</div>
+              <div className="text-xs text-gray-400 mt-0.5">{winsFirst}–{gamesFirst.length - winsFirst}</div>
+            </div>
+          )}
+          {winRateSecond != null && (
+            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Going 2nd</div>
+              <div className="text-2xl font-bold text-gray-900">{winRateSecond}%</div>
+              <div className="text-xs text-gray-400 mt-0.5">{winsSecond}–{gamesSecond.length - winsSecond}</div>
+            </div>
+          )}
         </div>
       )}
 

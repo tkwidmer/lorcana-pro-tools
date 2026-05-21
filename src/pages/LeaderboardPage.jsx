@@ -2,27 +2,64 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchLeaderboard } from '../lib/leaderboardApi'
 
 function Histogram({ buckets, highlightMmr }) {
+  if (!buckets.length) return null
   const max = Math.max(...buckets.map(b => b.count), 1)
+  const W = 1000
+  const H = 160
+  const padY = 4
+  const stepX = W / (buckets.length - 1 || 1)
+  const points = buckets.map((b, i) => {
+    const x = i * stepX
+    const y = H - padY - ((b.count / max) * (H - padY * 2))
+    return [x, y]
+  })
+  const linePath = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ')
+  const areaPath = `${linePath} L${W},${H} L0,${H} Z`
+  const highlightIdx = highlightMmr == null
+    ? -1
+    : buckets.findIndex(b => highlightMmr >= b.bucket && highlightMmr < b.bucket + 50)
   return (
-    <div className="flex items-end gap-px h-32">
-      {buckets.map(b => {
-        const h = Math.max(2, Math.round((b.count / max) * 100))
-        const isHighlight =
-          highlightMmr != null && highlightMmr >= b.bucket && highlightMmr < b.bucket + 50
-        return (
-          <div
-            key={b.bucket}
-            className="flex-1 h-full flex items-end group"
-            title={`${b.bucket}-${b.bucket + 49} MMR: ${b.count} players`}
-          >
-            <div
-              className={`w-full ${isHighlight ? 'bg-gray-900' : 'bg-gray-300 group-hover:bg-gray-500'} transition-colors`}
-              style={{ height: `${h}%` }}
-            />
-          </div>
-        )
-      })}
-    </div>
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className="w-full h-40"
+      role="img"
+      aria-label="MMR distribution"
+    >
+      <path d={areaPath} fill="rgb(229 231 235)" />
+      <path d={linePath} fill="none" stroke="rgb(55 65 81)" strokeWidth="2" />
+      {highlightIdx >= 0 && (
+        <>
+          <line
+            x1={points[highlightIdx][0]}
+            x2={points[highlightIdx][0]}
+            y1={0}
+            y2={H}
+            stroke="rgb(17 24 39)"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
+          <circle
+            cx={points[highlightIdx][0]}
+            cy={points[highlightIdx][1]}
+            r="3.5"
+            fill="rgb(17 24 39)"
+          />
+        </>
+      )}
+      {buckets.map((b, i) => (
+        <rect
+          key={b.bucket}
+          x={i * stepX - stepX / 2}
+          y={0}
+          width={stepX}
+          height={H}
+          fill="transparent"
+        >
+          <title>{`${b.bucket}-${b.bucket + 49} MMR: ${b.count} players`}</title>
+        </rect>
+      ))}
+    </svg>
   )
 }
 

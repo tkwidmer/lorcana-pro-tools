@@ -18,6 +18,7 @@ import { GameLibraryPage } from './pages/GameLibraryPage'
 import { WinrateMatrixPage } from './pages/WinrateMatrixPage'
 import { PracticePlanPage } from './pages/PracticePlanPage'
 import { LeaderboardPage } from './pages/LeaderboardPage'
+import { TournamentLookupPage } from './pages/TournamentLookupPage'
 import { LoginPage } from './pages/LoginPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/winrate-matrix" element={<WinrateMatrixPage />} />
         <Route path="/practice-plan" element={<PracticePlanPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/tournament-lookup" element={<TournamentLookupPage />} />
         {/* Redirects from old routes */}
         <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />
         <Route path="/players" element={<Navigate to="/library?tab=players" replace />} />

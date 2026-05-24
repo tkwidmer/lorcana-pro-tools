@@ -69,6 +69,11 @@ const SECTIONS = [
         name: 'Cut Calculator',
         description: 'Track your record during a Swiss tournament and know exactly when it\'s safe to intentional draw into top cut.',
       },
+      {
+        path: '/tournament-lookup',
+        name: 'Tournament Lookup',
+        description: 'Paste a tournament event URL to load live standings, find yourself by name, and check your rank, tiebreakers, and ID eligibility mid-event.',
+      },
     ],
   },
   {

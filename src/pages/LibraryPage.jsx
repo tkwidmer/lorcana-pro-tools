@@ -5,6 +5,7 @@ import { listPlayers } from '../lib/playerProfiles'
 import { parseSnapshot } from '../lib/gameSnapshot'
 import { getAllGames, deleteGame, clearAllGames, summarizeGame, saveGame as saveHistoryGame } from '../lib/gameHistory'
 import { resolveColors } from '../lib/inkColors'
+import { downloadGameIds } from '../lib/exportGameIds'
 import { GameView } from '../components/GameView'
 
 // --- Ignored players (stored in localStorage) ---
@@ -239,7 +240,15 @@ function HistoryTab({ records, onDelete, onClearAll }) {
       <StatsDashboard stats={stats} />
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Saved games</h2>
-        <button onClick={onClearAll} className="text-xs text-gray-400 hover:text-red-600 underline">Clear all</button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => downloadGameIds(records.map(r => r.uuid), [])}
+            className="text-xs text-gray-400 hover:text-blue-600 underline"
+          >
+            Export IDs
+          </button>
+          <button onClick={onClearAll} className="text-xs text-gray-400 hover:text-red-600 underline">Clear all</button>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-2">
         {summaries.map(s => (

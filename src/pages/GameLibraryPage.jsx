@@ -3,6 +3,7 @@ import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip } from '../lib/gameImport'
 import { analyzeOpponentMetagame, cardFrequencyByArchetype } from '../lib/metagameAnalysis'
 import { buildWinrateMatrixFromGames } from '../lib/buildWinrateMatrix'
+import { downloadGameIds } from '../lib/exportGameIds'
 import { InkImg } from './GamelogAnalyzerPage'
 import { useCards } from '../hooks/useCards'
 
@@ -189,7 +190,13 @@ export function GameLibraryPage() {
 
       {/* Control bar */}
       {games.length > 0 && (
-        <div className="mb-6 flex justify-end">
+        <div className="mb-6 flex justify-end gap-3">
+          <button
+            onClick={() => downloadGameIds([], games.map(g => g.id))}
+            className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
+          >
+            Export IDs
+          </button>
           <button
             onClick={handleClearAll}
             className="text-xs text-red-400 hover:text-red-600 transition-colors"

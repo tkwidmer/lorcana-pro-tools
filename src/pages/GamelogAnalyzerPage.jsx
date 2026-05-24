@@ -1257,7 +1257,7 @@ export function GamelogAnalyzerPage() {
   }
 
   useEffect(() => {
-    getAllGamelogs().then(all => setGamelogs(all)).catch(() => {})
+    getAllGamelogs().then(all => setGamelogs([...all].sort((a, b) => b.savedAt - a.savedAt))).catch(() => {})
 
     const pending = sessionStorage.getItem('lorcana_pending_gamelog')
     if (pending) {

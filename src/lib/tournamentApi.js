@@ -28,30 +28,42 @@ export function getTournamentStructure(eventDetails) {
   const topCutSize =
     eventDetails.top_cut_size || eliminationPhase?.rank_required_to_enter_phase || null
 
-  // Find current round across all phases
+  // Find the best round to show standings for:
+  // Prefer IN_PROGRESS with standings generated, then fall back to last COMPLETE with standings generated
   let currentRoundId = null
   let currentRoundNumber = null
   let currentPhaseType = null
+  let currentPhaseName = null
 
   for (const phase of phases) {
     if (!phase.rounds) continue
-    const inProgress = phase.rounds.find((r) => r.status === 'IN_PROGRESS')
-    if (inProgress) {
-      currentRoundId = inProgress.id
-      currentRoundNumber = inProgress.round_number
+
+    // Check for in-progress round with generated standings
+    const inProgressWithStandings = phase.rounds.find(
+      (r) => r.status === 'IN_PROGRESS' && r.standings_status === 'GENERATED'
+    )
+    if (inProgressWithStandings) {
+      currentRoundId = inProgressWithStandings.id
+      currentRoundNumber = inProgressWithStandings.round_number
       currentPhaseType = phase.round_type
+      currentPhaseName = phase.phase_name
       break
     }
-    // Track last completed round as fallback
-    const completed = phase.rounds.filter((r) => r.status === 'COMPLETE')
-    if (completed.length > 0) {
-      const last = completed[completed.length - 1]
+
+    // Track last completed round with generated standings as fallback
+    const completedWithStandings = phase.rounds.filter(
+      (r) => r.status === 'COMPLETE' && r.standings_status === 'GENERATED'
+    )
+    if (completedWithStandings.length > 0) {
+      const last = completedWithStandings[completedWithStandings.length - 1]
       currentRoundId = last.id
       currentRoundNumber = last.round_number
       currentPhaseType = phase.round_type
+      currentPhaseName = phase.phase_name
     }
   }
 
+  const isElimination = currentPhaseType === 'RANKED_SINGLE_ELIMINATION'
   const swissRoundsRemaining =
     currentPhaseType === 'SWISS' ? totalSwissRounds - currentRoundNumber : 0
 
@@ -61,6 +73,8 @@ export function getTournamentStructure(eventDetails) {
     currentRoundId,
     currentRoundNumber,
     currentPhaseType,
+    currentPhaseName,
+    isElimination,
     swissRoundsRemaining,
     eventName: eventDetails.name,
   }

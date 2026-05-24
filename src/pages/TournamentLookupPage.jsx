@@ -144,12 +144,19 @@ export function TournamentLookupPage() {
       {/* Tournament info strip */}
       {structure && (
         <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <span>
-            <strong className="text-gray-900">Round</strong>{' '}
-            {structure.currentRoundNumber}
-            {structure.totalSwissRounds > 0 && ` of ${structure.totalSwissRounds}`}
-          </span>
-          {structure.swissRoundsRemaining > 0 && (
+          {structure.isElimination ? (
+            <span>
+              <strong className="text-gray-900">{structure.currentPhaseName || 'Elimination'}</strong>{' '}
+              · Round {structure.currentRoundNumber}
+            </span>
+          ) : (
+            <span>
+              <strong className="text-gray-900">Round</strong>{' '}
+              {structure.currentRoundNumber}
+              {structure.totalSwissRounds > 0 && ` of ${structure.totalSwissRounds}`}
+            </span>
+          )}
+          {!structure.isElimination && structure.swissRoundsRemaining > 0 && (
             <span>
               <strong className="text-gray-900">{structure.swissRoundsRemaining}</strong> round{structure.swissRoundsRemaining !== 1 ? 's' : ''} remaining
             </span>
@@ -273,9 +280,10 @@ export function TournamentLookupPage() {
                 </div>
               </div>
 
-              {idAnalysis.swissRoundsRemaining > 0 && (
+              {idAnalysis.pointsAboveCut !== null && (
                 <p className="text-xs text-gray-600 mt-3">
-                  {idAnalysis.swissRoundsRemaining} swiss round{idAnalysis.swissRoundsRemaining !== 1 ? 's' : ''} remaining · {idAnalysis.pointsAboveCut > 0 ? `${idAnalysis.pointsAboveCut} pts above cut line` : `${Math.abs(idAnalysis.pointsAboveCut)} pts below cut line`}
+                  {idAnalysis.swissRoundsRemaining > 0 && `${idAnalysis.swissRoundsRemaining} swiss round${idAnalysis.swissRoundsRemaining !== 1 ? 's' : ''} remaining · `}
+                  {idAnalysis.pointsAboveCut > 0 ? `${idAnalysis.pointsAboveCut} pts above cut line` : `${Math.abs(idAnalysis.pointsAboveCut)} pts below cut line`}
                 </p>
               )}
             </div>

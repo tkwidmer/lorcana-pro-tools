@@ -1,10 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { tournamentId, roundId, page = '1', pageSize = '10' } = req.query
+  const { roundId, page = '1', pageSize = '10' } = req.query
 
-  if (!tournamentId || !roundId) {
-    return res.status(400).json({ error: 'Missing tournamentId or roundId' })
+  if (!roundId) {
+    return res.status(400).json({ error: 'Missing roundId' })
   }
 
   const pageNum = typeof page === 'string' ? page : page[0]

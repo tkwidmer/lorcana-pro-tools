@@ -5,6 +5,7 @@ import {
   fetchTournamentStandings,
   formatTiebreakers,
   analyzeId,
+  analyzeAdvancement,
 } from '../lib/tournamentApi'
 
 const RECOMMENDATION_STYLES = {
@@ -104,8 +105,9 @@ export function TournamentLookupPage() {
     )
   })
 
-  const tiebreakers = player ? formatTiebreakers(player) : null
+  const tiebreakers = player ? formatTiebreakers(player, structure?.tiebreakers) : null
   const idAnalysis = player && structure ? analyzeId(player, allStandings, structure) : null
+  const advancementAnalysis = player && structure ? analyzeAdvancement(player, structure) : null
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -169,6 +171,15 @@ export function TournamentLookupPage() {
           {allStandings && (
             <span>
               <strong className="text-gray-900">{allStandings.length}</strong> players
+            </span>
+          )}
+          {structure.advancementRequirement && (
+            <span className="text-amber-700">
+              {structure.advancementRequirement.type === 'points' ? (
+                <>Need <strong className="text-amber-900">{structure.advancementRequirement.value} pts</strong> → {structure.advancementRequirement.nextPhaseName}</>
+              ) : (
+                <>Need top <strong className="text-amber-900">{structure.advancementRequirement.value}</strong> → {structure.advancementRequirement.nextPhaseName}</>
+              )}
             </span>
           )}
         </div>
@@ -242,6 +253,33 @@ export function TournamentLookupPage() {
             ← Back to standings
           </button>
 
+          {/* Advancement status */}
+          {advancementAnalysis && (() => {
+            const { status, nextPhaseName, value, type, winsNeeded, pointsNeeded } = advancementAnalysis
+            const styles = {
+              secured:      { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800' },
+              possible:     { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800' },
+              eliminated:   { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800' },
+              in_cut:       { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800' },
+              outside_cut:  { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800' },
+            }
+            const s = styles[status]
+            const label = {
+              secured:     `Secured advancement to ${nextPhaseName}`,
+              possible:    type === 'points'
+                ? `Need ${winsNeeded} more win${winsNeeded !== 1 ? 's' : ''} (${pointsNeeded} pts) for ${nextPhaseName}`
+                : `Currently outside top ${value} for ${nextPhaseName}`,
+              eliminated:  `Eliminated from ${nextPhaseName} contention`,
+              in_cut:      `Currently in top ${value} → ${nextPhaseName}`,
+              outside_cut: `Currently outside top ${value} → ${nextPhaseName}`,
+            }[status]
+            return (
+              <div className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${s.bg} ${s.border} ${s.text}`}>
+                {label}
+              </div>
+            )
+          })()}
+
           {/* ID Analysis */}
           {idAnalysis && (
             <div className={`rounded-lg border p-5 ${RECOMMENDATION_STYLES[idAnalysis.recommendation].bg} ${RECOMMENDATION_STYLES[idAnalysis.recommendation].border}`}>
@@ -311,18 +349,17 @@ export function TournamentLookupPage() {
                 <span className="text-gray-600 text-sm">Match Points</span>
                 <span className="font-mono font-bold text-gray-900">{tiebreakers.matchPoints}</span>
               </div>
-              <div className="flex justify-between items-center pb-2.5 border-b border-gray-100">
-                <span className="text-gray-600 text-sm">Game Win %</span>
-                <span className="font-mono text-gray-900">{tiebreakers.gameWinPercentage}%</span>
-              </div>
-              <div className="flex justify-between items-center pb-2.5 border-b border-gray-100">
-                <span className="text-gray-600 text-sm">Opponent Match Win %</span>
-                <span className="font-mono text-gray-900">{tiebreakers.opponentMatchWinPercentage}%</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Opponent Game Win %</span>
-                <span className="font-mono text-gray-900">{tiebreakers.opponentGameWinPercentage}%</span>
-              </div>
+              {tiebreakers.ordered.map(({ key, label, value }, i) => (
+                <div
+                  key={key}
+                  className={`flex justify-between items-center${i < tiebreakers.ordered.length - 1 ? ' pb-2.5 border-b border-gray-100' : ''}`}
+                >
+                  <span className="text-gray-600 text-sm">
+                    <span className="text-gray-400 text-xs mr-1.5">{i + 1}.</span>{label}
+                  </span>
+                  <span className="font-mono text-gray-900">{value}%</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

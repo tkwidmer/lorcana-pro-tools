@@ -34,8 +34,10 @@ export function getTournamentStructure(eventDetails) {
   let currentRoundNumber = null
   let currentPhaseType = null
   let currentPhaseName = null
+  let currentPhaseIndex = -1
 
-  for (const phase of phases) {
+  for (let i = 0; i < phases.length; i++) {
+    const phase = phases[i]
     if (!phase.rounds) continue
 
     // Check for in-progress round with generated standings
@@ -47,6 +49,7 @@ export function getTournamentStructure(eventDetails) {
       currentRoundNumber = inProgressWithStandings.round_number
       currentPhaseType = phase.round_type
       currentPhaseName = phase.phase_name
+      currentPhaseIndex = i
       break
     }
 
@@ -60,12 +63,39 @@ export function getTournamentStructure(eventDetails) {
       currentRoundNumber = last.round_number
       currentPhaseType = phase.round_type
       currentPhaseName = phase.phase_name
+      currentPhaseIndex = i
     }
   }
 
   const isElimination = currentPhaseType === 'RANKED_SINGLE_ELIMINATION'
   const swissRoundsRemaining =
     currentPhaseType === 'SWISS' ? totalSwissRounds - currentRoundNumber : 0
+
+  // Determine what's needed to advance to the next phase
+  const nextPhase =
+    currentPhaseIndex >= 0 && currentPhaseIndex + 1 < phases.length
+      ? phases[currentPhaseIndex + 1]
+      : null
+
+  let advancementRequirement = null
+  if (nextPhase && !isElimination) {
+    if (nextPhase.rank_required_to_enter_phase) {
+      advancementRequirement = {
+        type: 'rank',
+        value: nextPhase.rank_required_to_enter_phase,
+        nextPhaseName: nextPhase.phase_name,
+      }
+    } else {
+      const pointsMatch = nextPhase.phase_name.match(/(\d+)\s*point/i)
+      if (pointsMatch) {
+        advancementRequirement = {
+          type: 'points',
+          value: parseInt(pointsMatch[1], 10),
+          nextPhaseName: nextPhase.phase_name,
+        }
+      }
+    }
+  }
 
   return {
     totalSwissRounds,
@@ -76,6 +106,8 @@ export function getTournamentStructure(eventDetails) {
     currentPhaseName,
     isElimination,
     swissRoundsRemaining,
+    advancementRequirement,
+    tiebreakers: eventDetails.tiebreakers ?? [],
     eventName: eventDetails.name,
   }
 }
@@ -103,15 +135,62 @@ export async function fetchTournamentStandings(roundId, page = 1, pageSize = 10)
   }
 }
 
-export function formatTiebreakers(entry) {
+const TIEBREAKER_LABELS = {
+  opponent_match_win_percentage: 'Opp. Match Win %',
+  game_win_percentage: 'Game Win %',
+  opponent_game_win_percentage: 'Opp. Game Win %',
+}
+
+export function formatTiebreakers(entry, tiebreakerOrder = []) {
+  const order =
+    tiebreakerOrder.length > 0
+      ? tiebreakerOrder
+      : ['opponent_match_win_percentage', 'game_win_percentage', 'opponent_game_win_percentage']
+
+  const values = {
+    opponent_match_win_percentage: (entry.opponent_match_win_percentage * 100).toFixed(2),
+    game_win_percentage: (entry.game_win_percentage * 100).toFixed(2),
+    opponent_game_win_percentage: (entry.opponent_game_win_percentage * 100).toFixed(2),
+  }
+
   return {
     rank: entry.rank,
     record: entry.record,
     matchPoints: entry.match_points,
-    gameWinPercentage: (entry.game_win_percentage * 100).toFixed(2),
-    opponentMatchWinPercentage: (entry.opponent_match_win_percentage * 100).toFixed(2),
-    opponentGameWinPercentage: (entry.opponent_game_win_percentage * 100).toFixed(2),
+    ordered: order.map((key) => ({ key, label: TIEBREAKER_LABELS[key] ?? key, value: values[key] })),
   }
+}
+
+export function analyzeAdvancement(playerEntry, structure) {
+  if (!playerEntry || !structure?.advancementRequirement) return null
+
+  const { advancementRequirement, swissRoundsRemaining } = structure
+  const { type, value, nextPhaseName } = advancementRequirement
+
+  if (type === 'points') {
+    const myPoints = playerEntry.match_points
+    const maxPossible = myPoints + swissRoundsRemaining * 3
+    if (myPoints >= value) {
+      return { status: 'secured', nextPhaseName, value, type }
+    }
+    if (maxPossible < value) {
+      return { status: 'eliminated', nextPhaseName, value, type }
+    }
+    const winsNeeded = Math.ceil((value - myPoints) / 3)
+    return { status: 'possible', nextPhaseName, value, type, winsNeeded, pointsNeeded: value - myPoints }
+  }
+
+  if (type === 'rank') {
+    const myRank = playerEntry.rank
+    return {
+      status: myRank <= value ? 'in_cut' : 'outside_cut',
+      nextPhaseName,
+      value,
+      type,
+    }
+  }
+
+  return null
 }
 
 export function analyzeId(playerEntry, allStandings, structure) {

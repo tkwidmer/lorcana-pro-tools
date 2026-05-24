@@ -5,6 +5,7 @@ import { analyzeOpponentMetagame, cardFrequencyByArchetype } from '../lib/metaga
 import { buildWinrateMatrixFromGames } from '../lib/buildWinrateMatrix'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { InkImg } from './GamelogAnalyzerPage'
+import { createGameExportZip } from '../lib/gameExport'
 import { useCards } from '../hooks/useCards'
 
 const IMPORTED_GAMES_KEY = 'lorcana_imported_game_ids'
@@ -388,7 +389,7 @@ export function GameLibraryPage() {
 
 function GamesList({ games, onDelete }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {games.map(g => (
         <GameListItem key={g.id} game={g} onDelete={onDelete} />
       ))}
@@ -399,50 +400,47 @@ function GamesList({ games, onDelete }) {
 function GameListItem({ game, onDelete }) {
   const p1Name = game.p1Name || 'Player 1'
   const p2Name = game.p2Name || 'Player 2'
-  const p1IsWinner = game.winner === 1 || game.winner === '1'
-  const p2IsWinner = game.winner === 2 || game.winner === '2'
-
-  // Determine your name and opponent name based on myPlayerNum
   const myNum = game.myPlayerNum
-  const myName = myNum === 1 ? p1Name : myNum === 2 ? p2Name : null
-  const oppName = myNum === 1 ? p2Name : myNum === 2 ? p1Name : null
-  const myWon = myNum != null && (game.winner === myNum || game.winner === String(myNum))
+  const myDisplayLabel = myNum === 1 ? p1Name : myNum === 2 ? p2Name : p1Name
+  const oppDisplayLabel = myNum === 1 ? p2Name : myNum === 2 ? p1Name : p2Name
+  const myColors = game.myInkCombo ?? []
+  const oppColors = game.oppInkCombo ?? []
+  const won = myNum != null && (game.winner === myNum || game.winner === String(myNum))
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded border border-gray-100 hover:bg-gray-50 transition-colors">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm text-gray-900 truncate">{myName || p1Name}</span>
-          {game.myInkCombo?.length > 0 && (
-            <span className="flex items-center gap-0.5 flex-shrink-0">
-              {game.myInkCombo.map(c => <InkImg key={c} color={c} size="w-3 h-3" />)}
-            </span>
-          )}
-          <span className="text-xs text-gray-400">vs</span>
-          <span className="font-medium text-sm text-gray-900 truncate">{oppName || p2Name}</span>
-          {game.oppInkCombo?.length > 0 && (
-            <span className="flex items-center gap-0.5 flex-shrink-0">
-              {game.oppInkCombo.map(c => <InkImg key={c} color={c} size="w-3 h-3" />)}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          {myNum != null && (
-            <span className={`text-xs px-2 py-0.5 rounded ${myWon ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>
-              {myWon ? 'Win' : 'Loss'}
-            </span>
-          )}
-          <span className="text-xs text-gray-500">{game.turnCount} turns</span>
-          <span className="text-xs text-gray-400">{new Date(game.playedAt ?? game.savedAt).toLocaleDateString()}</span>
-        </div>
-      </div>
+    <div className="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-50 transition-colors">
+      {myNum != null && (
+        <span className={`text-[10px] font-bold w-6 text-center flex-shrink-0 ${won ? 'text-emerald-600' : 'text-red-500'}`}>
+          {won ? 'W' : 'L'}
+        </span>
+      )}
+      <span className="flex items-center gap-1 font-medium text-sm flex-1 min-w-0">
+        <span className="truncate">{myDisplayLabel}</span>
+        {myColors.length > 0 && (
+          <span className="flex items-center gap-0.5 flex-shrink-0">
+            {myColors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+          </span>
+        )}
+        <span className="text-xs text-gray-400 flex-shrink-0">vs</span>
+        <span className="truncate">{oppDisplayLabel}</span>
+        {oppColors.length > 0 && (
+          <span className="flex items-center gap-0.5 flex-shrink-0">
+            {oppColors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+          </span>
+        )}
+      </span>
+      <span className="text-xs text-gray-400 flex-shrink-0">{game.turnCount}T</span>
+      <span className="text-xs text-gray-400 flex-shrink-0">{new Date(game.playedAt ?? game.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</span>
+      <button
+        onClick={() => createGameExportZip([game], `lorcana-${game.id}`)}
+        className="text-xs opacity-40 hover:opacity-100 transition-opacity flex-shrink-0"
+        title="Export game"
+      >⬇</button>
       <button
         onClick={() => onDelete(game.id)}
         className="text-xs opacity-40 hover:opacity-100 transition-opacity flex-shrink-0"
         title="Delete game"
-      >
-        ✕
-      </button>
+      >✕</button>
     </div>
   )
 }

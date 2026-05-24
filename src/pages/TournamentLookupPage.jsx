@@ -1,12 +1,21 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import {
   fetchEventDetails,
   getTournamentStructure,
   fetchTournamentStandings,
+  fetchAllRegistrations,
   formatTiebreakers,
   analyzeId,
   analyzeAdvancement,
 } from '../lib/tournamentApi'
+
+function formatTime(seconds) {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
 
 const RECOMMENDATION_STYLES = {
   safe: {
@@ -40,6 +49,21 @@ export function TournamentLookupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [registrationMap, setRegistrationMap] = useState(null)
+  const [timeRemaining, setTimeRemaining] = useState(null)
+
+  useEffect(() => {
+    if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
+      setTimeRemaining(null)
+      return
+    }
+    function tick() {
+      setTimeRemaining(Math.max(0, Math.floor((new Date(structure.timerEndDatetime) - Date.now()) / 1000)))
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [structure?.timerEndDatetime, structure?.timerIsRunning])
 
   function extractEventId(url) {
     const match = url.match(/\/events\/(\d+)/)
@@ -64,6 +88,7 @@ export function TournamentLookupPage() {
     setPlayer(null)
     setAllStandings(null)
     setSearchTerm('')
+    setRegistrationMap(null)
 
     try {
       const eventDetails = await fetchEventDetails(eventId)
@@ -89,6 +114,14 @@ export function TournamentLookupPage() {
       }
 
       setAllStandings(allResults)
+
+      // Fetch registrations for player status badges (best-effort)
+      try {
+        const regs = await fetchAllRegistrations(eventId)
+        setRegistrationMap(new Map(regs.map((r) => [r.best_identifier, r.registration_status])))
+      } catch {
+        // Registration status is supplementary; don't surface the error
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch tournament data')
     } finally {
@@ -170,7 +203,16 @@ export function TournamentLookupPage() {
           )}
           {allStandings && (
             <span>
-              <strong className="text-gray-900">{allStandings.length}</strong> players
+              <strong className="text-gray-900">{allStandings.length}</strong>
+              {structure.startingPlayerCount && structure.startingPlayerCount !== allStandings.length && (
+                <span className="text-gray-400"> / {structure.startingPlayerCount}</span>
+              )}
+              {' '}players
+            </span>
+          )}
+          {timeRemaining !== null && (
+            <span className={`font-mono font-medium ${timeRemaining === 0 ? 'text-red-600' : timeRemaining < 300 ? 'text-red-600' : timeRemaining < 900 ? 'text-amber-600' : 'text-gray-700'}`}>
+              {timeRemaining === 0 ? 'Time expired' : `${formatTime(timeRemaining)} left`}
             </span>
           )}
           {structure.advancementRequirement && (
@@ -182,6 +224,42 @@ export function TournamentLookupPage() {
               )}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Event details card */}
+      {structure && (
+        <div className="border border-gray-200 rounded-lg p-4 mb-6 bg-white">
+          <p className="text-sm font-semibold text-gray-900 mb-3 leading-snug">{structure.eventName}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+            {structure.eventStore && (
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Organizer</p>
+                <p className="text-gray-900 font-medium">{structure.eventStore.name}</p>
+              </div>
+            )}
+            {structure.eventStore?.address && (
+              <div className="col-span-2 sm:col-span-1">
+                <p className="text-xs text-gray-400 mb-0.5">Venue</p>
+                <p className="text-gray-700 text-xs leading-relaxed">{structure.eventStore.address}</p>
+              </div>
+            )}
+            {structure.gameplayFormat && (
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Format</p>
+                <p className="text-gray-900">{structure.gameplayFormat}</p>
+              </div>
+            )}
+            {structure.rulesEnforcementLevel && (
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">REL</p>
+                <p className="text-gray-900">
+                  {structure.rulesEnforcementLevel.charAt(0).toUpperCase() +
+                    structure.rulesEnforcementLevel.slice(1).toLowerCase()}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -210,6 +288,8 @@ export function TournamentLookupPage() {
                 <tbody>
                   {filteredStandings?.map((entry) => {
                     const atCutLine = structure?.topCutSize && entry.rank === structure.topCutSize
+                    const regStatus = registrationMap?.get(entry.user_event_status.best_identifier)
+                    const dropped = regStatus === 'ELIMINATED'
                     return (
                       <Fragment key={entry.id}>
                         {atCutLine && (
@@ -221,12 +301,17 @@ export function TournamentLookupPage() {
                         )}
                         <tr
                           onClick={() => setPlayer(entry)}
-                          className="border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors"
+                          className={`border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors${dropped ? ' opacity-50' : ''}`}
                         >
                           <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank}</td>
                           <td className="px-4 py-2.5">
-                            <div className="font-medium text-gray-900">
-                              {entry.user_event_status.best_identifier}
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900">
+                                {entry.user_event_status.best_identifier}
+                              </span>
+                              {dropped && (
+                                <span className="text-xs text-gray-400 font-normal">dropped</span>
+                              )}
                             </div>
                             <div className="text-xs text-gray-400">{entry.player.best_identifier}</div>
                           </td>

@@ -109,12 +109,39 @@ export function getTournamentStructure(eventDetails) {
     advancementRequirement,
     tiebreakers: eventDetails.tiebreakers ?? [],
     eventName: eventDetails.name,
+    startingPlayerCount: eventDetails.starting_player_count ?? null,
+    timerEndDatetime: eventDetails.timer_end_datetime ?? null,
+    timerIsRunning: eventDetails.timer_is_running ?? false,
+    gameplayFormat: eventDetails.gameplay_format?.name ?? null,
+    eventStore: eventDetails.store
+      ? { name: eventDetails.store.name, address: eventDetails.full_address ?? null }
+      : null,
+    rulesEnforcementLevel: eventDetails.rules_enforcement_level ?? null,
   }
 }
 
 // Keep backward compat
 export function getCurrentRoundId(eventDetails) {
   return getTournamentStructure(eventDetails)?.currentRoundId ?? null
+}
+
+export async function fetchAllRegistrations(eventId) {
+  const allResults = []
+  let page = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const response = await fetch(
+      `/api/tournament-registrations?eventId=${eventId}&page=${page}&pageSize=50`
+    )
+    if (!response.ok) break
+    const data = await response.json()
+    allResults.push(...data.results)
+    hasMore = data.next_page_number !== null
+    page = data.next_page_number || page + 1
+  }
+
+  return allResults
 }
 
 export async function fetchTournamentStandings(roundId, page = 1, pageSize = 10) {

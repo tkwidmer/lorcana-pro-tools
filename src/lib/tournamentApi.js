@@ -1,61 +1,74 @@
-export async function fetchEventRegistrations(eventId, page = 1, pageSize = 10) {
+export async function fetchEventDetails(eventId) {
   try {
-    const response = await fetch(
-      `/api/tournament-registrations?eventId=${eventId}&page=${page}&pageSize=${pageSize}`
-    )
+    const response = await fetch(`/api/event-details?eventId=${eventId}`)
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.detail || error.error || 'Failed to fetch event registrations')
+      throw new Error(error.detail || error.error || 'Failed to fetch event details')
     }
 
     return await response.json()
   } catch (err) {
-    console.error('Event registrations fetch error:', err)
+    console.error('Event details fetch error:', err)
     throw err
   }
 }
 
-export async function fetchAllEventRegistrations(eventId, pageSize = 50) {
-  const allResults = []
-  let page = 1
-  let hasMore = true
+export function getCurrentRoundId(eventDetails) {
+  if (!eventDetails || !eventDetails.tournament_phases) return null
 
-  while (hasMore) {
-    const data = await fetchEventRegistrations(eventId, page, pageSize)
-    allResults.push(...data.results)
-    hasMore = data.next_page_number !== null
-    page = data.next_page_number || page + 1
+  for (const phase of eventDetails.tournament_phases) {
+    if (!phase.rounds) continue
+
+    // Find in-progress round first
+    const inProgressRound = phase.rounds.find((r) => r.status === 'IN_PROGRESS')
+    if (inProgressRound) return inProgressRound.id
+
+    // Fall back to last completed round
+    const completedRounds = phase.rounds.filter((r) => r.status === 'COMPLETE')
+    if (completedRounds.length > 0) {
+      return completedRounds[completedRounds.length - 1].id
+    }
   }
 
-  return allResults
+  return null
 }
 
-export async function fetchAllTournamentStandings(roundId, pageSize = 10) {
-  const allResults = []
-  let page = 1
-  let hasMore = true
+export async function fetchTournamentStandings(roundId, page = 1, pageSize = 10) {
+  try {
+    const response = await fetch(
+      `/api/tournament-standings?roundId=${roundId}&page=${page}&pageSize=${pageSize}`
+    )
 
-  while (hasMore) {
-    const data = await fetchTournamentStandings(roundId, page, pageSize)
-    allResults.push(...data.results)
-    hasMore = data.next_page_number !== null
-    page = data.next_page_number || page + 1
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || error.error || 'Failed to fetch standings')
+    }
+
+    return await response.json()
+  } catch (err) {
+    console.error('Tournament standings fetch error:', err)
+    throw err
   }
-
-  return allResults
 }
 
-export function findPlayerInRegistrations(registrations, playerName) {
-  if (!registrations || !playerName) return null
+export function findPlayerInStandings(standings, playerName) {
+  if (!standings || !playerName) return null
   const searchTerm = playerName.toLowerCase()
-  return registrations.find(
+  return standings.find(
     (entry) =>
-      entry.user.best_identifier.toLowerCase().includes(searchTerm) ||
-      entry.best_identifier.toLowerCase().includes(searchTerm)
+      entry.player.best_identifier.toLowerCase().includes(searchTerm) ||
+      entry.user_event_status.best_identifier.toLowerCase().includes(searchTerm)
   )
 }
 
-export function formatRecord(registration) {
-  return `${registration.matches_won}-${registration.matches_drawn}-${registration.matches_lost}`
+export function formatTiebreakers(entry) {
+  return {
+    rank: entry.rank,
+    record: entry.record,
+    matchPoints: entry.match_points,
+    gameWinPercentage: (entry.game_win_percentage * 100).toFixed(2),
+    opponentMatchWinPercentage: (entry.opponent_match_win_percentage * 100).toFixed(2),
+    opponentGameWinPercentage: (entry.opponent_game_win_percentage * 100).toFixed(2),
+  }
 }

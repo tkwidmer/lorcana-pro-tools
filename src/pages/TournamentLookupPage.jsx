@@ -1,18 +1,52 @@
 import { useEffect, useState } from 'react'
-import { fetchTournamentStandings, findPlayerInStandings, calculateTiebreakers } from '../lib/tournamentApi'
+import { fetchTournamentStandings, findPlayerInStandings, calculateTiebreakers, fetchTournamentRound } from '../lib/tournamentApi'
 
 export function TournamentLookupPage() {
+  const [eventUrl, setEventUrl] = useState('')
   const [roundId, setRoundId] = useState('')
   const [playerName, setPlayerName] = useState('')
   const [standings, setStandings] = useState(null)
   const [player, setPlayer] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [fetchingRound, setFetchingRound] = useState(false)
+
+  function extractEventId(url) {
+    const match = url.match(/\/events\/(\d+)/)
+    return match ? match[1] : null
+  }
+
+  async function handleUrlChange(e) {
+    const url = e.target.value
+    setEventUrl(url)
+
+    if (!url.trim()) {
+      setRoundId('')
+      return
+    }
+
+    const eventId = extractEventId(url)
+    if (!eventId) {
+      setError('Invalid event URL. Format: https://tcg.ravensburgerplay.com/events/12345')
+      return
+    }
+
+    setFetchingRound(true)
+    setError(null)
+    try {
+      const round = await fetchTournamentRound(eventId)
+      setRoundId(round)
+    } catch (err) {
+      setError(`Could not fetch current round: ${err.message}`)
+    } finally {
+      setFetchingRound(false)
+    }
+  }
 
   async function handleSearch(e) {
     e.preventDefault()
     if (!roundId || !playerName) {
-      setError('Please enter both Round ID and player name')
+      setError('Please enter both event URL and player name')
       return
     }
 
@@ -55,17 +89,17 @@ export function TournamentLookupPage() {
       <form onSubmit={handleSearch} className="mb-8 space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Round ID
+            Tournament Event URL
           </label>
           <input
-            type="text"
-            placeholder="e.g., 852772"
-            value={roundId}
-            onChange={e => setRoundId(e.target.value)}
+            type="url"
+            placeholder="e.g., https://tcg.ravensburgerplay.com/events/528227"
+            value={eventUrl}
+            onChange={handleUrlChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Find the Round ID in the tournament URL
+            {fetchingRound ? 'Fetching current round…' : roundId ? `Current round ID: ${roundId}` : 'Paste the tournament event URL'}
           </p>
         </div>
 

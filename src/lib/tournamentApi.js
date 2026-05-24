@@ -1,3 +1,22 @@
+export async function fetchTournamentRound(eventId) {
+  try {
+    const response = await fetch(
+      `/api/tournament-round?eventId=${eventId}`
+    )
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || error.error || 'Failed to fetch tournament round')
+    }
+
+    const data = await response.json()
+    return data.roundId
+  } catch (err) {
+    console.error('Tournament round fetch error:', err)
+    throw err
+  }
+}
+
 export async function fetchTournamentStandings(roundId, page = 1, pageSize = 10) {
   try {
     const response = await fetch(

@@ -1,51 +1,42 @@
 import { useEffect, useState } from 'react'
-import { fetchTournamentStandings, findPlayerInStandings, calculateTiebreakers, fetchTournamentRound } from '../lib/tournamentApi'
+import { fetchEventRegistrations, findPlayerInRegistrations, formatRecord } from '../lib/tournamentApi'
 
 export function TournamentLookupPage() {
   const [eventUrl, setEventUrl] = useState('')
-  const [roundId, setRoundId] = useState('')
+  const [eventId, setEventId] = useState('')
   const [playerName, setPlayerName] = useState('')
-  const [standings, setStandings] = useState(null)
+  const [registrations, setRegistrations] = useState(null)
   const [player, setPlayer] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [fetchingRound, setFetchingRound] = useState(false)
 
   function extractEventId(url) {
     const match = url.match(/\/events\/(\d+)/)
     return match ? match[1] : null
   }
 
-  async function handleUrlChange(e) {
+  function handleUrlChange(e) {
     const url = e.target.value
     setEventUrl(url)
 
     if (!url.trim()) {
-      setRoundId('')
+      setEventId('')
       return
     }
 
-    const eventId = extractEventId(url)
-    if (!eventId) {
+    const extracted = extractEventId(url)
+    if (!extracted) {
       setError('Invalid event URL. Format: https://tcg.ravensburgerplay.com/events/12345')
       return
     }
 
-    setFetchingRound(true)
     setError(null)
-    try {
-      const round = await fetchTournamentRound(eventId)
-      setRoundId(round)
-    } catch (err) {
-      setError(`Could not fetch current round: ${err.message}`)
-    } finally {
-      setFetchingRound(false)
-    }
+    setEventId(extracted)
   }
 
   async function handleSearch(e) {
     e.preventDefault()
-    if (!roundId || !playerName) {
+    if (!eventId || !playerName) {
       setError('Please enter both event URL and player name')
       return
     }
@@ -55,25 +46,25 @@ export function TournamentLookupPage() {
     setPlayer(null)
 
     try {
-      const data = await fetchTournamentStandings(roundId, 1, 100)
-      setStandings(data)
+      const data = await fetchEventRegistrations(eventId, 1, 100)
+      setRegistrations(data)
 
-      const found = findPlayerInStandings(data.results, playerName)
+      const found = findPlayerInRegistrations(data.results, playerName)
       if (found) {
         setPlayer(found)
       } else {
-        setError(`Player "${playerName}" not found in standings`)
+        setError(`Player "${playerName}" not found in event registrations`)
       }
     } catch (err) {
-      setError(err.message || 'Failed to fetch standings')
+      setError(err.message || 'Failed to fetch event data')
     } finally {
       setLoading(false)
     }
   }
 
-  const tiebreakers = player ? calculateTiebreakers(player) : null
-  const totalPlayers = standings?.total
-  const playersAhead = player ? player.rank - 1 : 0
+  const totalPlayers = registrations?.total
+  const playerRecord = player ? formatRecord(player) : null
+  const playerStatus = player?.registration_status
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
@@ -99,7 +90,7 @@ export function TournamentLookupPage() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="text-xs text-gray-500 mt-1">
-            {fetchingRound ? 'Fetching current round…' : roundId ? `Current round ID: ${roundId}` : 'Paste the tournament event URL'}
+            {eventId ? `✓ Event ${eventId}` : 'Paste the tournament event URL'}
           </p>
         </div>
 
@@ -137,17 +128,26 @@ export function TournamentLookupPage() {
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  {player.player.best_identifier}
+                  {player.best_identifier || player.user.best_identifier}
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  Rank #{player.rank} of {totalPlayers} players
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                    playerStatus === 'COMPLETE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {playerStatus === 'COMPLETE' ? 'Active' : 'Eliminated'}
+                  </span>
+                  {totalPlayers && (
+                    <p className="text-sm text-gray-500">
+                      {totalPlayers} players total
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold text-gray-900">
-                  {player.record}
+                  {playerRecord}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Wins-Draws-Losses</p>
+                <p className="text-xs text-gray-500 mt-1">W-D-L</p>
               </div>
             </div>
 
@@ -155,49 +155,32 @@ export function TournamentLookupPage() {
               <div className="flex justify-between items-center pb-3 border-b border-gray-100">
                 <span className="text-gray-600">Match Points</span>
                 <span className="font-mono font-bold text-gray-900">
-                  {player.match_points}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center pb-3 border-b border-gray-100">
-                <span className="text-gray-600">Game Win %</span>
-                <span className="font-mono text-gray-900">
-                  {tiebreakers.gameWinPercentage}%
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center pb-3 border-b border-gray-100">
-                <span className="text-gray-600">Opponent Match Win %</span>
-                <span className="font-mono text-gray-900">
-                  {tiebreakers.opponentMatchWinPercentage}%
+                  {player.total_match_points}
                 </span>
               </div>
 
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Opponent Game Win %</span>
-                <span className="font-mono text-gray-900">
-                  {tiebreakers.opponentGameWinPercentage}%
-                </span>
+                <span className="text-gray-600">Matches Won</span>
+                <span className="font-mono text-gray-900">{player.matches_won}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Matches Drawn</span>
+                <span className="font-mono text-gray-900">{player.matches_drawn}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Matches Lost</span>
+                <span className="font-mono text-gray-900">{player.matches_lost}</span>
               </div>
             </div>
-          </div>
-
-          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <p className="text-sm text-gray-700">
-              <strong className="text-gray-900">{playersAhead}</strong> player{playersAhead !== 1 ? 's' : ''} ahead
-              {totalPlayers && (
-                <>
-                  {' '}· <strong className="text-gray-900">{totalPlayers - player.rank}</strong> player{totalPlayers - player.rank !== 1 ? 's' : ''} behind
-                </>
-              )}
-            </p>
           </div>
         </div>
       )}
 
-      {!player && !error && standings && (
+      {!player && !error && registrations && (
         <div className="text-sm text-gray-500 text-center py-8">
-          Enter a player name and search to see their standing
+          Enter a player name and search to see their registration
         </div>
       )}
     </div>

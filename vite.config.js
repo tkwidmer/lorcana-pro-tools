@@ -12,13 +12,15 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: () => '/files/current/en/allCards.json',
       },
-      '/api/tournament-round': {
+      '/api/tournament-registrations': {
         target: 'https://api.cloudflare.ravensburgerplay.com',
         changeOrigin: true,
         rewrite: (path) => {
           const url = new URL(path, 'http://localhost')
           const eventId = url.searchParams.get('eventId')
-          return `/hydraproxy/api/v2/tournaments/${eventId}`
+          const page = url.searchParams.get('page') || '1'
+          const pageSize = url.searchParams.get('pageSize') || '10'
+          return `/hydraproxy/api/v2/events/${eventId}/registrations/?page=${page}&page_size=${pageSize}`
         },
       },
       '/api/tournament-standings': {

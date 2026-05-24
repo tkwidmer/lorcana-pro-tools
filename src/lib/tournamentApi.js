@@ -1,38 +1,34 @@
-export async function fetchTournamentRound(eventId) {
+export async function fetchEventRegistrations(eventId, page = 1, pageSize = 10) {
   try {
     const response = await fetch(
-      `/api/tournament-round?eventId=${eventId}`
+      `/api/tournament-registrations?eventId=${eventId}&page=${page}&pageSize=${pageSize}`
     )
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.detail || error.error || 'Failed to fetch tournament round')
-    }
-
-    const data = await response.json()
-    return data.roundId
-  } catch (err) {
-    console.error('Tournament round fetch error:', err)
-    throw err
-  }
-}
-
-export async function fetchTournamentStandings(roundId, page = 1, pageSize = 10) {
-  try {
-    const response = await fetch(
-      `/api/tournament-standings?roundId=${roundId}&page=${page}&pageSize=${pageSize}`
-    )
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || error.error || 'Failed to fetch standings')
+      throw new Error(error.detail || error.error || 'Failed to fetch event registrations')
     }
 
     return await response.json()
   } catch (err) {
-    console.error('Tournament standings fetch error:', err)
+    console.error('Event registrations fetch error:', err)
     throw err
   }
+}
+
+export async function fetchAllEventRegistrations(eventId, pageSize = 50) {
+  const allResults = []
+  let page = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const data = await fetchEventRegistrations(eventId, page, pageSize)
+    allResults.push(...data.results)
+    hasMore = data.next_page_number !== null
+    page = data.next_page_number || page + 1
+  }
+
+  return allResults
 }
 
 export async function fetchAllTournamentStandings(roundId, pageSize = 10) {
@@ -50,21 +46,16 @@ export async function fetchAllTournamentStandings(roundId, pageSize = 10) {
   return allResults
 }
 
-export function findPlayerInStandings(standings, playerName) {
-  if (!standings || !playerName) return null
+export function findPlayerInRegistrations(registrations, playerName) {
+  if (!registrations || !playerName) return null
   const searchTerm = playerName.toLowerCase()
-  return standings.find(
+  return registrations.find(
     (entry) =>
-      entry.player.best_identifier.toLowerCase().includes(searchTerm) ||
-      entry.user_event_status.best_identifier.toLowerCase().includes(searchTerm)
+      entry.user.best_identifier.toLowerCase().includes(searchTerm) ||
+      entry.best_identifier.toLowerCase().includes(searchTerm)
   )
 }
 
-export function calculateTiebreakers(entry) {
-  return {
-    matchPoints: entry.match_points,
-    opponentMatchWinPercentage: (entry.opponent_match_win_percentage * 100).toFixed(2),
-    gameWinPercentage: (entry.game_win_percentage * 100).toFixed(2),
-    opponentGameWinPercentage: (entry.opponent_game_win_percentage * 100).toFixed(2),
-  }
+export function formatRecord(registration) {
+  return `${registration.matches_won}-${registration.matches_drawn}-${registration.matches_lost}`
 }

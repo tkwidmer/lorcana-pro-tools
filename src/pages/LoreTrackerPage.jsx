@@ -1,138 +1,140 @@
 import { useState } from 'react'
 
+function PlayerCard({ player, onLore, onNameChange }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <input
+        type="text"
+        value={player.name}
+        onChange={(e) => onNameChange(e.target.value)}
+        className="border border-gray-200 rounded px-3 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:border-gray-500 text-center"
+        placeholder="Player name"
+      />
+      <div
+        className="relative border border-gray-200 rounded-lg overflow-hidden select-none"
+        style={{ minHeight: '260px' }}
+      >
+        <div className="absolute inset-0 flex">
+          <div
+            onClick={() => onLore(-1)}
+            className="w-1/2 bg-red-50 hover:bg-red-100 active:bg-red-200 cursor-pointer flex items-center justify-start pl-3 text-red-300 text-3xl leading-none transition-colors"
+          >
+            −
+          </div>
+          <div
+            onClick={() => onLore(1)}
+            className="w-1/2 bg-green-50 hover:bg-green-100 active:bg-green-200 cursor-pointer flex items-center justify-end pr-3 text-green-300 text-3xl leading-none transition-colors"
+          >
+            +
+          </div>
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-7xl sm:text-8xl font-black text-gray-900 tabular-nums">
+            {player.lore}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function LoreTrackerPage() {
   const [player1, setPlayer1] = useState({ name: 'Player 1', lore: 0 })
   const [player2, setPlayer2] = useState({ name: 'Player 2', lore: 0 })
   const [auditLog, setAuditLog] = useState([])
 
   const updateLore = (playerNum, delta) => {
-    const isPlayer1 = playerNum === 1
-    const player = isPlayer1 ? player1 : player2
+    const isP1 = playerNum === 1
+    const player = isP1 ? player1 : player2
     const newLore = Math.max(0, Math.min(20, player.lore + delta))
 
-    if (newLore !== player.lore) {
-      setAuditLog(prev => [...prev, {
-        timestamp: new Date(),
-        player: player.name,
-        from: player.lore,
-        to: newLore
-      }])
+    if (newLore === player.lore) return
 
-      if (isPlayer1) {
-        setPlayer1({ ...player1, lore: newLore })
-      } else {
-        setPlayer2({ ...player2, lore: newLore })
-      }
-    }
+    setAuditLog(prev => [...prev, {
+      timestamp: new Date(),
+      player: player.name,
+      from: player.lore,
+      to: newLore
+    }])
+
+    if (isP1) setPlayer1({ ...player1, lore: newLore })
+    else setPlayer2({ ...player2, lore: newLore })
   }
 
   const handleReset = () => {
-    if (confirm('Reset lore totals to 0?')) {
-      setPlayer1({ ...player1, lore: 0 })
-      setPlayer2({ ...player2, lore: 0 })
-      setAuditLog(prev => [...prev, {
-        timestamp: new Date(),
-        player: 'SYSTEM',
-        from: '-',
-        to: 'RESET'
-      }])
-    }
+    if (!confirm('Reset both lore totals to 0?')) return
+    setPlayer1({ ...player1, lore: 0 })
+    setPlayer2({ ...player2, lore: 0 })
+    setAuditLog(prev => [...prev, {
+      timestamp: new Date(),
+      player: 'SYSTEM',
+      from: null,
+      to: null
+    }])
   }
 
-  const updateName = (playerNum, newName) => {
-    if (playerNum === 1) {
-      setPlayer1({ ...player1, name: newName })
-    } else {
-      setPlayer2({ ...player2, name: newName })
-    }
+  const updateName = (playerNum, name) => {
+    if (playerNum === 1) setPlayer1({ ...player1, name })
+    else setPlayer2({ ...player2, name })
   }
 
-  const formatTime = (date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  const formatTime = (date) =>
+    date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white p-4 flex flex-col">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-4 sm:mb-6">
-        <h1 className="text-xl sm:text-3xl font-bold">Lore Tracker</h1>
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="flex justify-between items-start mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Lore Tracker</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Tap left to decrease, tap right to increase
+          </p>
+        </div>
         <button
           onClick={handleReset}
-          className="px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 rounded font-semibold text-sm sm:text-base transition-colors"
+          className="border border-gray-200 rounded px-3 py-2 text-sm text-red-600 hover:border-red-200 hover:bg-red-50 active:bg-red-100 transition-colors"
         >
           Reset
         </button>
       </div>
 
-      {/* Players Container */}
-      <div className="flex-1 grid grid-cols-2 gap-2 sm:gap-6 mb-4 sm:mb-6">
-        {/* Player 1 */}
-        <div className="flex flex-col">
-          <input
-            type="text"
-            value={player1.name}
-            onChange={(e) => updateName(1, e.target.value)}
-            className="bg-slate-700 hover:bg-slate-600 text-white text-center mb-2 sm:mb-4 p-2 rounded font-semibold text-sm sm:text-base transition-colors"
-            placeholder="Player 1"
-          />
-          <div className="flex-1 relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '280px' }}>
-            <div className="absolute inset-0 flex">
-              <div
-                onClick={() => updateLore(1, -1)}
-                className="w-1/2 bg-red-700 hover:bg-red-600 active:bg-red-800 cursor-pointer transition-colors"
-              />
-              <div
-                onClick={() => updateLore(1, 1)}
-                className="w-1/2 bg-green-700 hover:bg-green-600 active:bg-green-800 cursor-pointer transition-colors"
-              />
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-6xl sm:text-8xl font-black drop-shadow-lg">{player1.lore}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Player 2 */}
-        <div className="flex flex-col">
-          <input
-            type="text"
-            value={player2.name}
-            onChange={(e) => updateName(2, e.target.value)}
-            className="bg-slate-700 hover:bg-slate-600 text-white text-center mb-2 sm:mb-4 p-2 rounded font-semibold text-sm sm:text-base transition-colors"
-            placeholder="Player 2"
-          />
-          <div className="flex-1 relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '280px' }}>
-            <div className="absolute inset-0 flex">
-              <div
-                onClick={() => updateLore(2, -1)}
-                className="w-1/2 bg-red-700 hover:bg-red-600 active:bg-red-800 cursor-pointer transition-colors"
-              />
-              <div
-                onClick={() => updateLore(2, 1)}
-                className="w-1/2 bg-green-700 hover:bg-green-600 active:bg-green-800 cursor-pointer transition-colors"
-              />
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-6xl sm:text-8xl font-black drop-shadow-lg">{player2.lore}</div>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 mb-6">
+        <PlayerCard
+          player={player1}
+          onLore={(d) => updateLore(1, d)}
+          onNameChange={(n) => updateName(1, n)}
+        />
+        <PlayerCard
+          player={player2}
+          onLore={(d) => updateLore(2, d)}
+          onNameChange={(n) => updateName(2, n)}
+        />
       </div>
 
-      {/* Audit Log */}
-      <div className="bg-slate-800 rounded-lg p-3 sm:p-4 max-h-48 sm:max-h-64 overflow-y-auto border border-slate-700">
-        <h2 className="text-base sm:text-lg font-bold mb-2 sm:mb-3 sticky top-0 bg-slate-800">Audit Log</h2>
-        <div className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 px-4 py-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Audit Log
+          </h2>
+        </div>
+        <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
           {auditLog.length === 0 ? (
-            <p className="text-slate-400">No changes yet</p>
+            <p className="px-4 py-3 text-sm text-gray-400 italic">No changes yet</p>
           ) : (
             [...auditLog].reverse().map((entry, idx) => (
-              <div key={idx} className="text-slate-300 font-mono">
-                <span className="text-slate-500">{formatTime(entry.timestamp)}</span>
+              <div key={idx} className="px-4 py-2.5 flex items-center gap-3 text-sm">
+                <span className="text-gray-400 font-mono text-xs tabular-nums shrink-0">
+                  {formatTime(entry.timestamp)}
+                </span>
                 {entry.player === 'SYSTEM' ? (
-                  <span className="ml-2">— <strong className="text-yellow-400">RESET</strong></span>
+                  <span className="text-gray-500">Game reset</span>
                 ) : (
-                  <span className="ml-2">— <strong>{entry.player}</strong>: <span className="text-red-400">{entry.from}</span> → <span className="text-green-400">{entry.to}</span></span>
+                  <>
+                    <span className="font-medium text-gray-900 truncate">{entry.player}</span>
+                    <span className="text-gray-400 tabular-nums shrink-0">
+                      {entry.from} → {entry.to}
+                    </span>
+                  </>
                 )}
               </div>
             ))

@@ -1,5 +1,29 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+
+const STORAGE_KEY = 'lorcana_lore_tracker'
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const state = JSON.parse(raw)
+    return {
+      ...state,
+      auditLog: state.auditLog.map(e => ({ ...e, timestamp: new Date(e.timestamp) }))
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveState(player1, player2, auditLog) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ player1, player2, auditLog }))
+  } catch {
+    // ignore quota errors
+  }
+}
 
 function PlayerCard({ player, onLore, onNameChange }) {
   return (
@@ -90,10 +114,15 @@ function AuditModal({ auditLog, onClose }) {
 
 export function LoreTrackerPage() {
   const navigate = useNavigate()
-  const [player1, setPlayer1] = useState({ name: 'Player 1', lore: 0 })
-  const [player2, setPlayer2] = useState({ name: 'Player 2', lore: 0 })
-  const [auditLog, setAuditLog] = useState([])
+  const saved = loadState()
+  const [player1, setPlayer1] = useState(saved?.player1 ?? { name: 'Player 1', lore: 0 })
+  const [player2, setPlayer2] = useState(saved?.player2 ?? { name: 'Player 2', lore: 0 })
+  const [auditLog, setAuditLog] = useState(saved?.auditLog ?? [])
   const [auditOpen, setAuditOpen] = useState(false)
+
+  useEffect(() => {
+    saveState(player1, player2, auditLog)
+  }, [player1, player2, auditLog])
 
   const updateLore = (playerNum, delta) => {
     const isP1 = playerNum === 1

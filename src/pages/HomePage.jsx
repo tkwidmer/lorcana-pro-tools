@@ -74,6 +74,11 @@ const SECTIONS = [
         name: 'Tournament Lookup',
         description: 'Paste a tournament event URL to load live standings, find yourself by name, and check your rank, tiebreakers, and ID eligibility mid-event.',
       },
+      {
+        path: '/lore-tracker',
+        name: 'Lore Tracker',
+        description: 'Mobile-optimized lore counter for in-game tracking. Tap left to decrease, tap right to increase. Includes full audit log of all changes.',
+      },
     ],
   },
   {

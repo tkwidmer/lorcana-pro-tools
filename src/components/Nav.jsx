@@ -5,6 +5,8 @@ import { useState } from 'react'
 
 export function Nav() {
   const { pathname } = useLocation()
+
+  if (pathname === '/lore-tracker') return null
   const navigate = useNavigate()
   const { user } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -50,6 +52,7 @@ export function Nav() {
                 : pathname === '/practice-plan' ? 'Practice Plan'
                 : pathname === '/leaderboard' ? 'Leaderboard'
                 : pathname === '/tournament-lookup' ? 'Tournament Lookup'
+                : pathname === '/lore-tracker' ? 'Lore Tracker'
                 : ''}
             </span>
           </>

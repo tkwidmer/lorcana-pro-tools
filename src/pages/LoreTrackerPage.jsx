@@ -42,6 +42,7 @@ export function LoreTrackerPage() {
   const [player1, setPlayer1] = useState({ name: 'Player 1', lore: 0 })
   const [player2, setPlayer2] = useState({ name: 'Player 2', lore: 0 })
   const [auditLog, setAuditLog] = useState([])
+  const [logOpen, setLogOpen] = useState(false)
 
   const updateLore = (playerNum, delta) => {
     const isP1 = playerNum === 1
@@ -98,7 +99,7 @@ export function LoreTrackerPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 mb-6">
+      <div className="flex flex-col gap-3 sm:gap-6 mb-6">
         <PlayerCard
           player={player1}
           onLore={(d) => updateLore(1, d)}
@@ -112,34 +113,40 @@ export function LoreTrackerPage() {
       </div>
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <div className="bg-gray-50 px-4 py-3">
+        <button
+          onClick={() => setLogOpen(o => !o)}
+          className="w-full bg-gray-50 hover:bg-gray-100 transition-colors px-4 py-3 flex items-center justify-between"
+        >
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Audit Log
+            Audit Log {auditLog.length > 0 && `(${auditLog.length})`}
           </h2>
-        </div>
-        <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
-          {auditLog.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-gray-400 italic">No changes yet</p>
-          ) : (
-            [...auditLog].reverse().map((entry, idx) => (
-              <div key={idx} className="px-4 py-2.5 flex items-center gap-3 text-sm">
-                <span className="text-gray-400 font-mono text-xs tabular-nums shrink-0">
-                  {formatTime(entry.timestamp)}
-                </span>
-                {entry.player === 'SYSTEM' ? (
-                  <span className="text-gray-500">Game reset</span>
-                ) : (
-                  <>
-                    <span className="font-medium text-gray-900 truncate">{entry.player}</span>
-                    <span className="text-gray-400 tabular-nums shrink-0">
-                      {entry.from} → {entry.to}
-                    </span>
-                  </>
-                )}
-              </div>
-            ))
-          )}
-        </div>
+          <span className="text-gray-400 text-xs">{logOpen ? '▲' : '▼'}</span>
+        </button>
+        {logOpen && (
+          <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+            {auditLog.length === 0 ? (
+              <p className="px-4 py-3 text-sm text-gray-400 italic">No changes yet</p>
+            ) : (
+              [...auditLog].reverse().map((entry, idx) => (
+                <div key={idx} className="px-4 py-2.5 flex items-center gap-3 text-sm">
+                  <span className="text-gray-400 font-mono text-xs tabular-nums shrink-0">
+                    {formatTime(entry.timestamp)}
+                  </span>
+                  {entry.player === 'SYSTEM' ? (
+                    <span className="text-gray-500">Game reset</span>
+                  ) : (
+                    <>
+                      <span className="font-medium text-gray-900 truncate">{entry.player}</span>
+                      <span className="text-gray-400 tabular-nums shrink-0">
+                        {entry.from} → {entry.to}
+                      </span>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

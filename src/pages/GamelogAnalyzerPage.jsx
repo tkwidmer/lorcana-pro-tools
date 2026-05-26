@@ -1040,24 +1040,21 @@ function GameChallengeLog({ challenges, p1Name, p2Name, myPlayerNum }) {
   )
 }
 
-function OppDecklistView({ oppDecklist, oppCards }) {
-  // Combine confirmed plays from gamelog with decklist from match history
+function OppDecklistView({ oppDecklist, isInferred, oppCards }) {
   const seen = new Set()
   const rows = []
 
-  // First: cards from the match history decklist (authoritative)
   if (oppDecklist?.length) {
     for (const { cardId, count } of oppDecklist) {
       if (!seen.has(cardId)) {
         seen.add(cardId)
-        // Find the name from gamelog if we have it
         const name = Object.values(oppCards ?? {}).find(c => c.id === cardId)?.name ?? cardId
         rows.push({ cardId, name, count, seen: Object.values(oppCards ?? {}).find(c => c.id === cardId) != null })
       }
     }
   }
 
-  // Add any observed opponent cards NOT in the decklist (e.g. gamelogs without decklist metadata)
+  // Add any observed opponent cards not captured in the decklist
   for (const card of Object.values(oppCards ?? {})) {
     if (!rows.find(r => r.name === card.name)) {
       rows.push({ cardId: card.id, name: card.name, count: null, seen: true })
@@ -1070,11 +1067,14 @@ function OppDecklistView({ oppDecklist, oppCards }) {
 
   return (
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Opponent Decklist</h3>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Opponent Decklist</h3>
+        {isInferred && <span className="text-[10px] text-gray-400">(inferred from gamelog — counts are minimums)</span>}
+      </div>
       <div className="grid grid-cols-2 gap-x-4 text-xs font-mono">
         {rows.map(r => (
           <div key={r.cardId} className={`flex items-center gap-1.5 py-0.5 border-b border-gray-50 ${r.seen ? 'text-gray-800' : 'text-gray-400'}`}>
-            <span className="w-5 text-right flex-shrink-0 font-semibold">{r.count ?? '?'}</span>
+            <span className="w-5 text-right flex-shrink-0 font-semibold">{isInferred && r.count != null ? `≥${r.count}` : (r.count ?? '?')}</span>
             <span className="truncate">{r.name}</span>
             {r.seen && <span className="text-emerald-500 flex-shrink-0 ml-auto">●</span>}
           </div>
@@ -1283,7 +1283,7 @@ function CardEffectsTimeline({ p1, p2, p1Name, p2Name, turnCount }) {
 }
 
 function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
-  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, savedAt, _rawLogs } = gamelog
+  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, inferredOppDecklist, savedAt, _rawLogs } = gamelog
   const p1Name = resolveDisplayName(rawP1Name, myPlayerNum === 1, myName)
   const p2Name = resolveDisplayName(rawP2Name, myPlayerNum === 2, myName)
   const p1IsWinner = winner === 1 || winner === '1'
@@ -1364,9 +1364,13 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
       )}
 
       {/* Opponent decklist */}
-      {(oppDecklist?.length > 0 || (oppP && Object.keys(oppP.cards ?? {}).length > 0)) && (
+      {((oppDecklist ?? inferredOppDecklist)?.length > 0 || (oppP && Object.keys(oppP.cards ?? {}).length > 0)) && (
         <div className="mt-6 border border-gray-100 rounded-lg p-4">
-          <OppDecklistView oppDecklist={oppDecklist} oppCards={oppP?.cards} />
+          <OppDecklistView
+            oppDecklist={oppDecklist ?? inferredOppDecklist}
+            isInferred={!oppDecklist && !!inferredOppDecklist}
+            oppCards={oppP?.cards}
+          />
         </div>
       )}
     </div>

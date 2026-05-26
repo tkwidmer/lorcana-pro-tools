@@ -1102,10 +1102,39 @@ function RawStructureInspector({ rawLogs }) {
 
   const uniqueTypes = [...new Set(rawLogs.map(l => l.type))].sort()
 
+  const copyRawLog = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(rawLogs))
+    } catch {
+      // Clipboard blocked — fall through to the download button instead.
+    }
+  }
+
+  const downloadRawLog = () => {
+    const blob = new Blob([JSON.stringify(rawLogs, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'gamelog-raw.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <details className="border border-dashed border-gray-300 rounded-lg p-4 text-xs text-gray-600 mb-6">
       <summary className="cursor-pointer font-medium text-gray-700 select-none">Raw structure inspector</summary>
       <div className="mt-3 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-semibold text-gray-700">Full raw log ({rawLogs.length} events):</span>
+          <button
+            onClick={copyRawLog}
+            className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:border-gray-500 hover:text-gray-900 transition-colors"
+          >Copy JSON</button>
+          <button
+            onClick={downloadRawLog}
+            className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:border-gray-500 hover:text-gray-900 transition-colors"
+          >Download .json</button>
+        </div>
         <div>
           <span className="font-semibold text-gray-700">Event types ({uniqueTypes.length}): </span>
           <span className="font-mono">{uniqueTypes.join(', ')}</span>

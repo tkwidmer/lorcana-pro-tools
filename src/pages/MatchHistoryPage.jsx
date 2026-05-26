@@ -97,7 +97,7 @@ function ImportGamelogButton({ game }) {
         oppDecklist: game.opp_decklist,
         startedAt: game.started_at,
       })
-      await saveGamelog(id, parsed)
+      await saveGamelog(id, parsed, logs)
       setStatus('done')
       navigate('/gamelog-analyzer')
     } catch {
@@ -311,7 +311,7 @@ export function MatchHistoryPage() {
           oppDecklist: game.opp_decklist,
           startedAt: game.started_at,
         })
-        await saveGamelog(game.gamelog_id, parsed)
+        await saveGamelog(game.gamelog_id, parsed, logs)
         done++
       } catch {
         errors++

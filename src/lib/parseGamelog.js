@@ -58,6 +58,13 @@ export function parseGamelog(id, logs, meta = {}) {
   let pendingDrawSource = null
   let pendingDrawCount = 0
 
+  // Per-turn tempo aggregation for leak/mistake detection
+  const turnsMap = {}
+  const ensureTurn = (t) => {
+    if (!turnsMap[t]) turnsMap[t] = { turn: t, owner: null, ink: { 1: 0, 2: 0 }, lore: { 1: 0, 2: 0 }, plays: { 1: 0, 2: 0 } }
+    return turnsMap[t]
+  }
+
   for (const entry of logs) {
     const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
     const type = entry.type
@@ -81,6 +88,16 @@ export function parseGamelog(id, logs, meta = {}) {
 
     if (!p) continue
     const pData = players[p]
+
+    // Per-turn tempo tracking (owner = active player from TURN_START)
+    const turnNo = entry.turnNumber ?? 0
+    if (turnNo > 0) {
+      const tt = ensureTurn(turnNo)
+      if (type === 'TURN_START') tt.owner = p
+      else if (type === 'CARD_INKED') tt.ink[p]++
+      else if (type === 'CARD_PLAYED') tt.plays[p]++
+      else if (type === 'CARD_QUEST') tt.lore[p] += (d.loreGained ?? 0)
+    }
 
     if (type === 'INITIAL_HAND') {
       pData.initialHand = (d.initialHandCards ?? []).filter(c => c?.name)
@@ -188,6 +205,24 @@ export function parseGamelog(id, logs, meta = {}) {
     }
   }
 
+  // Flatten per-turn tempo into the active player's stats for each turn.
+  // Fall back to the most active player when no TURN_START was logged for a turn.
+  const turns = Object.values(turnsMap).sort((a, b) => a.turn - b.turn).map(tt => {
+    let owner = tt.owner
+    if (!owner) {
+      const a1 = tt.ink[1] + tt.lore[1] + tt.plays[1]
+      const a2 = tt.ink[2] + tt.lore[2] + tt.plays[2]
+      owner = a1 === 0 && a2 === 0 ? null : (a1 >= a2 ? 1 : 2)
+    }
+    return {
+      turn: tt.turn,
+      owner,
+      inked: owner ? tt.ink[owner] : 0,
+      lore: owner ? tt.lore[owner] : 0,
+      plays: owner ? tt.plays[owner] : 0,
+    }
+  })
+
   const toList = (cardsMap) => Object.values(cardsMap).sort((a, b) => {
     const aTotal = a.drawn + a.played + a.inked
     const bTotal = b.drawn + b.played + b.inked
@@ -235,6 +270,7 @@ export function parseGamelog(id, logs, meta = {}) {
     p1FinalLore: loreByPlayer[1] > 0 ? loreByPlayer[1] : null,
     p2FinalLore: loreByPlayer[2] > 0 ? loreByPlayer[2] : null,
     challenges,
+    turns,
     myPlayerNum,
     myInkCombo,
     oppInkCombo,

@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { getToken, fetchMatchHistory, fetchStats } from '../lib/duelsApi'
 import { resolveColors } from '../lib/inkColors'
+import { getAllGamelogs } from '../lib/gamelogHistory'
+import { parseGamelog } from '../lib/parseGamelog'
+import { summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -164,6 +167,14 @@ export function PracticePlanPage() {
   const [practiceBudget, setPracticeBudget] = useState(50)
   const [showAllMeta, setShowAllMeta] = useState(false)
   const [sortBy, setSortBy] = useState('meta') // 'meta' | 'impact' | 'personal' | 'public' | 'lift'
+  const [savedGamelogs, setSavedGamelogs] = useState([])
+
+  // Load saved gamelogs (IndexedDB) for leak-based skill drills
+  useEffect(() => {
+    getAllGamelogs()
+      .then(all => setSavedGamelogs(all.filter(g => g.myPlayerNum != null && (Array.isArray(g.turns) || Array.isArray(g.challenges)))))
+      .catch(() => {})
+  }, [])
 
   // Load public stats
   useEffect(() => {
@@ -560,6 +571,57 @@ export function PracticePlanPage() {
     }).sort((a, b) => b.expectedWR - a.expectedWR)
   }, [games, twoColorPairs, matchupLookup, metaOverrides, defaultMetaByKey, planningTotalMetaPct])
 
+  // Gamelog records for the selected deck, with turns/challenges refreshed from
+  // raw logs (older records were parsed before the turn-segmentation fix).
+  const deckRecords = useMemo(() => {
+    if (!yourColorsKey) return []
+    const out = []
+    for (const g of savedGamelogs) {
+      const my = g.myInkCombo ?? []
+      if (my.length !== 2 || colorsKey(my) !== yourColorsKey) continue
+      let rec = g
+      if (Array.isArray(g._rawLogs) && g._rawLogs.length) {
+        const reparsed = parseGamelog(g.id, g._rawLogs, { yourPlayerNum: g.myPlayerNum })
+        rec = { ...g, turns: reparsed.turns, challenges: reparsed.challenges }
+      }
+      out.push(rec)
+    }
+    return out
+  }, [savedGamelogs, yourColorsKey])
+
+  const overallSkills = useMemo(() => (deckRecords.length ? summarizeLeaks(deckRecords) : null), [deckRecords])
+
+  // Leak summary per opponent color pair (for matchup cross-reference)
+  const leaksByMatchup = useMemo(() => {
+    const groups = new Map()
+    for (const r of deckRecords) {
+      const opp = r.oppInkCombo ?? []
+      if (opp.length !== 2) continue
+      const k = colorsKey(opp)
+      if (!groups.has(k)) groups.set(k, [])
+      groups.get(k).push(r)
+    }
+    const out = new Map()
+    for (const [k, recs] of groups) out.set(k, { summary: summarizeLeaks(recs), games: recs.length })
+    return out
+  }, [deckRecords])
+
+  // Weak matchups (you underperform or sit below ~50%) that you also have
+  // gamelog coverage for — the highest-ROI places to fix specific leaks.
+  const weakMatchupDrills = useMemo(() => {
+    const rows = []
+    for (const r of planRows) {
+      const entry = leaksByMatchup.get(r.key)
+      if (!entry || !entry.summary.ranked.length) continue
+      const weak = (r.effectiveWR != null && r.effectiveWR < 52) || (r.delta != null && r.delta <= -8)
+      if (!weak) continue
+      rows.push({ ...r, leakSummary: entry.summary, gameCount: entry.games })
+    }
+    return rows
+      .sort((a, b) => (b.normalizedMeta - a.normalizedMeta) || (a.effectiveWR - b.effectiveWR))
+      .slice(0, 6)
+  }, [planRows, leaksByMatchup])
+
   const visibleRows = showAllMeta ? sortedPlanRows : sortedPlanRows.filter(r => r.metaPct >= 1)
 
   if (!hasToken) {
@@ -756,6 +818,80 @@ export function PracticePlanPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Skills to drill (leak-based) */}
+      {yourColors.length > 0 && (
+        <div className="mb-6 border border-gray-200 rounded-lg p-5 bg-white">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Skills to drill</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Recurring leaks detected in your saved gamelogs on this deck. The matchup table tells you <em>where</em> to practice — this tells you <em>what</em> to fix.{' '}
+            <Link to="/gamelog-analyzer" className="text-blue-600 hover:underline">Import more games</Link> for sharper signal.
+          </p>
+
+          {!overallSkills || overallSkills.analyzed === 0 ? (
+            <p className="text-sm text-gray-400">
+              No gamelogs imported for {yourColors.join('/')} yet. Import games in the{' '}
+              <Link to="/gamelog-analyzer" className="text-blue-600 hover:underline">Gamelog Analyzer</Link> to unlock skill drills.
+            </p>
+          ) : (
+            <>
+              <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                Top leaks across {overallSkills.analyzed} game{overallSkills.analyzed !== 1 ? 's' : ''} · {Math.round(overallSkills.overallWinRate * 100)}% WR
+              </div>
+              <div className="space-y-2.5 mb-5">
+                {overallSkills.ranked.slice(0, 4).map(leak => {
+                  const meta = LEAK_TYPES[leak.type] ?? { label: leak.type }
+                  const wr = leak.winRateWhenPresent
+                  const drag = wr != null && wr < overallSkills.overallWinRate
+                  return (
+                    <div key={leak.type} className="text-sm">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-gray-800">{meta.label}</span>
+                        <span className="text-xs text-gray-400">{leak.gamesAffected}/{overallSkills.analyzed} games</span>
+                        {wr != null && (
+                          <span className={`text-xs ${drag ? 'text-red-600' : 'text-gray-500'}`}>
+                            {Math.round(wr * 100)}% WR when present{drag ? ` (−${Math.round((overallSkills.overallWinRate - wr) * 100)}pp)` : ''}
+                          </span>
+                        )}
+                      </div>
+                      {meta.tip && <p className="text-xs text-gray-500 mt-0.5">{meta.tip}</p>}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {weakMatchupDrills.length > 0 && (
+                <div className="pt-4 border-t border-gray-100">
+                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Weak matchups — what's going wrong</div>
+                  <div className="space-y-2">
+                    {weakMatchupDrills.map(row => {
+                      const topLeaks = row.leakSummary.ranked.slice(0, 3)
+                      return (
+                        <div key={row.key} className="flex items-start gap-3 text-sm">
+                          <div className="w-40 flex items-center gap-2 flex-shrink-0 pt-0.5">
+                            <ColorPairIcons colors={row.colors} size={18} />
+                            <span className="text-gray-700 truncate">{row.colors.join('/')}</span>
+                          </div>
+                          <div className="flex-shrink-0 w-24 pt-0.5">
+                            <span className={getWinrateColor(row.effectiveWR)}>{row.effectiveWR.toFixed(0)}%</span>
+                            <span className="text-xs text-gray-400 ml-1">{row.gameCount}g</span>
+                          </div>
+                          <div className="flex-1 text-xs text-gray-600">
+                            {topLeaks.length
+                              ? topLeaks.map(l => `${(LEAK_TYPES[l.type] ?? {}).label ?? l.type} (×${l.totalCount})`).join(' · ')
+                              : 'no leaks flagged'}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-3">Leaks are inferred from log data — patterns to review, not certain mistakes.</p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

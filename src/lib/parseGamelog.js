@@ -58,6 +58,13 @@ export function parseGamelog(id, logs, meta = {}) {
   let pendingDrawSource = null
   let pendingDrawCount = 0
 
+  // Per-player-turn tempo aggregation for leak/mistake detection.
+  // NOTE: turnNumber is a *round* shared by both players (the first player gets
+  // a solo opening round, then each round contains both players' turns), so we
+  // segment by TURN_START boundaries rather than keying on turnNumber.
+  const turnSegments = []
+  let curSeg = null
+
   for (const entry of logs) {
     const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
     const type = entry.type
@@ -81,6 +88,18 @@ export function parseGamelog(id, logs, meta = {}) {
 
     if (!p) continue
     const pData = players[p]
+
+    // Per-player-turn tempo tracking. A segment runs from one TURN_START to the
+    // next; only the active player's own actions are counted into it.
+    if (type === 'TURN_START') {
+      if (curSeg) turnSegments.push(curSeg)
+      curSeg = { turn: entry.turnNumber ?? 0, owner: p, inked: 0, lore: 0, plays: 0 }
+    } else if (curSeg && p === curSeg.owner) {
+      if (type === 'CARD_INKED') curSeg.inked++
+      else if (type === 'CARD_PUT_INTO_INKWELL' && (d.fromZone === 'hand')) curSeg.inked++
+      else if (type === 'CARD_PLAYED') curSeg.plays++
+      else if (type === 'CARD_QUEST') curSeg.lore += (d.loreGained ?? 0)
+    }
 
     if (type === 'INITIAL_HAND') {
       pData.initialHand = (d.initialHandCards ?? []).filter(c => c?.name)
@@ -188,6 +207,9 @@ export function parseGamelog(id, logs, meta = {}) {
     }
   }
 
+  if (curSeg) turnSegments.push(curSeg)
+  const turns = turnSegments
+
   const toList = (cardsMap) => Object.values(cardsMap).sort((a, b) => {
     const aTotal = a.drawn + a.played + a.inked
     const bTotal = b.drawn + b.played + b.inked
@@ -235,6 +257,7 @@ export function parseGamelog(id, logs, meta = {}) {
     p1FinalLore: loreByPlayer[1] > 0 ? loreByPlayer[1] : null,
     p2FinalLore: loreByPlayer[2] > 0 ? loreByPlayer[2] : null,
     challenges,
+    turns,
     myPlayerNum,
     myInkCombo,
     oppInkCombo,

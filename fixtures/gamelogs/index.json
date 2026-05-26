@@ -1,0 +1,9 @@
+{
+  "_note": "Real duels.ink gamelogs (raw event arrays) for validating parseGamelog + leakDetection. Raw logs carry no player names — names come from Match History metadata. `myPlayerNum` is the perspective to analyze from; `winner` is the recorded outcome.",
+  "games": [
+    { "file": "019e56ad-c4e7-782a-b40f-943376c43bed.json", "myPlayerNum": 1, "winner": 2, "rounds": 12 },
+    { "file": "019e5d91-18cf-7d14-9547-c7bdb492fae8.json", "myPlayerNum": 2, "winner": 2, "rounds": 13 },
+    { "file": "019e5363-fdf8-7089-9e2e-87aa4b543bd1.json", "myPlayerNum": 2, "winner": 2, "rounds": 19 },
+    { "file": "019e5d47-8b6b-779c-b496-673e02391846.json", "myPlayerNum": 1, "winner": 2, "rounds": 10 }
+  ]
+}

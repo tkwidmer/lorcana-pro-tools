@@ -57,8 +57,12 @@ function reconstructHands(logs) {
     const d = e.data ?? {}
     const t = e.turnNumber ?? 0
 
-    if (e.type === 'TURN_START' && t > 0) {
-      handAtTurnStart[t] = { 1: hand[1], 2: hand[2] }
+    // Capture each player's hand size at the start of their own turn. turnNumber
+    // is shared across both players in a round, so set per-player slots without
+    // clobbering the other player's earlier snapshot for the same round.
+    if (e.type === 'TURN_START' && t > 0 && p) {
+      if (!handAtTurnStart[t]) handAtTurnStart[t] = {}
+      handAtTurnStart[t][p] = hand[p]
     }
     if (!p) continue
 
@@ -75,10 +79,19 @@ function reconstructHands(logs) {
       case 'CARD_DRAWN':
         hand[p]++
         break
+      case 'CARD_RETURNED': // bounced from field back to hand
+        hand[p]++
+        break
+      case 'CARD_LOOKED_AT': // tutor/dig that puts the card into hand
+        if (d.revealDestination === 'hand') hand[p]++
+        break
       case 'CARD_PLAYED':
       case 'CARD_INKED':
       case 'CARD_DISCARDED':
         hand[p]--
+        break
+      case 'CARD_PUT_INTO_INKWELL':
+        if (d.fromZone === 'hand') hand[p]-- // effect-based ink from hand
         break
       default:
         break

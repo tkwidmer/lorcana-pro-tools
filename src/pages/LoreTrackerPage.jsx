@@ -25,9 +25,9 @@ function saveState(player1, player2, auditLog) {
   }
 }
 
-function PlayerCard({ player, onLore, onNameChange }) {
+function PlayerCard({ player, onLore, onNameChange, flipped }) {
   return (
-    <div className="flex-1 flex flex-col border border-gray-200 rounded-lg overflow-hidden min-h-0">
+    <div className={`flex-1 flex flex-col border border-gray-200 rounded-lg overflow-hidden min-h-0${flipped ? ' rotate-180' : ''}`}>
       <input
         type="text"
         value={player.name}
@@ -190,6 +190,7 @@ export function LoreTrackerPage() {
           player={player1}
           onLore={(d) => updateLore(1, d)}
           onNameChange={(n) => updateName(1, n)}
+          flipped
         />
         <PlayerCard
           player={player2}

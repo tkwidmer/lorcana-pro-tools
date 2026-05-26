@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip } from '../lib/gameImport'
-import { analyzeOpponentMetagame, cardFrequencyByArchetype } from '../lib/metagameAnalysis'
+import { analyzeOpponentMetagame } from '../lib/metagameAnalysis'
 import { buildWinrateMatrixFromGames } from '../lib/buildWinrateMatrix'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { InkImg } from './GamelogAnalyzerPage'
 import { createGameExportZip } from '../lib/gameExport'
-import { useCards } from '../hooks/useCards'
 
 const IMPORTED_GAMES_KEY = 'lorcana_imported_game_ids'
 
@@ -734,25 +733,6 @@ function WinRateTrendView({ games }) {
 
 function OpponentMetagameView({ games }) {
   const metagame = analyzeOpponentMetagame(games)
-  const freqData = useMemo(() => cardFrequencyByArchetype(games), [games])
-  const { cards } = useCards()
-  const [expanded, setExpanded] = useState(null)
-
-  const cardMap = useMemo(() => {
-    const map = new Map()
-    for (const card of cards) {
-      map.set(`${card.setCode}-${card.number}`, card)
-    }
-    return map
-  }, [cards])
-
-  const freqByColor = useMemo(() => {
-    const m = new Map()
-    for (const arch of freqData) {
-      m.set(arch.colorString, arch)
-    }
-    return m
-  }, [freqData])
 
   if (metagame.length === 0) {
     return <div className="text-sm text-gray-500">No opponent deck data available</div>
@@ -761,93 +741,34 @@ function OpponentMetagameView({ games }) {
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        {metagame.map(deck => {
-          const isExpanded = expanded === deck.colorString
-          const freqArch = freqByColor.get(deck.colorString)
-          const hasDecklist = freqArch && freqArch.gamesWithDecklist > 0
-
-          return (
-            <div key={deck.colorString}>
+        {metagame.map(deck => (
+          <div key={deck.colorString}>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-medium text-gray-900 flex-shrink-0">{deck.colors.length > 0 ? deck.colors.map(c => c.charAt(0).toUpperCase()).join('/') : 'Unknown'}</span>
+                {deck.colors.length > 0 && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {deck.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 text-sm ml-4">
+                <span className="text-gray-600">{deck.gameCount}g</span>
+                <span className="font-semibold text-gray-900 w-12 text-right">{deck.percentage}%</span>
+              </div>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden">
               <div
-                className={`flex items-center justify-between mb-1 ${hasDecklist ? 'cursor-pointer' : ''}`}
-                onClick={() => hasDecklist && setExpanded(isExpanded ? null : deck.colorString)}
+                className="h-full bg-blue-500 transition-all flex items-center justify-center"
+                style={{ width: `${parseFloat(deck.percentage)}%` }}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-medium text-gray-900 flex-shrink-0">{deck.colors.length > 0 ? deck.colors.map(c => c.charAt(0).toUpperCase()).join('/') : 'Unknown'}</span>
-                  {deck.colors.length > 0 && (
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {deck.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
-                    </div>
-                  )}
-                  {hasDecklist && (
-                    <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0 text-sm ml-4">
-                  <span className="text-gray-600">{deck.gameCount}g</span>
-                  <span className="font-semibold text-gray-900 w-12 text-right">{deck.percentage}%</span>
-                </div>
+                {parseFloat(deck.percentage) > 8 && (
+                  <span className="text-xs font-semibold text-white">{deck.percentage}%</span>
+                )}
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 transition-all flex items-center justify-center"
-                  style={{ width: `${parseFloat(deck.percentage)}%` }}
-                >
-                  {parseFloat(deck.percentage) > 8 && (
-                    <span className="text-xs font-semibold text-white">{deck.percentage}%</span>
-                  )}
-                </div>
-              </div>
-
-              {isExpanded && freqArch && (
-                <CardFrequencyList
-                  arch={freqArch}
-                  cardMap={cardMap}
-                  cardsLoading={cards.length === 0}
-                />
-              )}
             </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function CardFrequencyList({ arch, cardMap, cardsLoading }) {
-  if (cardsLoading) {
-    return <div className="mt-3 text-xs text-gray-400">Loading card data…</div>
-  }
-
-  return (
-    <div className="mt-3 mb-2 border border-gray-100 rounded-lg overflow-hidden">
-      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Card Frequency</span>
-        <span className="text-xs text-gray-400">{arch.gamesWithDecklist} game{arch.gamesWithDecklist !== 1 ? 's' : ''} with decklists</span>
-      </div>
-      <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-        {arch.cards.map(({ cardId, gamesWithCard, avgCopies }) => {
-          const card = cardMap.get(cardId)
-          const cardNum = card ? `${card.setCode}/${card.number}` : cardId.replace('-', '/')
-          const name = card?.fullName ?? cardId
-          const pct = Math.round(gamesWithCard / arch.gamesWithDecklist * 100)
-
-          return (
-            <div key={cardId} className="flex items-center gap-3 px-3 py-1.5 hover:bg-gray-50 transition-colors">
-              <span className="text-[10px] text-gray-400 font-mono w-10 flex-shrink-0">{cardNum}</span>
-              <span className="text-xs text-gray-800 flex-1 min-w-0 truncate">{name}</span>
-              <span className="text-xs text-gray-500 flex-shrink-0 w-16 text-right">
-                {gamesWithCard}/{arch.gamesWithDecklist}
-                <span className="text-gray-400 ml-1">({pct}%)</span>
-              </span>
-              <span className="text-xs font-medium text-gray-700 flex-shrink-0 w-12 text-right">
-                {avgCopies % 1 === 0 ? avgCopies.toFixed(0) : avgCopies.toFixed(1)} avg
-              </span>
-            </div>
-          )
-        })}
+          </div>
+        ))}
       </div>
     </div>
   )

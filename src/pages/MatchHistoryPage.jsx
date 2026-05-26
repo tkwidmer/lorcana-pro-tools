@@ -94,7 +94,6 @@ function ImportGamelogButton({ game }) {
         wentFirst: game.went_first,
         endReason: game.end_reason,
         yourDecklist: game.your_decklist,
-        oppDecklist: game.opp_decklist,
         startedAt: game.started_at,
       })
       await saveGamelog(id, parsed, logs)
@@ -308,7 +307,6 @@ export function MatchHistoryPage() {
           wentFirst: game.went_first,
           endReason: game.end_reason,
           yourDecklist: game.your_decklist,
-          oppDecklist: game.opp_decklist,
           startedAt: game.started_at,
         })
         await saveGamelog(game.gamelog_id, parsed, logs)

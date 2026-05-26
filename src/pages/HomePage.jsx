@@ -40,6 +40,11 @@ const SECTIONS = [
         description: 'Import complete server-side game logs to see both players\' full draw sequences, opening hands, mulligan decisions, and every card interaction — richer than replays.',
       },
       {
+        path: '/hand-trainer',
+        name: 'Hand-Reading Trainer',
+        description: 'Practice reading your opponent\'s hand from your imported games. At each turn, predict what they hold or estimate the odds, then reveal the actual hand and compare your read against the hypergeometric engine.',
+      },
+      {
         path: '/winrate-matrix',
         name: 'Winrate Matrix',
         description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',

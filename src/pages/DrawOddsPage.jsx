@@ -1131,6 +1131,14 @@ export function DrawOddsPage() {
     return map
   }, [allApiCards])
 
+  const colorMap = useMemo(() => {
+    const map = new Map()
+    for (const c of allApiCards) {
+      if (c.fullName) map.set(c.fullName.toLowerCase(), (c.color || '').toLowerCase())
+    }
+    return map
+  }, [allApiCards])
+
   const cardIndex = useMemo(() => buildCardIndex(allApiCards), [allApiCards])
 
   const legalityEntries = useMemo(() => {
@@ -1224,6 +1232,50 @@ export function DrawOddsPage() {
     }
     return counts
   }, [cards, costMap])
+
+  // Per-cost inkability breakdown: for each ink cost, how many copies are inkable vs. not.
+  const curveByInkability = useMemo(() => {
+    const map = new Map() // cost → { inkable, nonInkable }
+    for (const card of cards) {
+      const key = card.name.toLowerCase()
+      const cost = costMap.get(key)
+      const inkable = inkwellMap.get(key)
+      if (cost == null || inkable === undefined) continue
+      if (!map.has(cost)) map.set(cost, { inkable: 0, nonInkable: 0 })
+      const bucket = map.get(cost)
+      if (inkable) bucket.inkable += card.count
+      else bucket.nonInkable += card.count
+    }
+    return map
+  }, [cards, costMap, inkwellMap])
+
+  // Ink color distribution across the deck.
+  const colorBalance = useMemo(() => {
+    if (cards.length === 0) return null
+    const counts = new Map() // color → { inkable, nonInkable, total }
+    let unknown = 0
+    for (const card of cards) {
+      const key = card.name.toLowerCase()
+      const color = colorMap.get(key)
+      const inkable = inkwellMap.get(key)
+      if (!color) { unknown += card.count; continue }
+      if (!counts.has(color)) counts.set(color, { inkable: 0, nonInkable: 0, total: 0 })
+      const bucket = counts.get(color)
+      bucket.total += card.count
+      if (inkable === false) bucket.nonInkable += card.count
+      else bucket.inkable += card.count
+    }
+    const total = cards.reduce((s, c) => s + c.count, 0)
+    const entries = [...counts.entries()]
+      .map(([color, v]) => ({ color, ...v, pct: v.total / total }))
+      .sort((a, b) => b.total - a.total)
+    // Classify: a color is a "splash" if it has fewer copies than 10% of the deck
+    // or fewer than 4 copies.
+    const splashThreshold = Math.max(4, Math.round(total * 0.10))
+    const mainColors = entries.filter(e => e.total >= splashThreshold)
+    const splashes   = entries.filter(e => e.total < splashThreshold)
+    return { entries, mainColors, splashes, total, unknown }
+  }, [cards, colorMap, inkwellMap])
 
   // Curve probability: P(can play at least one card) for each turn T1-T8
   // Monte Carlo — accounts for mulligan strategy (keep playable, send back non-playable)
@@ -1749,7 +1801,7 @@ export function DrawOddsPage() {
           </button>
           {insightsOpen && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
 
-          {/* Ink Curve tile */}
+          {/* Ink Curve tile — stacked inkable / non-inkable bars */}
           {curveCounts.size > 0 && (() => {
             const costs = [...curveCounts.keys()].sort((a, b) => a - b)
             const maxCount = Math.max(...curveCounts.values())
@@ -1757,6 +1809,7 @@ export function DrawOddsPage() {
               [...curveCounts.entries()].reduce((s, [c, n]) => s + c * n, 0) /
               [...curveCounts.values()].reduce((s, n) => s + n, 0)
             ).toFixed(1)
+            const hasNonInkable = [...curveByInkability.values()].some(v => v.nonInkable > 0)
             return (
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -1766,19 +1819,32 @@ export function DrawOddsPage() {
                 <div className="flex items-end gap-1.5">
                   {costs.map(cost => {
                     const count = curveCounts.get(cost)
-                    const heightPct = count / maxCount
+                    const split = curveByInkability.get(cost) || { inkable: count, nonInkable: 0 }
+                    const totalH = Math.round((count / maxCount) * 52)
+                    const nonInkH = count > 0 ? Math.round((split.nonInkable / count) * totalH) : 0
+                    const inkH = totalH - nonInkH
                     return (
                       <div key={cost} className="flex flex-col items-center gap-0.5 flex-1">
                         <span className="text-[10px] font-medium text-gray-600">{count}</span>
-                        <div
-                          className="w-full bg-gray-900 rounded-t min-h-[3px]"
-                          style={{ height: `${Math.round(heightPct * 52)}px` }}
-                        />
+                        <div className="w-full flex flex-col-reverse min-h-[3px]" style={{ height: `${totalH}px` }}>
+                          {inkH > 0 && <div className="w-full bg-gray-900 rounded-t" style={{ height: `${inkH}px` }} />}
+                          {nonInkH > 0 && <div className="w-full bg-orange-400" style={{ height: `${nonInkH}px` }} />}
+                        </div>
                         <span className="text-[10px] text-gray-500">{cost}</span>
                       </div>
                     )
                   })}
                 </div>
+                {hasNonInkable && (
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="flex items-center gap-1 text-[10px] text-gray-400">
+                      <span className="inline-block w-2 h-2 rounded-sm bg-gray-900" /> inkable
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] text-orange-500">
+                      <span className="inline-block w-2 h-2 rounded-sm bg-orange-400" /> non-inkable
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })()}
@@ -1876,6 +1942,74 @@ export function DrawOddsPage() {
               )}
             </div>
           )}
+
+          {/* Ink Color Balance tile */}
+          {colorBalance && colorBalance.entries.length > 0 && (() => {
+            const INK_CSS = {
+              amber:    { bar: 'bg-amber-400',    text: 'text-amber-700',    dot: 'bg-amber-400'    },
+              amethyst: { bar: 'bg-purple-500',   text: 'text-purple-700',   dot: 'bg-purple-500'   },
+              emerald:  { bar: 'bg-emerald-500',  text: 'text-emerald-700',  dot: 'bg-emerald-500'  },
+              ruby:     { bar: 'bg-red-500',      text: 'text-red-700',      dot: 'bg-red-500'      },
+              sapphire: { bar: 'bg-blue-500',     text: 'text-blue-700',     dot: 'bg-blue-500'     },
+              steel:    { bar: 'bg-slate-500',    text: 'text-slate-700',    dot: 'bg-slate-500'    },
+            }
+            const { entries, mainColors, splashes, total } = colorBalance
+            const maxTotal = Math.max(...entries.map(e => e.total))
+            const isMono = mainColors.length === 1 && splashes.length === 0
+            const label = isMono ? 'Mono' : mainColors.length >= 2 && splashes.length === 0
+              ? `${mainColors.length}-Color`
+              : splashes.length > 0 ? `${mainColors.length}-Color + splash` : 'Multi-Color'
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ink Color Balance</h2>
+                  <span className="text-xs text-gray-400">{label}</span>
+                </div>
+                <div className="space-y-2">
+                  {entries.map(({ color, total: ct, nonInkable, pct }) => {
+                    const css = INK_CSS[color] || { bar: 'bg-gray-400', text: 'text-gray-600', dot: 'bg-gray-400' }
+                    const barW = Math.round((ct / maxTotal) * 100)
+                    const nonInkW = ct > 0 ? Math.round((nonInkable / ct) * barW) : 0
+                    const isSplash = splashes.some(s => s.color === color)
+                    return (
+                      <div key={color}>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <img src={`/ink/${color}.png`} alt={color} className="w-3.5 h-3.5 shrink-0" />
+                          <span className={`text-[11px] font-medium capitalize ${isSplash ? 'text-gray-400' : 'text-gray-700'}`}>
+                            {color}{isSplash ? ' (splash)' : ''}
+                          </span>
+                          <span className="ml-auto text-[10px] text-gray-400 tabular-nums">
+                            {ct} cop{ct === 1 ? 'y' : 'ies'} · {Math.round(pct * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full flex">
+                            <div className={`h-full ${css.bar} rounded-full`} style={{ width: `${barW - nonInkW}%` }} />
+                            {nonInkW > 0 && <div className="h-full bg-orange-300" style={{ width: `${nonInkW}%` }} />}
+                          </div>
+                        </div>
+                        {nonInkable > 0 && (
+                          <div className="text-[10px] text-orange-500 mt-0.5">
+                            {nonInkable} non-inkable · can't use as ink if flooded
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {colorBalance.unknown > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100">
+                    {colorBalance.unknown} cop{colorBalance.unknown === 1 ? 'y' : 'ies'} not in database — color data may be incomplete.
+                  </p>
+                )}
+                {splashes.length > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100">
+                    Splash colors (&lt;{Math.round(total * 0.10)}–4 copies) may be inconsistent to draw.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Quest Pressure tile */}
           {questPressure && (() => {
@@ -2560,7 +2694,14 @@ export function DrawOddsPage() {
             <div>
               <h3 className="font-semibold text-gray-800 mb-1">Ink Curve</h3>
               <p>
-                A bar chart showing how many cards in your deck cost each amount of ink, alongside the average cost across all cards. This gives you a quick read on whether your deck is aggressive (lots of cheap cards), controlling (heavier top end), or balanced in the middle. The average cost is weighted by copy count, so four 1-cost cards pull the average down more than one 4-cost card pulls it up.
+                A bar chart showing how many cards in your deck cost each amount of ink, alongside the average cost across all cards. Each bar is now split into two segments: the dark portion represents inkable copies at that cost, and the orange portion represents non-inkable copies. This makes it easy to spot cost brackets where you&apos;re committed to playing into a specific position — cards that can&apos;t be inked and have no other use if your curve stalls.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Ink Color Balance</h3>
+              <p>
+                A per-color breakdown of how many copies in your deck belong to each ink color, shown as proportional bars. Each bar is split to indicate how many of that color&apos;s cards are non-inkable (orange segment) — which matters because non-inkable cards of your secondary color can sit stranded in hand if you&apos;re color-flooded. Colors with very few copies (below roughly 10% of the deck or fewer than 4 copies) are marked as splashes and may be inconsistent to draw. The summary label classifies your deck as Mono, 2-Color, or multi-color with splashes.
               </p>
             </div>
 

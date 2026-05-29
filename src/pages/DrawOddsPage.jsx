@@ -363,9 +363,11 @@ function buildKeywordAnalysis(cards, allApiCards) {
   }
 
   const keywordCopies = new Map()   // keyword → total copies in deck
-  const shifts = []                 // { name, copies, shiftCost, base, baseCopies }
+  const shifts = []                 // { name, copies, shiftCost, baseName, baseCopies }
   const singers = []                // { name, copies, singerLevel }
   const songs = []                  // { name, copies, cost }
+  // All characters in the deck: { name, cost, singerLevel (null if no Singer keyword) }
+  const characters = []
   let totalSongs = 0, totalSingers = 0, totalSingerCapacity = 0
 
   for (const card of cards) {
@@ -373,9 +375,13 @@ function buildKeywordAnalysis(cards, allApiCards) {
     const type = api?.type || ''
     const subs = api?.subtypes || api?.classifications || []
     const isSong = /song/i.test(type) || (Array.isArray(subs) && subs.some(s => /song/i.test(s)))
+    const isCharacter = /character/i.test(type)
     if (isSong) {
       totalSongs += card.count
       songs.push({ name: card.name, copies: card.count, cost: api?.cost ?? null })
+    }
+    if (isCharacter && api?.cost != null) {
+      characters.push({ name: card.name, copies: card.count, cost: api.cost, singerLevel: null })
     }
 
     // keywordAbilities is a top-level string array listing keyword names without
@@ -399,7 +405,6 @@ function buildKeywordAnalysis(cards, allApiCards) {
 
       if (kw.keyword === 'Shift') {
         const sn = simpleName(card.name)
-        // Candidates in deck with the same simple name and lower (or equal) cost
         const bases = (deckBySimple.get(sn) || []).filter(b => {
           if (b.fullName.toLowerCase() === card.name.toLowerCase()) return false
           if (b.cost == null || api.cost == null) return false
@@ -416,6 +421,9 @@ function buildKeywordAnalysis(cards, allApiCards) {
         totalSingers += card.count
         if (kw.value != null) totalSingerCapacity += kw.value * card.count
         singers.push({ name: card.name, copies: card.count, singerLevel: kw.value })
+        // Update the matching character entry with its singer level
+        const charEntry = characters.find(c => c.name === card.name)
+        if (charEntry) charEntry.singerLevel = kw.value
       }
     }
   }
@@ -423,9 +431,14 @@ function buildKeywordAnalysis(cards, allApiCards) {
   shifts.sort((a, b) => a.covered - b.covered || a.name.localeCompare(b.name))
   singers.sort((a, b) => (b.singerLevel ?? 0) - (a.singerLevel ?? 0))
 
-  // Singer–song balance flags
-  const hasSingerSongMismatch = (totalSongs > 0 && totalSingers === 0) ||
-    (totalSingers > 0 && totalSongs === 0)
+  // A character can sing a song if: its cost >= song cost (base rule),
+  // OR it has Singer N where N >= song cost (keyword extends reach).
+  // The effective "singing power" of a character is max(cost, singerLevel ?? 0).
+  const singingPowers = characters.map(c => Math.max(c.cost, c.singerLevel ?? 0))
+  const maxSingingPower = singingPowers.length > 0 ? Math.max(...singingPowers) : 0
+
+  // For each song, flag whether any character in the deck can sing it.
+  const unsingSongs = songs.filter(s => s.cost != null && s.cost > maxSingingPower)
   const avgSingerLevel = totalSingers > 0 ? (totalSingerCapacity / totalSingers).toFixed(1) : null
 
   // Keyword density: sort by copy count descending
@@ -433,7 +446,7 @@ function buildKeywordAnalysis(cards, allApiCards) {
     .sort((a, b) => b[1] - a[1])
     .map(([kw, count]) => ({ keyword: kw, count }))
 
-  return { density, shifts, singers, songs, totalSongs, totalSingers, avgSingerLevel, hasSingerSongMismatch }
+  return { density, shifts, singers, songs, unsingSongs, totalSongs, totalSingers, avgSingerLevel, maxSingingPower, characters }
 }
 
 // --- Mulligan Advisor ---
@@ -2233,7 +2246,7 @@ export function DeckInsightsPage() {
 
           {/* Keyword Analysis tile */}
           {keywordAnalysis && keywordAnalysis.density.length > 0 && (() => {
-            const { density, shifts, singers, totalSongs, totalSingers, avgSingerLevel, hasSingerSongMismatch } = keywordAnalysis
+            const { density, shifts, singers, totalSongs, totalSingers, avgSingerLevel, unsingSongs, maxSingingPower } = keywordAnalysis
             const uncoveredShifts = shifts.filter(s => !s.covered)
             const coveredShifts = shifts.filter(s => s.covered)
             return (
@@ -2254,22 +2267,21 @@ export function DeckInsightsPage() {
                 </div>
 
                 {/* Singer ↔ Song balance */}
-                {(totalSingers > 0 || totalSongs > 0) && (
-                  <div className={`rounded-md p-3 mb-3 text-xs ${hasSingerSongMismatch ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-100'}`}>
+                {totalSongs > 0 && (
+                  <div className={`rounded-md p-3 mb-3 text-xs ${unsingSongs.length > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-100'}`}>
                     <div className="flex flex-wrap gap-x-6 gap-y-1 mb-1">
-                      <span><span className="font-semibold text-gray-700">{totalSingers}</span> singer cop{totalSingers === 1 ? 'y' : 'ies'}{avgSingerLevel ? ` (avg Singer ${avgSingerLevel})` : ''}</span>
                       <span><span className="font-semibold text-gray-700">{totalSongs}</span> song{totalSongs === 1 ? '' : 's'}</span>
+                      {totalSingers > 0 && <span><span className="font-semibold text-gray-700">{totalSingers}</span> Singer cop{totalSingers === 1 ? 'y' : 'ies'}{avgSingerLevel ? ` (avg Singer ${avgSingerLevel})` : ''}</span>}
+                      <span className="text-gray-500">max singing power: <span className="font-semibold text-gray-700">{maxSingingPower}⬡</span></span>
                     </div>
-                    {hasSingerSongMismatch && (
-                      <p className="text-amber-700">
-                        {totalSongs > 0 && totalSingers === 0
-                          ? "Songs in deck but no Singer characters — you'll need to hard-cast them."
-                          : 'Singer characters in deck but no songs to sing.'}
+                    {unsingSongs.length > 0 && (
+                      <p className="text-amber-700 mt-1">
+                        {unsingSongs.map(s => `${s.name} (${s.cost}⬡)`).join(', ')} can&apos;t be sung — no character with cost or Singer level ≥ {Math.min(...unsingSongs.map(s => s.cost))}.
                       </p>
                     )}
-                    {!hasSingerSongMismatch && totalSingers > 0 && singers.length > 0 && (
+                    {unsingSongs.length === 0 && totalSingers > 0 && singers.length > 0 && (
                       <p className="text-gray-500">
-                        Lowest singer: {[...singers].sort((a,b) => (a.singerLevel??0) - (b.singerLevel??0))[0]?.name} (Singer {[...singers].sort((a,b) => (a.singerLevel??0) - (b.singerLevel??0))[0]?.singerLevel})
+                        Highest Singer: {singers[0].name} (Singer {singers[0].singerLevel})
                         {' · '}most expensive song: {[...keywordAnalysis.songs].sort((a,b) => (b.cost??0) - (a.cost??0))[0]?.name} ({[...keywordAnalysis.songs].sort((a,b) => (b.cost??0) - (a.cost??0))[0]?.cost}⬡)
                       </p>
                     )}

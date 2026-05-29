@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useCards } from '../hooks/useCards'
 
 // --- Legality constants ---
@@ -308,6 +308,338 @@ function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, 
     if (foundA && foundB) hits++
   }
   return hits / MC_ITERS
+}
+
+// --- Keyword Analysis ---
+// Parses keyword abilities from card data and checks cross-card relationships:
+// - Shift: is the lower-cost base character also in the deck?
+// - Singer: how much song-cost capacity does the deck have vs. its song count?
+// - Keyword density: per-keyword copy counts across the whole deck.
+const TRACKED_KEYWORDS = ['Shift', 'Singer', 'Bodyguard', 'Rush', 'Evasive', 'Ward', 'Reckless', 'Support', 'Challenger']
+
+// LorcanaJSON keyword abilities have a `keyword` field (e.g. "Shift", "Singer");
+// named/triggered/static abilities use `name` instead and have no `keyword` field.
+function parseKeyword(ab) {
+  if (!ab) return null
+  if (ab.keyword) {
+    const kwName = TRACKED_KEYWORDS.find(k => ab.keyword.startsWith(k))
+    if (!kwName) return null
+    return { keyword: kwName, value: ab.keywordValueNumber ?? null }
+  }
+  // Fallback: scan ab.name in case the keyword is encoded there
+  const name = ab.name || ''
+  for (const kw of TRACKED_KEYWORDS) {
+    if (name.startsWith(kw)) {
+      const numMatch = name.match(/\d+/)
+      return { keyword: kw, value: numMatch ? parseInt(numMatch[0]) : null }
+    }
+  }
+  return null
+}
+
+// The "simple name" of a card is everything before the first " - " separator —
+// this is what Shift cards share with their lower-cost base version.
+function simpleName(fullName) {
+  const dash = fullName.indexOf(' - ')
+  return dash === -1 ? fullName : fullName.slice(0, dash)
+}
+
+function buildKeywordAnalysis(cards, allApiCards) {
+  if (cards.length === 0) return null
+
+  // Build a lookup: fullName.toLowerCase() → apiCard
+  const byName = new Map()
+  for (const c of allApiCards) {
+    if (c.fullName) byName.set(c.fullName.toLowerCase(), c)
+  }
+
+  // Build a lookup: simpleName → array of { fullName, cost, copies } for cards in deck
+  const deckBySimple = new Map()
+  for (const card of cards) {
+    const api = byName.get(card.name.toLowerCase())
+    const sn = simpleName(card.name)
+    if (!deckBySimple.has(sn)) deckBySimple.set(sn, [])
+    deckBySimple.get(sn).push({ fullName: card.name, cost: api?.cost ?? null, copies: card.count })
+  }
+
+  const keywordCopies = new Map()   // keyword → total copies in deck
+  const shifts = []                 // { name, copies, shiftCost, baseName, baseCopies }
+  const singers = []                // { name, copies, singerLevel }
+  const songs = []                  // { name, copies, cost }
+  // All characters in the deck: { name, cost, singerLevel (null if no Singer keyword) }
+  const characters = []
+  let totalSongs = 0, totalSingers = 0, totalSingerCapacity = 0
+
+  for (const card of cards) {
+    const api = byName.get(card.name.toLowerCase())
+    const type = api?.type || ''
+    const subs = api?.subtypes || api?.classifications || []
+    const isSong = /song/i.test(type) || (Array.isArray(subs) && subs.some(s => /song/i.test(s)))
+    const isCharacter = /character/i.test(type)
+    if (isSong) {
+      totalSongs += card.count
+      songs.push({ name: card.name, copies: card.count, cost: api?.cost ?? null })
+    }
+    if (isCharacter && api?.cost != null) {
+      characters.push({ name: card.name, copies: card.count, cost: api.cost, singerLevel: null })
+    }
+
+    // keywordAbilities is a top-level string array listing keyword names without
+    // values (e.g. ["Shift", "Singer"]) — use it for density counts when present.
+    // Fall back to parsing abilities entries for older schema versions.
+    if (Array.isArray(api?.keywordAbilities)) {
+      for (const kwName of api.keywordAbilities) {
+        const tracked = TRACKED_KEYWORDS.find(k => kwName.startsWith(k))
+        if (tracked) keywordCopies.set(tracked, (keywordCopies.get(tracked) || 0) + card.count)
+      }
+    }
+
+    if (!api?.abilities) continue
+    for (const ab of api.abilities) {
+      const kw = parseKeyword(ab)
+      if (!kw) continue
+      // Only count toward density if keywordAbilities wasn't already used above
+      if (!Array.isArray(api?.keywordAbilities)) {
+        keywordCopies.set(kw.keyword, (keywordCopies.get(kw.keyword) || 0) + card.count)
+      }
+
+      if (kw.keyword === 'Shift') {
+        const sn = simpleName(card.name)
+        const bases = (deckBySimple.get(sn) || []).filter(b => {
+          if (b.fullName.toLowerCase() === card.name.toLowerCase()) return false
+          if (b.cost == null || api.cost == null) return false
+          return b.cost < api.cost
+        })
+        const baseCopies = bases.reduce((s, b) => s + b.copies, 0)
+        shifts.push({
+          name: card.name, copies: card.count, shiftCost: kw.value,
+          baseName: sn, baseCopies, covered: baseCopies > 0,
+        })
+      }
+
+      if (kw.keyword === 'Singer') {
+        totalSingers += card.count
+        if (kw.value != null) totalSingerCapacity += kw.value * card.count
+        singers.push({ name: card.name, copies: card.count, singerLevel: kw.value })
+        // Update the matching character entry with its singer level
+        const charEntry = characters.find(c => c.name === card.name)
+        if (charEntry) charEntry.singerLevel = kw.value
+      }
+    }
+  }
+
+  shifts.sort((a, b) => a.covered - b.covered || a.name.localeCompare(b.name))
+  singers.sort((a, b) => (b.singerLevel ?? 0) - (a.singerLevel ?? 0))
+
+  // A character can sing a song if: its cost >= song cost (base rule),
+  // OR it has Singer N where N >= song cost (keyword extends reach).
+  // The effective "singing power" of a character is max(cost, singerLevel ?? 0).
+  const singingPowers = characters.map(c => Math.max(c.cost, c.singerLevel ?? 0))
+  const maxSingingPower = singingPowers.length > 0 ? Math.max(...singingPowers) : 0
+
+  // For each song, flag whether any character in the deck can sing it.
+  const unsingSongs = songs.filter(s => s.cost != null && s.cost > maxSingingPower)
+  const avgSingerLevel = totalSingers > 0 ? (totalSingerCapacity / totalSingers).toFixed(1) : null
+
+  // Keyword density: sort by copy count descending
+  const density = [...keywordCopies.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([kw, count]) => ({ keyword: kw, count }))
+
+  return { density, shifts, singers, songs, unsingSongs, totalSongs, totalSingers, avgSingerLevel, maxSingingPower, characters }
+}
+
+// --- Draw Effects ---
+// Scans each deck card's rules text to identify draw and ramp effects.
+// `isDraw` and `isRamp` come from classifyCardRole; here we also try to parse
+// the exact draw count (e.g. "draw 2 cards" → drawCount: 2).
+function buildDrawEffects(cards, allApiCards) {
+  if (cards.length === 0) return null
+  const byName = new Map()
+  for (const c of allApiCards) {
+    if (c.fullName) byName.set(c.fullName.toLowerCase(), c)
+  }
+
+  const drawCards = []
+  const rampCards = []
+  const discardRecoveryCards = []
+  const scryCards = []
+
+  for (const card of cards) {
+    const api = byName.get(card.name.toLowerCase())
+    if (!api) continue
+    const role = classifyCardRole(api)
+    const text = (
+      api.fullText ||
+      api.text ||
+      (Array.isArray(api.abilities) ? api.abilities.map(a => a.fullText || a.effect || '').join(' ') : '')
+    ).toLowerCase()
+
+    if (role.isDraw) {
+      // A fixed draw ("draw 2 cards") parses to a number; conditional or open-ended
+      // draws ("draw cards until …", "draw a card for each …", "up to") have no fixed
+      // count, so mark them variable rather than defaulting to 1.
+      const numMatch = text.match(/draws? (\d+) cards?/)
+      const isVariable = /draws? cards? until/.test(text)
+        || /draws? .*for each/.test(text)
+        || /draws? cards? equal to/.test(text)
+        || /draws? up to/.test(text)
+      let drawCount, variable = false
+      if (numMatch) {
+        drawCount = parseInt(numMatch[1])
+      } else if (isVariable) {
+        drawCount = null
+        variable = true
+      } else {
+        drawCount = 1
+      }
+      drawCards.push({ name: card.name, copies: card.count, drawCount, variable })
+    }
+    if (role.isRamp) {
+      rampCards.push({ name: card.name, copies: card.count })
+    }
+    if (role.isDiscardRecovery) {
+      discardRecoveryCards.push({ name: card.name, copies: card.count })
+    }
+    if (role.isScry) {
+      const lookMatch = text.match(/look at the top (\d+) cards?/)
+      const lookCount = lookMatch ? parseInt(lookMatch[1]) : null
+      scryCards.push({ name: card.name, copies: card.count, lookCount })
+    }
+  }
+
+  const sortFn = (a, b) => b.copies - a.copies || a.name.localeCompare(b.name)
+  drawCards.sort(sortFn)
+  rampCards.sort(sortFn)
+  discardRecoveryCards.sort(sortFn)
+  scryCards.sort(sortFn)
+
+  const totalDrawCopies = drawCards.reduce((s, c) => s + c.copies, 0)
+  const totalRampCopies = rampCards.reduce((s, c) => s + c.copies, 0)
+  const totalDiscardCopies = discardRecoveryCards.reduce((s, c) => s + c.copies, 0)
+  const totalScryCopies = scryCards.reduce((s, c) => s + c.copies, 0)
+  // Weighted draw potential: if every draw card were played once, how many extra cards?
+  // Variable draws have no fixed count, so they're excluded from this floor estimate.
+  const drawPotential = drawCards.reduce((s, c) => s + c.copies * (c.drawCount ?? 0), 0)
+  const hasVariableDraw = drawCards.some(c => c.variable)
+
+  if (totalDrawCopies === 0 && totalRampCopies === 0 && totalDiscardCopies === 0 && totalScryCopies === 0) return null
+  return {
+    drawCards, rampCards, discardRecoveryCards, scryCards,
+    totalDrawCopies, totalRampCopies, totalDiscardCopies, totalScryCopies,
+    drawPotential, hasVariableDraw,
+  }
+}
+
+// --- Mulligan Advisor ---
+// Infer a card's strategic role from its type and rules text. This is deterministic
+// and necessarily rough — it reads card *function* (does it develop the board? is it
+// reactive? does it draw/ramp?), not specific combos. It can tell that a song is a
+// sing-it-later payoff rather than an opening play, but it can't know which cards
+// combo together.
+function classifyCardRole(apiCard) {
+  if (!apiCard) return {}
+  const type = apiCard.type || ''
+  const subtypes = apiCard.subtypes || apiCard.classifications || []
+  const isSong = /song/i.test(type) || (Array.isArray(subtypes) && subtypes.some(s => /song/i.test(s)))
+  const isCharacter = /character/i.test(type)
+  const isLocation = /location/i.test(type)
+  const isItem = /item/i.test(type)
+  const text = (
+    apiCard.fullText ||
+    apiCard.text ||
+    (Array.isArray(apiCard.abilities) ? apiCard.abilities.map(a => a.fullText || a.reminderText || a.text || '').join(' ') : '') ||
+    ''
+  ).toLowerCase()
+  const isRemoval = /\bbanish\b/.test(text)
+    || /deals? \d+ damage/.test(text)
+    || /return[s]? .*(character|item|location|card).* to .*(hand|inkwell)/.test(text)
+  const isDraw = /draws? (a card|\d+ cards?|cards)/.test(text)
+  const isRamp = /into your inkwell/.test(text)
+  // Cards that retrieve a card from the discard pile into hand or play.
+  const isDiscardRecovery = /from (your |the )?discard/.test(text)
+  // Cards that look at the top N cards and put one or more into hand (scry/tutor).
+  const isScry = /look at the top \d+ cards?/.test(text) && /(put|place|add).{0,40}(into|in) (your )?hand/.test(text)
+  return {
+    isSong, isCharacter, isLocation, isItem,
+    isRemoval, isDraw, isRamp, isDiscardRecovery, isScry,
+    develops: isCharacter || isLocation,
+  }
+}
+
+// Classifies each unique card into keep / flexible / toss tiers for the opening hand.
+// Cost thresholds are derived from the deck's own curve (median cost) so the advice
+// scales from aggro to control; card role then refines the tier so cheap-but-conditional
+// cards (songs, removal, generic actions) aren't blindly kept just for being cheap.
+function buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize, shiftLineNames) {
+  // Lowercase set of Shift cards whose base version is also in the deck — keeping
+  // these in the opener enables a turn-cheaper Shift play, so they're worth holding
+  // even when their printed cost would otherwise read as too slow.
+  const shiftLine = shiftLineNames || new Set()
+  // Keep cards you can deploy by the early turns; toss cards too slow to matter in the opener.
+  const keepThreshold = Math.max(2, Math.min(3, medianCost))
+  const tossThreshold = Math.max(5, medianCost + 2)
+  const keep = [], flexible = [], toss = []
+  for (const card of cards) {
+    const key = card.name.toLowerCase()
+    const cost = costMap.get(key)
+    const inkable = inkwellMap.get(key)
+    const role = roleMap.get(key) || {}
+    if (cost == null) {
+      flexible.push({ ...card, cost: null, inkable, reason: 'Not in database — judge by hand' })
+      continue
+    }
+    let tier, reason
+    if (role.isSong) {
+      // Songs are paid by singing later; rarely a standalone opening play.
+      if (cost <= 2) { tier = 'flexible'; reason = `${cost}-cost song — only if you can hard-cast it early` }
+      else { tier = 'toss'; reason = `${cost}-cost song — sing it later with a character; a payoff, not an opener` }
+    } else if (role.develops) {
+      // Characters and locations are real board development — what you most want early.
+      const kind = role.isLocation ? 'location' : 'character'
+      if (cost <= keepThreshold) { tier = 'keep'; reason = `${cost}-cost ${kind} — early board presence` }
+      else if (cost >= tossThreshold) { tier = 'toss'; reason = `${cost}-cost ${kind} — too slow to commit early` }
+      else { tier = 'flexible'; reason = `${cost}-cost ${kind} — keep if your hand curves into it` }
+    } else if (role.isDraw || role.isRamp) {
+      // Card advantage / ink ramp smooths the opening hand.
+      const kind = role.isRamp ? 'ramp' : 'draw'
+      if (cost <= keepThreshold) { tier = 'keep'; reason = `${cost}-cost ${kind} — smooths your hand and ink` }
+      else if (cost >= tossThreshold) { tier = 'toss'; reason = `${cost}-cost ${kind} — too slow for early smoothing` }
+      else { tier = 'flexible'; reason = `${cost}-cost ${kind} — keep alongside an early play` }
+    } else if (role.isRemoval) {
+      // Reactive interaction — dead in hand without a target on the board.
+      if (cost >= tossThreshold) { tier = 'toss'; reason = `${cost}-cost removal — slow and reactive` }
+      else { tier = 'flexible'; reason = `${cost}-cost removal — reactive; keep only if you expect a target` }
+    } else {
+      // Generic actions / items: no immediate board presence, so never an auto-keep.
+      const kind = role.isItem ? 'item' : 'action'
+      if (cost <= keepThreshold) { tier = 'flexible'; reason = `${cost}-cost ${kind} — situational, no board presence` }
+      else { tier = 'toss'; reason = `${cost}-cost ${kind} — slow with no board presence` }
+    }
+    // A Shift card with its base in the deck is part of a Shift line — a key win
+    // condition you can deploy a turn early. Don't toss it; hold it as flexible.
+    if (tier === 'toss' && shiftLine.has(key)) {
+      tier = 'flexible'
+      reason = `${cost}-cost Shift — part of a Shift line; hold to enable a cheaper play`
+    }
+    // Non-inkable cards can't fall back to being ink. Note it, and nudge non-developing
+    // borderline cards further toward tossing.
+    if (inkable === false) {
+      reason += ' · non-inkable'
+      if (tier === 'flexible' && !role.develops && !shiftLine.has(key) && cost > keepThreshold) tier = 'toss'
+    }
+    const entry = { ...card, cost, inkable, reason }
+    if (tier === 'keep') keep.push(entry)
+    else if (tier === 'toss') toss.push(entry)
+    else flexible.push(entry)
+  }
+  const sortFn = (a, b) => (a.cost ?? 99) - (b.cost ?? 99) || a.name.localeCompare(b.name)
+  keep.sort(sortFn); flexible.sort(sortFn); toss.sort(sortFn)
+  const keepCopies = keep.reduce((s, c) => s + c.count, 0)
+  // Odds your opening 7 contains the early plays you'd want to keep.
+  const pAtLeast1 = drawOddsAtLeast(deckSize, keepCopies, 7, 1)
+  const pAtLeast2 = drawOddsAtLeast(deckSize, keepCopies, 7, 2)
+  return { keep, flexible, toss, keepThreshold, tossThreshold, keepCopies, pAtLeast1, pAtLeast2 }
 }
 
 // --- Deck list parsing ---
@@ -635,9 +967,19 @@ function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations = 5000)
 //   - Locations generate lore passively each turn after played, no characters needed
 function questPressureSim(deckCards, iterations = 6000) {
   const N = deckCards.length
-  if (N === 0) return { avgLore: new Array(8).fill(0), estWinTurn: null }
+  if (N === 0) return {
+    avgLore: new Array(SIM_TURNS).fill(0), estWinTurn: null,
+    loreBands: Array.from({ length: SIM_TURNS }, () => ({ p10: 0, p50: 0, p90: 0 })),
+    winTurnCdf: new Array(SIM_TURNS).fill(0), winTurnPmf: new Array(SIM_TURNS).fill(0),
+    medianWinTurn: null, neverWinRate: 1,
+  }
   const order = new Uint16Array(N)
-  const loreSums = new Float64Array(8)
+  const loreSums = new Float64Array(SIM_TURNS)
+  // Per-turn cumulative lore samples (one column per simulated game) for percentile bands.
+  const loreSamples = Array.from({ length: SIM_TURNS }, () => new Float32Array(iterations))
+  // winTurnCdf[t] = count of games that have reached 20 lore by the end of turn t+1.
+  const winTurnCdf = new Float64Array(SIM_TURNS)
+  let neverWin = 0
 
   for (let iter = 0; iter < iterations; iter++) {
     for (let i = 0; i < N; i++) order[i] = i
@@ -658,7 +1000,7 @@ function questPressureSim(deckCards, iterations = 6000) {
     // justPlayed: lore values of cards played this turn (quest next turn)
     const justPlayed = []
 
-    for (let t = 0; t < 8; t++) {
+    for (let t = 0; t < SIM_TURNS; t++) {
       // Draw one card (not on T1 since we start with opening hand)
       if (t > 0 && deckIdx < N) inHand[order[deckIdx++]] = 1
 
@@ -712,13 +1054,48 @@ function questPressureSim(deckCards, iterations = 6000) {
       }
 
       loreSums[t] += cumLore
+      loreSamples[t][iter] = cumLore
+    }
+
+    // Win turn = first turn this game's cumulative lore reached 20.
+    let winTurn = -1
+    for (let t = 0; t < SIM_TURNS; t++) {
+      if (loreSamples[t][iter] >= 20) { winTurn = t; break }
+    }
+    if (winTurn === -1) {
+      neverWin++
+    } else {
+      // CDF: a game that wins on turn winTurn has also "won by" every later turn.
+      for (let t = winTurn; t < SIM_TURNS; t++) winTurnCdf[t]++
     }
   }
 
   const avgLore = Array.from(loreSums).map(v => v / iterations)
+  // Percentile bands per turn: sort each turn's samples and read off p10/p50/p90.
+  // TypedArray.sort is numeric by default, so no comparator is needed.
+  const loreBands = loreSamples.map(samples => {
+    const sorted = samples.slice().sort()
+    const at = q => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]
+    return { p10: at(0.10), p50: at(0.50), p90: at(0.90) }
+  })
+  // Cumulative P(reached 20 lore by turn t) and the per-turn marginal P(win on turn t).
+  const winTurnCdfArr = Array.from(winTurnCdf).map(c => c / iterations)
+  const winTurnPmf = winTurnCdfArr.map((p, t) => p - (t > 0 ? winTurnCdfArr[t - 1] : 0))
+  const neverWinRate = neverWin / iterations
+  // Median win turn: first turn where the cumulative win probability reaches 50%.
+  const medianIdx = winTurnCdfArr.findIndex(p => p >= 0.5)
+  const medianWinTurn = medianIdx === -1 ? null : medianIdx + 1
   // Estimated turn to reach 20 lore (first turn where avg >= 20, or null)
   const estWinTurn = avgLore.findIndex(v => v >= 20)
-  return { avgLore, estWinTurn: estWinTurn === -1 ? null : estWinTurn + 1 }
+  return {
+    avgLore,
+    estWinTurn: estWinTurn === -1 ? null : estWinTurn + 1,
+    loreBands,
+    winTurnCdf: winTurnCdfArr,
+    winTurnPmf,
+    medianWinTurn,
+    neverWinRate,
+  }
 }
 
 // --- Constants ---
@@ -742,6 +1119,7 @@ const SAMPLE = `4 John Silver - Alien Pirate
 4 Cinderella - Dream Come True`
 
 const TURN_COLS = [1, 2, 3, 4, 5, 6]
+const SIM_TURNS = 12  // turns simulated in quest pressure / win turn
 
 // --- Component ---
 
@@ -770,7 +1148,7 @@ function decodeShareState() {
   } catch { return null }
 }
 
-export function DrawOddsPage() {
+export function DeckInsightsPage() {
   // Bootstrap: if a share URL is present, write its state into localStorage before
   // other state initializers read from it, then clear the hash.
   useState(() => {
@@ -789,6 +1167,7 @@ export function DrawOddsPage() {
 
   const [copied, setCopied] = useState(false)
   const [insightsOpen, setInsightsOpen] = useState(true)
+  const [mulliganOpen, setMulliganOpen] = useState(true)
   const [drawRatesOpen, setDrawRatesOpen] = useState(false)
   const [targetTurnOverrides, setTargetTurnOverrides] = useState({})
   const [targetedOddsOpen, setTargetedOddsOpen] = useState(true)
@@ -799,6 +1178,11 @@ export function DrawOddsPage() {
   const [maxMulligan, setMaxMulligan] = useState(() => lsGet('drawOdds.maxMulligan', 7))
   const [additionalDraws, setAdditionalDraws] = useState(() => lsGet('drawOdds.additionalDraws', 0))
   const [deckText, setDeckText] = useState(() => localStorage.getItem('drawOdds.deckText') ?? '')
+  const [debouncedDeckText, setDebouncedDeckText] = useState(deckText)
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedDeckText(deckText), 400)
+    return () => clearTimeout(id)
+  }, [deckText])
   const [groups, setGroups] = useState(() => lsGet('drawOdds.groups', []))
   const [scrySources, setScrySources] = useState(() => lsGet('drawOdds.scrySources', []))
   const nextGroupId = useRef(
@@ -874,11 +1258,29 @@ export function DrawOddsPage() {
     return map
   }, [allApiCards])
 
+  // Per-card strategic role (board development, removal, draw/ramp, song …) inferred
+  // from type + rules text, used by the Mulligan Advisor.
+  const roleMap = useMemo(() => {
+    const map = new Map()
+    for (const c of allApiCards) {
+      if (c.fullName) map.set(c.fullName.toLowerCase(), classifyCardRole(c))
+    }
+    return map
+  }, [allApiCards])
+
+  const colorMap = useMemo(() => {
+    const map = new Map()
+    for (const c of allApiCards) {
+      if (c.fullName) map.set(c.fullName.toLowerCase(), (c.color || '').toLowerCase())
+    }
+    return map
+  }, [allApiCards])
+
   const cardIndex = useMemo(() => buildCardIndex(allApiCards), [allApiCards])
 
   const legalityEntries = useMemo(() => {
     const entries = []
-    for (const raw of deckText.split('\n')) {
+    for (const raw of debouncedDeckText.split('\n')) {
       const line = raw.trim()
       if (!line) continue
       const m = line.match(/^(\d+)x?\s+(.+)$/i)
@@ -889,7 +1291,7 @@ export function DrawOddsPage() {
       entries.push({ name, count })
     }
     return entries
-  }, [deckText])
+  }, [debouncedDeckText])
 
   const legalityResults = useMemo(() => {
     return legalityEntries.map(entry => {
@@ -900,7 +1302,7 @@ export function DrawOddsPage() {
     })
   }, [legalityEntries, cardIndex])
 
-  const cards = useMemo(() => parseDeckList(deckText), [deckText])
+  const cards = useMemo(() => parseDeckList(debouncedDeckText), [debouncedDeckText])
   const totalCards = useMemo(() => cards.reduce((s, c) => s + c.count, 0), [cards])
 
   const brickability = useMemo(() => {
@@ -968,6 +1370,86 @@ export function DrawOddsPage() {
     return counts
   }, [cards, costMap])
 
+  // Per-cost inkability breakdown: for each ink cost, how many copies are inkable vs. not.
+  const curveByInkability = useMemo(() => {
+    const map = new Map() // cost → { inkable, nonInkable }
+    for (const card of cards) {
+      const key = card.name.toLowerCase()
+      const cost = costMap.get(key)
+      const inkable = inkwellMap.get(key)
+      if (cost == null || inkable === undefined) continue
+      if (!map.has(cost)) map.set(cost, { inkable: 0, nonInkable: 0 })
+      const bucket = map.get(cost)
+      if (inkable) bucket.inkable += card.count
+      else bucket.nonInkable += card.count
+    }
+    return map
+  }, [cards, costMap, inkwellMap])
+
+  // Ink color distribution across the deck.
+  const colorBalance = useMemo(() => {
+    if (cards.length === 0) return null
+    const counts = new Map() // color → { inkable, nonInkable, total }
+    let unknown = 0
+    for (const card of cards) {
+      const key = card.name.toLowerCase()
+      const color = colorMap.get(key)
+      const inkable = inkwellMap.get(key)
+      if (!color) { unknown += card.count; continue }
+      if (!counts.has(color)) counts.set(color, { inkable: 0, nonInkable: 0, total: 0 })
+      const bucket = counts.get(color)
+      bucket.total += card.count
+      if (inkable === false) bucket.nonInkable += card.count
+      else bucket.inkable += card.count
+    }
+    const total = cards.reduce((s, c) => s + c.count, 0)
+    const entries = [...counts.entries()]
+      .map(([color, v]) => ({ color, ...v, pct: v.total / total }))
+      .sort((a, b) => b.total - a.total)
+    // Classify: a color is a "splash" if it has fewer copies than 10% of the deck
+    // or fewer than 4 copies.
+    const splashThreshold = Math.max(4, Math.round(total * 0.10))
+    const mainColors = entries.filter(e => e.total >= splashThreshold)
+    const splashes   = entries.filter(e => e.total < splashThreshold)
+    return { entries, mainColors, splashes, total, unknown }
+  }, [cards, colorMap, inkwellMap])
+
+  // Lore density: distribution of lore values across characters and locations only.
+  const loreDensity = useMemo(() => {
+    if (cards.length === 0) return null
+    const byName = new Map()
+    for (const c of allApiCards) {
+      if (c.fullName) byName.set(c.fullName.toLowerCase(), c)
+    }
+    const buckets = new Map() // lore value → copy count
+    let totalQuesters = 0, totalLore = 0, unknownCount = 0
+    for (const card of cards) {
+      const api = byName.get(card.name.toLowerCase())
+      if (!api) continue
+      const type = api.type || ''
+      if (!/character|location/i.test(type)) continue
+      const lore = api.lore ?? 0
+      buckets.set(lore, (buckets.get(lore) || 0) + card.count)
+      totalQuesters += card.count
+      totalLore += lore * card.count
+      if (api.lore == null) unknownCount += card.count
+    }
+    if (totalQuesters === 0) return null
+    const avgLore = totalLore / totalQuesters
+    // Build ordered distribution: 0, 1, 2, 3, 4+
+    const distribution = [0, 1, 2, 3].map(v => ({
+      lore: v,
+      count: buckets.get(v) || 0,
+      pct: (buckets.get(v) || 0) / totalQuesters,
+    }))
+    const fourPlus = [...buckets.entries()]
+      .filter(([v]) => v >= 4)
+      .reduce((s, [, c]) => s + c, 0)
+    if (fourPlus > 0) distribution.push({ lore: '4+', count: fourPlus, pct: fourPlus / totalQuesters })
+    const questingCopies = totalQuesters - (buckets.get(0) || 0)
+    return { distribution, totalQuesters, questingCopies, avgLore, unknownCount }
+  }, [cards, allApiCards])
+
   // Curve probability: P(can play at least one card) for each turn T1-T8
   // Monte Carlo — accounts for mulligan strategy (keep playable, send back non-playable)
   const curveProbability = useMemo(() => {
@@ -1008,6 +1490,29 @@ export function DrawOddsPage() {
     if (questDeckCards.length === 0) return null
     return questPressureSim(questDeckCards)
   }, [questDeckCards])
+
+  const keywordAnalysis = useMemo(() =>
+    buildKeywordAnalysis(cards, allApiCards)
+  , [cards, allApiCards])
+
+  // Lowercase names of Shift cards whose base is in the deck (a live Shift line).
+  const shiftLineNames = useMemo(() => {
+    const set = new Set()
+    for (const s of keywordAnalysis?.shifts ?? []) {
+      if (s.covered) set.add(s.name.toLowerCase())
+    }
+    return set
+  }, [keywordAnalysis])
+
+  const mulliganAdvice = useMemo(() => {
+    if (cards.length === 0) return null
+    const medianCost = brickability?.medianCost ?? 3
+    return buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize, shiftLineNames)
+  }, [cards, costMap, inkwellMap, roleMap, brickability, deckSize, shiftLineNames])
+
+  const drawEffects = useMemo(() =>
+    buildDrawEffects(cards, allApiCards)
+  , [cards, allApiCards])
 
   const N = deckSize
 
@@ -1099,7 +1604,7 @@ export function DrawOddsPage() {
           Deck Insights
         </h1>
         <p className="text-gray-500">
-          Paste a deck list to analyse your curve, consistency, lore pressure, and draw odds.
+          Paste a deck list to analyse your curve, consistency, lore pressure, keyword synergies, mulligan strategy, and draw odds.
         </p>
       </div>
 
@@ -1482,7 +1987,7 @@ export function DrawOddsPage() {
           </button>
           {insightsOpen && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
 
-          {/* Ink Curve tile */}
+          {/* Ink Curve tile — stacked inkable / non-inkable bars */}
           {curveCounts.size > 0 && (() => {
             const costs = [...curveCounts.keys()].sort((a, b) => a - b)
             const maxCount = Math.max(...curveCounts.values())
@@ -1490,6 +1995,7 @@ export function DrawOddsPage() {
               [...curveCounts.entries()].reduce((s, [c, n]) => s + c * n, 0) /
               [...curveCounts.values()].reduce((s, n) => s + n, 0)
             ).toFixed(1)
+            const hasNonInkable = [...curveByInkability.values()].some(v => v.nonInkable > 0)
             return (
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -1499,19 +2005,32 @@ export function DrawOddsPage() {
                 <div className="flex items-end gap-1.5">
                   {costs.map(cost => {
                     const count = curveCounts.get(cost)
-                    const heightPct = count / maxCount
+                    const split = curveByInkability.get(cost) || { inkable: count, nonInkable: 0 }
+                    const totalH = Math.round((count / maxCount) * 52)
+                    const nonInkH = count > 0 ? Math.round((split.nonInkable / count) * totalH) : 0
+                    const inkH = totalH - nonInkH
                     return (
                       <div key={cost} className="flex flex-col items-center gap-0.5 flex-1">
                         <span className="text-[10px] font-medium text-gray-600">{count}</span>
-                        <div
-                          className="w-full bg-gray-900 rounded-t min-h-[3px]"
-                          style={{ height: `${Math.round(heightPct * 52)}px` }}
-                        />
+                        <div className="w-full flex flex-col-reverse min-h-[3px]" style={{ height: `${totalH}px` }}>
+                          {inkH > 0 && <div className={`w-full bg-gray-900 ${nonInkH === 0 ? 'rounded-t' : ''}`} style={{ height: `${inkH}px` }} />}
+                          {nonInkH > 0 && <div className="w-full bg-orange-400 rounded-t" style={{ height: `${nonInkH}px` }} />}
+                        </div>
                         <span className="text-[10px] text-gray-500">{cost}</span>
                       </div>
                     )
                   })}
                 </div>
+                {hasNonInkable && (
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="flex items-center gap-1 text-[10px] text-gray-400">
+                      <span className="inline-block w-2 h-2 rounded-sm bg-gray-900" /> inkable
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] text-orange-500">
+                      <span className="inline-block w-2 h-2 rounded-sm bg-orange-400" /> non-inkable
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })()}
@@ -1610,18 +2129,137 @@ export function DrawOddsPage() {
             </div>
           )}
 
+          {/* Lore Density tile */}
+          {loreDensity && (() => {
+            const { distribution, totalQuesters, questingCopies, avgLore } = loreDensity
+            const maxCount = Math.max(...distribution.map(d => d.count), 1)
+            const loreBarColor = (lore) => {
+              if (lore === 0)   return 'bg-gray-200'
+              if (lore === 1)   return 'bg-blue-300'
+              if (lore === 2)   return 'bg-blue-500'
+              if (lore === 3)   return 'bg-blue-700'
+              return 'bg-blue-900'
+            }
+            const loreTextColor = (lore) => {
+              if (lore === 0)   return 'text-gray-400'
+              if (lore === 1)   return 'text-blue-400'
+              if (lore === 2)   return 'text-blue-500'
+              if (lore === 3)   return 'text-blue-700'
+              return 'text-blue-900'
+            }
+            const questingPct = totalQuesters > 0 ? Math.round((questingCopies / totalQuesters) * 100) : 0
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Lore Density</h2>
+                  <span className="text-xs text-gray-400">avg {avgLore.toFixed(2)} ◆ per quester</span>
+                </div>
+                <div className="flex items-end gap-1.5 mb-3">
+                  {distribution.map(({ lore, count, pct }) => (
+                    <div key={lore} className="flex flex-col items-center gap-0.5 flex-1">
+                      <span className={`text-[10px] font-semibold tabular-nums ${loreTextColor(lore)}`}>{count}</span>
+                      <div
+                        className={`w-full rounded-t min-h-[3px] ${loreBarColor(lore)}`}
+                        style={{ height: `${Math.max(3, Math.round((count / maxCount) * 52))}px` }}
+                      />
+                      <span className="text-[10px] text-gray-500">{lore}◆</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[10px] text-gray-500 space-y-0.5">
+                  <div className="flex justify-between">
+                    <span>Questing characters &amp; locations</span>
+                    <span className="tabular-nums font-medium text-gray-700">{questingCopies} / {totalQuesters} ({questingPct}%)</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Ink Color Balance tile */}
+          {colorBalance && colorBalance.entries.length > 0 && (() => {
+            const INK_CSS = {
+              amber:    { bar: 'bg-amber-400',    text: 'text-amber-700',    dot: 'bg-amber-400'    },
+              amethyst: { bar: 'bg-purple-500',   text: 'text-purple-700',   dot: 'bg-purple-500'   },
+              emerald:  { bar: 'bg-emerald-500',  text: 'text-emerald-700',  dot: 'bg-emerald-500'  },
+              ruby:     { bar: 'bg-red-500',      text: 'text-red-700',      dot: 'bg-red-500'      },
+              sapphire: { bar: 'bg-blue-500',     text: 'text-blue-700',     dot: 'bg-blue-500'     },
+              steel:    { bar: 'bg-slate-500',    text: 'text-slate-700',    dot: 'bg-slate-500'    },
+            }
+            const { entries, mainColors, splashes, total } = colorBalance
+            const maxTotal = Math.max(...entries.map(e => e.total))
+            const isMono = mainColors.length === 1 && splashes.length === 0
+            const label = isMono ? 'Mono' : mainColors.length >= 2 && splashes.length === 0
+              ? `${mainColors.length}-Color`
+              : splashes.length > 0 ? `${mainColors.length}-Color + splash` : 'Multi-Color'
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ink Color Balance</h2>
+                  <span className="text-xs text-gray-400">{label}</span>
+                </div>
+                <div className="space-y-2">
+                  {entries.map(({ color, total: ct, nonInkable, pct }) => {
+                    const css = INK_CSS[color] || { bar: 'bg-gray-400', text: 'text-gray-600', dot: 'bg-gray-400' }
+                    const barW = Math.round((ct / maxTotal) * 100)
+                    const nonInkW = ct > 0 ? Math.round((nonInkable / ct) * barW) : 0
+                    const isSplash = splashes.some(s => s.color === color)
+                    return (
+                      <div key={color}>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <img src={`/ink/${color}.png`} alt={color} className="w-3.5 h-3.5 shrink-0" />
+                          <span className={`text-[11px] font-medium capitalize ${isSplash ? 'text-gray-400' : 'text-gray-700'}`}>
+                            {color}{isSplash ? ' (splash)' : ''}
+                          </span>
+                          <span className="ml-auto text-[10px] text-gray-400 tabular-nums">
+                            {ct} cop{ct === 1 ? 'y' : 'ies'} · {Math.round(pct * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full flex">
+                            <div className={`h-full ${css.bar} rounded-full`} style={{ width: `${barW - nonInkW}%` }} />
+                            {nonInkW > 0 && <div className="h-full bg-orange-300" style={{ width: `${nonInkW}%` }} />}
+                          </div>
+                        </div>
+                        {nonInkable > 0 && (
+                          <div className="text-[10px] text-orange-500 mt-0.5">
+                            {nonInkable} non-inkable · can't use as ink if flooded
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {colorBalance.unknown > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100">
+                    {colorBalance.unknown} cop{colorBalance.unknown === 1 ? 'y' : 'ies'} not in database — color data may be incomplete.
+                  </p>
+                )}
+                {splashes.length > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100">
+                    Splash colors (&lt;{Math.round(total * 0.10)}–4 copies) may be inconsistent to draw.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
+
           {/* Quest Pressure tile */}
           {questPressure && (() => {
-            const { avgLore, estWinTurn } = questPressure
-            const turns = [1, 2, 3, 4, 5, 6, 7, 8]
-            const maxLore = Math.max(20, ...avgLore)
+            const { avgLore, estWinTurn, loreBands } = questPressure
+            const turns = Array.from({ length: SIM_TURNS }, (_, i) => i + 1)
+            const maxLore = Math.max(20, ...avgLore, ...loreBands.map(b => b.p90))
             const W = 300, H = 96, padL = 22, padR = 6, padT = 6, padB = 18
             const cW = W - padL - padR
             const cH = H - padT - padB
-            const tx = (i) => padL + (i / 7) * cW
+            const tx = (i) => padL + (i / (SIM_TURNS - 1)) * cW
             const ty = (v) => padT + cH - (v / maxLore) * cH
             const points = avgLore.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(' ')
-            const callouts = [3, 5, 7].map(i => ({ turn: i + 1, lore: avgLore[i].toFixed(1) }))
+            // p10–p90 band: trace p90 left→right, then p10 right→left to close the area.
+            const bandTop = loreBands.map((b, i) => `${tx(i).toFixed(1)},${ty(b.p90).toFixed(1)}`)
+            const bandBot = loreBands.map((b, i) => `${tx(i).toFixed(1)},${ty(b.p10).toFixed(1)}`).reverse()
+            const bandPath = `${bandTop.join(' ')} ${bandBot.join(' ')}`
+            const callouts = [3, 7, 11].map(i => ({ turn: i + 1, lore: avgLore[i].toFixed(1) }))
             return (
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-1">
@@ -1654,11 +2292,239 @@ export function DrawOddsPage() {
                   {turns.map((t, i) => (
                     <text key={t} x={tx(i).toFixed(1)} y={H - padB + 9} textAnchor="middle" fontSize="6" fill="#9ca3af">T{t}</text>
                   ))}
+                  <polygon points={bandPath} fill="#1d4ed8" fillOpacity="0.12" stroke="none" />
                   <polyline points={points} fill="none" stroke="#1d4ed8" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
                   {avgLore.map((v, i) => (
                     <circle key={i} cx={tx(i).toFixed(1)} cy={ty(v).toFixed(1)} r="2" fill="#1d4ed8" />
                   ))}
                 </svg>
+                <p className="text-[10px] text-gray-400 mt-1">Line = average · shaded = 10th–90th percentile</p>
+              </div>
+            )
+          })()}
+
+          {/* Win Turn tile */}
+          {questPressure && (() => {
+            const { winTurnCdf, medianWinTurn, neverWinRate } = questPressure
+            const turns = Array.from({ length: SIM_TURNS - 4 }, (_, i) => i + 5)
+            const barColor = (p) => {
+              if (p >= 0.75) return 'bg-green-500'
+              if (p >= 0.50) return 'bg-yellow-400'
+              if (p >= 0.25) return 'bg-orange-400'
+              return 'bg-red-500'
+            }
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Win Turn</h2>
+                  {medianWinTurn != null
+                    ? <span className="text-xs text-gray-400">median ~T{medianWinTurn}</span>
+                    : <span className="text-xs text-gray-400">&lt;50% by T{SIM_TURNS}</span>
+                  }
+                </div>
+                <div className="flex items-end gap-1.5">
+                  {turns.map((t) => {
+                    const p = winTurnCdf[t - 1]
+                    return (
+                      <div key={t} className="flex flex-col items-center gap-0.5 flex-1">
+                        <span className="text-[10px] font-semibold tabular-nums text-gray-600">
+                          {Math.round(p * 100)}%
+                        </span>
+                        <div className="relative w-full" style={{ height: '52px' }}>
+                          <div
+                            className="absolute w-full border-t border-dashed border-gray-300"
+                            style={{ bottom: `${0.50 * 52}px` }}
+                          />
+                          <div
+                            className={`absolute bottom-0 w-full rounded-t ${barColor(p)}`}
+                            style={{ height: `${Math.max(2, p * 52)}px` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-gray-500">T{t}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2">
+                  P(reach 20 lore by turn) · dashed = 50%
+                  {neverWinRate > 0.005 && <> · {pct(neverWinRate)} not by T{SIM_TURNS}</>}
+                </p>
+              </div>
+            )
+          })()}
+
+          {/* Draw Effects tile */}
+          {drawEffects && (() => {
+            const { drawCards, rampCards, discardRecoveryCards, scryCards, totalDrawCopies, totalRampCopies, totalDiscardCopies, totalScryCopies, drawPotential, hasVariableDraw } = drawEffects
+            const summaryParts = [
+              totalDrawCopies > 0 && `${totalDrawCopies} draw`,
+              totalScryCopies > 0 && `${totalScryCopies} scry`,
+              totalDiscardCopies > 0 && `${totalDiscardCopies} recovery`,
+              totalRampCopies > 0 && `${totalRampCopies} ramp`,
+            ].filter(Boolean)
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draw Effects</h2>
+                  <span className="text-xs text-gray-400">{summaryParts.join(' · ')}</span>
+                </div>
+
+                <div className="space-y-3">
+                  {drawCards.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Draw</div>
+                      <div className="space-y-1">
+                        {drawCards.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 truncate">
+                              <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
+                            </span>
+                            <span className="text-[10px] text-blue-500 shrink-0 ml-2">
+                              {c.variable ? 'variable' : `+${c.drawCount} card${c.drawCount !== 1 ? 's' : ''}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      {drawPotential > 0 && (
+                        <p className="text-[10px] text-gray-400 mt-1.5">
+                          {hasVariableDraw ? 'At least ' : 'Up to '}
+                          <span className="font-semibold text-gray-600">{drawPotential}</span> extra cards if all copies played
+                          {hasVariableDraw && ' (plus variable draws)'}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {scryCards.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Scry / Tutor</div>
+                      <div className="space-y-1">
+                        {scryCards.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 truncate">
+                              <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
+                            </span>
+                            <span className="text-[10px] text-indigo-500 shrink-0 ml-2">
+                              {c.lookCount != null ? `look ${c.lookCount}` : 'look'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {discardRecoveryCards.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Discard Recovery</div>
+                      <div className="space-y-1">
+                        {discardRecoveryCards.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 truncate">
+                              <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
+                            </span>
+                            <span className="text-[10px] text-violet-500 shrink-0 ml-2">from discard</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {rampCards.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Ramp</div>
+                      <div className="space-y-1">
+                        {rampCards.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 truncate">
+                              <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
+                            </span>
+                            <span className="text-[10px] text-green-600 shrink-0 ml-2">+ink</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {drawCards.length === 0 && scryCards.length === 0 && discardRecoveryCards.length === 0 && (
+                    <p className="text-xs text-gray-400 italic">No draw effects detected.</p>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Keyword Analysis tile */}
+          {keywordAnalysis && keywordAnalysis.density.length > 0 && (() => {
+            const { density, shifts, singers, totalSongs, totalSingers, avgSingerLevel, unsingSongs, maxSingingPower } = keywordAnalysis
+            const uncoveredShifts = shifts.filter(s => !s.covered)
+            const coveredShifts = shifts.filter(s => s.covered)
+            return (
+              <div className="border border-gray-200 rounded-lg p-4 sm:col-span-2">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Keyword Analysis</h2>
+                  <span className="text-xs text-gray-400">{density.length} keyword{density.length !== 1 ? 's' : ''} found</span>
+                </div>
+
+                {/* Keyword density pills */}
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {density.map(({ keyword, count }) => (
+                    <span key={keyword} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-xs font-medium text-gray-700">
+                      {keyword}
+                      <span className="text-gray-400 tabular-nums">×{count}</span>
+                    </span>
+                  ))}
+                </div>
+
+                {/* Singer ↔ Song balance */}
+                {totalSongs > 0 && (
+                  <div className={`rounded-md p-3 mb-3 text-xs ${unsingSongs.length > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-100'}`}>
+                    <div className="flex flex-wrap gap-x-6 gap-y-1 mb-1">
+                      <span><span className="font-semibold text-gray-700">{totalSongs}</span> song{totalSongs === 1 ? '' : 's'}</span>
+                      {totalSingers > 0 && <span><span className="font-semibold text-gray-700">{totalSingers}</span> Singer cop{totalSingers === 1 ? 'y' : 'ies'}{avgSingerLevel ? ` (avg Singer ${avgSingerLevel})` : ''}</span>}
+                      <span className="text-gray-500">max singing power: <span className="font-semibold text-gray-700">{maxSingingPower}⬡</span></span>
+                    </div>
+                    {unsingSongs.length > 0 && (
+                      <p className="text-amber-700 mt-1">
+                        {unsingSongs.map(s => `${s.name} (${s.cost}⬡)`).join(', ')} can&apos;t be sung — no character with cost or Singer level ≥ {Math.min(...unsingSongs.map(s => s.cost))}.
+                      </p>
+                    )}
+                    {unsingSongs.length === 0 && totalSingers > 0 && singers.length > 0 && (
+                      <p className="text-gray-500">
+                        Highest Singer: {singers[0].name} (Singer {singers[0].singerLevel})
+                        {' · '}most expensive song: {[...keywordAnalysis.songs].sort((a,b) => (b.cost??0) - (a.cost??0))[0]?.name} ({[...keywordAnalysis.songs].sort((a,b) => (b.cost??0) - (a.cost??0))[0]?.cost}⬡)
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Shift coverage */}
+                {shifts.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Shift Coverage</div>
+                    <div className="space-y-1">
+                      {uncoveredShifts.map(s => (
+                        <div key={s.name} className="flex items-start gap-2 text-xs">
+                          <span className="text-red-500 mt-px shrink-0">✗</span>
+                          <div>
+                            <span className="font-medium text-gray-800">{s.name}</span>
+                            <span className="text-gray-400"> (Shift {s.shiftCost})</span>
+                            <span className="text-red-600"> — no &ldquo;{s.baseName}&rdquo; base in deck</span>
+                          </div>
+                        </div>
+                      ))}
+                      {coveredShifts.map(s => (
+                        <div key={s.name} className="flex items-start gap-2 text-xs">
+                          <span className="text-green-500 mt-px shrink-0">✓</span>
+                          <div>
+                            <span className="font-medium text-gray-800">{s.name}</span>
+                            <span className="text-gray-400"> (Shift {s.shiftCost})</span>
+                            <span className="text-gray-500"> — {s.baseCopies} base cop{s.baseCopies === 1 ? 'y' : 'ies'} in deck</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })()}
@@ -1666,6 +2532,76 @@ export function DrawOddsPage() {
           </div>}
         </div>
       )}
+
+      {/* Mulligan Advisor — collapsible keep/toss guidance */}
+      {mulliganAdvice && (() => {
+        const { keep, flexible, toss, keepThreshold, keepCopies, pAtLeast1, pAtLeast2 } = mulliganAdvice
+        const tiers = [
+          { key: 'keep', label: 'Keep', cards: keep, dot: 'bg-green-500', text: 'text-green-700', border: 'border-green-200', bg: 'bg-green-50' },
+          { key: 'flexible', label: 'Flexible', cards: flexible, dot: 'bg-yellow-400', text: 'text-yellow-700', border: 'border-yellow-200', bg: 'bg-yellow-50' },
+          { key: 'toss', label: 'Toss', cards: toss, dot: 'bg-red-500', text: 'text-red-700', border: 'border-red-200', bg: 'bg-red-50' },
+        ]
+        return (
+          <div className="mb-4">
+            <button
+              onClick={() => setMulliganOpen(o => !o)}
+              className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            >
+              <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Mulligan Advisor</span>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${mulliganOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {mulliganOpen && <div className="mt-3">
+              <div className="border border-gray-200 rounded-lg p-4 mb-3 bg-gray-50">
+                <p className="text-sm text-gray-700">
+                  Aim to keep an opening hand with <span className="font-semibold">at least one early play</span> (cost ≤ {keepThreshold})
+                  and enough inkable cards to ramp. Throw back slow, high-cost cards unless your hand already curves into them.
+                </p>
+                <div className="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-xs text-gray-500">
+                  <span><span className="font-semibold text-gray-700">{keepCopies}</span> keep-tier copies in deck</span>
+                  <span>P(≥1 in opener): <span className={`font-semibold tabular-nums ${oddsColor(pAtLeast1)}`}>{pct(pAtLeast1)}</span></span>
+                  <span>P(≥2 in opener): <span className={`font-semibold tabular-nums ${oddsColor(pAtLeast2)}`}>{pct(pAtLeast2)}</span></span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {tiers.map(tier => (
+                  <div key={tier.key} className={`border ${tier.border} rounded-lg overflow-hidden`}>
+                    <div className={`flex items-center justify-between px-3 py-2 ${tier.bg} border-b ${tier.border}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${tier.dot}`} />
+                        <span className={`text-xs font-semibold uppercase tracking-wide ${tier.text}`}>{tier.label}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 tabular-nums">
+                        {tier.cards.reduce((s, c) => s + c.count, 0)} cop{tier.cards.reduce((s, c) => s + c.count, 0) === 1 ? 'y' : 'ies'}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {tier.cards.length === 0 && (
+                        <div className="px-3 py-3 text-[11px] text-gray-400 italic">No cards</div>
+                      )}
+                      {tier.cards.map(card => (
+                        <div key={card.name} className="px-3 py-2" title={card.reason}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs text-gray-800 truncate">
+                              <span className="text-gray-400 tabular-nums">{card.count}×</span> {card.name}
+                            </span>
+                            <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
+                              {card.cost == null ? '?' : `${card.cost}⬡`}
+                              {card.inkable === false && <span className="text-orange-500 ml-0.5" title="Non-inkable">◇</span>}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{card.reason}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>}
+          </div>
+        )
+      })()}
 
       {/* Draw Rates — collapsible results table */}
       {cards.length > 0 && (
@@ -2090,7 +3026,14 @@ export function DrawOddsPage() {
             <div>
               <h3 className="font-semibold text-gray-800 mb-1">Ink Curve</h3>
               <p>
-                A bar chart showing how many cards in your deck cost each amount of ink, alongside the average cost across all cards. This gives you a quick read on whether your deck is aggressive (lots of cheap cards), controlling (heavier top end), or balanced in the middle. The average cost is weighted by copy count, so four 1-cost cards pull the average down more than one 4-cost card pulls it up.
+                A bar chart showing how many cards in your deck cost each amount of ink, alongside the average cost across all cards. Each bar is now split into two segments: the dark portion represents inkable copies at that cost, and the orange portion represents non-inkable copies. This makes it easy to spot cost brackets where you&apos;re committed to playing into a specific position — cards that can&apos;t be inked and have no other use if your curve stalls.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Ink Color Balance</h3>
+              <p>
+                A per-color breakdown of how many copies in your deck belong to each ink color, shown as proportional bars. Each bar is split to indicate how many of that color&apos;s cards are non-inkable (orange segment) — which matters because non-inkable cards of your secondary color can sit stranded in hand if you&apos;re color-flooded. Colors with very few copies (below roughly 10% of the deck or fewer than 4 copies) are marked as splashes and may be inconsistent to draw. The summary label classifies your deck as Mono, 2-Color, or multi-color with splashes.
               </p>
             </div>
 
@@ -2116,10 +3059,52 @@ export function DrawOddsPage() {
             </div>
 
             <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Lore Density</h3>
+              <p>
+                A bar chart showing how many copies of your characters and locations produce each lore value per quest. Cards with 0◆ sit on the board and challenge but never advance your win condition on their own; 1◆ cards are steady; 2◆ and 3◆ cards are your fastest lore engines. The summary row shows what fraction of your board-development cards actually quest, which is a quick read on whether you&apos;re building a racing deck or a defensive one.
+              </p>
+            </div>
+
+            <div>
               <h3 className="font-semibold text-gray-800 mb-1">Quest Pressure</h3>
               <p>
-                A simulation of how much lore your deck generates on average across turns T1–T8, played out across thousands of games. Each simulated game follows the basic rules of Lorcana: characters enter play "dry" and can't quest until the following turn, locations generate passive lore each turn automatically, and the ink system is modeled so you're spending the right amount each turn. The simulator plays greedily — it always tries to maximize lore gained — so the numbers represent a best-case ceiling rather than a conservative floor. The dashed red line at 20 lore marks the win condition. The average win turn is shown in the top-right corner.
+                A simulation of how much lore your deck generates on average across turns T1–T12, played out across thousands of games. Each simulated game follows the basic rules of Lorcana: characters enter play "dry" and can't quest until the following turn, locations generate passive lore each turn automatically, and the ink system is modeled so you're spending the right amount each turn. The simulator plays greedily — it always tries to maximize lore gained — so the numbers represent a best-case ceiling rather than a conservative floor. The dashed red line at 20 lore marks the win condition. The average win turn is shown in the top-right corner. The shaded band around the line shows the 10th-to-90th percentile range across all simulated games — a wide band means your lore output swings a lot game to game, a narrow band means it's consistent.
               </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Win Turn</h3>
+              <p>
+                Built from the same Quest Pressure simulation, this shows the probability that your deck has reached the 20-lore win condition by each turn — so the T7 bar answers "in what fraction of games have I already won by turn 7?" The dashed line marks 50%, and the median win turn (the first turn you win in at least half of games) is called out in the top-right. If a meaningful share of games never reach 20 lore by turn 8, that percentage is noted too. Because the underlying simulation plays greedily for maximum lore, treat these as an optimistic ceiling on your clock.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Mulligan Advisor</h3>
+              <p>
+                A keep-or-toss guide for your opening hand, sorted into three tiers. Cost thresholds are derived from your deck's own curve (its median ink cost) so the advice adapts to your archetype — an aggro deck wants to keep almost only its cheapest cards, while a control deck can afford to hold mid-cost cards. On top of cost, the advisor reads each card's <span className="font-medium">role</span> from its type and rules text, because a cheap card isn't automatically a good keep:
+              </p>
+              <ul className="mt-2 space-y-1.5 list-disc list-inside text-gray-500">
+                <li><span className="font-medium text-gray-700">Characters &amp; locations</span> are real board development — the cheap ones are your best keeps.</li>
+                <li><span className="font-medium text-gray-700">Card draw &amp; ink ramp</span> smooth your hand, so cheap ones are worth keeping even though they don't develop the board.</li>
+                <li><span className="font-medium text-gray-700">Removal and other reactive actions</span> are dead in hand without a target, so they stay flexible rather than auto-keep.</li>
+                <li><span className="font-medium text-gray-700">Songs</span> are treated as later payoffs you'll sing with a character, not opening plays — so a cheap-on-paper song is demoted out of Keep.</li>
+              </ul>
+              <p className="mt-2">
+                Non-inkable cards (marked ◇) lean toward tossing because they can't fall back to being ink. The summary at the top shows how likely your opening seven is to contain one or two keep-tier cards. One honest caveat: this reads card <em>function</em>, not strategy — it can tell a song is a payoff, but it doesn't know which specific cards combo together, so treat its calls on niche combo pieces as a starting point, not gospel.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Keyword Analysis</h3>
+              <p>
+                A cross-card keyword breakdown with two relationship checks:
+              </p>
+              <ul className="mt-2 space-y-1.5 list-disc list-inside text-gray-500">
+                <li><span className="font-medium text-gray-700">Keyword density</span> — total copies of each tracked keyword (Shift, Singer, Bodyguard, Rush, Evasive, Ward, Reckless, Support, Challenger) across the deck, so you can see at a glance how keyword-heavy your strategy is.</li>
+                <li><span className="font-medium text-gray-700">Singer–song balance</span> — total Singer characters vs. total songs, with the average Singer level and the gap between your cheapest singer and most expensive song. A Singer 4 character can&apos;t pay for a 6-cost song; mismatches are flagged in amber.</li>
+                <li><span className="font-medium text-gray-700">Shift coverage</span> — for each Shift card in your deck, checks whether a lower-cost version of that character (same name before the dash) is also in the deck. A missing base is flagged in red, since Shifting without a target means always hard-casting at full cost.</li>
+              </ul>
             </div>
 
             <div>

@@ -1016,7 +1016,7 @@ function decodeShareState() {
   } catch { return null }
 }
 
-export function DrawOddsPage() {
+export function DeckInsightsPage() {
   // Bootstrap: if a share URL is present, write its state into localStorage before
   // other state initializers read from it, then clear the hash.
   useState(() => {
@@ -1459,7 +1459,7 @@ export function DrawOddsPage() {
           Deck Insights
         </h1>
         <p className="text-gray-500">
-          Paste a deck list to analyse your curve, consistency, lore pressure, and draw odds.
+          Paste a deck list to analyse your curve, consistency, lore pressure, keyword synergies, mulligan strategy, and draw odds.
         </p>
       </div>
 

@@ -4,7 +4,7 @@ import { HomePage } from './pages/HomePage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { TournamentCutPage } from './pages/TournamentCutPage'
 import { LimitedGuidePage } from './pages/LimitedGuidePage'
-import { DrawOddsPage } from './pages/DrawOddsPage'
+import { DeckInsightsPage } from './pages/DrawOddsPage'
 import { GameScraperPage } from './pages/GameScraperPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { GameHistoryDetailPage } from './pages/GameHistoryDetailPage'
@@ -35,7 +35,7 @@ export default function App() {
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
         <Route path="/cut-calculator" element={<TournamentCutPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
-        <Route path="/deck-insights" element={<DrawOddsPage />} />
+        <Route path="/deck-insights" element={<DeckInsightsPage />} />
         <Route path="/replay-analyzer" element={<Navigate to="/gamelog-analyzer" replace />} />
         <Route path="/game-scraper" element={<GameScraperPage />} />
         <Route path="/library" element={<LibraryPage />} />

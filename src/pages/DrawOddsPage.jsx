@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useCards } from '../hooks/useCards'
 
 // --- Legality constants ---
@@ -1046,6 +1046,11 @@ export function DrawOddsPage() {
   const [maxMulligan, setMaxMulligan] = useState(() => lsGet('drawOdds.maxMulligan', 7))
   const [additionalDraws, setAdditionalDraws] = useState(() => lsGet('drawOdds.additionalDraws', 0))
   const [deckText, setDeckText] = useState(() => localStorage.getItem('drawOdds.deckText') ?? '')
+  const [debouncedDeckText, setDebouncedDeckText] = useState(deckText)
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedDeckText(deckText), 400)
+    return () => clearTimeout(id)
+  }, [deckText])
   const [groups, setGroups] = useState(() => lsGet('drawOdds.groups', []))
   const [scrySources, setScrySources] = useState(() => lsGet('drawOdds.scrySources', []))
   const nextGroupId = useRef(
@@ -1143,7 +1148,7 @@ export function DrawOddsPage() {
 
   const legalityEntries = useMemo(() => {
     const entries = []
-    for (const raw of deckText.split('\n')) {
+    for (const raw of debouncedDeckText.split('\n')) {
       const line = raw.trim()
       if (!line) continue
       const m = line.match(/^(\d+)x?\s+(.+)$/i)
@@ -1154,7 +1159,7 @@ export function DrawOddsPage() {
       entries.push({ name, count })
     }
     return entries
-  }, [deckText])
+  }, [debouncedDeckText])
 
   const legalityResults = useMemo(() => {
     return legalityEntries.map(entry => {
@@ -1165,7 +1170,7 @@ export function DrawOddsPage() {
     })
   }, [legalityEntries, cardIndex])
 
-  const cards = useMemo(() => parseDeckList(deckText), [deckText])
+  const cards = useMemo(() => parseDeckList(debouncedDeckText), [debouncedDeckText])
   const totalCards = useMemo(() => cards.reduce((s, c) => s + c.count, 0), [cards])
 
   const brickability = useMemo(() => {

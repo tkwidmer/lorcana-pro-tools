@@ -571,7 +571,11 @@ function classifyCardRole(apiCard) {
 // Cost thresholds are derived from the deck's own curve (median cost) so the advice
 // scales from aggro to control; card role then refines the tier so cheap-but-conditional
 // cards (songs, removal, generic actions) aren't blindly kept just for being cheap.
-function buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize) {
+function buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize, shiftLineNames) {
+  // Lowercase set of Shift cards whose base version is also in the deck — keeping
+  // these in the opener enables a turn-cheaper Shift play, so they're worth holding
+  // even when their printed cost would otherwise read as too slow.
+  const shiftLine = shiftLineNames || new Set()
   // Keep cards you can deploy by the early turns; toss cards too slow to matter in the opener.
   const keepThreshold = Math.max(2, Math.min(3, medianCost))
   const tossThreshold = Math.max(5, medianCost + 2)
@@ -612,11 +616,17 @@ function buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, de
       if (cost <= keepThreshold) { tier = 'flexible'; reason = `${cost}-cost ${kind} — situational, no board presence` }
       else { tier = 'toss'; reason = `${cost}-cost ${kind} — slow with no board presence` }
     }
+    // A Shift card with its base in the deck is part of a Shift line — a key win
+    // condition you can deploy a turn early. Don't toss it; hold it as flexible.
+    if (tier === 'toss' && shiftLine.has(key)) {
+      tier = 'flexible'
+      reason = `${cost}-cost Shift — part of a Shift line; hold to enable a cheaper play`
+    }
     // Non-inkable cards can't fall back to being ink. Note it, and nudge non-developing
     // borderline cards further toward tossing.
     if (inkable === false) {
       reason += ' · non-inkable'
-      if (tier === 'flexible' && !role.develops && cost > keepThreshold) tier = 'toss'
+      if (tier === 'flexible' && !role.develops && !shiftLine.has(key) && cost > keepThreshold) tier = 'toss'
     }
     const entry = { ...card, cost, inkable, reason }
     if (tier === 'keep') keep.push(entry)
@@ -1481,15 +1491,24 @@ export function DeckInsightsPage() {
     return questPressureSim(questDeckCards)
   }, [questDeckCards])
 
-  const mulliganAdvice = useMemo(() => {
-    if (cards.length === 0) return null
-    const medianCost = brickability?.medianCost ?? 3
-    return buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize)
-  }, [cards, costMap, inkwellMap, roleMap, brickability, deckSize])
-
   const keywordAnalysis = useMemo(() =>
     buildKeywordAnalysis(cards, allApiCards)
   , [cards, allApiCards])
+
+  // Lowercase names of Shift cards whose base is in the deck (a live Shift line).
+  const shiftLineNames = useMemo(() => {
+    const set = new Set()
+    for (const s of keywordAnalysis?.shifts ?? []) {
+      if (s.covered) set.add(s.name.toLowerCase())
+    }
+    return set
+  }, [keywordAnalysis])
+
+  const mulliganAdvice = useMemo(() => {
+    if (cards.length === 0) return null
+    const medianCost = brickability?.medianCost ?? 3
+    return buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize, shiftLineNames)
+  }, [cards, costMap, inkwellMap, roleMap, brickability, deckSize, shiftLineNames])
 
   const drawEffects = useMemo(() =>
     buildDrawEffects(cards, allApiCards)

@@ -476,9 +476,24 @@ function buildDrawEffects(cards, allApiCards) {
     ).toLowerCase()
 
     if (role.isDraw) {
+      // A fixed draw ("draw 2 cards") parses to a number; conditional or open-ended
+      // draws ("draw cards until …", "draw a card for each …", "up to") have no fixed
+      // count, so mark them variable rather than defaulting to 1.
       const numMatch = text.match(/draws? (\d+) cards?/)
-      const drawCount = numMatch ? parseInt(numMatch[1]) : 1
-      drawCards.push({ name: card.name, copies: card.count, drawCount })
+      const isVariable = /draws? cards? until/.test(text)
+        || /draws? .*for each/.test(text)
+        || /draws? cards? equal to/.test(text)
+        || /draws? up to/.test(text)
+      let drawCount, variable = false
+      if (numMatch) {
+        drawCount = parseInt(numMatch[1])
+      } else if (isVariable) {
+        drawCount = null
+        variable = true
+      } else {
+        drawCount = 1
+      }
+      drawCards.push({ name: card.name, copies: card.count, drawCount, variable })
     }
     if (role.isRamp) {
       rampCards.push({ name: card.name, copies: card.count })
@@ -504,13 +519,15 @@ function buildDrawEffects(cards, allApiCards) {
   const totalDiscardCopies = discardRecoveryCards.reduce((s, c) => s + c.copies, 0)
   const totalScryCopies = scryCards.reduce((s, c) => s + c.copies, 0)
   // Weighted draw potential: if every draw card were played once, how many extra cards?
-  const drawPotential = drawCards.reduce((s, c) => s + c.copies * c.drawCount, 0)
+  // Variable draws have no fixed count, so they're excluded from this floor estimate.
+  const drawPotential = drawCards.reduce((s, c) => s + c.copies * (c.drawCount ?? 0), 0)
+  const hasVariableDraw = drawCards.some(c => c.variable)
 
   if (totalDrawCopies === 0 && totalRampCopies === 0 && totalDiscardCopies === 0 && totalScryCopies === 0) return null
   return {
     drawCards, rampCards, discardRecoveryCards, scryCards,
     totalDrawCopies, totalRampCopies, totalDiscardCopies, totalScryCopies,
-    drawPotential,
+    drawPotential, hasVariableDraw,
   }
 }
 
@@ -2319,7 +2336,7 @@ export function DeckInsightsPage() {
 
           {/* Draw Effects tile */}
           {drawEffects && (() => {
-            const { drawCards, rampCards, discardRecoveryCards, scryCards, totalDrawCopies, totalRampCopies, totalDiscardCopies, totalScryCopies, drawPotential } = drawEffects
+            const { drawCards, rampCards, discardRecoveryCards, scryCards, totalDrawCopies, totalRampCopies, totalDiscardCopies, totalScryCopies, drawPotential, hasVariableDraw } = drawEffects
             const summaryParts = [
               totalDrawCopies > 0 && `${totalDrawCopies} draw`,
               totalScryCopies > 0 && `${totalScryCopies} scry`,
@@ -2343,13 +2360,17 @@ export function DeckInsightsPage() {
                             <span className="text-gray-700 truncate">
                               <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
                             </span>
-                            <span className="text-[10px] text-blue-500 shrink-0 ml-2">+{c.drawCount} card{c.drawCount !== 1 ? 's' : ''}</span>
+                            <span className="text-[10px] text-blue-500 shrink-0 ml-2">
+                              {c.variable ? 'variable' : `+${c.drawCount} card${c.drawCount !== 1 ? 's' : ''}`}
+                            </span>
                           </div>
                         ))}
                       </div>
                       {drawPotential > 0 && (
                         <p className="text-[10px] text-gray-400 mt-1.5">
-                          Up to <span className="font-semibold text-gray-600">{drawPotential}</span> extra cards if all copies played
+                          {hasVariableDraw ? 'At least ' : 'Up to '}
+                          <span className="font-semibold text-gray-600">{drawPotential}</span> extra cards if all copies played
+                          {hasVariableDraw && ' (plus variable draws)'}
                         </p>
                       )}
                     </div>

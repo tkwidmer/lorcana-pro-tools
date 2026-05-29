@@ -378,11 +378,24 @@ function buildKeywordAnalysis(cards, allApiCards) {
       songs.push({ name: card.name, copies: card.count, cost: api?.cost ?? null })
     }
 
+    // keywordAbilities is a top-level string array listing keyword names without
+    // values (e.g. ["Shift", "Singer"]) — use it for density counts when present.
+    // Fall back to parsing abilities entries for older schema versions.
+    if (Array.isArray(api?.keywordAbilities)) {
+      for (const kwName of api.keywordAbilities) {
+        const tracked = TRACKED_KEYWORDS.find(k => kwName.startsWith(k))
+        if (tracked) keywordCopies.set(tracked, (keywordCopies.get(tracked) || 0) + card.count)
+      }
+    }
+
     if (!api?.abilities) continue
     for (const ab of api.abilities) {
       const kw = parseKeyword(ab)
       if (!kw) continue
-      keywordCopies.set(kw.keyword, (keywordCopies.get(kw.keyword) || 0) + card.count)
+      // Only count toward density if keywordAbilities wasn't already used above
+      if (!Array.isArray(api?.keywordAbilities)) {
+        keywordCopies.set(kw.keyword, (keywordCopies.get(kw.keyword) || 0) + card.count)
+      }
 
       if (kw.keyword === 'Shift') {
         const sn = simpleName(card.name)

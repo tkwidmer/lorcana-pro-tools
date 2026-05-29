@@ -311,10 +311,42 @@ function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, 
 }
 
 // --- Mulligan Advisor ---
+// Infer a card's strategic role from its type and rules text. This is deterministic
+// and necessarily rough — it reads card *function* (does it develop the board? is it
+// reactive? does it draw/ramp?), not specific combos. It can tell that a song is a
+// sing-it-later payoff rather than an opening play, but it can't know which cards
+// combo together.
+function classifyCardRole(apiCard) {
+  if (!apiCard) return {}
+  const type = apiCard.type || ''
+  const subtypes = apiCard.subtypes || apiCard.classifications || []
+  const isSong = /song/i.test(type) || (Array.isArray(subtypes) && subtypes.some(s => /song/i.test(s)))
+  const isCharacter = /character/i.test(type)
+  const isLocation = /location/i.test(type)
+  const isItem = /item/i.test(type)
+  const text = (
+    apiCard.fullText ||
+    apiCard.text ||
+    (Array.isArray(apiCard.abilities) ? apiCard.abilities.map(a => a.fullText || a.text || '').join(' ') : '') ||
+    ''
+  ).toLowerCase()
+  const isRemoval = /\bbanish\b/.test(text)
+    || /deals? \d+ damage/.test(text)
+    || /return[s]? .*(character|item|location|card).* to .*(hand|inkwell)/.test(text)
+  const isDraw = /draws? (a card|\d+ cards?|cards)/.test(text)
+  const isRamp = /into your inkwell/.test(text)
+  return {
+    isSong, isCharacter, isLocation, isItem,
+    isRemoval, isDraw, isRamp,
+    develops: isCharacter || isLocation,
+  }
+}
+
 // Classifies each unique card into keep / flexible / toss tiers for the opening hand.
-// Thresholds are derived from the deck's own curve (median cost) so the advice scales
-// from aggro (toss almost everything expensive) to control (keep mid-cost cards).
-function buildMulliganAdvice(cards, costMap, inkwellMap, typeMap, medianCost, deckSize) {
+// Cost thresholds are derived from the deck's own curve (median cost) so the advice
+// scales from aggro to control; card role then refines the tier so cheap-but-conditional
+// cards (songs, removal, generic actions) aren't blindly kept just for being cheap.
+function buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize) {
   // Keep cards you can deploy by the early turns; toss cards too slow to matter in the opener.
   const keepThreshold = Math.max(2, Math.min(3, medianCost))
   const tossThreshold = Math.max(5, medianCost + 2)
@@ -323,28 +355,44 @@ function buildMulliganAdvice(cards, costMap, inkwellMap, typeMap, medianCost, de
     const key = card.name.toLowerCase()
     const cost = costMap.get(key)
     const inkable = inkwellMap.get(key)
-    const type = typeMap.get(key) || ''
+    const role = roleMap.get(key) || {}
     if (cost == null) {
       flexible.push({ ...card, cost: null, inkable, reason: 'Not in database — judge by hand' })
       continue
     }
-    const isSong = type.includes('Song')
     let tier, reason
-    if (cost <= keepThreshold) {
-      tier = 'keep'
-      reason = `${cost}-cost — gets you onto the board early`
-    } else if (cost >= tossThreshold) {
-      tier = 'toss'
-      reason = inkable === false
-        ? `${cost}-cost, non-inkable — dead weight in the opener`
-        : `${cost}-cost — too slow; better used as ink`
+    if (role.isSong) {
+      // Songs are paid by singing later; rarely a standalone opening play.
+      if (cost <= 2) { tier = 'flexible'; reason = `${cost}-cost song — only if you can hard-cast it early` }
+      else { tier = 'toss'; reason = `${cost}-cost song — sing it later with a character; a payoff, not an opener` }
+    } else if (role.develops) {
+      // Characters and locations are real board development — what you most want early.
+      const kind = role.isLocation ? 'location' : 'character'
+      if (cost <= keepThreshold) { tier = 'keep'; reason = `${cost}-cost ${kind} — early board presence` }
+      else if (cost >= tossThreshold) { tier = 'toss'; reason = `${cost}-cost ${kind} — too slow to commit early` }
+      else { tier = 'flexible'; reason = `${cost}-cost ${kind} — keep if your hand curves into it` }
+    } else if (role.isDraw || role.isRamp) {
+      // Card advantage / ink ramp smooths the opening hand.
+      const kind = role.isRamp ? 'ramp' : 'draw'
+      if (cost <= keepThreshold) { tier = 'keep'; reason = `${cost}-cost ${kind} — smooths your hand and ink` }
+      else if (cost >= tossThreshold) { tier = 'toss'; reason = `${cost}-cost ${kind} — too slow for early smoothing` }
+      else { tier = 'flexible'; reason = `${cost}-cost ${kind} — keep alongside an early play` }
+    } else if (role.isRemoval) {
+      // Reactive interaction — dead in hand without a target on the board.
+      if (cost >= tossThreshold) { tier = 'toss'; reason = `${cost}-cost removal — slow and reactive` }
+      else { tier = 'flexible'; reason = `${cost}-cost removal — reactive; keep only if you expect a target` }
     } else {
-      tier = 'flexible'
-      reason = inkable === false
-        ? `${cost}-cost, non-inkable — keep only with ink secured`
-        : `${cost}-cost — keep if the rest of your hand curves into it`
+      // Generic actions / items: no immediate board presence, so never an auto-keep.
+      const kind = role.isItem ? 'item' : 'action'
+      if (cost <= keepThreshold) { tier = 'flexible'; reason = `${cost}-cost ${kind} — situational, no board presence` }
+      else { tier = 'toss'; reason = `${cost}-cost ${kind} — slow with no board presence` }
     }
-    if (isSong && tier !== 'keep') reason += ' · song, can be sung off-curve'
+    // Non-inkable cards can't fall back to being ink. Note it, and nudge non-developing
+    // borderline cards further toward tossing.
+    if (inkable === false) {
+      reason += ' · non-inkable'
+      if (tier === 'flexible' && !role.develops && cost > keepThreshold) tier = 'toss'
+    }
     const entry = { ...card, cost, inkable, reason }
     if (tier === 'keep') keep.push(entry)
     else if (tier === 'toss') toss.push(entry)
@@ -969,10 +1017,12 @@ export function DrawOddsPage() {
     return map
   }, [allApiCards])
 
-  const typeMap = useMemo(() => {
+  // Per-card strategic role (board development, removal, draw/ramp, song …) inferred
+  // from type + rules text, used by the Mulligan Advisor.
+  const roleMap = useMemo(() => {
     const map = new Map()
     for (const c of allApiCards) {
-      if (c.fullName) map.set(c.fullName.toLowerCase(), c.type ?? '')
+      if (c.fullName) map.set(c.fullName.toLowerCase(), classifyCardRole(c))
     }
     return map
   }, [allApiCards])
@@ -1115,8 +1165,8 @@ export function DrawOddsPage() {
   const mulliganAdvice = useMemo(() => {
     if (cards.length === 0) return null
     const medianCost = brickability?.medianCost ?? 3
-    return buildMulliganAdvice(cards, costMap, inkwellMap, typeMap, medianCost, deckSize)
-  }, [cards, costMap, inkwellMap, typeMap, brickability, deckSize])
+    return buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize)
+  }, [cards, costMap, inkwellMap, roleMap, brickability, deckSize])
 
   const N = deckSize
 
@@ -2367,7 +2417,16 @@ export function DrawOddsPage() {
             <div>
               <h3 className="font-semibold text-gray-800 mb-1">Mulligan Advisor</h3>
               <p>
-                A keep-or-toss guide for your opening hand, sorted into three tiers. The thresholds are derived from your deck's own curve (its median ink cost) so the advice adapts to your archetype — an aggro deck wants to keep almost only its cheapest cards, while a control deck can afford to hold mid-cost cards. <span className="font-medium text-green-700">Keep</span> cards are cheap enough to play in the first couple of turns. <span className="font-medium text-red-700">Toss</span> cards are too slow to commit to early and are usually better sent back (or inked). <span className="font-medium text-yellow-700">Flexible</span> cards depend on the rest of your hand — keep them only if you already have early plays and ink. Non-inkable cards (marked ◇) lean toward tossing because they can't fall back to being ink. The summary at the top shows how likely your opening seven is to contain one or two keep-tier cards, so you know how often you'll see the hand you're aiming for.
+                A keep-or-toss guide for your opening hand, sorted into three tiers. Cost thresholds are derived from your deck's own curve (its median ink cost) so the advice adapts to your archetype — an aggro deck wants to keep almost only its cheapest cards, while a control deck can afford to hold mid-cost cards. On top of cost, the advisor reads each card's <span className="font-medium">role</span> from its type and rules text, because a cheap card isn't automatically a good keep:
+              </p>
+              <ul className="mt-2 space-y-1.5 list-disc list-inside text-gray-500">
+                <li><span className="font-medium text-gray-700">Characters &amp; locations</span> are real board development — the cheap ones are your best keeps.</li>
+                <li><span className="font-medium text-gray-700">Card draw &amp; ink ramp</span> smooth your hand, so cheap ones are worth keeping even though they don't develop the board.</li>
+                <li><span className="font-medium text-gray-700">Removal and other reactive actions</span> are dead in hand without a target, so they stay flexible rather than auto-keep.</li>
+                <li><span className="font-medium text-gray-700">Songs</span> are treated as later payoffs you'll sing with a character, not opening plays — so a cheap-on-paper song is demoted out of Keep.</li>
+              </ul>
+              <p className="mt-2">
+                Non-inkable cards (marked ◇) lean toward tossing because they can't fall back to being ink. The summary at the top shows how likely your opening seven is to contain one or two keep-tier cards. One honest caveat: this reads card <em>function</em>, not strategy — it can tell a song is a payoff, but it doesn't know which specific cards combo together, so treat its calls on niche combo pieces as a starting point, not gospel.
               </p>
             </div>
 

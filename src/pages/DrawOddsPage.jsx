@@ -1827,8 +1827,8 @@ export function DrawOddsPage() {
                       <div key={cost} className="flex flex-col items-center gap-0.5 flex-1">
                         <span className="text-[10px] font-medium text-gray-600">{count}</span>
                         <div className="w-full flex flex-col-reverse min-h-[3px]" style={{ height: `${totalH}px` }}>
-                          {inkH > 0 && <div className="w-full bg-gray-900 rounded-t" style={{ height: `${inkH}px` }} />}
-                          {nonInkH > 0 && <div className="w-full bg-orange-400" style={{ height: `${nonInkH}px` }} />}
+                          {inkH > 0 && <div className={`w-full bg-gray-900 ${nonInkH === 0 ? 'rounded-t' : ''}`} style={{ height: `${inkH}px` }} />}
+                          {nonInkH > 0 && <div className="w-full bg-orange-400 rounded-t" style={{ height: `${nonInkH}px` }} />}
                         </div>
                         <span className="text-[10px] text-gray-500">{cost}</span>
                       </div>

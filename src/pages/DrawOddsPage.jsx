@@ -310,6 +310,55 @@ function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, 
   return hits / MC_ITERS
 }
 
+// --- Mulligan Advisor ---
+// Classifies each unique card into keep / flexible / toss tiers for the opening hand.
+// Thresholds are derived from the deck's own curve (median cost) so the advice scales
+// from aggro (toss almost everything expensive) to control (keep mid-cost cards).
+function buildMulliganAdvice(cards, costMap, inkwellMap, typeMap, medianCost, deckSize) {
+  // Keep cards you can deploy by the early turns; toss cards too slow to matter in the opener.
+  const keepThreshold = Math.max(2, Math.min(3, medianCost))
+  const tossThreshold = Math.max(5, medianCost + 2)
+  const keep = [], flexible = [], toss = []
+  for (const card of cards) {
+    const key = card.name.toLowerCase()
+    const cost = costMap.get(key)
+    const inkable = inkwellMap.get(key)
+    const type = typeMap.get(key) || ''
+    if (cost == null) {
+      flexible.push({ ...card, cost: null, inkable, reason: 'Not in database — judge by hand' })
+      continue
+    }
+    const isSong = type.includes('Song')
+    let tier, reason
+    if (cost <= keepThreshold) {
+      tier = 'keep'
+      reason = `${cost}-cost — gets you onto the board early`
+    } else if (cost >= tossThreshold) {
+      tier = 'toss'
+      reason = inkable === false
+        ? `${cost}-cost, non-inkable — dead weight in the opener`
+        : `${cost}-cost — too slow; better used as ink`
+    } else {
+      tier = 'flexible'
+      reason = inkable === false
+        ? `${cost}-cost, non-inkable — keep only with ink secured`
+        : `${cost}-cost — keep if the rest of your hand curves into it`
+    }
+    if (isSong && tier !== 'keep') reason += ' · song, can be sung off-curve'
+    const entry = { ...card, cost, inkable, reason }
+    if (tier === 'keep') keep.push(entry)
+    else if (tier === 'toss') toss.push(entry)
+    else flexible.push(entry)
+  }
+  const sortFn = (a, b) => (a.cost ?? 99) - (b.cost ?? 99) || a.name.localeCompare(b.name)
+  keep.sort(sortFn); flexible.sort(sortFn); toss.sort(sortFn)
+  const keepCopies = keep.reduce((s, c) => s + c.count, 0)
+  // Odds your opening 7 contains the early plays you'd want to keep.
+  const pAtLeast1 = drawOddsAtLeast(deckSize, keepCopies, 7, 1)
+  const pAtLeast2 = drawOddsAtLeast(deckSize, keepCopies, 7, 2)
+  return { keep, flexible, toss, keepThreshold, tossThreshold, keepCopies, pAtLeast1, pAtLeast2 }
+}
+
 // --- Deck list parsing ---
 
 function parseDeckList(text) {
@@ -635,9 +684,19 @@ function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations = 5000)
 //   - Locations generate lore passively each turn after played, no characters needed
 function questPressureSim(deckCards, iterations = 6000) {
   const N = deckCards.length
-  if (N === 0) return { avgLore: new Array(8).fill(0), estWinTurn: null }
+  if (N === 0) return {
+    avgLore: new Array(8).fill(0), estWinTurn: null,
+    loreBands: Array.from({ length: 8 }, () => ({ p10: 0, p50: 0, p90: 0 })),
+    winTurnCdf: new Array(8).fill(0), winTurnPmf: new Array(8).fill(0),
+    medianWinTurn: null, neverWinRate: 1,
+  }
   const order = new Uint16Array(N)
   const loreSums = new Float64Array(8)
+  // Per-turn cumulative lore samples (one column per simulated game) for percentile bands.
+  const loreSamples = Array.from({ length: 8 }, () => new Float32Array(iterations))
+  // winTurnCdf[t] = count of games that have reached 20 lore by the end of turn t+1.
+  const winTurnCdf = new Float64Array(8)
+  let neverWin = 0
 
   for (let iter = 0; iter < iterations; iter++) {
     for (let i = 0; i < N; i++) order[i] = i
@@ -712,13 +771,48 @@ function questPressureSim(deckCards, iterations = 6000) {
       }
 
       loreSums[t] += cumLore
+      loreSamples[t][iter] = cumLore
+    }
+
+    // Win turn = first turn this game's cumulative lore reached 20.
+    let winTurn = -1
+    for (let t = 0; t < 8; t++) {
+      if (loreSamples[t][iter] >= 20) { winTurn = t; break }
+    }
+    if (winTurn === -1) {
+      neverWin++
+    } else {
+      // CDF: a game that wins on turn winTurn has also "won by" every later turn.
+      for (let t = winTurn; t < 8; t++) winTurnCdf[t]++
     }
   }
 
   const avgLore = Array.from(loreSums).map(v => v / iterations)
+  // Percentile bands per turn: sort each turn's samples and read off p10/p50/p90.
+  // TypedArray.sort is numeric by default, so no comparator is needed.
+  const loreBands = loreSamples.map(samples => {
+    const sorted = samples.slice().sort()
+    const at = q => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]
+    return { p10: at(0.10), p50: at(0.50), p90: at(0.90) }
+  })
+  // Cumulative P(reached 20 lore by turn t) and the per-turn marginal P(win on turn t).
+  const winTurnCdfArr = Array.from(winTurnCdf).map(c => c / iterations)
+  const winTurnPmf = winTurnCdfArr.map((p, t) => p - (t > 0 ? winTurnCdfArr[t - 1] : 0))
+  const neverWinRate = neverWin / iterations
+  // Median win turn: first turn where the cumulative win probability reaches 50%.
+  const medianIdx = winTurnCdfArr.findIndex(p => p >= 0.5)
+  const medianWinTurn = medianIdx === -1 ? null : medianIdx + 1
   // Estimated turn to reach 20 lore (first turn where avg >= 20, or null)
   const estWinTurn = avgLore.findIndex(v => v >= 20)
-  return { avgLore, estWinTurn: estWinTurn === -1 ? null : estWinTurn + 1 }
+  return {
+    avgLore,
+    estWinTurn: estWinTurn === -1 ? null : estWinTurn + 1,
+    loreBands,
+    winTurnCdf: winTurnCdfArr,
+    winTurnPmf,
+    medianWinTurn,
+    neverWinRate,
+  }
 }
 
 // --- Constants ---
@@ -789,6 +883,7 @@ export function DrawOddsPage() {
 
   const [copied, setCopied] = useState(false)
   const [insightsOpen, setInsightsOpen] = useState(true)
+  const [mulliganOpen, setMulliganOpen] = useState(true)
   const [drawRatesOpen, setDrawRatesOpen] = useState(false)
   const [targetTurnOverrides, setTargetTurnOverrides] = useState({})
   const [targetedOddsOpen, setTargetedOddsOpen] = useState(true)
@@ -870,6 +965,14 @@ export function DrawOddsPage() {
     const map = new Map()
     for (const c of allApiCards) {
       if (c.fullName) map.set(c.fullName.toLowerCase(), c.inkwell)
+    }
+    return map
+  }, [allApiCards])
+
+  const typeMap = useMemo(() => {
+    const map = new Map()
+    for (const c of allApiCards) {
+      if (c.fullName) map.set(c.fullName.toLowerCase(), c.type ?? '')
     }
     return map
   }, [allApiCards])
@@ -1008,6 +1111,12 @@ export function DrawOddsPage() {
     if (questDeckCards.length === 0) return null
     return questPressureSim(questDeckCards)
   }, [questDeckCards])
+
+  const mulliganAdvice = useMemo(() => {
+    if (cards.length === 0) return null
+    const medianCost = brickability?.medianCost ?? 3
+    return buildMulliganAdvice(cards, costMap, inkwellMap, typeMap, medianCost, deckSize)
+  }, [cards, costMap, inkwellMap, typeMap, brickability, deckSize])
 
   const N = deckSize
 
@@ -1612,15 +1721,19 @@ export function DrawOddsPage() {
 
           {/* Quest Pressure tile */}
           {questPressure && (() => {
-            const { avgLore, estWinTurn } = questPressure
+            const { avgLore, estWinTurn, loreBands } = questPressure
             const turns = [1, 2, 3, 4, 5, 6, 7, 8]
-            const maxLore = Math.max(20, ...avgLore)
+            const maxLore = Math.max(20, ...avgLore, ...loreBands.map(b => b.p90))
             const W = 300, H = 96, padL = 22, padR = 6, padT = 6, padB = 18
             const cW = W - padL - padR
             const cH = H - padT - padB
             const tx = (i) => padL + (i / 7) * cW
             const ty = (v) => padT + cH - (v / maxLore) * cH
             const points = avgLore.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(' ')
+            // p10–p90 band: trace p90 left→right, then p10 right→left to close the area.
+            const bandTop = loreBands.map((b, i) => `${tx(i).toFixed(1)},${ty(b.p90).toFixed(1)}`)
+            const bandBot = loreBands.map((b, i) => `${tx(i).toFixed(1)},${ty(b.p10).toFixed(1)}`).reverse()
+            const bandPath = `${bandTop.join(' ')} ${bandBot.join(' ')}`
             const callouts = [3, 5, 7].map(i => ({ turn: i + 1, lore: avgLore[i].toFixed(1) }))
             return (
               <div className="border border-gray-200 rounded-lg p-4">
@@ -1654,11 +1767,63 @@ export function DrawOddsPage() {
                   {turns.map((t, i) => (
                     <text key={t} x={tx(i).toFixed(1)} y={H - padB + 9} textAnchor="middle" fontSize="6" fill="#9ca3af">T{t}</text>
                   ))}
+                  <polygon points={bandPath} fill="#1d4ed8" fillOpacity="0.12" stroke="none" />
                   <polyline points={points} fill="none" stroke="#1d4ed8" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
                   {avgLore.map((v, i) => (
                     <circle key={i} cx={tx(i).toFixed(1)} cy={ty(v).toFixed(1)} r="2" fill="#1d4ed8" />
                   ))}
                 </svg>
+                <p className="text-[10px] text-gray-400 mt-1">Line = average · shaded = 10th–90th percentile</p>
+              </div>
+            )
+          })()}
+
+          {/* Win Turn tile */}
+          {questPressure && (() => {
+            const { winTurnCdf, medianWinTurn, neverWinRate } = questPressure
+            const turns = [1, 2, 3, 4, 5, 6, 7, 8]
+            const barColor = (p) => {
+              if (p >= 0.75) return 'bg-green-500'
+              if (p >= 0.50) return 'bg-yellow-400'
+              if (p >= 0.25) return 'bg-orange-400'
+              return 'bg-red-500'
+            }
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Win Turn</h2>
+                  {medianWinTurn != null
+                    ? <span className="text-xs text-gray-400">median ~T{medianWinTurn}</span>
+                    : <span className="text-xs text-gray-400">&lt;50% by T8</span>
+                  }
+                </div>
+                <div className="flex items-end gap-1.5">
+                  {turns.map((t, i) => {
+                    const p = winTurnCdf[i]
+                    return (
+                      <div key={t} className="flex flex-col items-center gap-0.5 flex-1">
+                        <span className="text-[10px] font-semibold tabular-nums text-gray-600">
+                          {Math.round(p * 100)}%
+                        </span>
+                        <div className="relative w-full" style={{ height: '52px' }}>
+                          <div
+                            className="absolute w-full border-t border-dashed border-gray-300"
+                            style={{ bottom: `${0.50 * 52}px` }}
+                          />
+                          <div
+                            className={`absolute bottom-0 w-full rounded-t ${barColor(p)}`}
+                            style={{ height: `${Math.max(2, p * 52)}px` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-gray-500">T{t}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2">
+                  P(reach 20 lore by turn) · dashed = 50%
+                  {neverWinRate > 0.005 && <> · {pct(neverWinRate)} not by T8</>}
+                </p>
               </div>
             )
           })()}
@@ -1666,6 +1831,76 @@ export function DrawOddsPage() {
           </div>}
         </div>
       )}
+
+      {/* Mulligan Advisor — collapsible keep/toss guidance */}
+      {mulliganAdvice && (() => {
+        const { keep, flexible, toss, keepThreshold, keepCopies, pAtLeast1, pAtLeast2 } = mulliganAdvice
+        const tiers = [
+          { key: 'keep', label: 'Keep', cards: keep, dot: 'bg-green-500', text: 'text-green-700', border: 'border-green-200', bg: 'bg-green-50' },
+          { key: 'flexible', label: 'Flexible', cards: flexible, dot: 'bg-yellow-400', text: 'text-yellow-700', border: 'border-yellow-200', bg: 'bg-yellow-50' },
+          { key: 'toss', label: 'Toss', cards: toss, dot: 'bg-red-500', text: 'text-red-700', border: 'border-red-200', bg: 'bg-red-50' },
+        ]
+        return (
+          <div className="mb-4">
+            <button
+              onClick={() => setMulliganOpen(o => !o)}
+              className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            >
+              <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Mulligan Advisor</span>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${mulliganOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {mulliganOpen && <div className="mt-3">
+              <div className="border border-gray-200 rounded-lg p-4 mb-3 bg-gray-50">
+                <p className="text-sm text-gray-700">
+                  Aim to keep an opening hand with <span className="font-semibold">at least one early play</span> (cost ≤ {keepThreshold})
+                  and enough inkable cards to ramp. Throw back slow, high-cost cards unless your hand already curves into them.
+                </p>
+                <div className="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-xs text-gray-500">
+                  <span><span className="font-semibold text-gray-700">{keepCopies}</span> keep-tier copies in deck</span>
+                  <span>P(≥1 in opener): <span className={`font-semibold tabular-nums ${oddsColor(pAtLeast1)}`}>{pct(pAtLeast1)}</span></span>
+                  <span>P(≥2 in opener): <span className={`font-semibold tabular-nums ${oddsColor(pAtLeast2)}`}>{pct(pAtLeast2)}</span></span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {tiers.map(tier => (
+                  <div key={tier.key} className={`border ${tier.border} rounded-lg overflow-hidden`}>
+                    <div className={`flex items-center justify-between px-3 py-2 ${tier.bg} border-b ${tier.border}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${tier.dot}`} />
+                        <span className={`text-xs font-semibold uppercase tracking-wide ${tier.text}`}>{tier.label}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 tabular-nums">
+                        {tier.cards.reduce((s, c) => s + c.count, 0)} cop{tier.cards.reduce((s, c) => s + c.count, 0) === 1 ? 'y' : 'ies'}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {tier.cards.length === 0 && (
+                        <div className="px-3 py-3 text-[11px] text-gray-400 italic">No cards</div>
+                      )}
+                      {tier.cards.map(card => (
+                        <div key={card.name} className="px-3 py-2" title={card.reason}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs text-gray-800 truncate">
+                              <span className="text-gray-400 tabular-nums">{card.count}×</span> {card.name}
+                            </span>
+                            <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
+                              {card.cost == null ? '?' : `${card.cost}⬡`}
+                              {card.inkable === false && <span className="text-orange-500 ml-0.5" title="Non-inkable">◇</span>}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{card.reason}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>}
+          </div>
+        )
+      })()}
 
       {/* Draw Rates — collapsible results table */}
       {cards.length > 0 && (
@@ -2118,7 +2353,21 @@ export function DrawOddsPage() {
             <div>
               <h3 className="font-semibold text-gray-800 mb-1">Quest Pressure</h3>
               <p>
-                A simulation of how much lore your deck generates on average across turns T1–T8, played out across thousands of games. Each simulated game follows the basic rules of Lorcana: characters enter play "dry" and can't quest until the following turn, locations generate passive lore each turn automatically, and the ink system is modeled so you're spending the right amount each turn. The simulator plays greedily — it always tries to maximize lore gained — so the numbers represent a best-case ceiling rather than a conservative floor. The dashed red line at 20 lore marks the win condition. The average win turn is shown in the top-right corner.
+                A simulation of how much lore your deck generates on average across turns T1–T8, played out across thousands of games. Each simulated game follows the basic rules of Lorcana: characters enter play "dry" and can't quest until the following turn, locations generate passive lore each turn automatically, and the ink system is modeled so you're spending the right amount each turn. The simulator plays greedily — it always tries to maximize lore gained — so the numbers represent a best-case ceiling rather than a conservative floor. The dashed red line at 20 lore marks the win condition. The average win turn is shown in the top-right corner. The shaded band around the line shows the 10th-to-90th percentile range across all simulated games — a wide band means your lore output swings a lot game to game, a narrow band means it's consistent.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Win Turn</h3>
+              <p>
+                Built from the same Quest Pressure simulation, this shows the probability that your deck has reached the 20-lore win condition by each turn — so the T7 bar answers "in what fraction of games have I already won by turn 7?" The dashed line marks 50%, and the median win turn (the first turn you win in at least half of games) is called out in the top-right. If a meaningful share of games never reach 20 lore by turn 8, that percentage is noted too. Because the underlying simulation plays greedily for maximum lore, treat these as an optimistic ceiling on your clock.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Mulligan Advisor</h3>
+              <p>
+                A keep-or-toss guide for your opening hand, sorted into three tiers. The thresholds are derived from your deck's own curve (its median ink cost) so the advice adapts to your archetype — an aggro deck wants to keep almost only its cheapest cards, while a control deck can afford to hold mid-cost cards. <span className="font-medium text-green-700">Keep</span> cards are cheap enough to play in the first couple of turns. <span className="font-medium text-red-700">Toss</span> cards are too slow to commit to early and are usually better sent back (or inked). <span className="font-medium text-yellow-700">Flexible</span> cards depend on the rest of your hand — keep them only if you already have early plays and ink. Non-inkable cards (marked ◇) lean toward tossing because they can't fall back to being ink. The summary at the top shows how likely your opening seven is to contain one or two keep-tier cards, so you know how often you'll see the hand you're aiming for.
               </p>
             </div>
 

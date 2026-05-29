@@ -317,11 +317,23 @@ function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, 
 // - Keyword density: per-keyword copy counts across the whole deck.
 const TRACKED_KEYWORDS = ['Shift', 'Singer', 'Bodyguard', 'Rush', 'Evasive', 'Ward', 'Reckless', 'Support', 'Challenger']
 
-function parseKeyword(abilityName) {
-  if (!abilityName) return null
+// LorcanaJSON stores keyword abilities as { type: "keyword", keyword: "Shift",
+// keywordValueNumber: 5, ... }. The ability.name field is used for named
+// abilities (e.g. "Grab Your Sword!"), not for keywords. Fall back to
+// scanning ab.name for older/alternative schema versions.
+function parseKeyword(ab) {
+  if (!ab) return null
+  // Preferred: structured keyword fields
+  if (ab.type === 'keyword' && ab.keyword) {
+    const kwName = TRACKED_KEYWORDS.find(k => ab.keyword.startsWith(k))
+    if (!kwName) return null
+    return { keyword: kwName, value: ab.keywordValueNumber ?? null }
+  }
+  // Fallback: keyword encoded in the name string (e.g. "Shift 5")
+  const name = ab.name || ''
   for (const kw of TRACKED_KEYWORDS) {
-    if (abilityName.startsWith(kw)) {
-      const numMatch = abilityName.match(/\d+/)
+    if (name.startsWith(kw)) {
+      const numMatch = name.match(/\d+/)
       return { keyword: kw, value: numMatch ? parseInt(numMatch[0]) : null }
     }
   }
@@ -371,7 +383,7 @@ function buildKeywordAnalysis(cards, allApiCards) {
 
     if (!api?.abilities) continue
     for (const ab of api.abilities) {
-      const kw = parseKeyword(ab.name)
+      const kw = parseKeyword(ab)
       if (!kw) continue
       keywordCopies.set(kw.keyword, (keywordCopies.get(kw.keyword) || 0) + card.count)
 
@@ -431,7 +443,7 @@ function classifyCardRole(apiCard) {
   const text = (
     apiCard.fullText ||
     apiCard.text ||
-    (Array.isArray(apiCard.abilities) ? apiCard.abilities.map(a => a.fullText || a.text || '').join(' ') : '') ||
+    (Array.isArray(apiCard.abilities) ? apiCard.abilities.map(a => a.fullText || a.reminderText || a.text || '').join(' ') : '') ||
     ''
   ).toLowerCase()
   const isRemoval = /\bbanish\b/.test(text)

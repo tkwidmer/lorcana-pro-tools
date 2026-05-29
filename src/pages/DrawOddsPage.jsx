@@ -310,6 +310,110 @@ function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, 
   return hits / MC_ITERS
 }
 
+// --- Keyword Analysis ---
+// Parses keyword abilities from card data and checks cross-card relationships:
+// - Shift: is the lower-cost base character also in the deck?
+// - Singer: how much song-cost capacity does the deck have vs. its song count?
+// - Keyword density: per-keyword copy counts across the whole deck.
+const TRACKED_KEYWORDS = ['Shift', 'Singer', 'Bodyguard', 'Rush', 'Evasive', 'Ward', 'Reckless', 'Support', 'Challenger']
+
+function parseKeyword(abilityName) {
+  if (!abilityName) return null
+  for (const kw of TRACKED_KEYWORDS) {
+    if (abilityName.startsWith(kw)) {
+      const numMatch = abilityName.match(/\d+/)
+      return { keyword: kw, value: numMatch ? parseInt(numMatch[0]) : null }
+    }
+  }
+  return null
+}
+
+// The "simple name" of a card is everything before the first " - " separator —
+// this is what Shift cards share with their lower-cost base version.
+function simpleName(fullName) {
+  const dash = fullName.indexOf(' - ')
+  return dash === -1 ? fullName : fullName.slice(0, dash)
+}
+
+function buildKeywordAnalysis(cards, allApiCards) {
+  if (cards.length === 0) return null
+
+  // Build a lookup: fullName.toLowerCase() → apiCard
+  const byName = new Map()
+  for (const c of allApiCards) {
+    if (c.fullName) byName.set(c.fullName.toLowerCase(), c)
+  }
+
+  // Build a lookup: simpleName → array of { fullName, cost, copies } for cards in deck
+  const deckBySimple = new Map()
+  for (const card of cards) {
+    const api = byName.get(card.name.toLowerCase())
+    const sn = simpleName(card.name)
+    if (!deckBySimple.has(sn)) deckBySimple.set(sn, [])
+    deckBySimple.get(sn).push({ fullName: card.name, cost: api?.cost ?? null, copies: card.count })
+  }
+
+  const keywordCopies = new Map()   // keyword → total copies in deck
+  const shifts = []                 // { name, copies, shiftCost, base, baseCopies }
+  const singers = []                // { name, copies, singerLevel }
+  const songs = []                  // { name, copies, cost }
+  let totalSongs = 0, totalSingers = 0, totalSingerCapacity = 0
+
+  for (const card of cards) {
+    const api = byName.get(card.name.toLowerCase())
+    const type = api?.type || ''
+    const subs = api?.subtypes || api?.classifications || []
+    const isSong = /song/i.test(type) || (Array.isArray(subs) && subs.some(s => /song/i.test(s)))
+    if (isSong) {
+      totalSongs += card.count
+      songs.push({ name: card.name, copies: card.count, cost: api?.cost ?? null })
+    }
+
+    if (!api?.abilities) continue
+    for (const ab of api.abilities) {
+      const kw = parseKeyword(ab.name)
+      if (!kw) continue
+      keywordCopies.set(kw.keyword, (keywordCopies.get(kw.keyword) || 0) + card.count)
+
+      if (kw.keyword === 'Shift') {
+        const sn = simpleName(card.name)
+        // Candidates in deck with the same simple name and lower (or equal) cost
+        const bases = (deckBySimple.get(sn) || []).filter(b => {
+          if (b.fullName.toLowerCase() === card.name.toLowerCase()) return false
+          if (b.cost == null || api.cost == null) return false
+          return b.cost < api.cost
+        })
+        const baseCopies = bases.reduce((s, b) => s + b.copies, 0)
+        shifts.push({
+          name: card.name, copies: card.count, shiftCost: kw.value,
+          baseName: sn, baseCopies, covered: baseCopies > 0,
+        })
+      }
+
+      if (kw.keyword === 'Singer') {
+        totalSingers += card.count
+        if (kw.value != null) totalSingerCapacity += kw.value * card.count
+        singers.push({ name: card.name, copies: card.count, singerLevel: kw.value })
+      }
+    }
+  }
+
+  shifts.sort((a, b) => a.covered - b.covered || a.name.localeCompare(b.name))
+  singers.sort((a, b) => (b.singerLevel ?? 0) - (a.singerLevel ?? 0))
+
+  // Singer–song balance flags
+  const hasSingerSongMismatch = (totalSongs > 0 && totalSingers === 0) ||
+    (totalSingers > 0 && totalSongs === 0)
+  const avgSingerLevel = totalSingers > 0 ? (totalSingerCapacity / totalSingers).toFixed(1) : null
+
+  // Keyword density: sort by copy count descending
+  const density = [...keywordCopies.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([kw, count]) => ({ keyword: kw, count }))
+
+  return { density, shifts, singers, songs, totalSongs, totalSingers, avgSingerLevel, hasSingerSongMismatch }
+}
+
 // --- Mulligan Advisor ---
 // Infer a card's strategic role from its type and rules text. This is deterministic
 // and necessarily rough — it reads card *function* (does it develop the board? is it
@@ -1168,6 +1272,10 @@ export function DrawOddsPage() {
     return buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, deckSize)
   }, [cards, costMap, inkwellMap, roleMap, brickability, deckSize])
 
+  const keywordAnalysis = useMemo(() =>
+    buildKeywordAnalysis(cards, allApiCards)
+  , [cards, allApiCards])
+
   const N = deckSize
 
   // Gameplay draws by turn T plus any bonus draws from card effects
@@ -1878,6 +1986,83 @@ export function DrawOddsPage() {
             )
           })()}
 
+          {/* Keyword Analysis tile */}
+          {keywordAnalysis && keywordAnalysis.density.length > 0 && (() => {
+            const { density, shifts, singers, totalSongs, totalSingers, avgSingerLevel, hasSingerSongMismatch } = keywordAnalysis
+            const uncoveredShifts = shifts.filter(s => !s.covered)
+            const coveredShifts = shifts.filter(s => s.covered)
+            return (
+              <div className="border border-gray-200 rounded-lg p-4 sm:col-span-2">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Keyword Analysis</h2>
+                  <span className="text-xs text-gray-400">{density.length} keyword{density.length !== 1 ? 's' : ''} found</span>
+                </div>
+
+                {/* Keyword density pills */}
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {density.map(({ keyword, count }) => (
+                    <span key={keyword} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-xs font-medium text-gray-700">
+                      {keyword}
+                      <span className="text-gray-400 tabular-nums">×{count}</span>
+                    </span>
+                  ))}
+                </div>
+
+                {/* Singer ↔ Song balance */}
+                {(totalSingers > 0 || totalSongs > 0) && (
+                  <div className={`rounded-md p-3 mb-3 text-xs ${hasSingerSongMismatch ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-100'}`}>
+                    <div className="flex flex-wrap gap-x-6 gap-y-1 mb-1">
+                      <span><span className="font-semibold text-gray-700">{totalSingers}</span> singer cop{totalSingers === 1 ? 'y' : 'ies'}{avgSingerLevel ? ` (avg Singer ${avgSingerLevel})` : ''}</span>
+                      <span><span className="font-semibold text-gray-700">{totalSongs}</span> song{totalSongs === 1 ? '' : 's'}</span>
+                    </div>
+                    {hasSingerSongMismatch && (
+                      <p className="text-amber-700">
+                        {totalSongs > 0 && totalSingers === 0
+                          ? "Songs in deck but no Singer characters — you'll need to hard-cast them."
+                          : 'Singer characters in deck but no songs to sing.'}
+                      </p>
+                    )}
+                    {!hasSingerSongMismatch && totalSingers > 0 && singers.length > 0 && (
+                      <p className="text-gray-500">
+                        Lowest singer: {[...singers].sort((a,b) => (a.singerLevel??0) - (b.singerLevel??0))[0]?.name} (Singer {[...singers].sort((a,b) => (a.singerLevel??0) - (b.singerLevel??0))[0]?.singerLevel})
+                        {' · '}most expensive song: {[...keywordAnalysis.songs].sort((a,b) => (b.cost??0) - (a.cost??0))[0]?.name} ({[...keywordAnalysis.songs].sort((a,b) => (b.cost??0) - (a.cost??0))[0]?.cost}⬡)
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Shift coverage */}
+                {shifts.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Shift Coverage</div>
+                    <div className="space-y-1">
+                      {uncoveredShifts.map(s => (
+                        <div key={s.name} className="flex items-start gap-2 text-xs">
+                          <span className="text-red-500 mt-px shrink-0">✗</span>
+                          <div>
+                            <span className="font-medium text-gray-800">{s.name}</span>
+                            <span className="text-gray-400"> (Shift {s.shiftCost})</span>
+                            <span className="text-red-600"> — no &ldquo;{s.baseName}&rdquo; base in deck</span>
+                          </div>
+                        </div>
+                      ))}
+                      {coveredShifts.map(s => (
+                        <div key={s.name} className="flex items-start gap-2 text-xs">
+                          <span className="text-green-500 mt-px shrink-0">✓</span>
+                          <div>
+                            <span className="font-medium text-gray-800">{s.name}</span>
+                            <span className="text-gray-400"> (Shift {s.shiftCost})</span>
+                            <span className="text-gray-500"> — {s.baseCopies} base cop{s.baseCopies === 1 ? 'y' : 'ies'} in deck</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           </div>}
         </div>
       )}
@@ -2428,6 +2613,18 @@ export function DrawOddsPage() {
               <p className="mt-2">
                 Non-inkable cards (marked ◇) lean toward tossing because they can't fall back to being ink. The summary at the top shows how likely your opening seven is to contain one or two keep-tier cards. One honest caveat: this reads card <em>function</em>, not strategy — it can tell a song is a payoff, but it doesn't know which specific cards combo together, so treat its calls on niche combo pieces as a starting point, not gospel.
               </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Keyword Analysis</h3>
+              <p>
+                A cross-card keyword breakdown with two relationship checks:
+              </p>
+              <ul className="mt-2 space-y-1.5 list-disc list-inside text-gray-500">
+                <li><span className="font-medium text-gray-700">Keyword density</span> — total copies of each tracked keyword (Shift, Singer, Bodyguard, Rush, Evasive, Ward, Reckless, Support, Challenger) across the deck, so you can see at a glance how keyword-heavy your strategy is.</li>
+                <li><span className="font-medium text-gray-700">Singer–song balance</span> — total Singer characters vs. total songs, with the average Singer level and the gap between your cheapest singer and most expensive song. A Singer 4 character can&apos;t pay for a 6-cost song; mismatches are flagged in amber.</li>
+                <li><span className="font-medium text-gray-700">Shift coverage</span> — for each Shift card in your deck, checks whether a lower-cost version of that character (same name before the dash) is also in the deck. A missing base is flagged in red, since Shifting without a target means always hard-casting at full cost.</li>
+              </ul>
             </div>
 
             <div>

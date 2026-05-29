@@ -317,19 +317,16 @@ function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, 
 // - Keyword density: per-keyword copy counts across the whole deck.
 const TRACKED_KEYWORDS = ['Shift', 'Singer', 'Bodyguard', 'Rush', 'Evasive', 'Ward', 'Reckless', 'Support', 'Challenger']
 
-// LorcanaJSON stores keyword abilities as { type: "keyword", keyword: "Shift",
-// keywordValueNumber: 5, ... }. The ability.name field is used for named
-// abilities (e.g. "Grab Your Sword!"), not for keywords. Fall back to
-// scanning ab.name for older/alternative schema versions.
+// LorcanaJSON keyword abilities have a `keyword` field (e.g. "Shift", "Singer");
+// named/triggered/static abilities use `name` instead and have no `keyword` field.
 function parseKeyword(ab) {
   if (!ab) return null
-  // Preferred: structured keyword fields
-  if (ab.type === 'keyword' && ab.keyword) {
+  if (ab.keyword) {
     const kwName = TRACKED_KEYWORDS.find(k => ab.keyword.startsWith(k))
     if (!kwName) return null
     return { keyword: kwName, value: ab.keywordValueNumber ?? null }
   }
-  // Fallback: keyword encoded in the name string (e.g. "Shift 5")
+  // Fallback: scan ab.name in case the keyword is encoded there
   const name = ab.name || ''
   for (const kw of TRACKED_KEYWORDS) {
     if (name.startsWith(kw)) {

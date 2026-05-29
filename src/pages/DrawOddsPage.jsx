@@ -462,17 +462,20 @@ function buildDrawEffects(cards, allApiCards) {
 
   const drawCards = []
   const rampCards = []
+  const discardRecoveryCards = []
+  const scryCards = []
 
   for (const card of cards) {
     const api = byName.get(card.name.toLowerCase())
     if (!api) continue
     const role = classifyCardRole(api)
+    const text = (
+      api.fullText ||
+      api.text ||
+      (Array.isArray(api.abilities) ? api.abilities.map(a => a.fullText || a.effect || '').join(' ') : '')
+    ).toLowerCase()
+
     if (role.isDraw) {
-      const text = (
-        api.fullText ||
-        api.text ||
-        (Array.isArray(api.abilities) ? api.abilities.map(a => a.fullText || a.effect || '').join(' ') : '')
-      ).toLowerCase()
       const numMatch = text.match(/draws? (\d+) cards?/)
       const drawCount = numMatch ? parseInt(numMatch[1]) : 1
       drawCards.push({ name: card.name, copies: card.count, drawCount })
@@ -480,18 +483,35 @@ function buildDrawEffects(cards, allApiCards) {
     if (role.isRamp) {
       rampCards.push({ name: card.name, copies: card.count })
     }
+    if (role.isDiscardRecovery) {
+      discardRecoveryCards.push({ name: card.name, copies: card.count })
+    }
+    if (role.isScry) {
+      const lookMatch = text.match(/look at the top (\d+) cards?/)
+      const lookCount = lookMatch ? parseInt(lookMatch[1]) : null
+      scryCards.push({ name: card.name, copies: card.count, lookCount })
+    }
   }
 
-  drawCards.sort((a, b) => b.copies - a.copies || a.name.localeCompare(b.name))
-  rampCards.sort((a, b) => b.copies - a.copies || a.name.localeCompare(b.name))
+  const sortFn = (a, b) => b.copies - a.copies || a.name.localeCompare(b.name)
+  drawCards.sort(sortFn)
+  rampCards.sort(sortFn)
+  discardRecoveryCards.sort(sortFn)
+  scryCards.sort(sortFn)
 
   const totalDrawCopies = drawCards.reduce((s, c) => s + c.copies, 0)
   const totalRampCopies = rampCards.reduce((s, c) => s + c.copies, 0)
+  const totalDiscardCopies = discardRecoveryCards.reduce((s, c) => s + c.copies, 0)
+  const totalScryCopies = scryCards.reduce((s, c) => s + c.copies, 0)
   // Weighted draw potential: if every draw card were played once, how many extra cards?
   const drawPotential = drawCards.reduce((s, c) => s + c.copies * c.drawCount, 0)
 
-  if (totalDrawCopies === 0 && totalRampCopies === 0) return null
-  return { drawCards, rampCards, totalDrawCopies, totalRampCopies, drawPotential }
+  if (totalDrawCopies === 0 && totalRampCopies === 0 && totalDiscardCopies === 0 && totalScryCopies === 0) return null
+  return {
+    drawCards, rampCards, discardRecoveryCards, scryCards,
+    totalDrawCopies, totalRampCopies, totalDiscardCopies, totalScryCopies,
+    drawPotential,
+  }
 }
 
 // --- Mulligan Advisor ---
@@ -519,9 +539,13 @@ function classifyCardRole(apiCard) {
     || /return[s]? .*(character|item|location|card).* to .*(hand|inkwell)/.test(text)
   const isDraw = /draws? (a card|\d+ cards?|cards)/.test(text)
   const isRamp = /into your inkwell/.test(text)
+  // Cards that retrieve a card from the discard pile into hand or play.
+  const isDiscardRecovery = /from (your |the )?discard/.test(text)
+  // Cards that look at the top N cards and put one or more into hand (scry/tutor).
+  const isScry = /look at the top \d+ cards?/.test(text) && /(put|place|add).{0,40}(into|in) (your )?hand/.test(text)
   return {
     isSong, isCharacter, isLocation, isItem,
-    isRemoval, isDraw, isRamp,
+    isRemoval, isDraw, isRamp, isDiscardRecovery, isScry,
     develops: isCharacter || isLocation,
   }
 }
@@ -2295,56 +2319,96 @@ export function DeckInsightsPage() {
 
           {/* Draw Effects tile */}
           {drawEffects && (() => {
-            const { drawCards, rampCards, totalDrawCopies, totalRampCopies, drawPotential } = drawEffects
+            const { drawCards, rampCards, discardRecoveryCards, scryCards, totalDrawCopies, totalRampCopies, totalDiscardCopies, totalScryCopies, drawPotential } = drawEffects
+            const summaryParts = [
+              totalDrawCopies > 0 && `${totalDrawCopies} draw`,
+              totalScryCopies > 0 && `${totalScryCopies} scry`,
+              totalDiscardCopies > 0 && `${totalDiscardCopies} recovery`,
+              totalRampCopies > 0 && `${totalRampCopies} ramp`,
+            ].filter(Boolean)
             return (
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draw Effects</h2>
-                  <span className="text-xs text-gray-400">
-                    {[totalDrawCopies > 0 && `${totalDrawCopies} draw`, totalRampCopies > 0 && `${totalRampCopies} ramp`].filter(Boolean).join(' · ')}
-                  </span>
+                  <span className="text-xs text-gray-400">{summaryParts.join(' · ')}</span>
                 </div>
 
-                {drawCards.length > 0 && (
-                  <div className="mb-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Draw</div>
-                    <div className="space-y-1">
-                      {drawCards.map(c => (
-                        <div key={c.name} className="flex items-center justify-between text-xs">
-                          <span className="text-gray-700 truncate">
-                            <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
-                          </span>
-                          <span className="text-[10px] text-blue-500 shrink-0 ml-2">+{c.drawCount} card{c.drawCount !== 1 ? 's' : ''}</span>
-                        </div>
-                      ))}
+                <div className="space-y-3">
+                  {drawCards.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Draw</div>
+                      <div className="space-y-1">
+                        {drawCards.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 truncate">
+                              <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
+                            </span>
+                            <span className="text-[10px] text-blue-500 shrink-0 ml-2">+{c.drawCount} card{c.drawCount !== 1 ? 's' : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {drawPotential > 0 && (
+                        <p className="text-[10px] text-gray-400 mt-1.5">
+                          Up to <span className="font-semibold text-gray-600">{drawPotential}</span> extra cards if all copies played
+                        </p>
+                      )}
                     </div>
-                    {drawPotential > 0 && (
-                      <p className="text-[10px] text-gray-400 mt-2">
-                        Up to <span className="font-semibold text-gray-600">{drawPotential}</span> extra cards if all copies played
-                      </p>
-                    )}
-                  </div>
-                )}
+                  )}
 
-                {rampCards.length > 0 && (
-                  <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Ramp</div>
-                    <div className="space-y-1">
-                      {rampCards.map(c => (
-                        <div key={c.name} className="flex items-center justify-between text-xs">
-                          <span className="text-gray-700 truncate">
-                            <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
-                          </span>
-                          <span className="text-[10px] text-green-600 shrink-0 ml-2">+ink</span>
-                        </div>
-                      ))}
+                  {scryCards.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Scry / Tutor</div>
+                      <div className="space-y-1">
+                        {scryCards.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 truncate">
+                              <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
+                            </span>
+                            <span className="text-[10px] text-indigo-500 shrink-0 ml-2">
+                              {c.lookCount != null ? `look ${c.lookCount}` : 'look'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {drawCards.length === 0 && (
-                  <p className="text-xs text-gray-400 italic">No draw effects detected.</p>
-                )}
+                  {discardRecoveryCards.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Discard Recovery</div>
+                      <div className="space-y-1">
+                        {discardRecoveryCards.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 truncate">
+                              <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
+                            </span>
+                            <span className="text-[10px] text-violet-500 shrink-0 ml-2">from discard</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {rampCards.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Ramp</div>
+                      <div className="space-y-1">
+                        {rampCards.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 truncate">
+                              <span className="text-gray-400 tabular-nums">{c.copies}×</span> {c.name}
+                            </span>
+                            <span className="text-[10px] text-green-600 shrink-0 ml-2">+ink</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {drawCards.length === 0 && scryCards.length === 0 && discardRecoveryCards.length === 0 && (
+                    <p className="text-xs text-gray-400 italic">No draw effects detected.</p>
+                  )}
+                </div>
               </div>
             )
           })()}

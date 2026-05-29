@@ -837,17 +837,17 @@ function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations = 5000)
 function questPressureSim(deckCards, iterations = 6000) {
   const N = deckCards.length
   if (N === 0) return {
-    avgLore: new Array(8).fill(0), estWinTurn: null,
-    loreBands: Array.from({ length: 8 }, () => ({ p10: 0, p50: 0, p90: 0 })),
-    winTurnCdf: new Array(8).fill(0), winTurnPmf: new Array(8).fill(0),
+    avgLore: new Array(SIM_TURNS).fill(0), estWinTurn: null,
+    loreBands: Array.from({ length: SIM_TURNS }, () => ({ p10: 0, p50: 0, p90: 0 })),
+    winTurnCdf: new Array(SIM_TURNS).fill(0), winTurnPmf: new Array(SIM_TURNS).fill(0),
     medianWinTurn: null, neverWinRate: 1,
   }
   const order = new Uint16Array(N)
-  const loreSums = new Float64Array(8)
+  const loreSums = new Float64Array(SIM_TURNS)
   // Per-turn cumulative lore samples (one column per simulated game) for percentile bands.
-  const loreSamples = Array.from({ length: 8 }, () => new Float32Array(iterations))
+  const loreSamples = Array.from({ length: SIM_TURNS }, () => new Float32Array(iterations))
   // winTurnCdf[t] = count of games that have reached 20 lore by the end of turn t+1.
-  const winTurnCdf = new Float64Array(8)
+  const winTurnCdf = new Float64Array(SIM_TURNS)
   let neverWin = 0
 
   for (let iter = 0; iter < iterations; iter++) {
@@ -869,7 +869,7 @@ function questPressureSim(deckCards, iterations = 6000) {
     // justPlayed: lore values of cards played this turn (quest next turn)
     const justPlayed = []
 
-    for (let t = 0; t < 8; t++) {
+    for (let t = 0; t < SIM_TURNS; t++) {
       // Draw one card (not on T1 since we start with opening hand)
       if (t > 0 && deckIdx < N) inHand[order[deckIdx++]] = 1
 
@@ -928,14 +928,14 @@ function questPressureSim(deckCards, iterations = 6000) {
 
     // Win turn = first turn this game's cumulative lore reached 20.
     let winTurn = -1
-    for (let t = 0; t < 8; t++) {
+    for (let t = 0; t < SIM_TURNS; t++) {
       if (loreSamples[t][iter] >= 20) { winTurn = t; break }
     }
     if (winTurn === -1) {
       neverWin++
     } else {
       // CDF: a game that wins on turn winTurn has also "won by" every later turn.
-      for (let t = winTurn; t < 8; t++) winTurnCdf[t]++
+      for (let t = winTurn; t < SIM_TURNS; t++) winTurnCdf[t]++
     }
   }
 
@@ -988,6 +988,7 @@ const SAMPLE = `4 John Silver - Alien Pirate
 4 Cinderella - Dream Come True`
 
 const TURN_COLS = [1, 2, 3, 4, 5, 6]
+const SIM_TURNS = 12  // turns simulated in quest pressure / win turn
 
 // --- Component ---
 
@@ -2102,19 +2103,19 @@ export function DeckInsightsPage() {
           {/* Quest Pressure tile */}
           {questPressure && (() => {
             const { avgLore, estWinTurn, loreBands } = questPressure
-            const turns = [1, 2, 3, 4, 5, 6, 7, 8]
+            const turns = Array.from({ length: SIM_TURNS }, (_, i) => i + 1)
             const maxLore = Math.max(20, ...avgLore, ...loreBands.map(b => b.p90))
             const W = 300, H = 96, padL = 22, padR = 6, padT = 6, padB = 18
             const cW = W - padL - padR
             const cH = H - padT - padB
-            const tx = (i) => padL + (i / 7) * cW
+            const tx = (i) => padL + (i / (SIM_TURNS - 1)) * cW
             const ty = (v) => padT + cH - (v / maxLore) * cH
             const points = avgLore.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(' ')
             // p10–p90 band: trace p90 left→right, then p10 right→left to close the area.
             const bandTop = loreBands.map((b, i) => `${tx(i).toFixed(1)},${ty(b.p90).toFixed(1)}`)
             const bandBot = loreBands.map((b, i) => `${tx(i).toFixed(1)},${ty(b.p10).toFixed(1)}`).reverse()
             const bandPath = `${bandTop.join(' ')} ${bandBot.join(' ')}`
-            const callouts = [3, 5, 7].map(i => ({ turn: i + 1, lore: avgLore[i].toFixed(1) }))
+            const callouts = [3, 7, 11].map(i => ({ turn: i + 1, lore: avgLore[i].toFixed(1) }))
             return (
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-1">
@@ -2161,7 +2162,7 @@ export function DeckInsightsPage() {
           {/* Win Turn tile */}
           {questPressure && (() => {
             const { winTurnCdf, medianWinTurn, neverWinRate } = questPressure
-            const turns = [5, 6, 7, 8]
+            const turns = Array.from({ length: SIM_TURNS - 4 }, (_, i) => i + 5)
             const barColor = (p) => {
               if (p >= 0.75) return 'bg-green-500'
               if (p >= 0.50) return 'bg-yellow-400'
@@ -2174,7 +2175,7 @@ export function DeckInsightsPage() {
                   <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Win Turn</h2>
                   {medianWinTurn != null
                     ? <span className="text-xs text-gray-400">median ~T{medianWinTurn}</span>
-                    : <span className="text-xs text-gray-400">&lt;50% by T8</span>
+                    : <span className="text-xs text-gray-400">&lt;50% by T{SIM_TURNS}</span>
                   }
                 </div>
                 <div className="flex items-end gap-1.5">
@@ -2202,7 +2203,7 @@ export function DeckInsightsPage() {
                 </div>
                 <p className="text-[10px] text-gray-400 mt-2">
                   P(reach 20 lore by turn) · dashed = 50%
-                  {neverWinRate > 0.005 && <> · {pct(neverWinRate)} not by T8</>}
+                  {neverWinRate > 0.005 && <> · {pct(neverWinRate)} not by T{SIM_TURNS}</>}
                 </p>
               </div>
             )
@@ -2824,7 +2825,7 @@ export function DeckInsightsPage() {
             <div>
               <h3 className="font-semibold text-gray-800 mb-1">Quest Pressure</h3>
               <p>
-                A simulation of how much lore your deck generates on average across turns T1–T8, played out across thousands of games. Each simulated game follows the basic rules of Lorcana: characters enter play "dry" and can't quest until the following turn, locations generate passive lore each turn automatically, and the ink system is modeled so you're spending the right amount each turn. The simulator plays greedily — it always tries to maximize lore gained — so the numbers represent a best-case ceiling rather than a conservative floor. The dashed red line at 20 lore marks the win condition. The average win turn is shown in the top-right corner. The shaded band around the line shows the 10th-to-90th percentile range across all simulated games — a wide band means your lore output swings a lot game to game, a narrow band means it's consistent.
+                A simulation of how much lore your deck generates on average across turns T1–T12, played out across thousands of games. Each simulated game follows the basic rules of Lorcana: characters enter play "dry" and can't quest until the following turn, locations generate passive lore each turn automatically, and the ink system is modeled so you're spending the right amount each turn. The simulator plays greedily — it always tries to maximize lore gained — so the numbers represent a best-case ceiling rather than a conservative floor. The dashed red line at 20 lore marks the win condition. The average win turn is shown in the top-right corner. The shaded band around the line shows the 10th-to-90th percentile range across all simulated games — a wide band means your lore output swings a lot game to game, a narrow band means it's consistent.
               </p>
             </div>
 

@@ -1282,6 +1282,42 @@ export function DrawOddsPage() {
     return { entries, mainColors, splashes, total, unknown }
   }, [cards, colorMap, inkwellMap])
 
+  // Lore density: distribution of lore values across characters and locations only.
+  const loreDensity = useMemo(() => {
+    if (cards.length === 0) return null
+    const byName = new Map()
+    for (const c of allApiCards) {
+      if (c.fullName) byName.set(c.fullName.toLowerCase(), c)
+    }
+    const buckets = new Map() // lore value → copy count
+    let totalQuesters = 0, totalLore = 0, unknownCount = 0
+    for (const card of cards) {
+      const api = byName.get(card.name.toLowerCase())
+      if (!api) continue
+      const type = api.type || ''
+      if (!/character|location/i.test(type)) continue
+      const lore = api.lore ?? 0
+      buckets.set(lore, (buckets.get(lore) || 0) + card.count)
+      totalQuesters += card.count
+      totalLore += lore * card.count
+      if (api.lore == null) unknownCount += card.count
+    }
+    if (totalQuesters === 0) return null
+    const avgLore = totalLore / totalQuesters
+    // Build ordered distribution: 0, 1, 2, 3, 4+
+    const distribution = [0, 1, 2, 3].map(v => ({
+      lore: v,
+      count: buckets.get(v) || 0,
+      pct: (buckets.get(v) || 0) / totalQuesters,
+    }))
+    const fourPlus = [...buckets.entries()]
+      .filter(([v]) => v >= 4)
+      .reduce((s, [, c]) => s + c, 0)
+    if (fourPlus > 0) distribution.push({ lore: '4+', count: fourPlus, pct: fourPlus / totalQuesters })
+    const questingCopies = totalQuesters - (buckets.get(0) || 0)
+    return { distribution, totalQuesters, questingCopies, avgLore, unknownCount }
+  }, [cards, allApiCards])
+
   // Curve probability: P(can play at least one card) for each turn T1-T8
   // Monte Carlo — accounts for mulligan strategy (keep playable, send back non-playable)
   const curveProbability = useMemo(() => {
@@ -1947,6 +1983,53 @@ export function DrawOddsPage() {
               )}
             </div>
           )}
+
+          {/* Lore Density tile */}
+          {loreDensity && (() => {
+            const { distribution, totalQuesters, questingCopies, avgLore } = loreDensity
+            const maxCount = Math.max(...distribution.map(d => d.count), 1)
+            const loreBarColor = (lore) => {
+              if (lore === 0)   return 'bg-gray-200'
+              if (lore === 1)   return 'bg-blue-300'
+              if (lore === 2)   return 'bg-blue-500'
+              if (lore === 3)   return 'bg-blue-700'
+              return 'bg-blue-900'
+            }
+            const loreTextColor = (lore) => {
+              if (lore === 0)   return 'text-gray-400'
+              if (lore === 1)   return 'text-blue-400'
+              if (lore === 2)   return 'text-blue-500'
+              if (lore === 3)   return 'text-blue-700'
+              return 'text-blue-900'
+            }
+            const questingPct = totalQuesters > 0 ? Math.round((questingCopies / totalQuesters) * 100) : 0
+            return (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Lore Density</h2>
+                  <span className="text-xs text-gray-400">avg {avgLore.toFixed(2)} ◆ per quester</span>
+                </div>
+                <div className="flex items-end gap-1.5 mb-3">
+                  {distribution.map(({ lore, count, pct }) => (
+                    <div key={lore} className="flex flex-col items-center gap-0.5 flex-1">
+                      <span className={`text-[10px] font-semibold tabular-nums ${loreTextColor(lore)}`}>{count}</span>
+                      <div
+                        className={`w-full rounded-t min-h-[3px] ${loreBarColor(lore)}`}
+                        style={{ height: `${Math.max(3, Math.round((count / maxCount) * 52))}px` }}
+                      />
+                      <span className="text-[10px] text-gray-500">{lore}◆</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[10px] text-gray-500 space-y-0.5">
+                  <div className="flex justify-between">
+                    <span>Questing characters &amp; locations</span>
+                    <span className="tabular-nums font-medium text-gray-700">{questingCopies} / {totalQuesters} ({questingPct}%)</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Ink Color Balance tile */}
           {colorBalance && colorBalance.entries.length > 0 && (() => {
@@ -2728,6 +2811,13 @@ export function DrawOddsPage() {
               </ul>
               <p className="mt-2">
                 The letter grade combines both risks into a single score: <span className="font-medium text-green-600">A</span> means your deck is very consistent, <span className="font-medium text-red-500">F</span> means you're likely to brick at least one of these ways fairly often.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-1">Lore Density</h3>
+              <p>
+                A bar chart showing how many copies of your characters and locations produce each lore value per quest. Cards with 0◆ sit on the board and challenge but never advance your win condition on their own; 1◆ cards are steady; 2◆ and 3◆ cards are your fastest lore engines. The summary row shows what fraction of your board-development cards actually quest, which is a quick read on whether you&apos;re building a racing deck or a defensive one.
               </p>
             </div>
 

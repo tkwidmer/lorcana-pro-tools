@@ -153,6 +153,13 @@ function deltaColor(delta) {
   return 'text-gray-500'
 }
 
+const DATE_RANGES = [
+  { id: 'all', label: 'All time' },
+  { id: '7d', label: 'Past 7 days' },
+  { id: '14d', label: 'Past 14 days' },
+  { id: '30d', label: 'Past 30 days' },
+]
+
 export function PracticePlanPage() {
   const hasToken = !!getToken()
   const [queue, setQueue] = useState('infinity-bo1')
@@ -168,6 +175,8 @@ export function PracticePlanPage() {
   const [showAllMeta, setShowAllMeta] = useState(false)
   const [sortBy, setSortBy] = useState('meta') // 'meta' | 'impact' | 'personal' | 'public' | 'lift'
   const [savedGamelogs, setSavedGamelogs] = useState([])
+  const [historyDateRange, setHistoryDateRange] = useState('all') // 'all' | '7d' | '14d' | '30d'
+  const [historyQueue, setHistoryQueue] = useState('') // '' = all queues
 
   // Load saved gamelogs (IndexedDB) for leak-based skill drills
   useEffect(() => {
@@ -175,6 +184,20 @@ export function PracticePlanPage() {
       .then(all => setSavedGamelogs(all.filter(g => g.myPlayerNum != null && (Array.isArray(g.turns) || Array.isArray(g.challenges)))))
       .catch(() => {})
   }, [])
+
+  // Filtered personal history for plan calculations
+  const filteredGames = useMemo(() => {
+    let result = games
+    if (historyQueue) {
+      result = result.filter(g => g.queue_name === historyQueue)
+    }
+    if (historyDateRange !== 'all') {
+      const days = historyDateRange === '7d' ? 7 : historyDateRange === '14d' ? 14 : 30
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+      result = result.filter(g => g.started_at && new Date(g.started_at).getTime() >= cutoff)
+    }
+    return result
+  }, [games, historyDateRange, historyQueue])
 
   // Load public stats
   useEffect(() => {
@@ -233,9 +256,9 @@ export function PracticePlanPage() {
 
   // Auto-pick most-played ink combo from user's games (used until user picks one)
   const mostPlayedKey = useMemo(() => {
-    if (!games.length) return ''
+    if (!filteredGames.length) return ''
     const counts = new Map()
-    for (const g of games) {
+    for (const g of filteredGames) {
       const cols = parseColorString(g.your_deck_colors)
       if (cols.length !== 2) continue
       const k = colorsKey(cols)
@@ -247,7 +270,7 @@ export function PracticePlanPage() {
       if (n > bestN) { bestN = n; best = k }
     }
     return best
-  }, [games])
+  }, [filteredGames])
 
   const yourColorsKey = yourColorsKeyOverride ?? mostPlayedKey
   const yourColors = useMemo(() => yourColorsKey ? yourColorsKey.split('+') : [], [yourColorsKey])
@@ -278,7 +301,7 @@ export function PracticePlanPage() {
     const map = new Map() // key -> { wins, losses, games, playWins, playGames, drawWins, drawGames }
     if (!yourColors.length) return map
     const myKey = yourColorsKey
-    for (const g of games) {
+    for (const g of filteredGames) {
       const my = parseColorString(g.your_deck_colors)
       if (colorsKey(my) !== myKey) continue
       const opp = parseColorString(g.opp_deck_colors)
@@ -301,12 +324,12 @@ export function PracticePlanPage() {
       map.set(k, cur)
     }
     return map
-  }, [games, yourColors, yourColorsKey])
+  }, [filteredGames, yourColors, yourColorsKey])
 
   // Global personal play/draw delta (fallback when per-matchup data is thin)
   const globalPlayDelta = useMemo(() => {
     let pw = 0, pg = 0, dw = 0, dg = 0
-    for (const g of games) {
+    for (const g of filteredGames) {
       const r = (g.result ?? '').toLowerCase()
       const isWin = r === 'win'
       const isLoss = r === 'loss'
@@ -316,7 +339,7 @@ export function PracticePlanPage() {
     }
     if (pg < 30 || dg < 30) return null // need a decent sample
     return (pw / pg) - (dw / dg) // positive = play favored
-  }, [games])
+  }, [filteredGames])
 
   // Default meta % from public stats popularity (share of games played).
   // Pairs below the rogue threshold default to 0; the rest are renormalized to sum to 100.
@@ -523,10 +546,10 @@ export function PracticePlanPage() {
 
   // Alternative decks: what's your expected WR with your other 2-color decks?
   const deckAlternatives = useMemo(() => {
-    if (!games.length || !twoColorPairs.length) return []
+    if (!filteredGames.length || !twoColorPairs.length) return []
     // Count games per personal deck
     const myDeckGames = new Map()
-    for (const g of games) {
+    for (const g of filteredGames) {
       const my = parseColorString(g.your_deck_colors)
       if (my.length !== 2) continue
       const k = colorsKey(my)
@@ -542,7 +565,7 @@ export function PracticePlanPage() {
       const colors = deckKey.split('+')
       // Personal opp record on THIS deck
       const oppRecord = new Map()
-      for (const g of games) {
+      for (const g of filteredGames) {
         const my = parseColorString(g.your_deck_colors)
         if (colorsKey(my) !== deckKey) continue
         const opp = parseColorString(g.opp_deck_colors)
@@ -569,7 +592,7 @@ export function PracticePlanPage() {
       }
       return { key: deckKey, colors, expectedWR: expWR * 100, totalGames, sampleN: myDeckGames.get(deckKey) }
     }).sort((a, b) => b.expectedWR - a.expectedWR)
-  }, [games, twoColorPairs, matchupLookup, metaOverrides, defaultMetaByKey, planningTotalMetaPct])
+  }, [filteredGames, twoColorPairs, matchupLookup, metaOverrides, defaultMetaByKey, planningTotalMetaPct])
 
   // Gamelog records for the selected deck, with turns/challenges refreshed from
   // raw logs (older records were parsed before the turn-segmentation fix).
@@ -652,7 +675,7 @@ export function PracticePlanPage() {
       </div>
 
       {/* Controls */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-4">
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2">Queue (public stats)</label>
           <select
@@ -691,6 +714,44 @@ export function PracticePlanPage() {
         </div>
       </div>
 
+      {/* Personal history filters */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Personal history — date range</label>
+          <div className="inline-flex rounded border border-gray-200 overflow-hidden bg-white">
+            {DATE_RANGES.map(dr => (
+              <button
+                key={dr.id}
+                onClick={() => setHistoryDateRange(dr.id)}
+                className={`px-3 py-1.5 text-xs ${historyDateRange === dr.id ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                {dr.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Personal history — queue</label>
+          <div className="inline-flex rounded border border-gray-200 overflow-hidden bg-white flex-wrap">
+            <button
+              onClick={() => setHistoryQueue('')}
+              className={`px-3 py-1.5 text-xs ${historyQueue === '' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+              All queues
+            </button>
+            {QUEUES.map(q => (
+              <button
+                key={q.id}
+                onClick={() => setHistoryQueue(historyQueue === q.id ? '' : q.id)}
+                className={`px-3 py-1.5 text-xs ${historyQueue === q.id ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                {q.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {(loadingStats || loadingGames) && (
         <p className="text-gray-500 text-sm mb-4">
           {loadingStats ? 'Loading public stats… ' : ''}{loadingGames ? 'Loading your match history…' : ''}
@@ -709,6 +770,11 @@ export function PracticePlanPage() {
             <span className="font-semibold text-gray-900">
               {[...personalByOpp.values()].reduce((s, p) => s + p.games, 0)}
             </span>
+            {(historyDateRange !== 'all' || historyQueue) && (
+              <span className="ml-1 text-xs text-amber-700">
+                (filtered{historyDateRange !== 'all' ? ` · ${DATE_RANGES.find(d => d.id === historyDateRange)?.label}` : ''}{historyQueue ? ` · ${QUEUES.find(q => q.id === historyQueue)?.name}` : ''})
+              </span>
+            )}
           </span>
         </div>
       )}

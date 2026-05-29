@@ -25,7 +25,7 @@ export function useCards() {
         const response = await fetch(CARDS_URL)
         if (!response.ok) throw new Error(`Failed to load card data (HTTP ${response.status})`)
         const data = await response.json()
-        const cardList = data.cards ?? []
+        const cardList = Array.isArray(data) ? data : (data.cards ?? [])
 
         if (mounted) {
           setCards(cardList)

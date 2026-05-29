@@ -58,9 +58,14 @@ function PlayerCard({ player, onLore, onNameChange, flipped }) {
   )
 }
 
-function AuditModal({ auditLog, onClose }) {
+function AuditModal({ auditLog, onClose, onClearAudit }) {
   const formatTime = (date) =>
     date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+  const handleClear = () => {
+    if (!confirm('Clear audit log? This cannot be undone.')) return
+    onClearAudit()
+  }
 
   return (
     <div
@@ -75,12 +80,22 @@ function AuditModal({ auditLog, onClose }) {
           <h2 className="text-sm font-semibold text-gray-900">
             Audit Log {auditLog.length > 0 && <span className="text-gray-400 font-normal">({auditLog.length})</span>}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 transition-colors text-lg leading-none px-1"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1">
+            {auditLog.length > 0 && (
+              <button
+                onClick={handleClear}
+                className="text-sm text-red-600 hover:text-red-800 transition-colors border border-red-200 rounded px-2 py-1 hover:bg-red-50 text-xs font-medium"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-700 transition-colors text-lg leading-none px-1"
+            >
+              ✕
+            </button>
+          </div>
         </div>
         <div className="overflow-y-auto flex-1">
           {auditLog.length === 0 ? (
@@ -200,7 +215,14 @@ export function LoreTrackerPage() {
       </div>
 
       {auditOpen && (
-        <AuditModal auditLog={auditLog} onClose={() => setAuditOpen(false)} />
+        <AuditModal
+          auditLog={auditLog}
+          onClose={() => setAuditOpen(false)}
+          onClearAudit={() => {
+            setAuditLog([])
+            setAuditOpen(false)
+          }}
+        />
       )}
     </div>
   )

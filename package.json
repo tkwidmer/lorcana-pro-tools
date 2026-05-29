@@ -8,7 +8,9 @@
     "build": "vite build && node build-extension.js",
     "build:ext": "node build-extension.js",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
@@ -31,6 +33,7 @@
     "globals": "^17.5.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.2.4",
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "vitest": "^4.1.7"
   }
 }

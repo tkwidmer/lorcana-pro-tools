@@ -2161,7 +2161,7 @@ export function DeckInsightsPage() {
           {/* Win Turn tile */}
           {questPressure && (() => {
             const { winTurnCdf, medianWinTurn, neverWinRate } = questPressure
-            const turns = [1, 2, 3, 4, 5, 6, 7, 8]
+            const turns = [5, 6, 7, 8]
             const barColor = (p) => {
               if (p >= 0.75) return 'bg-green-500'
               if (p >= 0.50) return 'bg-yellow-400'
@@ -2178,8 +2178,8 @@ export function DeckInsightsPage() {
                   }
                 </div>
                 <div className="flex items-end gap-1.5">
-                  {turns.map((t, i) => {
-                    const p = winTurnCdf[i]
+                  {turns.map((t) => {
+                    const p = winTurnCdf[t - 1]
                     return (
                       <div key={t} className="flex flex-col items-center gap-0.5 flex-1">
                         <span className="text-[10px] font-semibold tabular-nums text-gray-600">

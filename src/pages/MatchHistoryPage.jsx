@@ -1,10 +1,39 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getToken, fetchMatchHistory, fetchGamelogBuffer, fetchDecks } from '../lib/duelsApi'
+import { getToken, fetchMatchHistory, fetchGamelogBuffer, fetchDecks, fetchDeck } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
+import { useCards } from '../hooks/useCards'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
+
+function DeckCardList({ cardIds, cardIdToName }) {
+  const counts = {}
+  for (const id of cardIds) counts[id] = (counts[id] ?? 0) + 1
+  const entries = Object.entries(counts).sort((a, b) =>
+    b[1] - a[1] || (cardIdToName[a[0]] ?? a[0]).localeCompare(cardIdToName[b[0]] ?? b[0])
+  )
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-0.5">
+      {entries.map(([id, count]) => (
+        <div key={id} className="flex items-baseline gap-1.5 min-w-0">
+          <span className="text-xs text-gray-400 flex-shrink-0 w-4 text-right">{count}×</span>
+          <span className="text-xs text-gray-800 truncate">{cardIdToName[id] ?? id}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function isDeckModified(latestDecklist, apiCardIds) {
+  if (!latestDecklist?.length || !apiCardIds?.length) return false
+  const gameCounts = {}
+  for (const { cardId, count } of latestDecklist) gameCounts[cardId] = (gameCounts[cardId] ?? 0) + (count ?? 1)
+  const apiCounts = {}
+  for (const id of apiCardIds) apiCounts[id] = (apiCounts[id] ?? 0) + 1
+  const toSig = obj => Object.entries(obj).sort().map(([k, v]) => `${k}:${v}`).join('|')
+  return toSig(gameCounts) !== toSig(apiCounts)
+}
 
 function deckFingerprint(decklist) {
   if (!decklist) return null
@@ -349,6 +378,18 @@ export function MatchHistoryPage() {
   const [deckNames, setDeckNames] = useState(() => {
     try { return JSON.parse(localStorage.getItem(DECK_NAMES_KEY) ?? '{}') } catch { return {} }
   })
+  const [deckDetailMap, setDeckDetailMap] = useState({}) // { [deckId]: { status, deck } }
+  const [expandedDeckKey, setExpandedDeckKey] = useState(null)
+  const [insightsLoading, setInsightsLoading] = useState(null)
+  const fetchedDeckIds = useRef(new Set())
+  const { cards } = useCards()
+  const cardIdToName = useMemo(() => {
+    const map = {}
+    for (const c of cards) {
+      if (c.setCode != null && c.number != null) map[`${c.setCode}-${c.number}`] = c.fullName ?? c.name
+    }
+    return map
+  }, [cards])
 
   async function load({ cursor = null, append = false } = {}) {
     if (append) setLoadingMore(true)
@@ -394,6 +435,39 @@ export function MatchHistoryPage() {
       })
     } catch {
       // silently ignore — deck names just won't be auto-filled
+    }
+  }
+
+  // Background-fetch deck details for all constructed decks with a real deckId
+  useEffect(() => {
+    for (const { deckId } of deckStats) {
+      if (!deckId || fetchedDeckIds.current.has(deckId)) continue
+      fetchedDeckIds.current.add(deckId)
+      setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loading', deck: null } }))
+      fetchDeck(deckId)
+        .then(data => setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loaded', deck: data.deck } })))
+        .catch(() => setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'error', deck: null } })))
+    }
+  }, [deckStats]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleLoadInsights(deckStat) {
+    setInsightsLoading(deckStat.key)
+    try {
+      let entries = []
+      const detail = deckStat.deckId ? deckDetailMap[deckStat.deckId] : null
+      if (detail?.deck?.cardIds) {
+        const counts = {}
+        for (const id of detail.deck.cardIds) counts[id] = (counts[id] ?? 0) + 1
+        entries = Object.entries(counts).map(([cardId, count]) => ({ cardId, count }))
+      } else if (deckStat.latestDecklist?.length) {
+        entries = deckStat.latestDecklist
+      }
+      if (!entries.length) return
+      const lines = entries.map(({ cardId, count }) => `${count} ${cardIdToName[cardId] ?? cardId}`)
+      localStorage.setItem('drawOdds.deckText', lines.join('\n'))
+      navigate('/deck-insights')
+    } finally {
+      setInsightsLoading(null)
     }
   }
 
@@ -536,7 +610,13 @@ export function MatchHistoryPage() {
       if (isSealed) continue
       const key = getDeckKey(g)
       if (!key) continue
-      if (!byDeck[key]) byDeck[key] = { key, colors: g.your_deck_colors, wins: 0, losses: 0, loreTotal: 0, loreGames: 0 }
+      if (!byDeck[key]) byDeck[key] = {
+        key,
+        deckId: g.your_deck_id ?? null,
+        colors: g.your_deck_colors,
+        wins: 0, losses: 0, loreTotal: 0, loreGames: 0,
+        latestDecklist: g.your_decklist ?? null, // games sorted newest-first
+      }
       if (g.result === 'win') byDeck[key].wins++
       else if (g.result === 'loss') byDeck[key].losses++
       if (g.your_lore != null) { byDeck[key].loreTotal += g.your_lore; byDeck[key].loreGames++ }
@@ -752,30 +832,97 @@ export function MatchHistoryPage() {
         <div className="mb-6">
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">By Deck</div>
           <div className="flex gap-3 overflow-x-auto pb-1">
-            {deckStats.map(({ key, colors, wins, losses, loreTotal, loreGames }) => {
+            {deckStats.map((stat) => {
+              const { key, deckId, colors, wins, losses, loreTotal, loreGames, latestDecklist } = stat
               const total = wins + losses
               const wr = total > 0 ? wins / total : null
               const name = deckNames[key] ?? null
               const avgLore = loreGames > 0 ? (loreTotal / loreGames).toFixed(1) : null
+              const detail = deckId ? deckDetailMap[deckId] : null
+              const modified = detail?.status === 'loaded' && isDeckModified(latestDecklist, detail.deck?.cardIds)
+              const isSelected = filterDeck === key
+              const isExpanded = expandedDeckKey === key
               return (
-                <button
+                <div
                   key={key}
                   onClick={() => setFilterDeck(prev => prev === key ? null : key)}
-                  className={`flex-shrink-0 text-left border rounded-lg px-3 py-2.5 transition-colors min-w-[120px] ${filterDeck === key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'}`}
+                  className={`flex-shrink-0 text-left border rounded-lg px-3 py-2.5 cursor-pointer transition-colors min-w-[140px] ${isSelected ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'}`}
                 >
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <InkIcons colors={colors} />
+                    {modified && <span className="ml-auto text-[10px] text-amber-500 font-medium flex-shrink-0">updated</span>}
                   </div>
-                  {name && <div className={`text-[11px] font-medium truncate max-w-[110px] mb-1 ${filterDeck === key ? 'text-gray-300' : 'text-gray-600'}`}>{name}</div>}
-                  <div className={`text-sm font-bold ${filterDeck === key ? 'text-white' : wr != null && wr >= 0.5 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {name && <div className={`text-[11px] font-medium truncate max-w-[130px] mb-1 ${isSelected ? 'text-gray-300' : 'text-gray-600'}`}>{name}</div>}
+                  <div className={`text-sm font-bold ${isSelected ? 'text-white' : wr != null && wr >= 0.5 ? 'text-emerald-600' : 'text-red-500'}`}>
                     {wins}–{losses}
-                    {wr != null && <span className={`ml-1.5 text-xs font-normal ${filterDeck === key ? 'text-gray-400' : 'text-gray-400'}`}>{Math.round(wr * 100)}%</span>}
+                    {wr != null && <span className="ml-1.5 text-xs font-normal text-gray-400">{Math.round(wr * 100)}%</span>}
                   </div>
-                  {avgLore && <div className={`text-[11px] ${filterDeck === key ? 'text-gray-400' : 'text-gray-400'}`}>{avgLore} avg lore</div>}
-                </button>
+                  {avgLore && <div className="text-[11px] text-gray-400">{avgLore} avg lore</div>}
+                  {(deckId || latestDecklist?.length > 0) && (
+                    <div
+                      className={`flex gap-1.5 mt-2 pt-2 border-t ${isSelected ? 'border-gray-700' : 'border-gray-100'}`}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {deckId && (
+                        <button
+                          onClick={() => setExpandedDeckKey(prev => prev === key ? null : key)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${isExpanded ? (isSelected ? 'bg-gray-600 border-gray-500 text-white' : 'bg-gray-100 border-gray-300 text-gray-700') : (isSelected ? 'border-gray-600 text-gray-300 hover:border-gray-400' : 'border-gray-200 text-gray-500 hover:border-gray-400')}`}
+                        >
+                          Cards
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleLoadInsights(stat)}
+                        disabled={insightsLoading === key}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors disabled:opacity-40 ${isSelected ? 'border-gray-600 text-gray-300 hover:border-gray-400' : 'border-gray-200 text-gray-500 hover:border-gray-400'}`}
+                      >
+                        {insightsLoading === key ? '…' : '→ Insights'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
+
+          {expandedDeckKey && (() => {
+            const stat = deckStats.find(d => d.key === expandedDeckKey)
+            if (!stat?.deckId) return null
+            const detail = deckDetailMap[stat.deckId]
+            const name = deckNames[expandedDeckKey]
+            const modified = detail?.status === 'loaded' && isDeckModified(stat.latestDecklist, detail.deck?.cardIds)
+            return (
+              <div className="mt-3 border border-gray-200 rounded-lg bg-white overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900 text-sm">{name ?? 'Deck'}</span>
+                    <InkIcons colors={stat.colors} />
+                    {detail?.deck?.legalFormats?.map(f => (
+                      <span key={f} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">{f.replace('Constructed', '')}</span>
+                    ))}
+                    {modified && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded border border-amber-200">updated since last game</span>
+                    )}
+                  </div>
+                  <button onClick={() => setExpandedDeckKey(null)} className="text-xs text-gray-400 hover:text-gray-700 ml-4 flex-shrink-0">✕</button>
+                </div>
+                <div className="p-4">
+                  {detail?.status === 'loading' && <div className="text-sm text-gray-400">Loading deck…</div>}
+                  {detail?.status === 'error' && <div className="text-sm text-red-400">Failed to load deck list</div>}
+                  {detail?.deck?.cardIds && (
+                    <DeckCardList cardIds={detail.deck.cardIds} cardIdToName={cardIdToName} />
+                  )}
+                  <button
+                    onClick={() => handleLoadInsights(stat)}
+                    disabled={insightsLoading === stat.key}
+                    className="mt-4 text-xs px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-40"
+                  >
+                    {insightsLoading === stat.key ? 'Loading…' : '→ Load into Deck Insights'}
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 

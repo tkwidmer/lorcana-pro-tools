@@ -61,6 +61,20 @@ export async function fetchReplayBuffer(replayId) {
   return res.arrayBuffer()
 }
 
+export async function fetchDeck(id) {
+  const token = getToken()
+  if (!token) throw new Error('No API token configured')
+
+  const res = await fetch(`/api/duels-deck?id=${encodeURIComponent(id)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (res.status === 401) throw new Error('Invalid or expired API token')
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+
+  return res.json() // { deck: DeckDetail }
+}
+
 export async function fetchDecks() {
   const token = getToken()
   if (!token) throw new Error('No API token configured')

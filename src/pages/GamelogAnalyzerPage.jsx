@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { saveGamelog, getAllGamelogs, deleteGamelog, clearAllGamelogs } from '../lib/gamelogHistory'
-import { decompressGzip, parseGamelog, parseColors } from '../lib/parseGamelog'
+import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { createGameExportZip } from '../lib/gameExport'
 import { detectLeaks, summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
 
@@ -225,8 +225,8 @@ function MulliganTable({ rows, emptyText }) {
 // --- Aggregate stat components ---
 
 function WinRateStats({ enrichedGames }) {
-  if (!enrichedGames.length) return null
   const [expanded, setExpanded] = useState(new Set())
+  if (!enrichedGames.length) return null
   const toggle = (key) => setExpanded(prev => {
     const next = new Set(prev)
     next.has(key) ? next.delete(key) : next.add(key)
@@ -1028,14 +1028,13 @@ function LoreChart({ loreEvents, turnCount, p1Name, p2Name }) {
   )
 }
 
-function GameChallengeLog({ challenges, p1Name, p2Name, myPlayerNum }) {
+function GameChallengeLog({ challenges, myPlayerNum }) {
   if (!challenges?.length) return null
   return (
     <div>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Challenges ({challenges.length})</h3>
       <div className="space-y-0.5 text-xs font-mono">
         {challenges.map((c, i) => {
-          const attackerPlayer = c.player === 1 ? p1Name : p2Name
           const isMe = c.player === myPlayerNum
           return (
             <div key={i} className={`flex items-center gap-2 py-1 border-b border-gray-100 last:border-0 ${isMe ? '' : 'opacity-60'}`}>
@@ -1208,7 +1207,7 @@ function TurnByTurnLog({ rawLogs, turnCount }) {
     }
   }
 
-  const turns = Object.entries(eventsByTurn).filter(([_, events]) => events.length > 0)
+  const turns = Object.entries(eventsByTurn).filter(([, events]) => events.length > 0)
 
   if (turns.length === 0) return null
 
@@ -1248,9 +1247,6 @@ function CardEffectsTimeline({ p1, p2, p1Name, p2Name, turnCount }) {
 
     // Create turn-wise breakdown: distribute actions across turns
     const cardsArray = Object.values(player.cards)
-    const totalDraws = cardsArray.reduce((sum, c) => sum + (c.drawn || 0), 0)
-    const totalPlays = cardsArray.reduce((sum, c) => sum + (c.played || 0), 0)
-    const totalInked = cardsArray.reduce((sum, c) => sum + (c.inked || 0), 0)
 
     const turnsPerCard = {}
     for (const card of cardsArray) {
@@ -1301,7 +1297,7 @@ function CardEffectsTimeline({ p1, p2, p1Name, p2Name, turnCount }) {
 }
 
 function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
-  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, eventCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, inferredOppDecklist, savedAt, _rawLogs } = gamelog
+  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, inferredOppDecklist, savedAt, _rawLogs } = gamelog
   const p1Name = resolveDisplayName(rawP1Name, myPlayerNum === 1, myName)
   const p2Name = resolveDisplayName(rawP2Name, myPlayerNum === 2, myName)
   const p1IsWinner = winner === 1 || winner === '1'
@@ -1380,7 +1376,7 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
       {/* Challenge log */}
       {challenges?.length > 0 && (
         <div className="mt-8 border border-gray-100 rounded-lg p-4">
-          <GameChallengeLog challenges={challenges} p1Name={p1Name} p2Name={p2Name} myPlayerNum={myPlayerNum} />
+          <GameChallengeLog challenges={challenges} myPlayerNum={myPlayerNum} />
         </div>
       )}
 
@@ -1462,13 +1458,14 @@ export function GamelogAnalyzerPage() {
         const binary = atob(base64)
         const bytes = new Uint8Array(binary.length)
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true)
         processBuffer(bytes.buffer, filename).catch(e => setError(e.message)).finally(() => setLoading(false))
       } catch (e) {
         setError(e.message)
       }
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleDelete(id) {
     await deleteGamelog(id)

@@ -193,6 +193,7 @@ export function PracticePlanPage() {
     }
     if (historyDateRange !== 'all') {
       const days = historyDateRange === '7d' ? 7 : historyDateRange === '14d' ? 14 : 30
+      // eslint-disable-next-line react-hooks/purity
       const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
       result = result.filter(g => g.started_at && new Date(g.started_at).getTime() >= cutoff)
     }

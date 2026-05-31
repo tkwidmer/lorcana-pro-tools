@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 // Runs in the page's MAIN world at document_start — patches WebSocket before any
 // app code runs. Mirrors both the onmessage setter and addEventListener paths.
 
@@ -9,7 +8,7 @@
     try {
       const data = JSON.parse(ev.data)
       window.postMessage({ type: 'LORCANA_WS_DATA', data }, '*')
-    } catch (_) {
+    } catch {
       // not JSON
     }
   }

@@ -117,6 +117,7 @@ export function LeaderboardPage() {
 
   useEffect(() => {
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     setError(null)
     fetchLeaderboard({ queue })
@@ -136,12 +137,12 @@ export function LeaderboardPage() {
 
   const queues = data?.meta?.queues?.active ?? []
   const leaderboard = data?.leaderboard ?? []
-  const distribution = data?.meta?.mmrDistribution ?? []
+  const distribution = data?.meta?.mmrDistribution
   const currentSeason = data?.meta?.seasons?.currentSeason
   const minGames = data?.meta?.minGamesRequired
 
   const totalPlayers = useMemo(
-    () => distribution.reduce((acc, b) => acc + b.count, 0),
+    () => (distribution ?? []).reduce((acc, b) => acc + b.count, 0),
     [distribution],
   )
   const top1Mmr = leaderboard[0]?.mmr

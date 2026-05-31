@@ -895,14 +895,8 @@ function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 5000) {
       const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
     }
 
-    // Rebuild hand: kept cards + sent replacements from pool
-    let newNonInk = 0
-    for (let i = 0; i < 7; i++) {
-      // kept cards: inkable ones from original hand (nonInk - sent were kept non-inkable if sent < nonInk)
-    }
-    // Simpler: count non-inkables in final hand directly
     // Final hand = original hand minus sent non-inkables + sent replacements from pool
-    newNonInk = nonInk - sent // non-inkables kept from original hand
+    let newNonInk = nonInk - sent // non-inkables kept from original hand
     for (let i = 0; i < sent && i < pi; i++) {
       if (!deckInkable[pool[i]]) newNonInk++
     }
@@ -1132,7 +1126,7 @@ function lsGet(key, fallback) {
 }
 
 function lsSet(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* noop */ }
 }
 
 function encodeShareState({ deckText, deckSize, goingFirst, maxMulligan, additionalDraws, groups, scrySources }) {
@@ -2155,7 +2149,7 @@ export function DeckInsightsPage() {
                   <span className="text-xs text-gray-400">avg {avgLore.toFixed(2)} ◆ per quester</span>
                 </div>
                 <div className="flex items-end gap-1.5 mb-3">
-                  {distribution.map(({ lore, count, pct }) => (
+                  {distribution.map(({ lore, count }) => (
                     <div key={lore} className="flex flex-col items-center gap-0.5 flex-1">
                       <span className={`text-[10px] font-semibold tabular-nums ${loreTextColor(lore)}`}>{count}</span>
                       <div

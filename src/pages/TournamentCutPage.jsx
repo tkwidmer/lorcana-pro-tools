@@ -193,7 +193,7 @@ export function TournamentCutPage() {
     }
 
     return { pointsIfDrawOut, pointsIfWinOut, lower, upper, range, roundsRemaining, currentPoints, status, color, detail }
-  }, [N, R, T, fieldDrawCount, wins, losses, draws, setupValid, recordValid, currentPoints, roundsRemaining])
+  }, [N, R, T, fieldDrawCount, setupValid, recordValid, currentPoints, roundsRemaining])
 
   const recordOverflow = R > 0 && roundsPlayed > R
 

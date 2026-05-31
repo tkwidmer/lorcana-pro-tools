@@ -120,6 +120,54 @@ export function getTournamentStructure(eventDetails) {
   }
 }
 
+export async function fetchEventMatches(eventId, roundId) {
+  try {
+    const params = new URLSearchParams({ eventId: String(eventId), roundId: String(roundId) })
+    const response = await fetch(`/api/tournament-matches?${params}`)
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || error.error || 'Failed to fetch matches')
+    }
+    return await response.json()
+  } catch (err) {
+    console.error('Tournament matches fetch error:', err)
+    throw err
+  }
+}
+
+// Fetches all matches for every round in the event, in parallel.
+// Response per round is { id, matches: [...], round_number, ... } (not paginated).
+// Returns flat array of match objects with `round_number` and `phase_name` injected.
+export async function fetchAllRoundMatches(eventId, eventDetails) {
+  if (!eventDetails?.tournament_phases) return []
+
+  const rounds = []
+  for (const phase of eventDetails.tournament_phases) {
+    if (!phase.rounds) continue
+    for (const round of phase.rounds) {
+      rounds.push({ roundId: round.id, roundNumber: round.round_number, phaseName: phase.phase_name })
+    }
+  }
+
+  const allMatches = []
+
+  await Promise.all(
+    rounds.map(async ({ roundId, roundNumber, phaseName }) => {
+      try {
+        const data = await fetchEventMatches(eventId, roundId)
+        for (const match of data.matches ?? []) {
+          allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
+        }
+      } catch {
+        // Skip rounds that fail; don't block the rest
+      }
+    })
+  )
+
+  allMatches.sort((a, b) => a.round_number - b.round_number)
+  return allMatches
+}
+
 // Keep backward compat
 export function getCurrentRoundId(eventDetails) {
   return getTournamentStructure(eventDetails)?.currentRoundId ?? null

@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getToken, fetchMatchHistory, fetchGamelogBuffer } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
-import { createGameExportZip } from '../lib/gameExport'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
 
@@ -34,13 +33,6 @@ function formatDate(isoString) {
     hour: 'numeric',
     minute: '2-digit',
   }).replace(',', ' ·')
-}
-
-function formatDuration(seconds) {
-  if (seconds == null) return '—'
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}m ${String(s).padStart(2, '0')}s`
 }
 
 function ResultBadge({ result }) {
@@ -362,6 +354,7 @@ export function MatchHistoryPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (hasToken) load()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -478,24 +471,31 @@ export function MatchHistoryPage() {
   const oppColorOptions = [...new Set(afterMyColors.map(g => g.opp_deck_colors).filter(c => c && colorCount(c) <= 2))].sort()
   const afterOppColors = afterMyColors.filter(g => !filterOppColors || g.opp_deck_colors === filterOppColors)
 
-  const getDeckKey = (g) => g.your_deck_id ?? deckFingerprint(g.your_decklist)
+  const getDeckKey = useCallback((g) => g.your_deck_id ?? deckFingerprint(g.your_decklist), [])
 
-  const deckOptions = []
-  const seenDeckKeys = new Set()
-  for (const g of afterOppColors) {
-    const key = getDeckKey(g)
-    if (key && !seenDeckKeys.has(key) && colorCount(g.your_deck_colors) <= 2) {
-      seenDeckKeys.add(key)
-      deckOptions.push({ fp: key, colors: g.your_deck_colors })
+  const { deckOptions, seenDeckKeys } = useMemo(() => {
+    const options = []
+    const keys = new Set()
+    for (const g of afterOppColors) {
+      const key = getDeckKey(g)
+      if (key && !keys.has(key) && colorCount(g.your_deck_colors) <= 2) {
+        keys.add(key)
+        options.push({ fp: key, colors: g.your_deck_colors })
+      }
     }
-  }
+    return { deckOptions: options, seenDeckKeys: keys }
+  }, [afterOppColors, getDeckKey])
 
   const filteredGames = afterOppColors.filter(g => !filterDeck || getDeckKey(g) === filterDeck)
 
   // Auto-clear downstream filters that are no longer valid
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (filterQueue && !queues.includes(filterQueue)) setFilterQueue(null) }, [queues, filterQueue])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (filterMyColors && !myColorOptions.includes(filterMyColors)) setFilterMyColors(null) }, [myColorOptions, filterMyColors])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (filterOppColors && !oppColorOptions.includes(filterOppColors)) setFilterOppColors(null) }, [oppColorOptions, filterOppColors])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (filterDeck && !seenDeckKeys.has(filterDeck)) setFilterDeck(null) }, [filterDeck, seenDeckKeys])
 
   // Group BO3 games by match_id for display; BO1 games stay as individual rows

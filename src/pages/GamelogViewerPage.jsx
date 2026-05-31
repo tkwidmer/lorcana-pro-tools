@@ -193,6 +193,7 @@ export function GamelogViewerPage() {
 
   useEffect(() => {
     if (!gameId || !getToken()) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatus('loading')
     fetchGamelogBuffer(gameId)
       .then(buf => decompressGzip(buf))

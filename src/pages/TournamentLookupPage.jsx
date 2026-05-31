@@ -205,6 +205,7 @@ export function TournamentLookupPage() {
 
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimeRemaining(null)
       return
     }

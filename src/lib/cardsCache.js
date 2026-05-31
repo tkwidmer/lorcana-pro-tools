@@ -1,4 +1,4 @@
-import { openDB, promisify, getTx } from './db'
+import { promisify, getTx } from './db'
 
 const STORE = 'cards'
 
@@ -33,5 +33,5 @@ export async function clearCardsCache() {
   try {
     const store = await getTx(STORE, 'readwrite')
     await promisify(store.delete('current'))
-  } catch {}
+  } catch { /* noop */ }
 }

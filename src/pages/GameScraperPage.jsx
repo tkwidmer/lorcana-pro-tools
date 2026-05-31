@@ -344,6 +344,7 @@ export function GameScraperPage() {
   useEffect(() => {
     const paramUuid = searchParams.get('uuid')
     if (paramUuid) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveUuid(paramUuid)
       setSearchParams({}, { replace: true })
     }
@@ -356,6 +357,7 @@ export function GameScraperPage() {
   // Re-parse when cardLookup populates or selected game changes
   useEffect(() => {
     if (!rawGame) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setGameData(parseLiveGame(rawGame.game, cardLookup))
   }, [rawGame, cardLookup])
 
@@ -396,6 +398,7 @@ export function GameScraperPage() {
   // When the selected UUID or games map changes, update displayed game
   useEffect(() => {
     if (!activeUuid || !activeGames[activeUuid]) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRawGame({ game: activeGames[activeUuid].game, uuid: activeUuid })
     setLastUpdated(new Date(activeGames[activeUuid].timestamp))
   }, [activeUuid, activeGames])
@@ -420,7 +423,7 @@ export function GameScraperPage() {
 
       {gameList.length > 1 && (
         <div className="flex gap-2 my-4 flex-wrap">
-          {gameList.map(({ uuid, game, timestamp }) => {
+          {gameList.map(({ uuid, game }) => {
             const g = parseLiveGame(game, cardLookup)
             const label = g.p1Name && g.p2Name ? `${g.p1Name} vs ${g.p2Name}` : uuid.slice(0, 8)
             const isActive = uuid === activeUuid

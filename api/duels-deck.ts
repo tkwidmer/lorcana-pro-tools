@@ -7,12 +7,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { id } = req.query
-  if (!id || typeof id !== 'string') {
-    return res.status(400).json({ error: 'Missing deck id' })
-  }
+  const deckId = Array.isArray(id) ? id[0] : id
+  const url = deckId
+    ? `https://duels.ink/api/decks/${encodeURIComponent(deckId)}`
+    : 'https://duels.ink/api/decks'
 
   try {
-    const upstreamRes = await fetch(`https://duels.ink/api/decks/${encodeURIComponent(id)}`, {
+    const upstreamRes = await fetch(url, {
       headers: { Authorization: auth },
     })
 

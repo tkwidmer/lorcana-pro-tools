@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const id = Array.isArray(eventId) ? eventId[0] : eventId
   const rid = Array.isArray(roundId) ? roundId[0] : roundId
 
-  const url = `https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2/events/${id}/matches?round_id=${rid}`
+  const url = `https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2/tournament-rounds/${rid}/matches/`
 
   try {
     const response = await fetch(url)

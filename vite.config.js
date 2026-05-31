@@ -44,6 +44,15 @@ export default defineConfig({
           return `/hydraproxy/api/v2/tournament-rounds/${roundId}/standings/paginated/?page=${page}&page_size=${pageSize}`
         },
       },
+      '/api/tournament-matches': {
+        target: 'https://api.cloudflare.ravensburgerplay.com',
+        changeOrigin: true,
+        rewrite: (path) => {
+          const url = new URL(path, 'http://localhost')
+          const roundId = url.searchParams.get('roundId')
+          return `/hydraproxy/api/v2/tournament-rounds/${roundId}/matches/`
+        },
+      },
     },
   },
 })

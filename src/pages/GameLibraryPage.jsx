@@ -29,6 +29,7 @@ export function GameLibraryPage() {
   const [metagameOpen, setMetagameOpen] = useState(true)
   const [matchupOpen, setMatchupOpen] = useState(true)
   const [trendOpen, setTrendOpen] = useState(true)
+  const [mmrTrendOpen, setMmrTrendOpen] = useState(true)
   const [turnDistOpen, setTurnDistOpen] = useState(true)
 
   useEffect(() => {
@@ -266,6 +267,26 @@ export function GameLibraryPage() {
           {trendOpen && (
             <div className="mt-6">
               <WinRateTrendView games={games} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MMR Trend */}
+      {games.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setMmrTrendOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">MMR Trend</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${mmrTrendOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {mmrTrendOpen && (
+            <div className="mt-6">
+              <MMRTrendView games={games} />
             </div>
           )}
         </div>
@@ -714,6 +735,107 @@ function WinRateTrendView({ games }) {
         {/* Dots on the line */}
         {points.map((r, i) => (
           <circle key={i} cx={xPos(i)} cy={yPos(r)} r={4} fill="#3b82f6" />
+        ))}
+
+        {/* X-axis date labels */}
+        {labelIdxs.map(i => (
+          <text
+            key={i} x={xPos(i)} y={H - 4}
+            textAnchor={i === 0 ? 'start' : i === sorted.length - 1 ? 'end' : 'middle'}
+            fontSize={16} fill="#9ca3af"
+          >
+            {formatDate(sorted[i].playedAt)}
+          </text>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function MMRTrendView({ games }) {
+  const sorted = [...games]
+    .filter(g => g.mmr_delta != null && g.playedAt != null)
+    .sort((a, b) => a.playedAt - b.playedAt)
+
+  if (sorted.length === 0) {
+    return <div className="text-sm text-gray-500">No imported games with MMR data available. Import games from match history to see MMR trends.</div>
+  }
+
+  const W = 1000
+  const H = 200
+  const PAD = { top: 16, right: 16, bottom: 32, left: 40 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+
+  // Calculate cumulative MMR at each game
+  let cumulativeMMR = 0
+  const points = sorted.map(game => {
+    cumulativeMMR += game.mmr_delta
+    return cumulativeMMR
+  })
+
+  // Find min and max for scaling
+  const minMMR = Math.min(...points)
+  const maxMMR = Math.max(...points)
+  const range = maxMMR - minMMR
+
+  // Add padding to y-axis
+  const paddedMin = minMMR - (range * 0.1)
+  const paddedMax = maxMMR + (range * 0.1)
+  const paddedRange = paddedMax - paddedMin
+
+  const xPos = (i) => PAD.left + (i / Math.max(1, sorted.length - 1)) * chartW
+  const yPos = (mmr) => PAD.top + (1 - (mmr - paddedMin) / paddedRange) * chartH
+
+  const linePath = points.map((mmr, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(mmr).toFixed(1)}`).join(' ')
+
+  // X-axis date labels (first, middle, last)
+  const labelIdxs = [0, Math.floor((sorted.length - 1) / 2), sorted.length - 1]
+  const formatDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+  // Grid lines at round MMR values
+  const gridLines = []
+  const gridStep = Math.pow(10, Math.floor(Math.log10(paddedRange / 4)))
+  for (let mmr = Math.ceil(paddedMin / gridStep) * gridStep; mmr <= paddedMax; mmr += gridStep) {
+    gridLines.push(mmr)
+  }
+
+  return (
+    <div>
+      <div className="text-xs text-gray-400 mb-2">Cumulative MMR change over time (imported games only)</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+        {/* Grid lines */}
+        {gridLines.map(mmr => (
+          <g key={mmr}>
+            <line
+              x1={PAD.left} y1={yPos(mmr)} x2={W - PAD.right} y2={yPos(mmr)}
+              stroke="#e5e7eb" strokeWidth={1} strokeDasharray="6 3"
+            />
+            <text x={PAD.left - 6} y={yPos(mmr) + 4} textAnchor="end" fontSize={18} fill="#9ca3af">{mmr.toFixed(0)}</text>
+          </g>
+        ))}
+
+        {/* Individual game dots */}
+        {sorted.map((game, i) => {
+          const mmr = points[i]
+          const isWin = game.mmr_delta > 0
+          return (
+            <circle
+              key={i}
+              cx={xPos(i)} cy={yPos(mmr)}
+              r={5}
+              fill={isWin ? '#86efac' : '#fca5a5'}
+              opacity={0.5}
+            />
+          )
+        })}
+
+        {/* MMR line */}
+        <path d={linePath} fill="none" stroke="#8b5cf6" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Dots on the line */}
+        {points.map((mmr, i) => (
+          <circle key={i} cx={xPos(i)} cy={yPos(mmr)} r={4} fill="#8b5cf6" />
         ))}
 
         {/* X-axis date labels */}

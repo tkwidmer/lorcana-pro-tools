@@ -9,6 +9,52 @@ import {
   analyzeId,
   analyzeAdvancement,
 } from '../lib/tournamentApi'
+import { VALID_INKS } from '../lib/inkColors'
+import { generateShareImage, downloadShareImage, copyShareImageToClipboard } from '../lib/tournamentShareImage'
+
+const ANNOTATIONS_KEY = 'lorcana_tournament_match_annotations'
+
+function getAnnotations() {
+  try { return JSON.parse(localStorage.getItem(ANNOTATIONS_KEY) ?? '{}') } catch { return {} }
+}
+
+function saveAnnotation(matchId, patch) {
+  const all = getAnnotations()
+  all[String(matchId)] = { ...all[String(matchId)], ...patch }
+  localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(all))
+}
+
+const INK_DOT_COLORS = {
+  amber:    'bg-yellow-400',
+  amethyst: 'bg-violet-500',
+  emerald:  'bg-emerald-500',
+  ruby:     'bg-red-500',
+  sapphire: 'bg-blue-500',
+  steel:    'bg-gray-400',
+}
+
+function ColorPicker({ selected, onChange }) {
+  function toggle(color) {
+    const next = selected.includes(color)
+      ? selected.filter(c => c !== color)
+      : selected.length >= 2 ? [selected[1], color] : [...selected, color]
+    onChange(next)
+  }
+  return (
+    <div className="flex gap-1">
+      {VALID_INKS.map(color => (
+        <button
+          key={color}
+          title={color.charAt(0).toUpperCase() + color.slice(1)}
+          onClick={() => toggle(color)}
+          className={`w-5 h-5 rounded-full border-2 transition-all ${INK_DOT_COLORS[color]} ${
+            selected.includes(color) ? 'border-white scale-110' : 'border-transparent opacity-40 hover:opacity-70'
+          }`}
+        />
+      ))}
+    </div>
+  )
+}
 
 function formatTime(seconds) {
   const h = Math.floor(seconds / 3600)
@@ -130,7 +176,16 @@ function MatchesTab({ allMatches, matchesLoading }) {
   )
 }
 
-function PlayerMatchHistory({ playerId, allMatches, matchesLoading }) {
+function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
+  const playerId = player?.player?.id
+  const [annotations, setAnnotations] = useState(getAnnotations)
+  const [shareStatus, setShareStatus] = useState(null) // null | 'copying' | 'copied' | 'error'
+
+  function updateAnnotation(matchId, patch) {
+    saveAnnotation(matchId, patch)
+    setAnnotations(getAnnotations())
+  }
+
   if (matchesLoading && !allMatches) {
     return (
       <div className="border border-gray-200 rounded-lg p-4 bg-white">
@@ -146,45 +201,139 @@ function PlayerMatchHistory({ playerId, allMatches, matchesLoading }) {
   const playerMatches = (allMatches ?? []).filter((m) => m.players.includes(playerId))
   if (playerMatches.length === 0) return null
 
+  // Derive overall stats from matches
+  const wins   = playerMatches.filter(m => !m.match_is_bye && m.winning_player === playerId).length
+  const losses = playerMatches.filter(m => !m.match_is_bye && m.status === 'COMPLETE' && m.winning_player !== playerId && !m.match_is_intentional_draw && !m.match_is_unintentional_draw).length
+  const draws  = playerMatches.filter(m => m.match_is_intentional_draw || m.match_is_unintentional_draw).length
+  const played = wins + losses + draws
+  const winPct = played > 0 ? ((wins / played) * 100).toFixed(1) : '0.0'
+
+  function handleShare(action) {
+    const rows = playerMatches.map(m => {
+      const { result, score, opponent } = matchResultForPlayer(m, playerId)
+      const ann = annotations[String(m.id)] ?? {}
+      return {
+        round:     m.round_number,
+        result,
+        score,
+        opponent,
+        oppColors: ann.oppColors ?? [],
+        onPlay:    ann.onPlay ?? null,
+      }
+    })
+
+    const canvas = generateShareImage({
+      playerName:   player?.user_event_status?.best_identifier ?? '—',
+      rank:         player?.rank ?? null,
+      totalPlayers: null,
+      record:       player?.record ?? `${wins}-${losses}-${draws}`,
+      matchPoints:  player?.match_points ?? wins * 3 + draws,
+      winPct,
+      eventName:    structure?.eventName ?? null,
+      rows,
+    })
+
+    if (action === 'download') {
+      const name = (player?.user_event_status?.best_identifier ?? 'player').replace(/\s+/g, '-').toLowerCase()
+      downloadShareImage(canvas, `${name}-tournament.jpg`)
+    } else {
+      setShareStatus('copying')
+      copyShareImageToClipboard(canvas)
+        .then(() => { setShareStatus('copied'); setTimeout(() => setShareStatus(null), 2500) })
+        .catch(() => { setShareStatus('error'); setTimeout(() => setShareStatus(null), 2500) })
+    }
+  }
+
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-      <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900">Match History</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 mr-1">Share card:</span>
+          <button
+            onClick={() => handleShare('copy')}
+            disabled={shareStatus === 'copying'}
+            className="px-3 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {shareStatus === 'copying' ? 'Copying…' : shareStatus === 'copied' ? '✓ Copied' : shareStatus === 'error' ? 'Failed' : 'Copy Image'}
+          </button>
+          <button
+            onClick={() => handleShare('download')}
+            className="px-3 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Download JPG
+          </button>
+        </div>
       </div>
-      <table className="w-full text-sm">
-        <thead className="text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
-          <tr>
-            <th className="text-left px-6 py-2 w-20">Round</th>
-            <th className="text-left px-6 py-2">Opponent</th>
-            <th className="text-center px-6 py-2 w-16">Result</th>
-            <th className="text-right px-6 py-2 w-16">Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {playerMatches.map((match) => {
-            const { result, score, opponent } = matchResultForPlayer(match, playerId)
-            const resultStyle = result === 'WIN'
-              ? 'bg-green-100 text-green-800'
-              : result === 'LOSS'
-              ? 'bg-red-100 text-red-800'
-              : result === 'BYE'
-              ? 'bg-blue-100 text-blue-800'
-              : 'bg-gray-100 text-gray-700'
-            return (
-              <tr key={match.id} className="border-t border-gray-100">
-                <td className="px-6 py-2.5 text-gray-500 font-medium">R{match.round_number}</td>
-                <td className="px-6 py-2.5 text-gray-900 font-medium">{opponent}</td>
-                <td className="px-6 py-2.5 text-center">
-                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${resultStyle}`}>
-                    {result}
-                  </span>
-                </td>
-                <td className="px-6 py-2.5 text-right font-mono text-gray-600">{score}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[600px]">
+          <thead className="text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100 bg-gray-50">
+            <tr>
+              <th className="text-left px-4 py-2 w-16">Round</th>
+              <th className="text-left px-4 py-2">Opponent</th>
+              <th className="text-center px-4 py-2 w-16">Result</th>
+              <th className="text-center px-4 py-2 w-14">Score</th>
+              <th className="text-left px-4 py-2">Opp Colors</th>
+              <th className="text-center px-4 py-2 w-24">Play/Draw</th>
+            </tr>
+          </thead>
+          <tbody>
+            {playerMatches.map((match) => {
+              const { result, score, opponent } = matchResultForPlayer(match, playerId)
+              const ann = annotations[String(match.id)] ?? {}
+              const oppColors = ann.oppColors ?? []
+              const onPlay    = ann.onPlay ?? null
+
+              const resultStyle = result === 'WIN'
+                ? 'bg-green-100 text-green-800'
+                : result === 'LOSS'
+                ? 'bg-red-100 text-red-800'
+                : result === 'BYE'
+                ? 'bg-blue-100 text-blue-800'
+                : 'bg-gray-100 text-gray-700'
+
+              const pdStyle = onPlay === true
+                ? 'bg-green-100 text-green-800'
+                : onPlay === false
+                ? 'bg-blue-100 text-blue-800'
+                : 'bg-gray-100 text-gray-500'
+
+              function cycleOnPlay() {
+                const next = onPlay === null ? true : onPlay === true ? false : null
+                updateAnnotation(match.id, { onPlay: next })
+              }
+
+              return (
+                <tr key={match.id} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-2.5 text-gray-500 font-medium">R{match.round_number}</td>
+                  <td className="px-4 py-2.5 text-gray-900 font-medium">{opponent}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${resultStyle}`}>
+                      {result}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-center font-mono text-gray-500 text-xs">{score}</td>
+                  <td className="px-4 py-2.5">
+                    <ColorPicker
+                      selected={oppColors}
+                      onChange={colors => updateAnnotation(match.id, { oppColors: colors })}
+                    />
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <button
+                      onClick={cycleOnPlay}
+                      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold cursor-pointer transition-colors ${pdStyle}`}
+                      title="Click to cycle: Play → Draw → Unknown"
+                    >
+                      {onPlay === true ? 'Play' : onPlay === false ? 'Draw' : '?'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -644,7 +793,7 @@ export function TournamentLookupPage() {
           </div>
 
           {/* Player match history */}
-          <PlayerMatchHistory playerId={player.player.id} allMatches={allMatches} matchesLoading={matchesLoading} />
+          <PlayerMatchHistory player={player} allMatches={allMatches} matchesLoading={matchesLoading} structure={structure} />
         </div>
       )}
     </div>

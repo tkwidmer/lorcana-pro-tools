@@ -120,9 +120,14 @@ export function getTournamentStructure(eventDetails) {
   }
 }
 
-export async function fetchEventMatches(eventId, roundId) {
+export async function fetchEventMatches(eventId, roundId, page = 1, pageSize = 50) {
   try {
-    const params = new URLSearchParams({ eventId: String(eventId), roundId: String(roundId) })
+    const params = new URLSearchParams({
+      eventId: String(eventId),
+      roundId: String(roundId),
+      page: String(page),
+      pageSize: String(pageSize),
+    })
     const response = await fetch(`/api/tournament-matches?${params}`)
     if (!response.ok) {
       const error = await response.json()
@@ -135,8 +140,16 @@ export async function fetchEventMatches(eventId, roundId) {
   }
 }
 
-// Fetches all matches for every round in the event, in parallel.
-// Response per round is { id, matches: [...], round_number, ... } (not paginated).
+// Normalise the two possible response shapes:
+// - Paginated: { results: [...], next_page_number: N|null }
+// - Round object: { id, matches: [...], round_number, ... }
+function extractMatches(data) {
+  if (Array.isArray(data.results)) return { matches: data.results, nextPage: data.next_page_number ?? null }
+  if (Array.isArray(data.matches)) return { matches: data.matches, nextPage: null }
+  return { matches: [], nextPage: null }
+}
+
+// Fetches all matches for every round in the event, in parallel, with pagination.
 // Returns flat array of match objects with `round_number` and `phase_name` injected.
 export async function fetchAllRoundMatches(eventId, eventDetails) {
   if (!eventDetails?.tournament_phases) return []
@@ -154,9 +167,16 @@ export async function fetchAllRoundMatches(eventId, eventDetails) {
   await Promise.all(
     rounds.map(async ({ roundId, roundNumber, phaseName }) => {
       try {
-        const data = await fetchEventMatches(eventId, roundId)
-        for (const match of data.matches ?? []) {
-          allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
+        let page = 1
+        let hasMore = true
+        while (hasMore) {
+          const data = await fetchEventMatches(eventId, roundId, page, 50)
+          const { matches, nextPage } = extractMatches(data)
+          for (const match of matches) {
+            allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
+          }
+          hasMore = nextPage !== null
+          page = nextPage || page + 1
         }
       } catch {
         // Skip rounds that fail; don't block the rest

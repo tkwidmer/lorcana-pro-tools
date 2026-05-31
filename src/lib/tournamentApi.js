@@ -158,6 +158,7 @@ export async function fetchAllRoundMatches(eventId, eventDetails) {
   for (const phase of eventDetails.tournament_phases) {
     if (!phase.rounds) continue
     for (const round of phase.rounds) {
+      if (round.status !== 'COMPLETE') continue
       rounds.push({ roundId: round.id, roundNumber: round.round_number, phaseName: phase.phase_name })
     }
   }

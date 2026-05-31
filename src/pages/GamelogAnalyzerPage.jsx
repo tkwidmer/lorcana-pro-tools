@@ -237,6 +237,21 @@ function WinRateStats({ enrichedGames }) {
   const first = enrichedGames.filter(g => g.wentFirst)
   const second = enrichedGames.filter(g => !g.wentFirst)
 
+  // Match-level win rate for BO3 games
+  const bo3Games = enrichedGames.filter(g => g.match_id)
+  const matchGroups = {}
+  for (const g of bo3Games) {
+    if (!matchGroups[g.match_id]) matchGroups[g.match_id] = []
+    matchGroups[g.match_id].push(g)
+  }
+  const completeMatches = Object.values(matchGroups).filter(games => {
+    const wins = games.filter(g => g.won).length
+    const losses = games.filter(g => !g.won).length
+    return wins >= 2 || losses >= 2
+  })
+  const matchWins = completeMatches.filter(games => games.filter(g => g.won).length >= 2).length
+  const matchLosses = completeMatches.filter(games => games.filter(g => !g.won).length >= 2).length
+
   const hasInkData = enrichedGames.some(g => g.oppInkCombo?.length > 0)
 
   // Group by opponent ink combo when available, else by opponent name
@@ -255,6 +270,9 @@ function WinRateStats({ enrichedGames }) {
           <WinRateRow label="All games" {...tally(enrichedGames)} />
           <WinRateRow label="Going first" {...tally(first)} />
           <WinRateRow label="Going second" {...tally(second)} />
+          {completeMatches.length > 0 && (
+            <WinRateRow label={<span className="text-gray-500">BO3 matches</span>} wins={matchWins} losses={matchLosses} />
+          )}
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
@@ -1292,6 +1310,9 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
   const myWon = myPlayerNum != null && (winner === myPlayerNum || winner === String(myPlayerNum))
 
   const metaBits = []
+  if (gamelog.match_format === 'bo3' && gamelog.match_game_number) {
+    metaBits.push(`Game ${gamelog.match_game_number} of BO3`)
+  }
   if (turnCount) metaBits.push(`${turnCount} turns`)
   if (wentFirst != null) {
     const firstName = wentFirst === 1 ? p1Name : p2Name
@@ -1601,6 +1622,11 @@ export function GamelogAnalyzerPage() {
                     </span>
                   )}
                 </span>
+                {g.match_game_number && (
+                  <span className={`text-[10px] font-medium flex-shrink-0 px-1 py-0.5 rounded ${isActive ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-500'}`}>
+                    G{g.match_game_number}
+                  </span>
+                )}
                 <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{g.turnCount}T</span>
                 <span className={`text-xs flex-shrink-0 ${isActive ? 'opacity-60' : 'text-gray-400'}`}>{new Date(g.playedAt ?? g.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</span>
                 <button

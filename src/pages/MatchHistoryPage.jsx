@@ -99,6 +99,9 @@ function ImportGamelogButton({ game }) {
         mmr_before: game.mmr_before,
         mmr_after: game.mmr_after,
         duration_seconds: game.duration_seconds,
+        match_id: game.match_id,
+        match_format: game.match_format,
+        match_game_number: game.match_game_number,
       })
       await saveGamelog(id, parsed, logs)
       setStatus('done')
@@ -121,15 +124,27 @@ function ImportGamelogButton({ game }) {
   )
 }
 
-function GameRow({ game, selected, onToggle }) {
+function MatchSeriesBadge({ wins, losses }) {
+  const matchWon = wins > losses
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded ${matchWon ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+        {matchWon ? 'Win' : 'Loss'}
+      </span>
+      <span className="text-xs text-gray-400">{wins}–{losses}</span>
+    </div>
+  )
+}
+
+function GameRow({ game, selected, onToggle, indent = false, gameLabel = null }) {
   const isSealed = game.queue_id?.toLowerCase().includes('sealed') || game.queue_name?.toLowerCase().includes('sealed')
   const id = game.game_id
   return (
     <tr
-      className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${selected ? 'bg-blue-50 hover:bg-blue-50' : ''}`}
+      className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${selected ? 'bg-blue-50 hover:bg-blue-50' : ''} ${indent ? 'opacity-90' : ''}`}
       onClick={() => onToggle(id)}
     >
-      <td className="py-3 pl-3 pr-1" onClick={e => e.stopPropagation()}>
+      <td className={`py-3 pr-1 ${indent ? 'pl-7' : 'pl-3'}`} onClick={e => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={selected}
@@ -138,10 +153,12 @@ function GameRow({ game, selected, onToggle }) {
         />
       </td>
       <td className="py-3 px-3 text-sm text-gray-600 whitespace-nowrap">
-        {formatDate(game.started_at)}
+        {indent ? (
+          <span className="text-xs text-gray-400">{formatDate(game.started_at)}</span>
+        ) : formatDate(game.started_at)}
       </td>
       <td className="py-3 px-3 text-sm text-gray-700 hidden sm:table-cell max-w-[120px] truncate">
-        {game.queue_name ?? '—'}
+        {gameLabel ? <span className="text-xs text-gray-500 font-medium">{gameLabel}</span> : (game.queue_name ?? '—')}
       </td>
       <td className="py-3 px-3">
         <ResultBadge result={game.result} />
@@ -153,18 +170,92 @@ function GameRow({ game, selected, onToggle }) {
         {!isSealed && game.opp_deck_colors ? <InkIcons colors={game.opp_deck_colors} /> : <span className="text-gray-400">—</span>}
       </td>
       <td className="py-3 px-3 text-sm text-gray-700 font-medium">
-        {game.opp_display_name ?? '—'}
+        {indent ? <span className="text-gray-400">—</span> : (game.opp_display_name ?? '—')}
       </td>
       <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
         {game.your_lore ?? '?'} – {game.opp_lore ?? '?'}
       </td>
       <td className="py-3 px-3 text-sm hidden sm:table-cell text-center">
-        <MmrDelta delta={game.mmr_delta} />
+        {indent ? <span className="text-gray-400">—</span> : <MmrDelta delta={game.mmr_delta} />}
       </td>
       <td className="py-3 px-3 hidden sm:table-cell" onClick={e => e.stopPropagation()}>
         <ImportGamelogButton game={game} />
       </td>
     </tr>
+  )
+}
+
+function MatchGroup({ games, selected, onToggle, onToggleMatch }) {
+  const [expanded, setExpanded] = useState(false)
+  const sorted = [...games].sort((a, b) => (a.match_game_number ?? 0) - (b.match_game_number ?? 0))
+  const wins = sorted.filter(g => g.result === 'win').length
+  const losses = sorted.filter(g => g.result === 'loss').length
+  const isSealed = games[0]?.queue_id?.toLowerCase().includes('sealed')
+  const queueName = games[0]?.queue_name ?? 'BO3'
+  // MMR delta comes from the decisive game (the one with a non-zero delta, or the last game)
+  const mmrGame = sorted.find(g => g.mmr_delta != null && g.mmr_delta !== 0) ?? sorted[sorted.length - 1]
+  const matchMmr = mmrGame?.mmr_delta ?? null
+  const gameIds = sorted.map(g => g.game_id)
+  const allSel = gameIds.every(id => selected.has(id))
+  const someSel = gameIds.some(id => selected.has(id)) && !allSel
+
+  return (
+    <>
+      <tr
+        className="border-b border-gray-200 bg-gray-50/70 hover:bg-gray-100 transition-colors cursor-pointer"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <td className="py-3 pl-3 pr-1" onClick={e => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={allSel}
+            ref={el => { if (el) el.indeterminate = someSel }}
+            onChange={() => onToggleMatch(gameIds)}
+            className="rounded border-gray-300 text-gray-900 focus:ring-gray-400 cursor-pointer"
+          />
+        </td>
+        <td className="py-3 px-3 text-sm text-gray-600 whitespace-nowrap">
+          {formatDate(sorted[0]?.started_at)}
+        </td>
+        <td className="py-3 px-3 text-sm text-gray-700 hidden sm:table-cell max-w-[120px] truncate">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate">{queueName}</span>
+            <svg className={`w-3 h-3 text-gray-400 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+        </td>
+        <td className="py-3 px-3">
+          <MatchSeriesBadge wins={wins} losses={losses} />
+        </td>
+        <td className="py-3 px-3 hidden sm:table-cell">
+          {isSealed ? <span className="text-gray-400 text-sm">Sealed</span> : <InkIcons colors={games[0]?.your_deck_colors} />}
+        </td>
+        <td className="py-3 px-3 hidden sm:table-cell">
+          {!isSealed && games[0]?.opp_deck_colors ? <InkIcons colors={games[0]?.opp_deck_colors} /> : <span className="text-gray-400">—</span>}
+        </td>
+        <td className="py-3 px-3 text-sm text-gray-700 font-medium">
+          {games[0]?.opp_display_name ?? '—'}
+        </td>
+        <td className="py-3 px-3 text-sm text-gray-500 whitespace-nowrap font-medium">
+          {wins}–{losses}
+        </td>
+        <td className="py-3 px-3 text-sm hidden sm:table-cell text-center">
+          <MmrDelta delta={matchMmr} />
+        </td>
+        <td className="py-3 px-3 hidden sm:table-cell" />
+      </tr>
+      {expanded && sorted.map((game, i) => (
+        <GameRow
+          key={game.game_id}
+          game={game}
+          selected={selected.has(game.game_id)}
+          onToggle={onToggle}
+          indent
+          gameLabel={`Game ${game.match_game_number ?? i + 1}`}
+        />
+      ))}
+    </>
   )
 }
 
@@ -282,6 +373,16 @@ export function MatchHistoryPage() {
     })
   }
 
+  function toggleSelectMatch(gameIds) {
+    const allSel = gameIds.every(id => selected.has(id))
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (allSel) gameIds.forEach(id => next.delete(id))
+      else gameIds.forEach(id => next.add(id))
+      return next
+    })
+  }
+
   function toggleSelectAll() {
     if (filteredGames.every(g => selected.has(g.game_id))) {
       setSelected(new Set())
@@ -312,6 +413,13 @@ export function MatchHistoryPage() {
           endReason: game.end_reason,
           yourDecklist: game.your_decklist,
           startedAt: game.started_at,
+          mmr_delta: game.mmr_delta,
+          mmr_before: game.mmr_before,
+          mmr_after: game.mmr_after,
+          duration_seconds: game.duration_seconds,
+          match_id: game.match_id,
+          match_format: game.match_format,
+          match_game_number: game.match_game_number,
         })
         await saveGamelog(game.gamelog_id, parsed, logs)
         done++
@@ -389,6 +497,24 @@ export function MatchHistoryPage() {
   useEffect(() => { if (filterMyColors && !myColorOptions.includes(filterMyColors)) setFilterMyColors(null) }, [myColorOptions, filterMyColors])
   useEffect(() => { if (filterOppColors && !oppColorOptions.includes(filterOppColors)) setFilterOppColors(null) }, [oppColorOptions, filterOppColors])
   useEffect(() => { if (filterDeck && !seenDeckKeys.has(filterDeck)) setFilterDeck(null) }, [filterDeck, seenDeckKeys])
+
+  // Group BO3 games by match_id for display; BO1 games stay as individual rows
+  const displayItems = (() => {
+    const items = []
+    const matchGroups = {}
+    for (const g of filteredGames) {
+      if (g.match_id) {
+        if (!matchGroups[g.match_id]) {
+          matchGroups[g.match_id] = { type: 'match', match_id: g.match_id, games: [] }
+          items.push(matchGroups[g.match_id])
+        }
+        matchGroups[g.match_id].games.push(g)
+      } else {
+        items.push({ type: 'game', game: g })
+      }
+    }
+    return items
+  })()
 
   const selectedGames = filteredGames.filter(g => selected.has(g.game_id))
   const hasGamelogs = selectedGames.some(g => g.gamelog_id)
@@ -592,14 +718,24 @@ export function MatchHistoryPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredGames.map((game, i) => (
-                <GameRow
-                  key={game.game_id ?? i}
-                  game={game}
-                  selected={selected.has(game.game_id)}
-                  onToggle={toggleSelect}
-                />
-              ))}
+              {displayItems.map((item, i) =>
+                item.type === 'match' ? (
+                  <MatchGroup
+                    key={item.match_id}
+                    games={item.games}
+                    selected={selected}
+                    onToggle={toggleSelect}
+                    onToggleMatch={toggleSelectMatch}
+                  />
+                ) : (
+                  <GameRow
+                    key={item.game.game_id ?? i}
+                    game={item.game}
+                    selected={selected.has(item.game.game_id)}
+                    onToggle={toggleSelect}
+                  />
+                )
+              )}
             </tbody>
           </table>
         </div>

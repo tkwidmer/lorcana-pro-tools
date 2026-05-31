@@ -315,6 +315,7 @@ export function parseGamelog(id, logs, meta = {}) {
     mmr_delta: meta.mmr_delta ?? null,
     mmr_before: meta.mmr_before ?? null,
     mmr_after: meta.mmr_after ?? null,
+    duration_seconds: meta.duration_seconds ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }

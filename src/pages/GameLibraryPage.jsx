@@ -140,7 +140,7 @@ export function GameLibraryPage() {
     currentMMR = firstMMR + netMMR
   }
 
-  const totalPlayTime = games.reduce((sum, g) => sum + (g.turnCount || 0), 0) * 3
+  const totalPlayTime = games.reduce((sum, g) => sum + (g.duration_seconds || 0), 0)
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">

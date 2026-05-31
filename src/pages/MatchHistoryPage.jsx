@@ -98,6 +98,7 @@ function ImportGamelogButton({ game }) {
         mmr_delta: game.mmr_delta,
         mmr_before: game.mmr_before,
         mmr_after: game.mmr_after,
+        duration_seconds: game.duration_seconds,
       })
       await saveGamelog(id, parsed, logs)
       setStatus('done')

@@ -52,9 +52,7 @@ export default defineConfig({
         rewrite: (path) => {
           const url = new URL(path, 'http://localhost')
           const roundId = url.searchParams.get('roundId')
-          const page = url.searchParams.get('page') || '1'
-          const pageSize = url.searchParams.get('pageSize') || '50'
-          return `/api/v2/tournament-rounds/${roundId}/matches/?page=${page}&page_size=${pageSize}`
+          return `/api/v2/tournament-rounds/${roundId}/matches/`
         },
       },
     },

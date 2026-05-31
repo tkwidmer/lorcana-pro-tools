@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { eventId, roundId, page = '1', pageSize = '50' } = req.query
+  const { eventId, roundId } = req.query
 
   if (!eventId || !roundId) {
     return res.status(400).json({ error: 'Missing eventId or roundId' })
@@ -9,11 +9,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const id = Array.isArray(eventId) ? eventId[0] : eventId
   const rid = Array.isArray(roundId) ? roundId[0] : roundId
-  const pageNum = Array.isArray(page) ? page[0] : page
-  const size = Array.isArray(pageSize) ? pageSize[0] : pageSize
 
   void id // eventId kept for future use / logging
-  const url = `https://api.ravensburgerplay.com/api/v2/tournament-rounds/${rid}/matches/?page=${pageNum}&page_size=${size}`
+  const url = `https://api.ravensburgerplay.com/api/v2/tournament-rounds/${rid}/matches/`
 
   try {
     const response = await fetch(url)

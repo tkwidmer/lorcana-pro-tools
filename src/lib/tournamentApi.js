@@ -120,14 +120,9 @@ export function getTournamentStructure(eventDetails) {
   }
 }
 
-export async function fetchEventMatches(eventId, roundId, page = 1, pageSize = 50) {
+export async function fetchEventMatches(eventId, roundId) {
   try {
-    const params = new URLSearchParams({
-      eventId: String(eventId),
-      roundId: String(roundId),
-      page: String(page),
-      pageSize: String(pageSize),
-    })
+    const params = new URLSearchParams({ eventId: String(eventId), roundId: String(roundId) })
     const response = await fetch(`/api/tournament-matches?${params}`)
     if (!response.ok) {
       const error = await response.json()
@@ -168,16 +163,9 @@ export async function fetchAllRoundMatches(eventId, eventDetails) {
   await Promise.all(
     rounds.map(async ({ roundId, roundNumber, phaseName }) => {
       try {
-        let page = 1
-        let hasMore = true
-        while (hasMore) {
-          const data = await fetchEventMatches(eventId, roundId, page, 50)
-          const { matches, nextPage } = extractMatches(data)
-          for (const match of matches) {
-            allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
-          }
-          hasMore = nextPage !== null
-          page = nextPage || page + 1
+        const data = await fetchEventMatches(eventId, roundId)
+        for (const match of extractMatches(data).matches) {
+          allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
         }
       } catch {
         // Skip rounds that fail; don't block the rest

@@ -131,6 +131,17 @@ export function GameLibraryPage() {
   const winRateFirst = gamesFirst.length > 0 ? Math.round(winsFirst / gamesFirst.length * 100) : null
   const winRateSecond = gamesSecond.length > 0 ? Math.round(winsSecond / gamesSecond.length * 100) : null
 
+  // Calculate MMR and play time stats from imported games
+  const importedWithMMR = importedGames.filter(g => g.mmr_delta != null).sort((a, b) => a.playedAt - b.playedAt)
+  let currentMMR = null
+  if (importedWithMMR.length > 0) {
+    const firstMMR = importedWithMMR[0].mmr_before ?? 0
+    const netMMR = importedWithMMR.reduce((sum, g) => sum + (g.mmr_delta || 0), 0)
+    currentMMR = firstMMR + netMMR
+  }
+
+  const totalPlayTime = games.reduce((sum, g) => sum + (g.turnCount || 0), 0) * 3
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
@@ -167,7 +178,7 @@ export function GameLibraryPage() {
 
       {/* Stats overview */}
       {games.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Games</div>
             <div className="text-2xl font-bold text-gray-900">{games.length}</div>
@@ -185,6 +196,16 @@ export function GameLibraryPage() {
             <div className="text-2xl font-bold text-gray-900">
               {games.length > 0 ? Math.round(games.reduce((sum, g) => sum + (g.turnCount || 0), 0) / games.length) : '—'}
             </div>
+          </div>
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Current MMR</div>
+            <div className="text-2xl font-bold text-purple-600">{currentMMR !== null ? currentMMR.toFixed(0) : '—'}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{importedWithMMR.length} games tracked</div>
+          </div>
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Play Time</div>
+            <div className="text-2xl font-bold text-gray-900">{Math.floor(totalPlayTime / 60)}h {totalPlayTime % 60}m</div>
+            <div className="text-xs text-gray-400 mt-0.5">{games.reduce((sum, g) => sum + (g.turnCount || 0), 0)} turns</div>
           </div>
         </div>
       )}
@@ -795,8 +816,37 @@ function MMRTrendView({ games }) {
     gridLines.push(mmr)
   }
 
+  // Calculate summary statistics
+  const startMMR = points[0]
+  const endMMR = points[points.length - 1]
+  const netMMR = endMMR - startMMR
+  const highestMMR = maxMMR
+  const lowestMMR = minMMR
+
   return (
     <div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Start MMR</div>
+          <div className="text-lg font-bold text-gray-900">{startMMR.toFixed(0)}</div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">End MMR</div>
+          <div className="text-lg font-bold text-gray-900">{endMMR.toFixed(0)}</div>
+        </div>
+        <div className={`bg-gray-50 border rounded-lg p-3 ${netMMR >= 0 ? 'border-green-200' : 'border-red-200'}`}>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Net Change</div>
+          <div className={`text-lg font-bold ${netMMR >= 0 ? 'text-green-600' : 'text-red-600'}`}>{netMMR >= 0 ? '+' : ''}{netMMR.toFixed(0)}</div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Highest</div>
+          <div className="text-lg font-bold text-gray-900">{highestMMR.toFixed(0)}</div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Lowest</div>
+          <div className="text-lg font-bold text-gray-900">{lowestMMR.toFixed(0)}</div>
+        </div>
+      </div>
       <div className="text-xs text-gray-400 mb-2">Cumulative MMR change over time (imported games only)</div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
         {/* Grid lines */}

@@ -79,7 +79,7 @@ export async function fetchDecks() {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
-  const res = await fetch('/api/duels-decks', {
+  const res = await fetch('/api/duels-deck', {
     headers: { Authorization: `Bearer ${token}` },
   })
 

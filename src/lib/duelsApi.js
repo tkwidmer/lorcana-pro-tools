@@ -61,6 +61,20 @@ export async function fetchReplayBuffer(replayId) {
   return res.arrayBuffer()
 }
 
+export async function fetchDecks() {
+  const token = getToken()
+  if (!token) throw new Error('No API token configured')
+
+  const res = await fetch('/api/duels-decks', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (res.status === 401) throw new Error('Invalid or expired API token')
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+
+  return res.json() // { decks: Deck[] }
+}
+
 export async function fetchStats({ queue, period, ranks }) {
   if (!queue) throw new Error('Queue is required')
   if (!period) throw new Error('Period is required')

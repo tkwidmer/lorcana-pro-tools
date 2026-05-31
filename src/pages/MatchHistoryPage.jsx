@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getToken, fetchMatchHistory, fetchGamelogBuffer } from '../lib/duelsApi'
+import { getToken, fetchMatchHistory, fetchGamelogBuffer, fetchDecks } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 
@@ -355,8 +355,33 @@ export function MatchHistoryPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (hasToken) load()
+    if (hasToken) {
+      load()
+      syncDeckNamesFromApi()
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function syncDeckNamesFromApi() {
+    try {
+      const data = await fetchDecks()
+      const decks = data.decks ?? []
+      if (!decks.length) return
+      setDeckNames(prev => {
+        const merged = { ...prev }
+        let changed = false
+        for (const deck of decks) {
+          if (deck.id && deck.name && !merged[deck.id]) {
+            merged[deck.id] = deck.name
+            changed = true
+          }
+        }
+        if (changed) localStorage.setItem(DECK_NAMES_KEY, JSON.stringify(merged))
+        return changed ? merged : prev
+      })
+    } catch {
+      // silently ignore — deck names just won't be auto-filled
+    }
+  }
 
   function toggleSelect(id) {
     setSelected(prev => {

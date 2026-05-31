@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip } from '../lib/gameImport'
 import { analyzeOpponentMetagame } from '../lib/metagameAnalysis'
@@ -768,11 +768,11 @@ function MMRTrendView({ games }) {
   const chartH = H - PAD.top - PAD.bottom
 
   // Calculate cumulative MMR at each game
-  let cumulativeMMR = 0
-  const points = sorted.map(game => {
-    cumulativeMMR += game.mmr_delta
-    return cumulativeMMR
-  })
+  const points = sorted.reduce((acc, game) => {
+    const newCumulative = (acc[acc.length - 1] ?? 0) + game.mmr_delta
+    acc.push(newCumulative)
+    return acc
+  }, [])
 
   // Find min and max for scaling
   const minMMR = Math.min(...points)

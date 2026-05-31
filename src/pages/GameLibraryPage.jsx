@@ -189,23 +189,6 @@ export function GameLibraryPage() {
         </div>
       )}
 
-      {/* Control bar */}
-      {games.length > 0 && (
-        <div className="mb-6 flex justify-end gap-3">
-          <button
-            onClick={() => downloadGameIds([], games.map(g => g.id))}
-            className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
-          >
-            Export IDs
-          </button>
-          <button
-            onClick={handleClearAll}
-            className="text-xs text-red-400 hover:text-red-600 transition-colors"
-          >
-            Clear all
-          </button>
-        </div>
-      )}
 
       {/* Overall Stats */}
       {gamesWithMyPlayer.length > 0 && (
@@ -376,6 +359,18 @@ export function GameLibraryPage() {
           >
             <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Personal Games ({personalGames.length})</span>
             <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); downloadGameIds([], games.map(g => g.id)) }}
+                className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
+              >
+                Export IDs
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleClearAll() }}
+                className="text-xs text-red-400 hover:text-red-600 transition-colors"
+              >
+                Clear all
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleClearPersonal() }}
                 className="text-xs text-red-400 hover:text-red-600 transition-colors"

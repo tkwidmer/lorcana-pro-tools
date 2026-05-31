@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip } from '../lib/gameImport'
 import { analyzeOpponentMetagame } from '../lib/metagameAnalysis'
@@ -29,6 +29,7 @@ export function GameLibraryPage() {
   const [metagameOpen, setMetagameOpen] = useState(true)
   const [matchupOpen, setMatchupOpen] = useState(true)
   const [trendOpen, setTrendOpen] = useState(true)
+  const [mmrTrendOpen, setMmrTrendOpen] = useState(true)
   const [turnDistOpen, setTurnDistOpen] = useState(true)
 
   useEffect(() => {
@@ -130,6 +131,17 @@ export function GameLibraryPage() {
   const winRateFirst = gamesFirst.length > 0 ? Math.round(winsFirst / gamesFirst.length * 100) : null
   const winRateSecond = gamesSecond.length > 0 ? Math.round(winsSecond / gamesSecond.length * 100) : null
 
+  // Calculate MMR and play time stats from imported games
+  const importedWithMMR = importedGames.filter(g => g.mmr_delta != null).sort((a, b) => a.playedAt - b.playedAt)
+  let currentMMR = null
+  if (importedWithMMR.length > 0) {
+    const firstMMR = importedWithMMR[0].mmr_before ?? 0
+    const netMMR = importedWithMMR.reduce((sum, g) => sum + (g.mmr_delta || 0), 0)
+    currentMMR = firstMMR + netMMR
+  }
+
+  const totalPlayTime = games.reduce((sum, g) => sum + (g.duration_seconds || 0), 0)
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
@@ -166,7 +178,7 @@ export function GameLibraryPage() {
 
       {/* Stats overview */}
       {games.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Games</div>
             <div className="text-2xl font-bold text-gray-900">{games.length}</div>
@@ -185,26 +197,19 @@ export function GameLibraryPage() {
               {games.length > 0 ? Math.round(games.reduce((sum, g) => sum + (g.turnCount || 0), 0) / games.length) : '—'}
             </div>
           </div>
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Current MMR</div>
+            <div className="text-2xl font-bold text-purple-600">{currentMMR !== null ? currentMMR.toFixed(0) : '—'}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{importedWithMMR.length} games tracked</div>
+          </div>
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Play Time</div>
+            <div className="text-2xl font-bold text-gray-900">{Math.floor(totalPlayTime / 60)}h {totalPlayTime % 60}m</div>
+            <div className="text-xs text-gray-400 mt-0.5">{games.reduce((sum, g) => sum + (g.turnCount || 0), 0)} turns</div>
+          </div>
         </div>
       )}
 
-      {/* Control bar */}
-      {games.length > 0 && (
-        <div className="mb-6 flex justify-end gap-3">
-          <button
-            onClick={() => downloadGameIds([], games.map(g => g.id))}
-            className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
-          >
-            Export IDs
-          </button>
-          <button
-            onClick={handleClearAll}
-            className="text-xs text-red-400 hover:text-red-600 transition-colors"
-          >
-            Clear all
-          </button>
-        </div>
-      )}
 
       {/* Overall Stats */}
       {gamesWithMyPlayer.length > 0 && (
@@ -266,6 +271,26 @@ export function GameLibraryPage() {
           {trendOpen && (
             <div className="mt-6">
               <WinRateTrendView games={games} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MMR Trend */}
+      {games.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setMmrTrendOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">MMR Trend</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${mmrTrendOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {mmrTrendOpen && (
+            <div className="mt-6">
+              <MMRTrendView games={games} />
             </div>
           )}
         </div>
@@ -355,6 +380,18 @@ export function GameLibraryPage() {
           >
             <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Personal Games ({personalGames.length})</span>
             <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); downloadGameIds([], games.map(g => g.id)) }}
+                className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
+              >
+                Export IDs
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleClearAll() }}
+                className="text-xs text-red-400 hover:text-red-600 transition-colors"
+              >
+                Clear all
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleClearPersonal() }}
                 className="text-xs text-red-400 hover:text-red-600 transition-colors"
@@ -714,6 +751,136 @@ function WinRateTrendView({ games }) {
         {/* Dots on the line */}
         {points.map((r, i) => (
           <circle key={i} cx={xPos(i)} cy={yPos(r)} r={4} fill="#3b82f6" />
+        ))}
+
+        {/* X-axis date labels */}
+        {labelIdxs.map(i => (
+          <text
+            key={i} x={xPos(i)} y={H - 4}
+            textAnchor={i === 0 ? 'start' : i === sorted.length - 1 ? 'end' : 'middle'}
+            fontSize={16} fill="#9ca3af"
+          >
+            {formatDate(sorted[i].playedAt)}
+          </text>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function MMRTrendView({ games }) {
+  const sorted = [...games]
+    .filter(g => g.mmr_delta != null && g.playedAt != null)
+    .sort((a, b) => a.playedAt - b.playedAt)
+
+  if (sorted.length === 0) {
+    return <div className="text-sm text-gray-500">No imported games with MMR data available. Import games from match history to see MMR trends.</div>
+  }
+
+  const W = 1000
+  const H = 200
+  const PAD = { top: 16, right: 16, bottom: 32, left: 40 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+
+  // Calculate cumulative MMR at each game
+  const points = sorted.reduce((acc, game) => {
+    const newCumulative = (acc[acc.length - 1] ?? 0) + game.mmr_delta
+    acc.push(newCumulative)
+    return acc
+  }, [])
+
+  // Find min and max for scaling
+  const minMMR = Math.min(...points)
+  const maxMMR = Math.max(...points)
+  const range = maxMMR - minMMR
+
+  // Add padding to y-axis
+  const paddedMin = minMMR - (range * 0.1)
+  const paddedMax = maxMMR + (range * 0.1)
+  const paddedRange = paddedMax - paddedMin
+
+  const xPos = (i) => PAD.left + (i / Math.max(1, sorted.length - 1)) * chartW
+  const yPos = (mmr) => PAD.top + (1 - (mmr - paddedMin) / paddedRange) * chartH
+
+  const linePath = points.map((mmr, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(mmr).toFixed(1)}`).join(' ')
+
+  // X-axis date labels (first, middle, last)
+  const labelIdxs = [0, Math.floor((sorted.length - 1) / 2), sorted.length - 1]
+  const formatDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+  // Grid lines at round MMR values
+  const gridLines = []
+  const gridStep = Math.pow(10, Math.floor(Math.log10(paddedRange / 4)))
+  for (let mmr = Math.ceil(paddedMin / gridStep) * gridStep; mmr <= paddedMax; mmr += gridStep) {
+    gridLines.push(mmr)
+  }
+
+  // Calculate summary statistics
+  const startMMR = points[0]
+  const endMMR = points[points.length - 1]
+  const netMMR = endMMR - startMMR
+  const highestMMR = maxMMR
+  const lowestMMR = minMMR
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Start MMR</div>
+          <div className="text-lg font-bold text-gray-900">{startMMR.toFixed(0)}</div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">End MMR</div>
+          <div className="text-lg font-bold text-gray-900">{endMMR.toFixed(0)}</div>
+        </div>
+        <div className={`bg-gray-50 border rounded-lg p-3 ${netMMR >= 0 ? 'border-green-200' : 'border-red-200'}`}>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Net Change</div>
+          <div className={`text-lg font-bold ${netMMR >= 0 ? 'text-green-600' : 'text-red-600'}`}>{netMMR >= 0 ? '+' : ''}{netMMR.toFixed(0)}</div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Highest</div>
+          <div className="text-lg font-bold text-gray-900">{highestMMR.toFixed(0)}</div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Lowest</div>
+          <div className="text-lg font-bold text-gray-900">{lowestMMR.toFixed(0)}</div>
+        </div>
+      </div>
+      <div className="text-xs text-gray-400 mb-2">Cumulative MMR change over time (imported games only)</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+        {/* Grid lines */}
+        {gridLines.map(mmr => (
+          <g key={mmr}>
+            <line
+              x1={PAD.left} y1={yPos(mmr)} x2={W - PAD.right} y2={yPos(mmr)}
+              stroke="#e5e7eb" strokeWidth={1} strokeDasharray="6 3"
+            />
+            <text x={PAD.left - 6} y={yPos(mmr) + 4} textAnchor="end" fontSize={18} fill="#9ca3af">{mmr.toFixed(0)}</text>
+          </g>
+        ))}
+
+        {/* Individual game dots */}
+        {sorted.map((game, i) => {
+          const mmr = points[i]
+          const isWin = game.mmr_delta > 0
+          return (
+            <circle
+              key={i}
+              cx={xPos(i)} cy={yPos(mmr)}
+              r={5}
+              fill={isWin ? '#86efac' : '#fca5a5'}
+              opacity={0.5}
+            />
+          )
+        })}
+
+        {/* MMR line */}
+        <path d={linePath} fill="none" stroke="#8b5cf6" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Dots on the line */}
+        {points.map((mmr, i) => (
+          <circle key={i} cx={xPos(i)} cy={yPos(mmr)} r={4} fill="#8b5cf6" />
         ))}
 
         {/* X-axis date labels */}

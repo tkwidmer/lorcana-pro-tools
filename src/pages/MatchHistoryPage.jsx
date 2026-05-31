@@ -95,6 +95,10 @@ function ImportGamelogButton({ game }) {
         endReason: game.end_reason,
         yourDecklist: game.your_decklist,
         startedAt: game.started_at,
+        mmr_delta: game.mmr_delta,
+        mmr_before: game.mmr_before,
+        mmr_after: game.mmr_after,
+        duration_seconds: game.duration_seconds,
       })
       await saveGamelog(id, parsed, logs)
       setStatus('done')

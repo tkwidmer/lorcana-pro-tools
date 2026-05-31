@@ -312,6 +312,10 @@ export function parseGamelog(id, logs, meta = {}) {
     oppDecklist: meta.oppDecklist ?? null,
     inferredOppDecklist: myPlayerNum ? buildInferredDecklist(myPlayerNum === 1 ? 2 : 1) : null,
     playedAt: meta.startedAt ? new Date(meta.startedAt).getTime() : null,
+    mmr_delta: meta.mmr_delta ?? null,
+    mmr_before: meta.mmr_before ?? null,
+    mmr_after: meta.mmr_after ?? null,
+    duration_seconds: meta.duration_seconds ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }

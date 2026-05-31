@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const pageNum = typeof page === 'string' ? page : page[0]
   const size = typeof pageSize === 'string' ? pageSize : pageSize[0]
 
-  const url = `https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2/tournament-rounds/${roundId}/standings/paginated/?page=${pageNum}&page_size=${size}`
+  const url = `https://api.ravensburgerplay.com/api/v2/tournament-rounds/${roundId}/standings/paginated/?page=${pageNum}&page_size=${size}`
 
   try {
     const response = await fetch(url)

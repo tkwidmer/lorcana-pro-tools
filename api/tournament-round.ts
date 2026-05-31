@@ -9,7 +9,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Fetch tournament details from Ravensburger API
-    const url = `https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2/tournaments/${eventId}`
+    const url = `https://api.ravensburgerplay.com/api/v2/tournaments/${eventId}`
     const response = await fetch(url)
     const contentType = response.headers.get('content-type') ?? ''
     const body = await response.text()

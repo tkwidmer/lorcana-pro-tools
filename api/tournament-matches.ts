@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const size = Array.isArray(pageSize) ? pageSize[0] : pageSize
 
   void id // eventId kept for future use / logging
-  const url = `https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2/tournament-rounds/${rid}/matches/?page=${pageNum}&page_size=${size}`
+  const url = `https://api.ravensburgerplay.com/api/v2/tournament-rounds/${rid}/matches/?page=${pageNum}&page_size=${size}`
 
   try {
     const response = await fetch(url)
@@ -21,6 +21,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = await response.text()
 
     if (!response.ok) {
+      // Completed tournaments return 404 for the matches endpoint — treat as empty
+      if (response.status === 404) {
+        return res.status(200).json({ matches: [], results: [], next_page_number: null })
+      }
       return res.status(response.status).json({
         error: 'Tournament API error',
         status: response.status,

@@ -7,7 +7,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing eventId' })
   }
 
-  const url = `https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2/events/${eventId}`
+  const url = `https://api.ravensburgerplay.com/api/v2/events/${eventId}`
 
   try {
     const response = await fetch(url)

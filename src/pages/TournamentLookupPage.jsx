@@ -416,11 +416,16 @@ export function TournamentLookupPage() {
         page = data.next_page_number || page + 1
       }
 
-      setAllStandings(allResults)
+      // Normalize match_points to current total — the standings snapshot field is stale mid-event
+      const normalized = allResults.map((entry) => ({
+        ...entry,
+        match_points: entry.user_event_status?.total_match_points ?? entry.match_points,
+      }))
+      setAllStandings(normalized)
 
-      // Fetch registrations best-effort (non-blocking)
+      // Fetch registrations best-effort (non-blocking); key by user.id for reliable lookup
       fetchAllRegistrations(eventId)
-        .then((regs) => setRegistrationMap(new Map(regs.map((r) => [r.best_identifier, r.registration_status]))))
+        .then((regs) => setRegistrationMap(new Map(regs.map((r) => [r.user.id, r.registration_status]))))
         .catch(() => {})
 
       // Fetch matches per round in parallel (non-blocking — updates independently)
@@ -627,7 +632,7 @@ export function TournamentLookupPage() {
                 <tbody>
                   {filteredStandings?.map((entry) => {
                     const atCutLine = structure?.topCutSize && entry.rank === structure.topCutSize
-                    const regStatus = registrationMap?.get(entry.user_event_status.best_identifier)
+                    const regStatus = registrationMap?.get(entry.player.id)
                     const dropped = regStatus === 'ELIMINATED'
                     return (
                       <Fragment key={entry.id}>

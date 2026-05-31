@@ -319,6 +319,7 @@ export function parseGamelog(id, logs, meta = {}) {
     match_id: meta.match_id ?? null,
     match_format: meta.match_format ?? null,
     match_game_number: meta.match_game_number ?? null,
+    deckName: meta.deckName ?? null,
     p1: { ...players[1], cardList: toList(players[1].cards) },
     p2: { ...players[2], cardList: toList(players[2].cards) },
   }

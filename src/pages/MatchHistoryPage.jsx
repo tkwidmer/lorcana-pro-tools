@@ -76,6 +76,8 @@ function ImportGamelogButton({ game }) {
       const logs = JSON.parse(text)
       const id = game.gamelog_id
       const storedMyName = localStorage.getItem('lorcana_my_name') ?? ''
+      const storedDeckNames = JSON.parse(localStorage.getItem(DECK_NAMES_KEY) ?? '{}')
+      const deckName = game.your_deck_id ? (storedDeckNames[game.your_deck_id] ?? null) : null
       const parsed = parseGamelog(id, logs, {
         yourResult: game.result,
         yourPlayerNum: game.your_player,
@@ -94,6 +96,7 @@ function ImportGamelogButton({ game }) {
         match_id: game.match_id,
         match_format: game.match_format,
         match_game_number: game.match_game_number,
+        deckName,
       })
       await saveGamelog(id, parsed, logs)
       setStatus('done')
@@ -128,7 +131,7 @@ function MatchSeriesBadge({ wins, losses }) {
   )
 }
 
-function GameRow({ game, selected, onToggle, indent = false, gameLabel = null }) {
+function GameRow({ game, selected, onToggle, indent = false, gameLabel = null, deckName = null }) {
   const isSealed = game.queue_id?.toLowerCase().includes('sealed') || game.queue_name?.toLowerCase().includes('sealed')
   const id = game.game_id
   return (
@@ -156,7 +159,12 @@ function GameRow({ game, selected, onToggle, indent = false, gameLabel = null })
         <ResultBadge result={game.result} />
       </td>
       <td className="py-3 px-3 hidden sm:table-cell">
-        {isSealed ? <span className="text-gray-400 text-sm">Sealed</span> : <InkIcons colors={game.your_deck_colors} />}
+        {isSealed ? <span className="text-gray-400 text-sm">Sealed</span> : (
+          <div className="flex flex-col gap-0.5">
+            <InkIcons colors={game.your_deck_colors} />
+            {deckName && <span className="text-[11px] text-gray-400 leading-tight max-w-[120px] truncate">{deckName}</span>}
+          </div>
+        )}
       </td>
       <td className="py-3 px-3 hidden sm:table-cell">
         {!isSealed && game.opp_deck_colors ? <InkIcons colors={game.opp_deck_colors} /> : <span className="text-gray-400">—</span>}
@@ -177,7 +185,7 @@ function GameRow({ game, selected, onToggle, indent = false, gameLabel = null })
   )
 }
 
-function MatchGroup({ games, selected, onToggle, onToggleMatch }) {
+function MatchGroup({ games, selected, onToggle, onToggleMatch, deckName = null }) {
   const [expanded, setExpanded] = useState(false)
   const sorted = [...games].sort((a, b) => (a.match_game_number ?? 0) - (b.match_game_number ?? 0))
   const wins = sorted.filter(g => g.result === 'win').length
@@ -221,7 +229,12 @@ function MatchGroup({ games, selected, onToggle, onToggleMatch }) {
           <MatchSeriesBadge wins={wins} losses={losses} />
         </td>
         <td className="py-3 px-3 hidden sm:table-cell">
-          {isSealed ? <span className="text-gray-400 text-sm">Sealed</span> : <InkIcons colors={games[0]?.your_deck_colors} />}
+          {isSealed ? <span className="text-gray-400 text-sm">Sealed</span> : (
+            <div className="flex flex-col gap-0.5">
+              <InkIcons colors={games[0]?.your_deck_colors} />
+              {deckName && <span className="text-[11px] text-gray-400 leading-tight max-w-[120px] truncate">{deckName}</span>}
+            </div>
+          )}
         </td>
         <td className="py-3 px-3 hidden sm:table-cell">
           {!isSealed && games[0]?.opp_deck_colors ? <InkIcons colors={games[0]?.opp_deck_colors} /> : <span className="text-gray-400">—</span>}
@@ -245,6 +258,7 @@ function MatchGroup({ games, selected, onToggle, onToggleMatch }) {
           onToggle={onToggle}
           indent
           gameLabel={`Game ${game.match_game_number ?? i + 1}`}
+          deckName={deckName}
         />
       ))}
     </>
@@ -420,6 +434,7 @@ export function MatchHistoryPage() {
         const buf = await fetchGamelogBuffer(game.gamelog_id)
         const text = await decompressGzip(buf)
         const logs = JSON.parse(text)
+        const deckName = game.your_deck_id ? (deckNames[game.your_deck_id] ?? null) : null
         const parsed = parseGamelog(game.gamelog_id, logs, {
           yourResult: game.result,
           yourPlayerNum: game.your_player,
@@ -438,6 +453,7 @@ export function MatchHistoryPage() {
           match_id: game.match_id,
           match_format: game.match_format,
           match_game_number: game.match_game_number,
+          deckName,
         })
         await saveGamelog(game.gamelog_id, parsed, logs)
         done++
@@ -512,6 +528,21 @@ export function MatchHistoryPage() {
   }, [afterOppColors, getDeckKey])
 
   const filteredGames = afterOppColors.filter(g => !filterDeck || getDeckKey(g) === filterDeck)
+
+  const deckStats = useMemo(() => {
+    const byDeck = {}
+    for (const g of games) {
+      const isSealed = g.queue_id?.toLowerCase().includes('sealed') || g.queue_name?.toLowerCase().includes('sealed')
+      if (isSealed) continue
+      const key = getDeckKey(g)
+      if (!key) continue
+      if (!byDeck[key]) byDeck[key] = { key, colors: g.your_deck_colors, wins: 0, losses: 0, loreTotal: 0, loreGames: 0 }
+      if (g.result === 'win') byDeck[key].wins++
+      else if (g.result === 'loss') byDeck[key].losses++
+      if (g.your_lore != null) { byDeck[key].loreTotal += g.your_lore; byDeck[key].loreGames++ }
+    }
+    return Object.values(byDeck).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
+  }, [games, getDeckKey])
 
   // Auto-clear downstream filters that are no longer valid
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -717,6 +748,37 @@ export function MatchHistoryPage() {
         </div>
       )}
 
+      {deckStats.length > 1 && (
+        <div className="mb-6">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">By Deck</div>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {deckStats.map(({ key, colors, wins, losses, loreTotal, loreGames }) => {
+              const total = wins + losses
+              const wr = total > 0 ? wins / total : null
+              const name = deckNames[key] ?? null
+              const avgLore = loreGames > 0 ? (loreTotal / loreGames).toFixed(1) : null
+              return (
+                <button
+                  key={key}
+                  onClick={() => setFilterDeck(prev => prev === key ? null : key)}
+                  className={`flex-shrink-0 text-left border rounded-lg px-3 py-2.5 transition-colors min-w-[120px] ${filterDeck === key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'}`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <InkIcons colors={colors} />
+                  </div>
+                  {name && <div className={`text-[11px] font-medium truncate max-w-[110px] mb-1 ${filterDeck === key ? 'text-gray-300' : 'text-gray-600'}`}>{name}</div>}
+                  <div className={`text-sm font-bold ${filterDeck === key ? 'text-white' : wr != null && wr >= 0.5 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {wins}–{losses}
+                    {wr != null && <span className={`ml-1.5 text-xs font-normal ${filterDeck === key ? 'text-gray-400' : 'text-gray-400'}`}>{Math.round(wr * 100)}%</span>}
+                  </div>
+                  {avgLore && <div className={`text-[11px] ${filterDeck === key ? 'text-gray-400' : 'text-gray-400'}`}>{avgLore} avg lore</div>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {games.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -751,6 +813,7 @@ export function MatchHistoryPage() {
                     selected={selected}
                     onToggle={toggleSelect}
                     onToggleMatch={toggleSelectMatch}
+                    deckName={deckNames[getDeckKey(item.games[0])] ?? null}
                   />
                 ) : (
                   <GameRow
@@ -758,6 +821,7 @@ export function MatchHistoryPage() {
                     game={item.game}
                     selected={selected.has(item.game.game_id)}
                     onToggle={toggleSelect}
+                    deckName={deckNames[getDeckKey(item.game)] ?? null}
                   />
                 )
               )}

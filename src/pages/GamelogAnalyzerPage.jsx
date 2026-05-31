@@ -1306,6 +1306,7 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
   const myWon = myPlayerNum != null && (winner === myPlayerNum || winner === String(myPlayerNum))
 
   const metaBits = []
+  if (gamelog.deckName) metaBits.push(gamelog.deckName)
   if (gamelog.match_format === 'bo3' && gamelog.match_game_number) {
     metaBits.push(`Game ${gamelog.match_game_number} of BO3`)
   }
@@ -1609,6 +1610,11 @@ export function GamelogAnalyzerPage() {
                   {myColors?.length > 0 && (
                     <span className="flex items-center gap-0.5 flex-shrink-0">
                       {myColors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                    </span>
+                  )}
+                  {g.deckName && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 max-w-[80px] truncate ${isActive ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-500'}`}>
+                      {g.deckName}
                     </span>
                   )}
                   <span className={`text-xs flex-shrink-0 ${isActive ? 'text-gray-400' : 'text-gray-400'}`}>vs</span>

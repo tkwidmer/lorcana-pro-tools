@@ -4,6 +4,7 @@ import {
   getTournamentStructure,
   fetchTournamentStandings,
   fetchAllRegistrations,
+  fetchAllRoundMatches,
   formatTiebreakers,
   analyzeId,
   analyzeAdvancement,
@@ -41,6 +42,153 @@ const RECOMMENDATION_STYLES = {
   },
 }
 
+function matchResultForPlayer(match, playerId) {
+  if (match.match_is_bye) return { result: 'BYE', score: '', opponent: 'BYE' }
+  if (match.match_is_intentional_draw || match.match_is_unintentional_draw) {
+    const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
+    return { result: 'DRAW', score: '—', opponent: opp?.user_event_status.best_identifier ?? '—' }
+  }
+  const won = match.winning_player === playerId
+  const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
+  const oppName = opp?.user_event_status.best_identifier ?? '—'
+  const w = match.games_won_by_winner
+  const l = match.games_won_by_loser
+  const score = won ? `${w}-${l}` : `${l}-${w}`
+  return { result: won ? 'WIN' : 'LOSS', score, opponent: oppName }
+}
+
+function MatchesTab({ allMatches, matchesLoading }) {
+  if (matchesLoading && !allMatches) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-gray-500 py-8 justify-center">
+        <span className="inline-block w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        Loading matches…
+      </div>
+    )
+  }
+  if (!allMatches || allMatches.length === 0) {
+    return <p className="text-sm text-gray-500 py-8 text-center">No match data available.</p>
+  }
+
+  const rounds = [...new Set(allMatches.map((m) => m.round_number))].sort((a, b) => a - b)
+
+  return (
+    <div className="space-y-6">
+      {rounds.map((roundNum) => {
+        const roundMatches = allMatches.filter((m) => m.round_number === roundNum)
+        const phaseName = roundMatches[0]?.phase_name
+        return (
+          <div key={roundNum} className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-800">Round {roundNum}</span>
+              {phaseName && <span className="text-xs text-gray-400">{phaseName}</span>}
+              <span className="ml-auto text-xs text-gray-400">{roundMatches.length} matches</span>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-2 w-10">Tbl</th>
+                  <th className="text-left px-4 py-2">Player 1</th>
+                  <th className="text-center px-4 py-2 w-20">Result</th>
+                  <th className="text-right px-4 py-2">Player 2</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roundMatches.map((match) => {
+                  const [p1, p2] = match.player_match_relationships.sort((a, b) => a.player_order - b.player_order)
+                  const p1Won = match.winning_player === p1?.player.id
+                  const p2Won = match.winning_player === p2?.player.id
+                  const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
+                  const isBye = match.match_is_bye
+                  const w = match.games_won_by_winner
+                  const l = match.games_won_by_loser
+                  return (
+                    <tr key={match.id} className="border-t border-gray-100">
+                      <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                          {p1?.user_event_status.best_identifier ?? '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
+                        {isBye ? 'BYE' : isDraw ? 'DRAW' : `${w}-${l}`}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                          {p2?.user_event_status.best_identifier ?? '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PlayerMatchHistory({ playerId, allMatches, matchesLoading }) {
+  if (matchesLoading && !allMatches) {
+    return (
+      <div className="border border-gray-200 rounded-lg p-4 bg-white">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Match History</h3>
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <span className="inline-block w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          Loading…
+        </div>
+      </div>
+    )
+  }
+
+  const playerMatches = (allMatches ?? []).filter((m) => m.players.includes(playerId))
+  if (playerMatches.length === 0) return null
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+        <h3 className="text-sm font-semibold text-gray-900">Match History</h3>
+      </div>
+      <table className="w-full text-sm">
+        <thead className="text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
+          <tr>
+            <th className="text-left px-6 py-2 w-20">Round</th>
+            <th className="text-left px-6 py-2">Opponent</th>
+            <th className="text-center px-6 py-2 w-16">Result</th>
+            <th className="text-right px-6 py-2 w-16">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {playerMatches.map((match) => {
+            const { result, score, opponent } = matchResultForPlayer(match, playerId)
+            const resultStyle = result === 'WIN'
+              ? 'bg-green-100 text-green-800'
+              : result === 'LOSS'
+              ? 'bg-red-100 text-red-800'
+              : result === 'BYE'
+              ? 'bg-blue-100 text-blue-800'
+              : 'bg-gray-100 text-gray-700'
+            return (
+              <tr key={match.id} className="border-t border-gray-100">
+                <td className="px-6 py-2.5 text-gray-500 font-medium">R{match.round_number}</td>
+                <td className="px-6 py-2.5 text-gray-900 font-medium">{opponent}</td>
+                <td className="px-6 py-2.5 text-center">
+                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${resultStyle}`}>
+                    {result}
+                  </span>
+                </td>
+                <td className="px-6 py-2.5 text-right font-mono text-gray-600">{score}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function TournamentLookupPage() {
   const [eventUrl, setEventUrl] = useState('')
   const [allStandings, setAllStandings] = useState(null)
@@ -51,6 +199,9 @@ export function TournamentLookupPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [registrationMap, setRegistrationMap] = useState(null)
   const [timeRemaining, setTimeRemaining] = useState(null)
+  const [allMatches, setAllMatches] = useState(null)
+  const [matchesLoading, setMatchesLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('standings')
 
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
@@ -89,6 +240,8 @@ export function TournamentLookupPage() {
     setAllStandings(null)
     setSearchTerm('')
     setRegistrationMap(null)
+    setAllMatches(null)
+    setActiveTab('standings')
 
     try {
       const eventDetails = await fetchEventDetails(eventId)
@@ -115,13 +268,17 @@ export function TournamentLookupPage() {
 
       setAllStandings(allResults)
 
-      // Fetch registrations for player status badges (best-effort)
-      try {
-        const regs = await fetchAllRegistrations(eventId)
-        setRegistrationMap(new Map(regs.map((r) => [r.best_identifier, r.registration_status])))
-      } catch {
-        // Registration status is supplementary; don't surface the error
-      }
+      // Fetch registrations best-effort (non-blocking)
+      fetchAllRegistrations(eventId)
+        .then((regs) => setRegistrationMap(new Map(regs.map((r) => [r.best_identifier, r.registration_status]))))
+        .catch(() => {})
+
+      // Fetch matches per round in parallel (non-blocking — updates independently)
+      setMatchesLoading(true)
+      fetchAllRoundMatches(eventId, eventDetails)
+        .then((matches) => setAllMatches(matches))
+        .catch(() => setAllMatches([]))
+        .finally(() => setMatchesLoading(false))
     } catch (err) {
       setError(err.message || 'Failed to fetch tournament data')
     } finally {
@@ -263,8 +420,40 @@ export function TournamentLookupPage() {
         </div>
       )}
 
-      {/* Standings table */}
+      {/* Tab switcher */}
       {allStandings && !player && (
+        <div className="flex gap-1 mb-4 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('standings')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === 'standings'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Standings
+          </button>
+          <button
+            onClick={() => setActiveTab('matches')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+              activeTab === 'matches'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Matches
+            {matchesLoading && (
+              <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60" />
+            )}
+            {!matchesLoading && allMatches && (
+              <span className="text-xs text-gray-400 font-normal">({allMatches.length})</span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Standings table */}
+      {allStandings && !player && activeTab === 'standings' && (
         <div className="space-y-3">
           <input
             type="text"
@@ -326,6 +515,11 @@ export function TournamentLookupPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Matches tab */}
+      {allStandings && !player && activeTab === 'matches' && (
+        <MatchesTab allMatches={allMatches} matchesLoading={matchesLoading} />
       )}
 
       {/* Player detail view */}
@@ -447,6 +641,9 @@ export function TournamentLookupPage() {
               ))}
             </div>
           </div>
+
+          {/* Player match history */}
+          <PlayerMatchHistory playerId={player.player.id} allMatches={allMatches} matchesLoading={matchesLoading} />
         </div>
       )}
     </div>

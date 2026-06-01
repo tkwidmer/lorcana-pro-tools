@@ -199,7 +199,7 @@ export function GameLibraryPage() {
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">MMR Range</div>
-            <div className="text-2xl font-bold text-purple-600">{mmrRange ? `${mmrRange.low}–${mmrRange.peak}` : '—'}</div>
+            <div className="text-base font-bold text-purple-600 leading-tight">{mmrRange ? `${mmrRange.low}–${mmrRange.peak}` : '—'}</div>
             <div className="text-xs text-gray-400 mt-0.5">{gamesWithMMR.length} games tracked</div>
           </div>
           <div className="border border-gray-200 rounded-lg p-4">

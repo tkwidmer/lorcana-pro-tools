@@ -783,41 +783,41 @@ function MMRTrendView({ games }) {
   const chartW = W - PAD.left - PAD.right
   const chartH = H - PAD.top - PAD.bottom
 
-  // Calculate cumulative MMR at each game
-  const points = sorted.reduce((acc, game) => {
-    const newCumulative = (acc[acc.length - 1] ?? 0) + game.mmr_delta
-    acc.push(newCumulative)
-    return acc
-  }, [])
+  // Build actual MMR points: start with mmr_before of first game, then mmr_after of each game
+  const startMMR = sorted[0].mmr_before ?? (sorted[0].mmr_after != null ? sorted[0].mmr_after - sorted[0].mmr_delta : 0)
+  const points = sorted.map(game => game.mmr_after ?? (startMMR + sorted.slice(0, sorted.indexOf(game) + 1).reduce((s, g) => s + g.mmr_delta, 0)))
 
-  // Find min and max for scaling
-  const minMMR = Math.min(...points)
-  const maxMMR = Math.max(...points)
+  // All values including start point for min/max
+  const allValues = [startMMR, ...points]
+  const minMMR = Math.min(...allValues)
+  const maxMMR = Math.max(...allValues)
   const range = maxMMR - minMMR
 
   // Add padding to y-axis
-  const paddedMin = minMMR - (range * 0.1)
-  const paddedMax = maxMMR + (range * 0.1)
+  const paddedMin = minMMR - (range * 0.1 || 10)
+  const paddedMax = maxMMR + (range * 0.1 || 10)
   const paddedRange = paddedMax - paddedMin
 
-  const xPos = (i) => PAD.left + (i / Math.max(1, sorted.length - 1)) * chartW
+  // x positions: index 0 = start point (before first game), index 1..n = after each game
+  const totalPoints = points.length + 1
+  const xPos = (i) => PAD.left + (i / Math.max(1, totalPoints - 1)) * chartW
   const yPos = (mmr) => PAD.top + (1 - (mmr - paddedMin) / paddedRange) * chartH
 
-  const linePath = points.map((mmr, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(mmr).toFixed(1)}`).join(' ')
+  const allPoints = [startMMR, ...points]
+  const linePath = allPoints.map((mmr, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(mmr).toFixed(1)}`).join(' ')
 
-  // X-axis date labels (first, middle, last)
-  const labelIdxs = [0, Math.floor((sorted.length - 1) / 2), sorted.length - 1]
+  // X-axis date labels (first, middle, last) — offset by 1 for start point
+  const labelIdxs = [1, Math.floor((totalPoints - 1) / 2), totalPoints - 1]
   const formatDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
   // Grid lines at round MMR values
   const gridLines = []
-  const gridStep = Math.pow(10, Math.floor(Math.log10(paddedRange / 4)))
+  const gridStep = Math.max(1, Math.pow(10, Math.floor(Math.log10(paddedRange / 4))))
   for (let mmr = Math.ceil(paddedMin / gridStep) * gridStep; mmr <= paddedMax; mmr += gridStep) {
     gridLines.push(mmr)
   }
 
   // Calculate summary statistics
-  const startMMR = points[0]
   const endMMR = points[points.length - 1]
   const netMMR = endMMR - startMMR
   const highestMMR = maxMMR
@@ -847,7 +847,7 @@ function MMRTrendView({ games }) {
           <div className="text-lg font-bold text-gray-900">{lowestMMR.toFixed(0)}</div>
         </div>
       </div>
-      <div className="text-xs text-gray-400 mb-2">Cumulative MMR change over time (imported games only)</div>
+      <div className="text-xs text-gray-400 mb-2">MMR over time (imported games only)</div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
         {/* Grid lines */}
         {gridLines.map(mmr => (
@@ -860,14 +860,14 @@ function MMRTrendView({ games }) {
           </g>
         ))}
 
-        {/* Individual game dots */}
+        {/* Individual game result dots (offset by 1 for start point) */}
         {sorted.map((game, i) => {
           const mmr = points[i]
           const isWin = game.mmr_delta > 0
           return (
             <circle
               key={i}
-              cx={xPos(i)} cy={yPos(mmr)}
+              cx={xPos(i + 1)} cy={yPos(mmr)}
               r={5}
               fill={isWin ? '#86efac' : '#fca5a5'}
               opacity={0.5}
@@ -879,7 +879,7 @@ function MMRTrendView({ games }) {
         <path d={linePath} fill="none" stroke="#8b5cf6" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
 
         {/* Dots on the line */}
-        {points.map((mmr, i) => (
+        {allPoints.map((mmr, i) => (
           <circle key={i} cx={xPos(i)} cy={yPos(mmr)} r={4} fill="#8b5cf6" />
         ))}
 
@@ -887,10 +887,10 @@ function MMRTrendView({ games }) {
         {labelIdxs.map(i => (
           <text
             key={i} x={xPos(i)} y={H - 4}
-            textAnchor={i === 0 ? 'start' : i === sorted.length - 1 ? 'end' : 'middle'}
+            textAnchor={i === 1 ? 'start' : i === totalPoints - 1 ? 'end' : 'middle'}
             fontSize={16} fill="#9ca3af"
           >
-            {formatDate(sorted[i].playedAt)}
+            {formatDate(sorted[i - 1].playedAt)}
           </text>
         ))}
       </svg>

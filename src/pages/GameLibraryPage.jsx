@@ -523,8 +523,8 @@ function MatchupMatrixView({ games }) {
     oppDeckMap.get(oppKey).games += m.games
   })
 
-  const userDecks = Array.from(userDeckMap.values()).sort((a, b) => b.wins / b.games - a.wins / a.games)
-  const oppDecks = Array.from(oppDeckMap.values()).sort((a, b) => b.wins / b.games - a.wins / a.games)
+  const userDecks = Array.from(userDeckMap.values()).sort((a, b) => b.games - a.games)
+  const oppDecks = Array.from(oppDeckMap.values()).sort((a, b) => b.games - a.games)
 
   // Build lookup map for quick access
   const matchupMap = new Map()
@@ -919,8 +919,9 @@ function OpponentMetagameView({ games }) {
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0 text-sm ml-4">
+              <div className="flex items-center gap-3 flex-shrink-0 text-sm ml-4">
                 <span className="text-gray-600">{deck.gameCount}g</span>
+                <span className={`font-medium w-12 text-right ${parseFloat(deck.winRate) >= 55 ? 'text-green-600' : parseFloat(deck.winRate) <= 45 ? 'text-red-500' : 'text-gray-500'}`}>{deck.winRate}% WR</span>
                 <span className="font-semibold text-gray-900 w-12 text-right">{deck.percentage}%</span>
               </div>
             </div>

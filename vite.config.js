@@ -15,44 +15,24 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: () => '/files/current/en/allCards.json',
       },
-      '/api/event-details': {
+      '/api/tournament': {
         target: RAVEN_BASE,
         changeOrigin: true,
         rewrite: (path) => {
           const url = new URL(path, 'http://localhost')
+          const type = url.searchParams.get('type')
           const eventId = url.searchParams.get('eventId')
-          return `/api/v2/events/${eventId}`
-        },
-      },
-      '/api/tournament-registrations': {
-        target: RAVEN_BASE,
-        changeOrigin: true,
-        rewrite: (path) => {
-          const url = new URL(path, 'http://localhost')
-          const eventId = url.searchParams.get('eventId')
-          const page = url.searchParams.get('page') || '1'
-          const pageSize = url.searchParams.get('pageSize') || '10'
-          return `/api/v2/events/${eventId}/registrations/?page=${page}&page_size=${pageSize}`
-        },
-      },
-      '/api/tournament-standings': {
-        target: RAVEN_BASE,
-        changeOrigin: true,
-        rewrite: (path) => {
-          const url = new URL(path, 'http://localhost')
           const roundId = url.searchParams.get('roundId')
           const page = url.searchParams.get('page') || '1'
           const pageSize = url.searchParams.get('pageSize') || '10'
-          return `/api/v2/tournament-rounds/${roundId}/standings/paginated/?page=${page}&page_size=${pageSize}`
-        },
-      },
-      '/api/tournament-matches': {
-        target: RAVEN_BASE,
-        changeOrigin: true,
-        rewrite: (path) => {
-          const url = new URL(path, 'http://localhost')
-          const roundId = url.searchParams.get('roundId')
-          return `/api/v2/tournament-rounds/${roundId}/matches/`
+
+          switch (type) {
+            case 'event':        return `/api/v2/events/${eventId}`
+            case 'registrations': return `/api/v2/events/${eventId}/registrations/?page=${page}&page_size=${pageSize}`
+            case 'standings':    return `/api/v2/tournament-rounds/${roundId}/standings/paginated/?page=${page}&page_size=${pageSize}`
+            case 'matches':      return `/api/v2/tournament-rounds/${roundId}/matches/`
+            default:             return path
+          }
         },
       },
     },

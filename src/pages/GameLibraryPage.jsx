@@ -131,13 +131,13 @@ export function GameLibraryPage() {
   const winRateFirst = gamesFirst.length > 0 ? Math.round(winsFirst / gamesFirst.length * 100) : null
   const winRateSecond = gamesSecond.length > 0 ? Math.round(winsSecond / gamesSecond.length * 100) : null
 
-  // Calculate MMR and play time stats from imported games
+  // Calculate MMR range from imported games
   const importedWithMMR = importedGames.filter(g => g.mmr_delta != null).sort((a, b) => a.playedAt - b.playedAt)
-  let currentMMR = null
+  let mmrRange = null
   if (importedWithMMR.length > 0) {
-    const firstMMR = importedWithMMR[0].mmr_before ?? 0
-    const netMMR = importedWithMMR.reduce((sum, g) => sum + (g.mmr_delta || 0), 0)
-    currentMMR = firstMMR + netMMR
+    const startMMR = importedWithMMR[0].mmr_before ?? importedWithMMR[0].mmr_after ?? 0
+    const allMMR = [startMMR, ...importedWithMMR.map(g => g.mmr_after ?? startMMR)]
+    mmrRange = { low: Math.min(...allMMR), peak: Math.max(...allMMR) }
   }
 
   const totalPlayTime = games.reduce((sum, g) => sum + (g.duration_seconds || 0), 0)
@@ -198,8 +198,8 @@ export function GameLibraryPage() {
             </div>
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Current MMR</div>
-            <div className="text-2xl font-bold text-purple-600">{currentMMR !== null ? currentMMR.toFixed(0) : '—'}</div>
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">MMR Range</div>
+            <div className="text-2xl font-bold text-purple-600">{mmrRange ? `${mmrRange.low}–${mmrRange.peak}` : '—'}</div>
             <div className="text-xs text-gray-400 mt-0.5">{importedWithMMR.length} games tracked</div>
           </div>
           <div className="border border-gray-200 rounded-lg p-4">

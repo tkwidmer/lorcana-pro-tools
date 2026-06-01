@@ -42,6 +42,7 @@ function enrichGame(gamelog, myName) {
       effectRemovals: card.effectRemovals ?? 0,
       exerts: card.exerts ?? 0,
       cardsRecovered: card.cardsRecovered ?? 0,
+      sings: card.sings ?? 0,
     }
   }
 
@@ -86,7 +87,7 @@ function aggregateMyCards(games) {
         map[key] = {
           fullName: key, name: key,
           playedCount: 0, inkedCount: 0, loreGained: 0,
-          effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
+          effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0, sings: 0,
         }
       }
       const m = map[key]
@@ -99,6 +100,7 @@ function aggregateMyCards(games) {
       m.effectRemovals += card.effectRemovals
       m.exerts += card.exerts ?? 0
       m.cardsRecovered += card.cardsRecovered ?? 0
+      m.sings += card.sings ?? 0
     }
   }
   return Object.values(map)
@@ -438,6 +440,7 @@ function ImpactTable({ games, order }) {
         c.effectRemovals * 2 +
         c.exerts * 1.5 +
         c.cardsRecovered * 1.5 +
+        c.sings * 1.5 +
         ch.kills * 2 +
         ch.survived * 0.5
       return { ...c, impactScore, ch }
@@ -460,6 +463,7 @@ function ImpactTable({ games, order }) {
         if (c.extraInks > 0) tags.push(`${c.extraInks} +ink`)
         if (c.effectRemovals > 0) tags.push(`${c.effectRemovals} remove`)
         if (c.ch.kills > 0) tags.push(`${c.ch.kills} kills`)
+        if (c.sings > 0) tags.push(`${c.sings} sings`)
         return (
           <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
             <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.playedCount}</span>
@@ -516,12 +520,12 @@ function DeckStats({ filteredGames, subtitle }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Most Impactful Cards</h3>
-              <p className="text-[10px] text-gray-400 mb-2">Plays · score: lore + draws + kills + removal</p>
+              <p className="text-[10px] text-gray-400 mb-2">Plays · score: lore + draws + kills + removal + sings</p>
               <ImpactTable games={filteredGames} order="desc" />
             </div>
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Least Impactful Cards</h3>
-              <p className="text-[10px] text-gray-400 mb-2">Plays · score: lore + draws + kills + removal</p>
+              <p className="text-[10px] text-gray-400 mb-2">Plays · score: lore + draws + kills + removal + sings</p>
               <ImpactTable games={filteredGames} order="asc" />
             </div>
           </div>

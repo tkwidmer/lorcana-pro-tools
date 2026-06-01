@@ -49,6 +49,7 @@ export function parseGamelog(id, logs, meta = {}) {
         drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0,
         loreGained: 0, shiftPlays: 0,
         effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
+        sings: 0,
       }
     }
     return pData.cards[name]
@@ -140,6 +141,10 @@ export function parseGamelog(id, logs, meta = {}) {
         lastPlayedByPlayer[p] = { name: card.name, id: card.id }
         const drawCount = ON_PLAY_DRAWS[card.id]
         if (drawCount) { pendingDrawSource = { ...card, player: p }; pendingDrawCount = drawCount }
+        // Track singer: the character that exerted to sing this song
+        if (d.singerCardName && d.singerCardId && card.name === d.cardName) {
+          ensureCard(p, d.singerCardName, d.singerCardId).sings++
+        }
       } else if (type === 'CARD_INKED') {
         c.inked++
       } else if (type === 'CARD_DISCARDED') {
@@ -155,6 +160,13 @@ export function parseGamelog(id, logs, meta = {}) {
       const causedBy = p === 1 ? 2 : 1
       const src = lastPlayedByPlayer[causedBy]
       if (src) ensureCard(causedBy, src.name, src.id).effectRemovals++
+    }
+
+    // When a card is destroyed by an ability effect (abilitySourceCardId present and fromZone === 'field'),
+    // attribute the removal to the source card owned by the other player.
+    if (type === 'CARD_DESTROYED' && d.abilitySourceCardId && d.abilitySourceCardName && d.fromZone === 'field') {
+      const causedBy = p === 1 ? 2 : 1
+      ensureCard(causedBy, d.abilitySourceCardName, d.abilitySourceCardId).effectRemovals++
     }
 
     if (type === 'CARD_QUEST' && d.cardName) {

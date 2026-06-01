@@ -131,12 +131,12 @@ export function GameLibraryPage() {
   const winRateFirst = gamesFirst.length > 0 ? Math.round(winsFirst / gamesFirst.length * 100) : null
   const winRateSecond = gamesSecond.length > 0 ? Math.round(winsSecond / gamesSecond.length * 100) : null
 
-  // Calculate MMR range from imported games
-  const importedWithMMR = importedGames.filter(g => g.mmr_delta != null).sort((a, b) => a.playedAt - b.playedAt)
+  // Calculate MMR range from all games with MMR data
+  const gamesWithMMR = games.filter(g => g.mmr_delta != null).sort((a, b) => a.playedAt - b.playedAt)
   let mmrRange = null
-  if (importedWithMMR.length > 0) {
-    const startMMR = importedWithMMR[0].mmr_before ?? importedWithMMR[0].mmr_after ?? 0
-    const allMMR = [startMMR, ...importedWithMMR.map(g => g.mmr_after ?? startMMR)]
+  if (gamesWithMMR.length > 0) {
+    const startMMR = gamesWithMMR[0].mmr_before ?? gamesWithMMR[0].mmr_after ?? 0
+    const allMMR = [startMMR, ...gamesWithMMR.map(g => g.mmr_after ?? startMMR)]
     mmrRange = { low: Math.min(...allMMR), peak: Math.max(...allMMR) }
   }
 
@@ -200,7 +200,7 @@ export function GameLibraryPage() {
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">MMR Range</div>
             <div className="text-2xl font-bold text-purple-600">{mmrRange ? `${mmrRange.low}–${mmrRange.peak}` : '—'}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{importedWithMMR.length} games tracked</div>
+            <div className="text-xs text-gray-400 mt-0.5">{gamesWithMMR.length} games tracked</div>
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Play Time</div>

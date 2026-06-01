@@ -49,7 +49,7 @@ export function parseGamelog(id, logs, meta = {}) {
         drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0,
         loreGained: 0, shiftPlays: 0,
         effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
-        sings: 0,
+        sings: 0, oppRestrictions: 0,
       }
     }
     return pData.cards[name]
@@ -169,6 +169,14 @@ export function parseGamelog(id, logs, meta = {}) {
       ensureCard(causedBy, d.abilitySourceCardName, d.abilitySourceCardId).effectRemovals++
     }
 
+    // CARD_REVEALED with revealDestination === 'hand' means an on-play ability fetched a card
+    // from the deck to hand (e.g. Ariel - Spectacular Singer's MUSICAL DEBUT). Attribute as
+    // effectDraws to the card that was most recently played by this player.
+    if (type === 'CARD_REVEALED' && d.revealDestination === 'hand') {
+      const src = lastPlayedByPlayer[p]
+      if (src) ensureCard(p, src.name, src.id).effectDraws++
+    }
+
     if (type === 'CARD_QUEST' && d.cardName) {
       const gain = d.loreGained ?? 0
       ensureCard(p, d.cardName, d.cardId).loreGained += gain
@@ -222,6 +230,8 @@ export function parseGamelog(id, logs, meta = {}) {
           c.exerts++
         else if (k === 'returnedFromDiscard' || k === 'returnFromDiscard')
           c.cardsRecovered += (d.returnedCardRefs?.length ?? count)
+        else if (k === 'cannotPlayTypes')
+          c.oppRestrictions++
       }
     }
   }

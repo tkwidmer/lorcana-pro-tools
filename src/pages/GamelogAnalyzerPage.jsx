@@ -43,6 +43,7 @@ function enrichGame(gamelog, myName) {
       exerts: card.exerts ?? 0,
       cardsRecovered: card.cardsRecovered ?? 0,
       sings: card.sings ?? 0,
+      oppRestrictions: card.oppRestrictions ?? 0,
     }
   }
 
@@ -87,7 +88,7 @@ function aggregateMyCards(games) {
         map[key] = {
           fullName: key, name: key,
           playedCount: 0, inkedCount: 0, loreGained: 0,
-          effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0, sings: 0,
+          effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0, sings: 0, oppRestrictions: 0,
         }
       }
       const m = map[key]
@@ -101,6 +102,7 @@ function aggregateMyCards(games) {
       m.exerts += card.exerts ?? 0
       m.cardsRecovered += card.cardsRecovered ?? 0
       m.sings += card.sings ?? 0
+      m.oppRestrictions += card.oppRestrictions ?? 0
     }
   }
   return Object.values(map)
@@ -441,6 +443,7 @@ function ImpactTable({ games, order }) {
         c.exerts * 1.5 +
         c.cardsRecovered * 1.5 +
         c.sings * 1.5 +
+        c.oppRestrictions * 2 +
         ch.kills * 2 +
         ch.survived * 0.5
       return { ...c, impactScore, ch }
@@ -464,6 +467,7 @@ function ImpactTable({ games, order }) {
         if (c.effectRemovals > 0) tags.push(`${c.effectRemovals} remove`)
         if (c.ch.kills > 0) tags.push(`${c.ch.kills} kills`)
         if (c.sings > 0) tags.push(`${c.sings} sings`)
+        if (c.oppRestrictions > 0) tags.push(`${c.oppRestrictions} lock`)
         return (
           <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
             <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.playedCount}</span>

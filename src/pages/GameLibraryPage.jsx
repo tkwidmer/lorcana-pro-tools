@@ -523,8 +523,8 @@ function MatchupMatrixView({ games }) {
     oppDeckMap.get(oppKey).games += m.games
   })
 
-  const userDecks = Array.from(userDeckMap.values()).sort((a, b) => b.wins / b.games - a.wins / a.games)
-  const oppDecks = Array.from(oppDeckMap.values()).sort((a, b) => b.wins / b.games - a.wins / a.games)
+  const userDecks = Array.from(userDeckMap.values()).sort((a, b) => b.games - a.games)
+  const oppDecks = Array.from(oppDeckMap.values()).sort((a, b) => b.games - a.games)
 
   // Build lookup map for quick access
   const matchupMap = new Map()

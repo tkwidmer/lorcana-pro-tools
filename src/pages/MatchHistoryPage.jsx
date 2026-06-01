@@ -438,6 +438,29 @@ export function MatchHistoryPage() {
     }
   }
 
+  const getDeckKey = useCallback((g) => g.your_deck_id ?? deckFingerprint(g.your_decklist), [])
+
+  const deckStats = useMemo(() => {
+    const byDeck = {}
+    for (const g of games) {
+      const isSealed = g.queue_id?.toLowerCase().includes('sealed') || g.queue_name?.toLowerCase().includes('sealed')
+      if (isSealed) continue
+      const key = getDeckKey(g)
+      if (!key) continue
+      if (!byDeck[key]) byDeck[key] = {
+        key,
+        deckId: g.your_deck_id ?? null,
+        colors: g.your_deck_colors,
+        wins: 0, losses: 0, loreTotal: 0, loreGames: 0,
+        latestDecklist: g.your_decklist ?? null, // games sorted newest-first
+      }
+      if (g.result === 'win') byDeck[key].wins++
+      else if (g.result === 'loss') byDeck[key].losses++
+      if (g.your_lore != null) { byDeck[key].loreTotal += g.your_lore; byDeck[key].loreGames++ }
+    }
+    return Object.values(byDeck).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
+  }, [games, getDeckKey])
+
   // Background-fetch deck details for all constructed decks with a real deckId
   useEffect(() => {
     for (const { deckId } of deckStats) {
@@ -586,8 +609,6 @@ export function MatchHistoryPage() {
   const oppColorOptions = [...new Set(afterMyColors.map(g => g.opp_deck_colors).filter(c => c && colorCount(c) <= 2))].sort()
   const afterOppColors = afterMyColors.filter(g => !filterOppColors || g.opp_deck_colors === filterOppColors)
 
-  const getDeckKey = useCallback((g) => g.your_deck_id ?? deckFingerprint(g.your_decklist), [])
-
   const { deckOptions, seenDeckKeys } = useMemo(() => {
     const options = []
     const keys = new Set()
@@ -602,27 +623,6 @@ export function MatchHistoryPage() {
   }, [afterOppColors, getDeckKey])
 
   const filteredGames = afterOppColors.filter(g => !filterDeck || getDeckKey(g) === filterDeck)
-
-  const deckStats = useMemo(() => {
-    const byDeck = {}
-    for (const g of games) {
-      const isSealed = g.queue_id?.toLowerCase().includes('sealed') || g.queue_name?.toLowerCase().includes('sealed')
-      if (isSealed) continue
-      const key = getDeckKey(g)
-      if (!key) continue
-      if (!byDeck[key]) byDeck[key] = {
-        key,
-        deckId: g.your_deck_id ?? null,
-        colors: g.your_deck_colors,
-        wins: 0, losses: 0, loreTotal: 0, loreGames: 0,
-        latestDecklist: g.your_decklist ?? null, // games sorted newest-first
-      }
-      if (g.result === 'win') byDeck[key].wins++
-      else if (g.result === 'loss') byDeck[key].losses++
-      if (g.your_lore != null) { byDeck[key].loreTotal += g.your_lore; byDeck[key].loreGames++ }
-    }
-    return Object.values(byDeck).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
-  }, [games, getDeckKey])
 
   // Auto-clear downstream filters that are no longer valid
   // eslint-disable-next-line react-hooks/set-state-in-effect

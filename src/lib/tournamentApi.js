@@ -1,6 +1,6 @@
 export async function fetchEventDetails(eventId) {
   try {
-    const response = await fetch(`/api/event-details?eventId=${eventId}`)
+    const response = await fetch(`/api/tournament?type=event&eventId=${eventId}`)
 
     if (!response.ok) {
       const error = await response.json()
@@ -123,7 +123,7 @@ export function getTournamentStructure(eventDetails) {
 export async function fetchEventMatches(eventId, roundId) {
   try {
     const params = new URLSearchParams({ eventId: String(eventId), roundId: String(roundId) })
-    const response = await fetch(`/api/tournament-matches?${params}`)
+    const response = await fetch(`/api/tournament?type=matches&${params}`)
     if (!response.ok) {
       const error = await response.json()
       throw new Error(error.detail || error.error || 'Failed to fetch matches')
@@ -189,7 +189,7 @@ export async function fetchAllRegistrations(eventId) {
 
   while (hasMore) {
     const response = await fetch(
-      `/api/tournament-registrations?eventId=${eventId}&page=${page}&pageSize=50`
+      `/api/tournament?type=registrations&eventId=${eventId}&page=${page}&pageSize=50`
     )
     if (!response.ok) break
     const data = await response.json()
@@ -204,7 +204,7 @@ export async function fetchAllRegistrations(eventId) {
 export async function fetchTournamentStandings(roundId, page = 1, pageSize = 10) {
   try {
     const response = await fetch(
-      `/api/tournament-standings?roundId=${roundId}&page=${page}&pageSize=${pageSize}`
+      `/api/tournament?type=standings&roundId=${roundId}&page=${page}&pageSize=${pageSize}`
     )
 
     if (!response.ok) {

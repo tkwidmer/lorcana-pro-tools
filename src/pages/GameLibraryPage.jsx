@@ -810,9 +810,11 @@ function MMRTrendView({ games }) {
   const labelIdxs = [1, Math.floor((totalPoints - 1) / 2), totalPoints - 1]
   const formatDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
-  // Grid lines at round MMR values
+  // Grid lines — target ~4 labels max to avoid overlap
   const gridLines = []
-  const gridStep = Math.max(1, Math.pow(10, Math.floor(Math.log10(paddedRange / 4))))
+  const rawStep = paddedRange / 4
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)))
+  const gridStep = Math.max(1, [1, 2, 5, 10].map(m => m * magnitude).find(s => paddedRange / s <= 5) ?? magnitude * 10)
   for (let mmr = Math.ceil(paddedMin / gridStep) * gridStep; mmr <= paddedMax; mmr += gridStep) {
     gridLines.push(mmr)
   }

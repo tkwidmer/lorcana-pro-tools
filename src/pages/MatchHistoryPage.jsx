@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getToken, fetchMatchHistory, fetchGamelogBuffer, fetchDecks, fetchDeck } from '../lib/duelsApi'
+import { getToken, getTokens, getActiveTokenId, setTokenUserId, fetchMatchHistory, fetchGamelogBuffer, fetchDecks, fetchDeck } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { useCards } from '../hooks/useCards'
@@ -363,6 +363,13 @@ function DeckFilterPills({ deckOptions, deckNames, filterDeck, onSelect, onRenam
 export function MatchHistoryPage() {
   const navigate = useNavigate()
   const hasToken = Boolean(getToken())
+  const [activeToken, setActiveTokenState] = useState(() => {
+    const tokens = getTokens()
+    if (!tokens.length) return null
+    const activeId = getActiveTokenId()
+    return tokens.find(t => t.id === activeId) ?? tokens[0]
+  })
+  const activeTokenLabel = activeToken?.username || activeToken?.label || null
   const [games, setGames] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -402,6 +409,16 @@ export function MatchHistoryPage() {
       const incoming = data.games ?? []
       setGames(prev => append ? [...prev, ...incoming] : incoming)
       setNextCursor(data.next_cursor ?? null)
+      // Auto-capture your_user_id on the active token so games can be attributed by player
+      if (!append && incoming.length > 0 && incoming[0].your_user_id) {
+        const tokens = getTokens()
+        const activeId = getActiveTokenId()
+        const active = tokens.find(t => t.id === activeId) ?? tokens[0]
+        if (active) {
+          setTokenUserId(active.id, incoming[0].your_user_id)
+          setActiveTokenState(prev => prev ? { ...prev, userId: incoming[0].your_user_id } : prev)
+        }
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -665,7 +682,20 @@ export function MatchHistoryPage() {
     <div className="max-w-5xl mx-auto px-6 py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">Match History</h1>
-        <p className="text-sm text-gray-500">Imported from duels.ink</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm text-gray-500">Imported from duels.ink</p>
+          {activeTokenLabel && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="text-sm text-gray-500">
+                Viewing as{' '}
+                <Link to="/settings" className="font-medium text-gray-700 hover:text-gray-900 transition-colors">
+                  {activeTokenLabel}
+                </Link>
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       {!hasToken && (

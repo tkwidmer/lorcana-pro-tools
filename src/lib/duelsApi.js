@@ -1,16 +1,98 @@
-const TOKEN_KEY = 'duels_api_token'
+const OLD_TOKEN_KEY = 'duels_api_token'
+const TOKENS_KEY = 'duels_api_tokens'
+const ACTIVE_ID_KEY = 'duels_api_active_token_id'
+
+function getRawTokens() {
+  try {
+    return JSON.parse(localStorage.getItem(TOKENS_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+
+// Migrate single-token storage to multi-token on first access
+function migrate() {
+  const old = localStorage.getItem(OLD_TOKEN_KEY)
+  if (!old) return
+  if (getRawTokens().length === 0) {
+    const id = String(Date.now())
+    localStorage.setItem(TOKENS_KEY, JSON.stringify([{ id, label: 'My Account', token: old.trim() }]))
+    localStorage.setItem(ACTIVE_ID_KEY, id)
+  }
+  localStorage.removeItem(OLD_TOKEN_KEY)
+}
+
+export function getTokens() {
+  migrate()
+  return getRawTokens()
+}
+
+export function getActiveTokenId() {
+  return localStorage.getItem(ACTIVE_ID_KEY) ?? null
+}
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY) ?? ''
+  const tokens = getTokens()
+  if (tokens.length === 0) return ''
+  const activeId = getActiveTokenId()
+  const active = tokens.find(t => t.id === activeId) ?? tokens[0]
+  return active?.token ?? ''
 }
 
-export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token.trim())
-  else localStorage.removeItem(TOKEN_KEY)
+export function addToken(label, token) {
+  migrate()
+  const tokens = getRawTokens()
+  const id = String(Date.now())
+  tokens.push({ id, label: label.trim() || 'Account', token: token.trim() })
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
+  // Auto-activate if this is the first token
+  if (tokens.length === 1) localStorage.setItem(ACTIVE_ID_KEY, id)
+  return id
 }
 
-export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY)
+export function removeToken(id) {
+  const tokens = getRawTokens().filter(t => t.id !== id)
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
+  if (getActiveTokenId() === id) {
+    if (tokens.length > 0) localStorage.setItem(ACTIVE_ID_KEY, tokens[0].id)
+    else localStorage.removeItem(ACTIVE_ID_KEY)
+  }
+}
+
+export function setActiveToken(id) {
+  localStorage.setItem(ACTIVE_ID_KEY, id)
+}
+
+export function updateTokenLabel(id, label) {
+  const tokens = getRawTokens().map(t =>
+    t.id === id ? { ...t, label: label.trim() || 'Account' } : t
+  )
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
+}
+
+export function updateTokenUsername(id, username) {
+  const tokens = getRawTokens().map(t =>
+    t.id === id ? { ...t, username: username.trim() } : t
+  )
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
+}
+
+export function setTokenUserId(id, userId) {
+  const tokens = getRawTokens()
+  const token = tokens.find(t => t.id === id)
+  if (!token || token.userId === userId) return
+  const updated = tokens.map(t => t.id === id ? { ...t, userId } : t)
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(updated))
+}
+
+export async function testToken(token) {
+  const params = new URLSearchParams({ format: 'json', limit: '1' })
+  const res = await fetch(`/api/duels-match-history?${params}`, {
+    headers: { Authorization: `Bearer ${token.trim()}` },
+  })
+  if (res.status === 401) throw new Error('Invalid or expired API token')
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
 }
 
 export async function fetchMatchHistory({ cursor, limit = 100, from, to, source } = {}) {

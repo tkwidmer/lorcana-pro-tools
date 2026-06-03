@@ -52,6 +52,8 @@ export function GameLibraryPage() {
   const [turnDistOpen, setTurnDistOpen] = useState(true)
   const [filterDeck, setFilterDeck] = useState(null)
   const [filterQueue, setFilterQueue] = useState(null)
+  const [filterMyColors, setFilterMyColors] = useState(null)
+  const [filterOppColors, setFilterOppColors] = useState(null)
   const [apiDeckNames, setApiDeckNames] = useState({})
   const [insightsLoading, setInsightsLoading] = useState(null)
   const [expandedDeckKey, setExpandedDeckKey] = useState(null)
@@ -176,13 +178,26 @@ export function GameLibraryPage() {
   // Build filter options from stored gamelogs
   const queues = [...new Set(games.map(g => g.queue_name).filter(Boolean))].sort()
 
+  const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
+
+  const myColorOptions = [...new Set(
+    games.map(g => colorKey(g.myInkCombo)).filter(k => k && k.split('/').length === 2)
+  )].sort()
+  const oppColorOptions = [...new Set(
+    games.map(g => colorKey(g.oppInkCombo)).filter(k => k && k.split('/').length === 2)
+  )].sort()
+
   const queueFilteredGames = filterQueue
     ? games.filter(g => g.queue_name === filterQueue)
     : games
 
-  // Build deck stats from queue-filtered games
+  const colorFilteredGames = queueFilteredGames
+    .filter(g => !filterMyColors || colorKey(g.myInkCombo) === filterMyColors)
+    .filter(g => !filterOppColors || colorKey(g.oppInkCombo) === filterOppColors)
+
+  // Build deck stats from color-filtered games
   const deckStatMap = new Map()
-  for (const g of queueFilteredGames) {
+  for (const g of colorFilteredGames) {
     const fp = deckFingerprint(g.yourDecklist)
     if (!fp) continue
     if (!deckStatMap.has(fp)) {
@@ -207,8 +222,8 @@ export function GameLibraryPage() {
   const deckStats = [...deckStatMap.values()].sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
 
   const filteredGames = filterDeck
-    ? queueFilteredGames.filter(g => deckFingerprint(g.yourDecklist) === filterDeck)
-    : queueFilteredGames
+    ? colorFilteredGames.filter(g => deckFingerprint(g.yourDecklist) === filterDeck)
+    : colorFilteredGames
 
   const importedGames = filteredGames.filter(g => importedIds.has(g.id))
   const personalGames = filteredGames.filter(g => !importedIds.has(g.id))
@@ -285,6 +300,38 @@ export function GameLibraryPage() {
               onClick={() => setFilterQueue(filterQueue === q ? null : q)}
               className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterQueue === q ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
             >{q}</button>
+          ))}
+        </div>
+      )}
+
+      {/* My Colors filter */}
+      {games.length > 0 && myColorOptions.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">My Colors</span>
+          {myColorOptions.map(k => (
+            <button
+              key={k}
+              onClick={() => setFilterMyColors(prev => prev === k ? null : k)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${filterMyColors === k ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'}`}
+            >
+              {k.split('/').map(c => <InkImg key={c} color={c} size="w-5 h-5" />)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Opp Colors filter */}
+      {games.length > 0 && oppColorOptions.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Opp Colors</span>
+          {oppColorOptions.map(k => (
+            <button
+              key={k}
+              onClick={() => setFilterOppColors(prev => prev === k ? null : k)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${filterOppColors === k ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'}`}
+            >
+              {k.split('/').map(c => <InkImg key={c} color={c} size="w-5 h-5" />)}
+            </button>
           ))}
         </div>
       )}

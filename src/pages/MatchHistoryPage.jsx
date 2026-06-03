@@ -809,15 +809,6 @@ export function MatchHistoryPage() {
               ))}
             </FilterRow>
           )}
-          {deckOptions.length > 0 && (
-            <DeckFilterPills
-              deckOptions={deckOptions}
-              deckNames={deckNames}
-              filterDeck={filterDeck}
-              onSelect={fp => setFilterDeck(prev => prev === fp ? null : fp)}
-              onRename={saveDeckName}
-            />
-          )}
           {(filterQueue || filterMyColors || filterOppColors || filterDeck || filterDatePreset) && (
             <div className="flex items-center gap-2">
               <button

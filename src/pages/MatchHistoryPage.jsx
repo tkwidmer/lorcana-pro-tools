@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getToken, getTokens, getActiveTokenId, fetchMatchHistory, fetchGamelogBuffer, fetchDecks, fetchDeck } from '../lib/duelsApi'
+import { getToken, getTokens, getActiveTokenId, setTokenUserId, fetchMatchHistory, fetchGamelogBuffer, fetchDecks, fetchDeck } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { useCards } from '../hooks/useCards'
@@ -363,13 +363,13 @@ function DeckFilterPills({ deckOptions, deckNames, filterDeck, onSelect, onRenam
 export function MatchHistoryPage() {
   const navigate = useNavigate()
   const hasToken = Boolean(getToken())
-  const activeTokenLabel = (() => {
+  const [activeToken, setActiveTokenState] = useState(() => {
     const tokens = getTokens()
     if (!tokens.length) return null
     const activeId = getActiveTokenId()
-    const active = tokens.find(t => t.id === activeId) ?? tokens[0]
-    return active?.label ?? null
-  })()
+    return tokens.find(t => t.id === activeId) ?? tokens[0]
+  })
+  const activeTokenLabel = activeToken?.username || activeToken?.label || null
   const [games, setGames] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -409,6 +409,16 @@ export function MatchHistoryPage() {
       const incoming = data.games ?? []
       setGames(prev => append ? [...prev, ...incoming] : incoming)
       setNextCursor(data.next_cursor ?? null)
+      // Auto-capture your_user_id on the active token so games can be attributed by player
+      if (!append && incoming.length > 0 && incoming[0].your_user_id) {
+        const tokens = getTokens()
+        const activeId = getActiveTokenId()
+        const active = tokens.find(t => t.id === activeId) ?? tokens[0]
+        if (active) {
+          setTokenUserId(active.id, incoming[0].your_user_id)
+          setActiveTokenState(prev => prev ? { ...prev, userId: incoming[0].your_user_id } : prev)
+        }
+      }
     } catch (err) {
       setError(err.message)
     } finally {

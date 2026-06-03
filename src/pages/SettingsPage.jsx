@@ -6,6 +6,7 @@ import {
   removeToken,
   setActiveToken,
   updateTokenLabel,
+  updateTokenUsername,
   testToken,
 } from '../lib/duelsApi'
 
@@ -27,6 +28,7 @@ export function SettingsPage() {
   // Per-token UI state
   const [showToken, setShowToken] = useState({}) // id → bool
   const [editLabel, setEditLabel] = useState({}) // id → string | undefined
+  const [editUsername, setEditUsername] = useState({}) // id → string | undefined
   const [testStatus, setTestStatus] = useState({}) // id → null|'loading'|'ok'|{error}
 
   // Add-token form
@@ -50,6 +52,7 @@ export function SettingsPage() {
     setTestStatus(prev => { const n = { ...prev }; delete n[id]; return n })
     setShowToken(prev => { const n = { ...prev }; delete n[id]; return n })
     setEditLabel(prev => { const n = { ...prev }; delete n[id]; return n })
+    setEditUsername(prev => { const n = { ...prev }; delete n[id]; return n })
   }
 
   function handleLabelBlur(id) {
@@ -65,6 +68,22 @@ export function SettingsPage() {
     if (e.key === 'Enter') e.target.blur()
     if (e.key === 'Escape') {
       setEditLabel(prev => { const n = { ...prev }; delete n[id]; return n })
+    }
+  }
+
+  function handleUsernameBlur(id) {
+    const username = editUsername[id]
+    if (username !== undefined) {
+      updateTokenUsername(id, username)
+      setEditUsername(prev => { const n = { ...prev }; delete n[id]; return n })
+      refresh()
+    }
+  }
+
+  function handleUsernameKeyDown(id, e) {
+    if (e.key === 'Enter') e.target.blur()
+    if (e.key === 'Escape') {
+      setEditUsername(prev => { const n = { ...prev }; delete n[id]; return n })
     }
   }
 
@@ -116,6 +135,7 @@ export function SettingsPage() {
             {tokens.map(t => {
               const isActive = t.id === activeId || (activeId === null && tokens[0].id === t.id)
               const labelValue = editLabel[t.id] !== undefined ? editLabel[t.id] : t.label
+              const usernameValue = editUsername[t.id] !== undefined ? editUsername[t.id] : (t.username ?? '')
               const status = testStatus[t.id]
               const visible = showToken[t.id] ?? false
 
@@ -152,6 +172,26 @@ export function SettingsPage() {
                     {isActive && (
                       <span className="text-xs font-medium text-gray-500 bg-gray-200 rounded px-2 py-0.5 flex-shrink-0">
                         Active
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Username row */}
+                  <div className="flex items-center gap-2 mb-2 pl-7">
+                    <span className="text-xs text-gray-400 flex-shrink-0 w-20">Username</span>
+                    <input
+                      type="text"
+                      value={usernameValue}
+                      onChange={e => setEditUsername(prev => ({ ...prev, [t.id]: e.target.value }))}
+                      onBlur={() => handleUsernameBlur(t.id)}
+                      onKeyDown={e => handleUsernameKeyDown(t.id, e)}
+                      placeholder="duels.ink username (optional)"
+                      className="flex-1 text-xs text-gray-700 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-gray-900 focus:outline-none py-0.5 transition-colors placeholder:text-gray-300"
+                      aria-label="duels.ink username"
+                    />
+                    {t.userId && (
+                      <span className="text-xs text-gray-300 font-mono flex-shrink-0 truncate max-w-24" title={t.userId}>
+                        {t.userId.slice(0, 8)}…
                       </span>
                     )}
                   </div>

@@ -70,6 +70,21 @@ export function updateTokenLabel(id, label) {
   localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
 }
 
+export function updateTokenUsername(id, username) {
+  const tokens = getRawTokens().map(t =>
+    t.id === id ? { ...t, username: username.trim() } : t
+  )
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
+}
+
+export function setTokenUserId(id, userId) {
+  const tokens = getRawTokens()
+  const token = tokens.find(t => t.id === id)
+  if (!token || token.userId === userId) return
+  const updated = tokens.map(t => t.id === id ? { ...t, userId } : t)
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(updated))
+}
+
 export async function testToken(token) {
   const params = new URLSearchParams({ format: 'json', limit: '1' })
   const res = await fetch(`/api/duels-match-history?${params}`, {

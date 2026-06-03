@@ -126,6 +126,8 @@ function ImportGamelogButton({ game }) {
         match_format: game.match_format,
         match_game_number: game.match_game_number,
         deckName,
+        deck_id: game.your_deck_id ?? null,
+        queue_name: game.queue_name,
       })
       await saveGamelog(id, parsed, logs)
       setStatus('done')
@@ -551,6 +553,8 @@ export function MatchHistoryPage() {
           match_format: game.match_format,
           match_game_number: game.match_game_number,
           deckName,
+          deck_id: game.your_deck_id ?? null,
+          queue_name: game.queue_name,
         })
         await saveGamelog(game.gamelog_id, parsed, logs)
         done++

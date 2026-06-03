@@ -479,7 +479,7 @@ export function GameLibraryPage() {
       )}
 
       {/* Turn Distribution */}
-      {games.length > 0 && (
+      {filteredGames.length > 0 && (
         <div className="mb-4">
           <button
             onClick={() => setTurnDistOpen(o => !o)}
@@ -492,14 +492,14 @@ export function GameLibraryPage() {
           </button>
           {turnDistOpen && (
             <div className="mt-6">
-              <TurnDistributionView games={games} />
+              <TurnDistributionView games={filteredGames} />
             </div>
           )}
         </div>
       )}
 
       {/* Win Rate Trend */}
-      {games.length > 0 && (
+      {filteredGames.length > 0 && (
         <div className="mb-4">
           <button
             onClick={() => setTrendOpen(o => !o)}
@@ -512,14 +512,14 @@ export function GameLibraryPage() {
           </button>
           {trendOpen && (
             <div className="mt-6">
-              <WinRateTrendView games={games} />
+              <WinRateTrendView games={filteredGames} />
             </div>
           )}
         </div>
       )}
 
       {/* MMR Trend */}
-      {games.length > 0 && (
+      {filteredGames.length > 0 && (
         <div className="mb-4">
           <button
             onClick={() => setMmrTrendOpen(o => !o)}
@@ -532,14 +532,14 @@ export function GameLibraryPage() {
           </button>
           {mmrTrendOpen && (
             <div className="mt-6">
-              <MMRTrendView games={games} />
+              <MMRTrendView games={filteredGames} />
             </div>
           )}
         </div>
       )}
 
       {/* Opponent Metagame */}
-      {games.length > 0 && (
+      {filteredGames.length > 0 && (
         <div className="mb-4">
           <button
             onClick={() => setMetagameOpen(o => !o)}
@@ -552,14 +552,14 @@ export function GameLibraryPage() {
           </button>
           {metagameOpen && (
             <div className="mt-6">
-              <OpponentMetagameView games={games} />
+              <OpponentMetagameView games={filteredGames} />
             </div>
           )}
         </div>
       )}
 
       {/* Matchup Matrix */}
-      {games.length > 0 && (
+      {filteredGames.length > 0 && (
         <div className="mb-4">
           <button
             onClick={() => setMatchupOpen(o => !o)}
@@ -572,7 +572,7 @@ export function GameLibraryPage() {
           </button>
           {matchupOpen && (
             <div className="mt-6">
-              <MatchupMatrixView games={games} />
+              <MatchupMatrixView games={filteredGames} />
             </div>
           )}
         </div>

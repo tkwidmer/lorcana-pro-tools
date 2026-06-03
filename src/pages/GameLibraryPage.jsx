@@ -7,7 +7,7 @@ import { buildWinrateMatrixFromGames } from '../lib/buildWinrateMatrix'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { InkImg } from './GamelogAnalyzerPage'
 import { createGameExportZip } from '../lib/gameExport'
-import { fetchDecks, getToken } from '../lib/duelsApi'
+import { fetchDecks, getToken, getTokens } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
 
 function deckFingerprint(decklist) {
@@ -50,6 +50,7 @@ export function GameLibraryPage() {
   const [trendOpen, setTrendOpen] = useState(true)
   const [mmrTrendOpen, setMmrTrendOpen] = useState(true)
   const [turnDistOpen, setTurnDistOpen] = useState(true)
+  const [filterPlayer, setFilterPlayer] = useState(null)
   const [filterDeck, setFilterDeck] = useState(null)
   const [filterQueue, setFilterQueue] = useState(null)
   const [filterMyColors, setFilterMyColors] = useState(null)
@@ -176,20 +177,40 @@ export function GameLibraryPage() {
   }
 
   // Build filter options from stored gamelogs
-  const queues = [...new Set(games.map(g => g.queue_name).filter(Boolean))].sort()
-
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
 
+  // userId → display label for all tokens (used in game rows and player filter)
+  const userIdToLabel = useMemo(() => {
+    const map = {}
+    for (const t of getTokens()) if (t.userId) map[t.userId] = t.username || t.label
+    return map
+  }, [])
+
+  // Player filter — derived from tokens whose userId matches games in the library
+  const playerOptions = useMemo(() => {
+    const gameUserIds = new Set(games.map(g => g.userId).filter(Boolean))
+    if (gameUserIds.size < 2) return []
+    return getTokens()
+      .filter(t => t.userId && gameUserIds.has(t.userId))
+      .map(t => ({ userId: t.userId, label: t.username || t.label }))
+  }, [games])
+
+  const playerFilteredGames = filterPlayer
+    ? games.filter(g => g.userId === filterPlayer)
+    : games
+
+  const queues = [...new Set(playerFilteredGames.map(g => g.queue_name).filter(Boolean))].sort()
+
   const myColorOptions = [...new Set(
-    games.map(g => colorKey(g.myInkCombo)).filter(k => k && k.split('/').length === 2)
+    playerFilteredGames.map(g => colorKey(g.myInkCombo)).filter(k => k && k.split('/').length === 2)
   )].sort()
   const oppColorOptions = [...new Set(
-    games.map(g => colorKey(g.oppInkCombo)).filter(k => k && k.split('/').length === 2)
+    playerFilteredGames.map(g => colorKey(g.oppInkCombo)).filter(k => k && k.split('/').length === 2)
   )].sort()
 
   const queueFilteredGames = filterQueue
-    ? games.filter(g => g.queue_name === filterQueue)
-    : games
+    ? playerFilteredGames.filter(g => g.queue_name === filterQueue)
+    : playerFilteredGames
 
   const colorFilteredGames = queueFilteredGames
     .filter(g => !filterMyColors || colorKey(g.myInkCombo) === filterMyColors)
@@ -287,6 +308,24 @@ export function GameLibraryPage() {
 
       {loading && <div className="mb-4 text-sm text-gray-500">Processing files…</div>}
       {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
+
+      {/* Player filter */}
+      {playerOptions.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Player</span>
+          <button
+            onClick={() => setFilterPlayer(null)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterPlayer === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+          >All</button>
+          {playerOptions.map(p => (
+            <button
+              key={p.userId}
+              onClick={() => setFilterPlayer(prev => prev === p.userId ? null : p.userId)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterPlayer === p.userId ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+            >{p.label}</button>
+          ))}
+        </div>
+      )}
 
       {/* Queue filter */}
       {games.length > 0 && queues.length > 1 && (
@@ -600,7 +639,7 @@ export function GameLibraryPage() {
           </button>
           {importedOpen && (
             <div className="mt-6">
-              <GamesList games={importedGames} onDelete={async (id) => {
+              <GamesList games={importedGames} userIdToLabel={userIdToLabel} onDelete={async (id) => {
                 await deleteGamelog(id)
                 const newIds = new Set(importedIds)
                 newIds.delete(id)
@@ -647,7 +686,7 @@ export function GameLibraryPage() {
           </button>
           {personalOpen && (
             <div className="mt-6">
-              <GamesList games={personalGames} onDelete={async (id) => {
+              <GamesList games={personalGames} userIdToLabel={userIdToLabel} onDelete={async (id) => {
                 await deleteGamelog(id)
                 await loadGames()
               }} />
@@ -681,21 +720,21 @@ function DecklistDisplay({ decklist, cardIdToName }) {
   )
 }
 
-function GamesList({ games, onDelete }) {
+function GamesList({ games, userIdToLabel = {}, onDelete }) {
   return (
     <div className="space-y-1">
       {games.map(g => (
-        <GameListItem key={g.id} game={g} onDelete={onDelete} />
+        <GameListItem key={g.id} game={g} playerLabel={g.userId ? userIdToLabel[g.userId] : undefined} onDelete={onDelete} />
       ))}
     </div>
   )
 }
 
-function GameListItem({ game, onDelete }) {
+function GameListItem({ game, playerLabel, onDelete }) {
   const p1Name = game.p1Name || 'Player 1'
   const p2Name = game.p2Name || 'Player 2'
   const myNum = game.myPlayerNum
-  const myDisplayLabel = myNum === 1 ? p1Name : myNum === 2 ? p2Name : p1Name
+  const myDisplayLabel = playerLabel ?? (myNum === 1 ? p1Name : myNum === 2 ? p2Name : p1Name)
   const oppDisplayLabel = myNum === 1 ? p2Name : myNum === 2 ? p1Name : p2Name
   const myColors = game.myInkCombo ?? []
   const oppColors = game.oppInkCombo ?? []

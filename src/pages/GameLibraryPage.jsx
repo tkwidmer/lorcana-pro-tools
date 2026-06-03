@@ -397,7 +397,7 @@ export function GameLibraryPage() {
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Play Time</div>
-            <div className="text-2xl font-bold text-gray-900">{Math.floor(totalPlayTime / 60)}h {totalPlayTime % 60}m</div>
+            <div className="text-base font-bold text-gray-900 leading-tight">{Math.floor(totalPlayTime / 60)}h {totalPlayTime % 60}m</div>
             <div className="text-xs text-gray-400 mt-0.5">{filteredGames.reduce((sum, g) => sum + (g.turnCount || 0), 0)} turns</div>
           </div>
         </div>

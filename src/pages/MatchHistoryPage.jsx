@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getToken, getTokens, getActiveTokenId, setTokenUserId, fetchMatchHistory, fetchGamelogBuffer, fetchDecks, fetchDeck } from '../lib/duelsApi'
+import { getToken, getTokens, getActiveTokenId, setTokenUserId, fetchMatchHistory, fetchGamelogBuffer, fetchGamelogManifest, fetchDecks, fetchDeck } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { useCards } from '../hooks/useCards'
@@ -543,11 +543,30 @@ export function MatchHistoryPage() {
     const toImport = games.filter(g => selected.has(g.game_id) && g.gamelog_id)
     if (!toImport.length) return
     const storedMyName = localStorage.getItem('lorcana_my_name') ?? ''
-    setBulkOp({ done: 0, total: toImport.length, errors: 0, label: 'Importing gamelogs' })
+    setBulkOp({ done: 0, total: toImport.length, errors: 0, label: 'Fetching gamelogs' })
+
+    // Fetch a signed-URL manifest for all IDs in one request, then download in batches
+    const BATCH = 1000
+    const urlMap = {} // gamelog_id → signed CDN URL
+    for (let i = 0; i < toImport.length; i += BATCH) {
+      const ids = toImport.slice(i, i + BATCH).map(g => g.gamelog_id)
+      try {
+        const manifest = await fetchGamelogManifest(ids)
+        for (const f of manifest.files ?? []) urlMap[f.id] = f.url
+      } catch {
+        // fall through — missing entries will error per-game below
+      }
+    }
+
     let done = 0, errors = 0
+    setBulkOp({ done: 0, total: toImport.length, errors: 0, label: 'Importing gamelogs' })
     for (const game of toImport) {
       try {
-        const buf = await fetchGamelogBuffer(game.gamelog_id)
+        const signedUrl = urlMap[game.gamelog_id]
+        // Prefer signed URL from manifest; fall back to single-game proxy if not in manifest
+        const buf = signedUrl
+          ? await fetch(signedUrl).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer() })
+          : await fetchGamelogBuffer(game.gamelog_id)
         const text = await decompressGzip(buf)
         const logs = JSON.parse(text)
         const deckName = game.your_deck_id ? (deckNames[game.your_deck_id] ?? null) : null

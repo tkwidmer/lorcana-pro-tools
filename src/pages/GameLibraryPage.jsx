@@ -971,7 +971,7 @@ function WinRateTrendView({ games }) {
   const linePath = points.map((r, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(r).toFixed(1)}`).join(' ')
 
   // X-axis date labels (first, middle, last)
-  const labelIdxs = [0, Math.floor((sorted.length - 1) / 2), sorted.length - 1]
+  const labelIdxs = [...new Set([0, Math.floor((sorted.length - 1) / 2), sorted.length - 1])]
   const formatDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
   return (
@@ -1065,7 +1065,7 @@ function MMRTrendView({ games }) {
   const linePath = allPoints.map((mmr, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(mmr).toFixed(1)}`).join(' ')
 
   // X-axis date labels (first, middle, last) — offset by 1 for start point
-  const labelIdxs = [1, Math.floor((totalPoints - 1) / 2), totalPoints - 1]
+  const labelIdxs = [...new Set([1, Math.max(1, Math.floor((totalPoints - 1) / 2)), totalPoints - 1])]
   const formatDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
   // Grid lines — target ~4 labels max to avoid overlap

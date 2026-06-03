@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip } from '../lib/gameImport'
 import { analyzeOpponentMetagame } from '../lib/metagameAnalysis'
@@ -6,6 +7,24 @@ import { buildWinrateMatrixFromGames } from '../lib/buildWinrateMatrix'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { InkImg } from './GamelogAnalyzerPage'
 import { createGameExportZip } from '../lib/gameExport'
+import { fetchDecks, getToken } from '../lib/duelsApi'
+import { useCards } from '../hooks/useCards'
+
+function deckFingerprint(decklist) {
+  if (!decklist) return null
+  const cards = Array.isArray(decklist) ? decklist : Object.values(decklist)
+  const key = cards
+    .map(c => typeof c === 'string' ? c : `${c?.cardId ?? c?.name ?? c?.id ?? ''}x${c?.count ?? 1}`)
+    .filter(s => s && s !== 'x1')
+    .sort()
+    .join('|')
+  if (!key) return null
+  let h = 5381
+  for (let i = 0; i < key.length; i++) {
+    h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0
+  }
+  return String(Math.abs(h))
+}
 
 const IMPORTED_GAMES_KEY = 'lorcana_imported_game_ids'
 
@@ -31,9 +50,35 @@ export function GameLibraryPage() {
   const [trendOpen, setTrendOpen] = useState(true)
   const [mmrTrendOpen, setMmrTrendOpen] = useState(true)
   const [turnDistOpen, setTurnDistOpen] = useState(true)
+  const [filterDeck, setFilterDeck] = useState(null)
+  const [filterQueue, setFilterQueue] = useState(null)
+  const [apiDeckNames, setApiDeckNames] = useState({})
+  const [insightsLoading, setInsightsLoading] = useState(null)
+  const [expandedDeckKey, setExpandedDeckKey] = useState(null)
+
+  const navigate = useNavigate()
+  const { cards } = useCards()
+  const cardIdToName = useMemo(() => {
+    const map = {}
+    for (const c of cards) {
+      if (c.setCode != null && c.number != null) map[`${c.setCode}-${c.number}`] = c.fullName ?? c.name
+    }
+    return map
+  }, [cards])
 
   useEffect(() => {
     loadGames()
+  }, [])
+
+  useEffect(() => {
+    if (!getToken()) return
+    fetchDecks()
+      .then(data => {
+        const names = {}
+        for (const d of data.decks ?? []) names[d.id] = d.name
+        setApiDeckNames(names)
+      })
+      .catch(() => {})
   }, [])
 
   async function loadGames() {
@@ -115,11 +160,61 @@ export function GameLibraryPage() {
     await loadGames()
   }
 
-  const importedGames = games.filter(g => importedIds.has(g.id))
-  const personalGames = games.filter(g => !importedIds.has(g.id))
+  async function handleLoadInsights(deckStat) {
+    setInsightsLoading(deckStat.fp)
+    try {
+      const decklist = deckStat.latestDecklist
+      if (!decklist?.length) return
+      const lines = decklist.map(({ cardId, count }) => `${count} ${cardIdToName[cardId] ?? cardId}`)
+      localStorage.setItem('drawOdds.deckText', lines.join('\n'))
+      navigate('/deck-insights')
+    } finally {
+      setInsightsLoading(null)
+    }
+  }
 
-  // Calculate overall stats
-  const gamesWithMyPlayer = games.filter(g => g.myPlayerNum != null)
+  // Build filter options from stored gamelogs
+  const queues = [...new Set(games.map(g => g.queue_name).filter(Boolean))].sort()
+
+  const queueFilteredGames = filterQueue
+    ? games.filter(g => g.queue_name === filterQueue)
+    : games
+
+  // Build deck stats from queue-filtered games
+  const deckStatMap = new Map()
+  for (const g of queueFilteredGames) {
+    const fp = deckFingerprint(g.yourDecklist)
+    if (!fp) continue
+    if (!deckStatMap.has(fp)) {
+      deckStatMap.set(fp, {
+        fp,
+        colors: g.myInkCombo ?? [],
+        name: g.deckName ?? apiDeckNames[g.deck_id] ?? null,
+        wins: 0, losses: 0, loreTotal: 0, loreGames: 0,
+        latestDecklist: g.yourDecklist ?? null,
+      })
+    }
+    const stat = deckStatMap.get(fp)
+    const myNum = g.myPlayerNum
+    if (myNum != null) {
+      const won = g.winner === myNum || g.winner === String(myNum)
+      if (won) stat.wins++
+      else stat.losses++
+    }
+    const myLore = g.myPlayerNum === 1 ? g.p1FinalLore : g.myPlayerNum === 2 ? g.p2FinalLore : null
+    if (myLore != null) { stat.loreTotal += myLore; stat.loreGames++ }
+  }
+  const deckStats = [...deckStatMap.values()].sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
+
+  const filteredGames = filterDeck
+    ? queueFilteredGames.filter(g => deckFingerprint(g.yourDecklist) === filterDeck)
+    : queueFilteredGames
+
+  const importedGames = filteredGames.filter(g => importedIds.has(g.id))
+  const personalGames = filteredGames.filter(g => !importedIds.has(g.id))
+
+  // Calculate overall stats from filtered games
+  const gamesWithMyPlayer = filteredGames.filter(g => g.myPlayerNum != null)
   const wins = gamesWithMyPlayer.filter(g => g.winner === String(g.myPlayerNum) || g.winner === g.myPlayerNum).length
   const losses = gamesWithMyPlayer.length - wins
   const winRate = gamesWithMyPlayer.length > 0 ? (wins / gamesWithMyPlayer.length * 100).toFixed(0) : 0
@@ -131,8 +226,8 @@ export function GameLibraryPage() {
   const winRateFirst = gamesFirst.length > 0 ? Math.round(winsFirst / gamesFirst.length * 100) : null
   const winRateSecond = gamesSecond.length > 0 ? Math.round(winsSecond / gamesSecond.length * 100) : null
 
-  // Calculate MMR range from all games with MMR data
-  const gamesWithMMR = games.filter(g => g.mmr_delta != null).sort((a, b) => a.playedAt - b.playedAt)
+  // Calculate MMR range from filtered games with MMR data
+  const gamesWithMMR = filteredGames.filter(g => g.mmr_delta != null).sort((a, b) => a.playedAt - b.playedAt)
   let mmrRange = null
   if (gamesWithMMR.length > 0) {
     const startMMR = gamesWithMMR[0].mmr_before ?? gamesWithMMR[0].mmr_after ?? 0
@@ -140,7 +235,7 @@ export function GameLibraryPage() {
     mmrRange = { low: Math.min(...allMMR), peak: Math.max(...allMMR) }
   }
 
-  const totalPlayTime = games.reduce((sum, g) => sum + (g.duration_seconds || 0), 0)
+  const totalPlayTime = filteredGames.reduce((sum, g) => sum + (g.duration_seconds || 0), 0)
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -176,12 +271,110 @@ export function GameLibraryPage() {
       {loading && <div className="mb-4 text-sm text-gray-500">Processing files…</div>}
       {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
 
+      {/* Queue filter */}
+      {games.length > 0 && queues.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Queue</span>
+          <button
+            onClick={() => setFilterQueue(null)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterQueue === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+          >All</button>
+          {queues.map(q => (
+            <button
+              key={q}
+              onClick={() => setFilterQueue(filterQueue === q ? null : q)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterQueue === q ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+            >{q}</button>
+          ))}
+        </div>
+      )}
+
+      {/* By Deck */}
+      {deckStats.length > 1 && (
+        <div className="mb-6">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">By Deck</div>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {deckStats.map((stat) => {
+              const { fp, colors, name, wins, losses, loreTotal, loreGames, latestDecklist } = stat
+              const total = wins + losses
+              const wr = total > 0 ? wins / total : null
+              const avgLore = loreGames > 0 ? (loreTotal / loreGames).toFixed(1) : null
+              const isSelected = filterDeck === fp
+              const isExpanded = expandedDeckKey === fp
+              return (
+                <div
+                  key={fp}
+                  onClick={() => setFilterDeck(prev => prev === fp ? null : fp)}
+                  className={`flex-shrink-0 text-left border rounded-lg px-3 py-2.5 cursor-pointer transition-colors min-w-[140px] ${isSelected ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'}`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    {colors.map(c => <InkImg key={c} color={c} size="w-5 h-5" />)}
+                  </div>
+                  {name && <div className={`text-[11px] font-medium truncate max-w-[130px] mb-1 ${isSelected ? 'text-gray-300' : 'text-gray-600'}`}>{name}</div>}
+                  <div className={`text-sm font-bold ${isSelected ? 'text-white' : wr != null && wr >= 0.5 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {wins}–{losses}
+                    {wr != null && <span className="ml-1.5 text-xs font-normal text-gray-400">{Math.round(wr * 100)}%</span>}
+                  </div>
+                  {avgLore && <div className="text-[11px] text-gray-400">{avgLore} avg lore</div>}
+                  {latestDecklist?.length > 0 && (
+                    <div
+                      className={`flex gap-1.5 mt-2 pt-2 border-t ${isSelected ? 'border-gray-700' : 'border-gray-100'}`}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => setExpandedDeckKey(prev => prev === fp ? null : fp)}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${isExpanded ? (isSelected ? 'bg-gray-600 border-gray-500 text-white' : 'bg-gray-100 border-gray-300 text-gray-700') : (isSelected ? 'border-gray-600 text-gray-300 hover:border-gray-400' : 'border-gray-200 text-gray-500 hover:border-gray-400')}`}
+                      >
+                        Cards
+                      </button>
+                      <button
+                        onClick={() => handleLoadInsights(stat)}
+                        disabled={insightsLoading === fp}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors disabled:opacity-40 ${isSelected ? 'border-gray-600 text-gray-300 hover:border-gray-400' : 'border-gray-200 text-gray-500 hover:border-gray-400'}`}
+                      >
+                        {insightsLoading === fp ? '…' : '→ Insights'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {expandedDeckKey && (() => {
+            const stat = deckStats.find(d => d.fp === expandedDeckKey)
+            if (!stat?.latestDecklist?.length) return null
+            return (
+              <div className="mt-3 border border-gray-200 rounded-lg bg-white overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900 text-sm">{stat.name ?? 'Deck'}</span>
+                    {stat.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                  </div>
+                  <button onClick={() => setExpandedDeckKey(null)} className="text-xs text-gray-400 hover:text-gray-700 ml-4 flex-shrink-0">✕</button>
+                </div>
+                <div className="p-4">
+                  <DecklistDisplay decklist={stat.latestDecklist} cardIdToName={cardIdToName} />
+                  <button
+                    onClick={() => handleLoadInsights(stat)}
+                    disabled={insightsLoading === stat.fp}
+                    className="mt-4 text-xs px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-40"
+                  >
+                    {insightsLoading === stat.fp ? 'Loading…' : '→ Load into Deck Insights'}
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
       {/* Stats overview */}
-      {games.length > 0 && (
+      {filteredGames.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Games</div>
-            <div className="text-2xl font-bold text-gray-900">{games.length}</div>
+            <div className="text-2xl font-bold text-gray-900">{filteredGames.length}</div>
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Imported</div>
@@ -194,7 +387,7 @@ export function GameLibraryPage() {
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Avg Turns</div>
             <div className="text-2xl font-bold text-gray-900">
-              {games.length > 0 ? Math.round(games.reduce((sum, g) => sum + (g.turnCount || 0), 0) / games.length) : '—'}
+              {filteredGames.length > 0 ? Math.round(filteredGames.reduce((sum, g) => sum + (g.turnCount || 0), 0) / filteredGames.length) : '—'}
             </div>
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
@@ -205,7 +398,7 @@ export function GameLibraryPage() {
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Play Time</div>
             <div className="text-2xl font-bold text-gray-900">{Math.floor(totalPlayTime / 60)}h {totalPlayTime % 60}m</div>
-            <div className="text-xs text-gray-400 mt-0.5">{games.reduce((sum, g) => sum + (g.turnCount || 0), 0)} turns</div>
+            <div className="text-xs text-gray-400 mt-0.5">{filteredGames.reduce((sum, g) => sum + (g.turnCount || 0), 0)} turns</div>
           </div>
         </div>
       )}
@@ -419,6 +612,22 @@ export function GameLibraryPage() {
           No games yet — import a .zip game export to get started.
         </div>
       )}
+    </div>
+  )
+}
+
+function DecklistDisplay({ decklist, cardIdToName }) {
+  const entries = [...decklist].sort((a, b) =>
+    b.count - a.count || (cardIdToName[a.cardId] ?? a.cardId).localeCompare(cardIdToName[b.cardId] ?? b.cardId)
+  )
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-0.5">
+      {entries.map(({ cardId, count }) => (
+        <div key={cardId} className="flex items-baseline gap-1.5 min-w-0">
+          <span className="text-xs text-gray-400 flex-shrink-0 w-4 text-right">{count}×</span>
+          <span className="text-xs text-gray-800 truncate">{cardIdToName[cardId] ?? cardId}</span>
+        </div>
+      ))}
     </div>
   )
 }

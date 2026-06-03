@@ -196,20 +196,22 @@ export function GameLibraryPage() {
     .filter(g => !filterOppColors || colorKey(g.oppInkCombo) === filterOppColors)
 
   // Build deck stats from color-filtered games
+  // Use deck_id as primary key (stable across deck versions), fall back to fingerprint
+  const getDeckKey = (g) => g.deck_id ?? deckFingerprint(g.yourDecklist)
   const deckStatMap = new Map()
   for (const g of colorFilteredGames) {
-    const fp = deckFingerprint(g.yourDecklist)
-    if (!fp) continue
-    if (!deckStatMap.has(fp)) {
-      deckStatMap.set(fp, {
-        fp,
+    const key = getDeckKey(g)
+    if (!key) continue
+    if (!deckStatMap.has(key)) {
+      deckStatMap.set(key, {
+        fp: key,
         colors: g.myInkCombo ?? [],
         name: g.deckName ?? apiDeckNames[g.deck_id] ?? null,
         wins: 0, losses: 0, loreTotal: 0, loreGames: 0,
         latestDecklist: g.yourDecklist ?? null,
       })
     }
-    const stat = deckStatMap.get(fp)
+    const stat = deckStatMap.get(key)
     const myNum = g.myPlayerNum
     if (myNum != null) {
       const won = g.winner === myNum || g.winner === String(myNum)
@@ -222,7 +224,7 @@ export function GameLibraryPage() {
   const deckStats = [...deckStatMap.values()].sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
 
   const filteredGames = filterDeck
-    ? colorFilteredGames.filter(g => deckFingerprint(g.yourDecklist) === filterDeck)
+    ? colorFilteredGames.filter(g => getDeckKey(g) === filterDeck)
     : colorFilteredGames
 
   const importedGames = filteredGames.filter(g => importedIds.has(g.id))
@@ -305,7 +307,7 @@ export function GameLibraryPage() {
       )}
 
       {/* My Colors filter */}
-      {games.length > 0 && myColorOptions.length > 1 && (
+      {games.length > 0 && myColorOptions.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">My Colors</span>
           {myColorOptions.map(k => (

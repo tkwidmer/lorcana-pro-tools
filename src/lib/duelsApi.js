@@ -129,6 +129,27 @@ export async function fetchGamelogBuffer(gameId) {
   return res.arrayBuffer()
 }
 
+// Fetch a manifest of signed CDN URLs for multiple gamelog IDs in one request.
+// Returns { files: [{id, filename, url}], missing: string[] }
+export async function fetchGamelogManifest(ids) {
+  const token = getToken()
+  if (!token) throw new Error('No API token configured')
+
+  const res = await fetch('/api/duels-gamelog-bulk', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ ids }),
+  })
+
+  if (res.status === 401) throw new Error('Invalid or expired API token')
+  if (!res.ok) throw new Error(`Failed to fetch gamelog manifest: ${res.status}`)
+
+  return res.json()
+}
+
 export async function fetchReplayBuffer(replayId) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')

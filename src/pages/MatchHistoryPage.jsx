@@ -572,6 +572,7 @@ export function MatchHistoryPage() {
           deckName,
           deck_id: game.your_deck_id ?? null,
           queue_name: game.queue_name,
+          userId: game.your_user_id ?? null,
         })
         await saveGamelog(game.gamelog_id, parsed, logs)
         done++

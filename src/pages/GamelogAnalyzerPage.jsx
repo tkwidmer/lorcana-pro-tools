@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { saveGamelog, getAllGamelogs, deleteGamelog, clearAllGamelogs } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { createGameExportZip } from '../lib/gameExport'
 import { detectLeaks, summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
+import { getTokens } from '../lib/duelsApi'
 
 const MY_NAME_KEY = 'lorcana_my_name'
 
@@ -1414,6 +1415,12 @@ export function GamelogAnalyzerPage() {
   const [myName, setMyName] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
   const [nameInput, setNameInput] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
 
+  const userIdToLabel = useMemo(() => {
+    const map = {}
+    for (const t of getTokens()) if (t.userId) map[t.userId] = t.username || t.label
+    return map
+  }, [])
+
   const activeGamelog = gamelogs.find(g => g.id === activeId) ?? null
   const enrichedGames = gamelogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
   const activeMyPlayerNum = activeGamelog
@@ -1594,9 +1601,10 @@ export function GamelogAnalyzerPage() {
             const won = myNum != null && (g.winner === myNum || g.winner === String(myNum))
             const myDisplayName = resolveDisplayName(myNum === 1 ? g.p1Name : g.p2Name, true, myName)
             const oppDisplayName = myNum === 1 ? g.p2Name : myNum === 2 ? g.p1Name : null
-            const myDisplayLabel = myNum
+            const tokenLabel = g.userId ? userIdToLabel[g.userId] : null
+            const myDisplayLabel = tokenLabel ?? (myNum
               ? myDisplayName
-              : resolveDisplayName(g.p1Name, false, myName)
+              : resolveDisplayName(g.p1Name, false, myName))
             const oppDisplayLabel = myNum
               ? (oppDisplayName ?? '?')
               : resolveDisplayName(g.p2Name, false, myName)

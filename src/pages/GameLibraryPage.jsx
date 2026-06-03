@@ -179,6 +179,13 @@ export function GameLibraryPage() {
   // Build filter options from stored gamelogs
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
 
+  // userId → display label for all tokens (used in game rows and player filter)
+  const userIdToLabel = useMemo(() => {
+    const map = {}
+    for (const t of getTokens()) if (t.userId) map[t.userId] = t.username || t.label
+    return map
+  }, [])
+
   // Player filter — derived from tokens whose userId matches games in the library
   const playerOptions = useMemo(() => {
     const gameUserIds = new Set(games.map(g => g.userId).filter(Boolean))
@@ -632,7 +639,7 @@ export function GameLibraryPage() {
           </button>
           {importedOpen && (
             <div className="mt-6">
-              <GamesList games={importedGames} onDelete={async (id) => {
+              <GamesList games={importedGames} userIdToLabel={userIdToLabel} onDelete={async (id) => {
                 await deleteGamelog(id)
                 const newIds = new Set(importedIds)
                 newIds.delete(id)
@@ -679,7 +686,7 @@ export function GameLibraryPage() {
           </button>
           {personalOpen && (
             <div className="mt-6">
-              <GamesList games={personalGames} onDelete={async (id) => {
+              <GamesList games={personalGames} userIdToLabel={userIdToLabel} onDelete={async (id) => {
                 await deleteGamelog(id)
                 await loadGames()
               }} />
@@ -713,21 +720,21 @@ function DecklistDisplay({ decklist, cardIdToName }) {
   )
 }
 
-function GamesList({ games, onDelete }) {
+function GamesList({ games, userIdToLabel = {}, onDelete }) {
   return (
     <div className="space-y-1">
       {games.map(g => (
-        <GameListItem key={g.id} game={g} onDelete={onDelete} />
+        <GameListItem key={g.id} game={g} playerLabel={g.userId ? userIdToLabel[g.userId] : undefined} onDelete={onDelete} />
       ))}
     </div>
   )
 }
 
-function GameListItem({ game, onDelete }) {
+function GameListItem({ game, playerLabel, onDelete }) {
   const p1Name = game.p1Name || 'Player 1'
   const p2Name = game.p2Name || 'Player 2'
   const myNum = game.myPlayerNum
-  const myDisplayLabel = myNum === 1 ? p1Name : myNum === 2 ? p2Name : p1Name
+  const myDisplayLabel = playerLabel ?? (myNum === 1 ? p1Name : myNum === 2 ? p2Name : p1Name)
   const oppDisplayLabel = myNum === 1 ? p2Name : myNum === 2 ? p1Name : p2Name
   const myColors = game.myInkCombo ?? []
   const oppColors = game.oppInkCombo ?? []

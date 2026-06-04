@@ -55,6 +55,7 @@ export function GameLibraryPage() {
   const [filterQueue, setFilterQueue] = useState(null)
   const [filterMyColors, setFilterMyColors] = useState(null)
   const [filterOppColors, setFilterOppColors] = useState(null)
+  const [filterDate, setFilterDate] = useState(null)
   const [apiDeckNames, setApiDeckNames] = useState({})
   const [insightsLoading, setInsightsLoading] = useState(null)
   const [expandedDeckKey, setExpandedDeckKey] = useState(null)
@@ -177,6 +178,16 @@ export function GameLibraryPage() {
   }
 
   // Build filter options from stored gamelogs
+  const DATE_PRESETS = [
+    { key: '3d', label: 'Last 3 days', days: 3 },
+    { key: '7d', label: 'Last 7 days', days: 7 },
+    { key: '14d', label: 'Last 14 days', days: 14 },
+    { key: '21d', label: 'Last 21 days', days: 21 },
+    { key: 'month', label: 'Last month', days: 30 },
+  ]
+  const dateCutoff = filterDate ? Date.now() - (DATE_PRESETS.find(p => p.key === filterDate)?.days ?? 0) * 86400000 : null
+  const dateFilteredGames = dateCutoff ? games.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : games
+
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
 
   // userId → display label for all tokens (used in game rows and player filter)
@@ -196,8 +207,8 @@ export function GameLibraryPage() {
   }, [games])
 
   const playerFilteredGames = filterPlayer
-    ? games.filter(g => g.userId === filterPlayer)
-    : games
+    ? dateFilteredGames.filter(g => g.userId === filterPlayer)
+    : dateFilteredGames
 
   const queues = [...new Set(playerFilteredGames.map(g => g.queue_name).filter(Boolean))].sort()
 
@@ -308,6 +319,18 @@ export function GameLibraryPage() {
 
       {loading && <div className="mb-4 text-sm text-gray-500">Processing files…</div>}
       {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
+
+      {/* Date filter */}
+      {games.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Period</span>
+          {DATE_PRESETS.map(p => (
+            <button key={p.key} onClick={() => setFilterDate(prev => prev === p.key ? null : p.key)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterDate === p.key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+            >{p.label}</button>
+          ))}
+        </div>
+      )}
 
       {/* Player filter */}
       {playerOptions.length > 1 && (

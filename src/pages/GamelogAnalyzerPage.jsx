@@ -1417,6 +1417,7 @@ export function GamelogAnalyzerPage() {
   const [filterQueue, setFilterQueue] = useState(null)
   const [filterMyColors, setFilterMyColors] = useState(null)
   const [filterUser, setFilterUser] = useState(null)
+  const [filterDate, setFilterDate] = useState(null)
 
   const userIdToLabel = useMemo(() => {
     const map = {}
@@ -1427,12 +1428,21 @@ export function GamelogAnalyzerPage() {
   const activeGamelog = gamelogs.find(g => g.id === activeId) ?? null
 
   // Filter options
+  const DATE_PRESETS = [
+    { key: '3d', label: 'Last 3 days', days: 3 },
+    { key: '7d', label: 'Last 7 days', days: 7 },
+    { key: '14d', label: 'Last 14 days', days: 14 },
+    { key: '21d', label: 'Last 21 days', days: 21 },
+    { key: 'month', label: 'Last month', days: 30 },
+  ]
+  const dateCutoff = filterDate ? Date.now() - (DATE_PRESETS.find(p => p.key === filterDate)?.days ?? 0) * 86400000 : null
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
-  const allQueues = [...new Set(gamelogs.map(g => g.queue_name).filter(Boolean))].sort()
-  const allPlayerNames = [...new Set(gamelogs.flatMap(g => [g.p1Name, g.p2Name]).filter(Boolean))].sort()
+  const dateFilteredLogs = dateCutoff ? gamelogs.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : gamelogs
+  const allQueues = [...new Set(dateFilteredLogs.map(g => g.queue_name).filter(Boolean))].sort()
+  const allPlayerNames = [...new Set(dateFilteredLogs.flatMap(g => [g.p1Name, g.p2Name]).filter(Boolean))].sort()
 
   // Filter pipeline
-  const queueFilteredLogs = filterQueue ? gamelogs.filter(g => g.queue_name === filterQueue) : gamelogs
+  const queueFilteredLogs = filterQueue ? dateFilteredLogs.filter(g => g.queue_name === filterQueue) : dateFilteredLogs
   const userFilteredLogs = filterUser
     ? queueFilteredLogs.filter(g => g.p1Name === filterUser || g.p2Name === filterUser)
     : queueFilteredLogs
@@ -1558,8 +1568,16 @@ export function GamelogAnalyzerPage() {
       </div>
 
       {/* Filters */}
-      {gamelogs.length > 1 && (allQueues.length > 1 || allPlayerNames.length > 2 || myColorOptions.length > 0) && (
+      {gamelogs.length > 1 && (
         <div className="mb-5 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Period</span>
+            {DATE_PRESETS.map(p => (
+              <button key={p.key} onClick={() => setFilterDate(prev => prev === p.key ? null : p.key)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterDate === p.key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+              >{p.label}</button>
+            ))}
+          </div>
           {allQueues.length > 1 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Queue</span>
@@ -1592,11 +1610,11 @@ export function GamelogAnalyzerPage() {
               ))}
             </div>
           )}
-          {(filterQueue || filterUser || filterMyColors) && (
+          {(filterDate || filterQueue || filterUser || filterMyColors) && (
             <div className="text-xs text-gray-400">
               {enrichedGames.length} game{enrichedGames.length !== 1 ? 's' : ''} shown
               {' · '}
-              <button onClick={() => { setFilterQueue(null); setFilterUser(null); setFilterMyColors(null) }} className="underline hover:text-gray-600">Clear filters</button>
+              <button onClick={() => { setFilterDate(null); setFilterQueue(null); setFilterUser(null); setFilterMyColors(null) }} className="underline hover:text-gray-600">Clear filters</button>
             </div>
           )}
         </div>

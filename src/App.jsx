@@ -23,6 +23,7 @@ import { TournamentLookupPage } from './pages/TournamentLookupPage'
 import { LoreTrackerPage } from './pages/LoreTrackerPage'
 import { LoginPage } from './pages/LoginPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
+import { AdminPage } from './pages/AdminPage'
 
 export default function App() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/tournament-lookup" element={<TournamentLookupPage />} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         {/* Redirects from old routes */}
         <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />
         <Route path="/players" element={<Navigate to="/library?tab=players" replace />} />

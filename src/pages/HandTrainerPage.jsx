@@ -54,8 +54,24 @@ export function HandTrainerPage() {
 
   // cardId -> name, from card data (setCode-number) plus names seen in this log
   const cardNameById = useMemo(() => {
+    const cardByKey = {}
+    const score = c => {
+      const promoBonus = (c.promoGrouping == null && c.promoSourceCategory == null) ? 10 : 0
+      if (c.allowedInFormats?.Core?.allowed) return promoBonus + 2
+      if (c.allowedInFormats?.Infinity?.allowed) return promoBonus + 1
+      return promoBonus
+    }
+    for (const c of cards) {
+      if (c.setCode == null || c.number == null) continue
+      const key = `${c.setCode}-${c.number}`
+      const existing = cardByKey[key]
+      if (!existing) { cardByKey[key] = c; continue }
+      const ts = score(c), es = score(existing)
+      if (ts > es) { cardByKey[key] = c; continue }
+      if (ts === es && (parseInt(c.setCode) || 0) > (parseInt(existing.setCode) || 0)) cardByKey[key] = c
+    }
     const m = new Map()
-    for (const c of cards) if (c.setCode != null && c.number != null) m.set(`${c.setCode}-${c.number}`, c.fullName ?? c.name)
+    for (const [key, c] of Object.entries(cardByKey)) m.set(key, c.fullName ?? c.name)
     return m
   }, [cards])
 

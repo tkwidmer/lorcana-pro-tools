@@ -1414,6 +1414,10 @@ export function GamelogAnalyzerPage() {
   const [dragOver, setDragOver] = useState(false)
   const [myName, setMyName] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
   const [nameInput, setNameInput] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
+  const [filterQueue, setFilterQueue] = useState(null)
+  const [filterMyColors, setFilterMyColors] = useState(null)
+  const [filterUser, setFilterUser] = useState(null)
+  const [filterDate, setFilterDate] = useState(null)
 
   const userIdToLabel = useMemo(() => {
     const map = {}
@@ -1422,7 +1426,32 @@ export function GamelogAnalyzerPage() {
   }, [])
 
   const activeGamelog = gamelogs.find(g => g.id === activeId) ?? null
-  const enrichedGames = gamelogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
+
+  // Filter options
+  const DATE_PRESETS = [
+    { key: '3d', label: 'Last 3 days', days: 3 },
+    { key: '7d', label: 'Last 7 days', days: 7 },
+    { key: '14d', label: 'Last 14 days', days: 14 },
+    { key: '21d', label: 'Last 21 days', days: 21 },
+    { key: 'month', label: 'Last month', days: 30 },
+  ]
+  const dateCutoff = filterDate ? Date.now() - (DATE_PRESETS.find(p => p.key === filterDate)?.days ?? 0) * 86400000 : null
+  const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
+  const dateFilteredLogs = dateCutoff ? gamelogs.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : gamelogs
+  const allQueues = [...new Set(dateFilteredLogs.map(g => g.queue_name).filter(Boolean))].sort()
+  const allPlayerNames = [...new Set(dateFilteredLogs.flatMap(g => [g.p1Name, g.p2Name]).filter(Boolean))].sort()
+
+  // Filter pipeline
+  const queueFilteredLogs = filterQueue ? dateFilteredLogs.filter(g => g.queue_name === filterQueue) : dateFilteredLogs
+  const userFilteredLogs = filterUser
+    ? queueFilteredLogs.filter(g => g.p1Name === filterUser || g.p2Name === filterUser)
+    : queueFilteredLogs
+  const allEnrichedGames = userFilteredLogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
+  const myColorOptions = [...new Set(allEnrichedGames.map(g => colorKey(g.myInkCombo)).filter(k => k && k.split('/').length === 2))].sort()
+  const enrichedGames = filterMyColors
+    ? allEnrichedGames.filter(g => colorKey(g.myInkCombo) === filterMyColors)
+    : allEnrichedGames
+
   const activeMyPlayerNum = activeGamelog
     ? (activeGamelog.myPlayerNum ?? getMyPlayerNum(activeGamelog, myName))
     : null
@@ -1526,10 +1555,10 @@ export function GamelogAnalyzerPage() {
             placeholder="e.g. Teagan"
             className="flex-1 min-w-48 text-sm border border-gray-200 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder:text-gray-300"
           />
-          {myName && gamelogs.length > 0 && enrichedGames.length === 0 && (
+          {myName && gamelogs.length > 0 && allEnrichedGames.length === 0 && (
             <span className="text-xs text-orange-600">Name not found — try matching exactly as it appears in gamelogs</span>
           )}
-          {enrichedGames.length > 0 && (
+          {allEnrichedGames.length > 0 && (
             <span className="text-xs text-emerald-600">{enrichedGames.length}/{gamelogs.length} games tracked</span>
           )}
         </div>
@@ -1537,6 +1566,59 @@ export function GamelogAnalyzerPage() {
           Only needed for <span className="font-medium">.logs.gz files imported directly</span> — games imported from Match History already know which side is you.
         </p>
       </div>
+
+      {/* Filters */}
+      {gamelogs.length > 1 && (
+        <div className="mb-5 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Period</span>
+            {DATE_PRESETS.map(p => (
+              <button key={p.key} onClick={() => setFilterDate(prev => prev === p.key ? null : p.key)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterDate === p.key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+              >{p.label}</button>
+            ))}
+          </div>
+          {allQueues.length > 1 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Queue</span>
+              {allQueues.map(q => (
+                <button key={q} onClick={() => setFilterQueue(prev => prev === q ? null : q)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterQueue === q ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+                >{q}</button>
+              ))}
+            </div>
+          )}
+          {allPlayerNames.length > 2 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Player</span>
+              {allPlayerNames.map(name => (
+                <button key={name} onClick={() => setFilterUser(prev => prev === name ? null : name)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterUser === name ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+                >{name}</button>
+              ))}
+            </div>
+          )}
+          {myColorOptions.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">My Colors</span>
+              {myColorOptions.map(k => (
+                <button key={k} onClick={() => setFilterMyColors(prev => prev === k ? null : k)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${filterMyColors === k ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'}`}
+                >
+                  {k.split('/').map(c => <InkImg key={c} color={c} size="w-5 h-5" />)}
+                </button>
+              ))}
+            </div>
+          )}
+          {(filterDate || filterQueue || filterUser || filterMyColors) && (
+            <div className="text-xs text-gray-400">
+              {enrichedGames.length} game{enrichedGames.length !== 1 ? 's' : ''} shown
+              {' · '}
+              <button onClick={() => { setFilterDate(null); setFilterQueue(null); setFilterUser(null); setFilterMyColors(null) }} className="underline hover:text-gray-600">Clear filters</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Drop zone */}
       <div

@@ -394,12 +394,13 @@ export function MatchHistoryPage() {
   const { cards } = useCards()
   const cardIdToName = useMemo(() => {
     // When LorcanaJSON has multiple entries with the same setCode-number (e.g. promo reprints),
-    // prefer Core > Infinity > other format cards, then higher set number on ties.
+    // prefer non-promo cards, then Core > Infinity > other format cards, then higher set number on ties.
     const cardByKey = {}
     const score = c => {
-      if (c.allowedInFormats?.Core?.allowed) return 2
-      if (c.allowedInFormats?.Infinity?.allowed) return 1
-      return 0
+      const promoBonus = (c.promoGrouping == null && c.promoSourceCategory == null) ? 10 : 0
+      if (c.allowedInFormats?.Core?.allowed) return promoBonus + 2
+      if (c.allowedInFormats?.Infinity?.allowed) return promoBonus + 1
+      return promoBonus
     }
     for (const c of cards) {
       if (c.setCode == null || c.number == null) continue

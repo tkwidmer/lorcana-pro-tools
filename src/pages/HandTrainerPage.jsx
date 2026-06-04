@@ -56,9 +56,10 @@ export function HandTrainerPage() {
   const cardNameById = useMemo(() => {
     const cardByKey = {}
     const score = c => {
-      if (c.allowedInFormats?.Core?.allowed) return 2
-      if (c.allowedInFormats?.Infinity?.allowed) return 1
-      return 0
+      const promoBonus = (c.promoGrouping == null && c.promoSourceCategory == null) ? 10 : 0
+      if (c.allowedInFormats?.Core?.allowed) return promoBonus + 2
+      if (c.allowedInFormats?.Infinity?.allowed) return promoBonus + 1
+      return promoBonus
     }
     for (const c of cards) {
       if (c.setCode == null || c.number == null) continue

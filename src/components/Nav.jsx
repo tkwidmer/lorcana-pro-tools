@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useSupporter } from '../hooks/useSupporter'
 import { logout } from '../lib/supabaseClient'
 import { useState } from 'react'
 
@@ -7,6 +8,7 @@ export function Nav() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isAdmin } = useSupporter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   if (pathname === '/lore-tracker') return null
@@ -54,7 +56,7 @@ export function Nav() {
                 : pathname === '/leaderboard' ? 'Leaderboard'
                 : pathname === '/tournament-lookup' ? 'Tournament Lookup'
                 : pathname === '/lore-tracker' ? 'Lore Tracker'
-                : pathname === '/admin' ? 'Admin'
+                : pathname === '/admin' && isAdmin ? 'Admin'
                 : ''}
             </span>
           </>

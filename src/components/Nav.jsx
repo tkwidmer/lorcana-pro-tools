@@ -54,6 +54,7 @@ export function Nav() {
                 : pathname === '/leaderboard' ? 'Leaderboard'
                 : pathname === '/tournament-lookup' ? 'Tournament Lookup'
                 : pathname === '/lore-tracker' ? 'Lore Tracker'
+                : pathname === '/admin' ? 'Admin'
                 : ''}
             </span>
           </>

@@ -17,21 +17,13 @@ export function useSupporter() {
     }
 
     const loadProfile = async () => {
-      const { data: existing } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('supporter_tier')
         .eq('user_id', user.id)
         .single()
 
-      if (existing) {
-        setTier(existing.supporter_tier ?? null)
-        setIsLoading(false)
-        return
-      }
-
-      // Profile missing — user signed up before profiles table existed
-      await supabase.from('profiles').insert({ user_id: user.id, email: user.email })
-      setTier(null)
+      setTier(data?.supporter_tier ?? null)
       setIsLoading(false)
     }
 

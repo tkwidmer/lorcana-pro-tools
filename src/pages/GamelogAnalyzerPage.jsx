@@ -811,7 +811,6 @@ function GameLeaks({ gamelog, myPlayerNum }) {
 
 function AggregateView({ enrichedGames }) {
   const [matchupFilter, setMatchupFilter] = useState(null)
-  const [oppFilter, setOppFilter] = useState(null)
   if (!enrichedGames.length) return null
 
   // Build matchup filter entries (by opponent ink combo when available)
@@ -823,21 +822,12 @@ function AggregateView({ enrichedGames }) {
     if (key && !seenMatchups.has(key)) { seenMatchups.add(key); matchups.push({ key, colors: g.oppInkCombo }) }
   }
 
-  // Build opponent name filter entries
-  const opponents = []
-  const seenOpps = new Set()
-  for (const g of enrichedGames) {
-    const key = g.opponentName || 'Unknown'
-    if (!seenOpps.has(key)) { seenOpps.add(key); opponents.push(key) }
-  }
-
   const filtered = enrichedGames.filter(g => {
     if (matchupFilter && (g.oppInkCombo?.join('/') || null) !== matchupFilter) return false
-    if (oppFilter && (g.opponentName || 'Unknown') !== oppFilter) return false
     return true
   })
 
-  const activeFilters = [matchupFilter, oppFilter].filter(Boolean)
+  const activeFilters = [matchupFilter].filter(Boolean)
   const subtitle = activeFilters.length
     ? `${filtered.length} game${filtered.length !== 1 ? 's' : ''} filtered · ${enrichedGames.length} total`
     : `Aggregated across ${enrichedGames.length} game${enrichedGames.length !== 1 ? 's' : ''}`
@@ -865,26 +855,6 @@ function AggregateView({ enrichedGames }) {
                 {colors.map(c => <InkDot key={c} color={matchupFilter === key ? null : c} />)}
                 <span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span>
               </button>
-            ))}
-          </div>
-        )}
-        {opponents.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-gray-500 font-medium">vs opponent:</span>
-            <button
-              onClick={() => setOppFilter(null)}
-              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                oppFilter === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
-              }`}
-            >All</button>
-            {opponents.map(name => (
-              <button
-                key={name}
-                onClick={() => setOppFilter(oppFilter === name ? null : name)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  oppFilter === name ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
-                }`}
-              >{name}</button>
             ))}
           </div>
         )}
@@ -1439,12 +1409,18 @@ export function GamelogAnalyzerPage() {
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
   const dateFilteredLogs = dateCutoff ? gamelogs.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : gamelogs
   const allQueues = [...new Set(dateFilteredLogs.map(g => g.queue_name).filter(Boolean))].sort()
-  const allPlayerNames = [...new Set(dateFilteredLogs.flatMap(g => [g.p1Name, g.p2Name]).filter(Boolean))].sort()
+  const playerOptions = useMemo(() => {
+    const gameUserIds = new Set(dateFilteredLogs.map(g => g.userId).filter(Boolean))
+    if (gameUserIds.size < 2) return []
+    return getTokens()
+      .filter(t => t.userId && gameUserIds.has(t.userId))
+      .map(t => ({ userId: t.userId, label: t.username || t.label }))
+  }, [dateFilteredLogs])
 
   // Filter pipeline
   const queueFilteredLogs = filterQueue ? dateFilteredLogs.filter(g => g.queue_name === filterQueue) : dateFilteredLogs
   const userFilteredLogs = filterUser
-    ? queueFilteredLogs.filter(g => g.p1Name === filterUser || g.p2Name === filterUser)
+    ? queueFilteredLogs.filter(g => g.userId === filterUser)
     : queueFilteredLogs
   const allEnrichedGames = userFilteredLogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
   const myColorOptions = [...new Set(allEnrichedGames.map(g => colorKey(g.myInkCombo)).filter(k => k && k.split('/').length === 2))].sort()
@@ -1588,13 +1564,16 @@ export function GamelogAnalyzerPage() {
               ))}
             </div>
           )}
-          {allPlayerNames.length > 2 && (
+          {playerOptions.length > 1 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Player</span>
-              {allPlayerNames.map(name => (
-                <button key={name} onClick={() => setFilterUser(prev => prev === name ? null : name)}
-                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterUser === name ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
-                >{name}</button>
+              <button onClick={() => setFilterUser(null)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterUser === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+              >All</button>
+              {playerOptions.map(p => (
+                <button key={p.userId} onClick={() => setFilterUser(prev => prev === p.userId ? null : p.userId)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterUser === p.userId ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+                >{p.label}</button>
               ))}
             </div>
           )}

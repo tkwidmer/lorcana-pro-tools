@@ -18,7 +18,7 @@ function DeckCardList({ cardIds, cardIdToName }) {
       {entries.map(([id, count]) => (
         <div key={id} className="flex items-baseline gap-1.5 min-w-0">
           <span className="text-xs text-gray-400 flex-shrink-0 w-4 text-right">{count}×</span>
-          <span className="text-xs text-gray-800 truncate">{cardIdToName[id] ?? id}</span>
+          <span className="text-xs text-gray-800 truncate" title={id}>{cardIdToName[id] ?? id}</span>
         </div>
       ))}
     </div>
@@ -393,10 +393,25 @@ export function MatchHistoryPage() {
   const fetchedDeckIds = useRef(new Set())
   const { cards } = useCards()
   const cardIdToName = useMemo(() => {
-    const map = {}
-    for (const c of cards) {
-      if (c.setCode != null && c.number != null) map[`${c.setCode}-${c.number}`] = c.fullName ?? c.name
+    // When LorcanaJSON has multiple entries with the same setCode-number (e.g. promo reprints),
+    // prefer Core > Infinity > other format cards, then higher set number on ties.
+    const cardByKey = {}
+    const score = c => {
+      if (c.allowedInFormats?.Core?.allowed) return 2
+      if (c.allowedInFormats?.Infinity?.allowed) return 1
+      return 0
     }
+    for (const c of cards) {
+      if (c.setCode == null || c.number == null) continue
+      const key = `${c.setCode}-${c.number}`
+      const existing = cardByKey[key]
+      if (!existing) { cardByKey[key] = c; continue }
+      const ts = score(c), es = score(existing)
+      if (ts > es) { cardByKey[key] = c; continue }
+      if (ts === es && (parseInt(c.setCode) || 0) > (parseInt(existing.setCode) || 0)) cardByKey[key] = c
+    }
+    const map = {}
+    for (const [key, c] of Object.entries(cardByKey)) map[key] = c.fullName ?? c.name
     return map
   }, [cards])
 
@@ -944,6 +959,8 @@ export function MatchHistoryPage() {
             const detail = deckDetailMap[stat.deckId]
             const name = deckNames[expandedDeckKey]
             const modified = detail?.status === 'loaded' && isDeckModified(stat.latestDecklist, detail.deck?.cardIds)
+            // Flat card ID array from game-time decklist for comparison display
+            const gameCardIds = stat.latestDecklist?.flatMap(({ cardId, count }) => Array(count ?? 1).fill(cardId)) ?? []
             return (
               <div className="mt-3 border border-gray-200 rounded-lg bg-white overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -962,8 +979,17 @@ export function MatchHistoryPage() {
                 <div className="p-4">
                   {detail?.status === 'loading' && <div className="text-sm text-gray-400">Loading deck…</div>}
                   {detail?.status === 'error' && <div className="text-sm text-red-400">Failed to load deck list</div>}
+                  {modified && gameCardIds.length > 0 && (
+                    <div className="mb-4">
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Used in games</div>
+                      <DeckCardList cardIds={gameCardIds} cardIdToName={cardIdToName} />
+                    </div>
+                  )}
                   {detail?.deck?.cardIds && (
-                    <DeckCardList cardIds={detail.deck.cardIds} cardIdToName={cardIdToName} />
+                    <div>
+                      {modified && <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Current deck</div>}
+                      <DeckCardList cardIds={detail.deck.cardIds} cardIdToName={cardIdToName} />
+                    </div>
                   )}
                   <button
                     onClick={() => handleLoadInsights(stat)}

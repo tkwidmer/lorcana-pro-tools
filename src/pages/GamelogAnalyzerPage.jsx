@@ -811,7 +811,6 @@ function GameLeaks({ gamelog, myPlayerNum }) {
 
 function AggregateView({ enrichedGames }) {
   const [matchupFilter, setMatchupFilter] = useState(null)
-  const [oppFilter, setOppFilter] = useState(null)
   if (!enrichedGames.length) return null
 
   // Build matchup filter entries (by opponent ink combo when available)
@@ -823,21 +822,12 @@ function AggregateView({ enrichedGames }) {
     if (key && !seenMatchups.has(key)) { seenMatchups.add(key); matchups.push({ key, colors: g.oppInkCombo }) }
   }
 
-  // Build opponent name filter entries
-  const opponents = []
-  const seenOpps = new Set()
-  for (const g of enrichedGames) {
-    const key = g.opponentName || 'Unknown'
-    if (!seenOpps.has(key)) { seenOpps.add(key); opponents.push(key) }
-  }
-
   const filtered = enrichedGames.filter(g => {
     if (matchupFilter && (g.oppInkCombo?.join('/') || null) !== matchupFilter) return false
-    if (oppFilter && (g.opponentName || 'Unknown') !== oppFilter) return false
     return true
   })
 
-  const activeFilters = [matchupFilter, oppFilter].filter(Boolean)
+  const activeFilters = [matchupFilter].filter(Boolean)
   const subtitle = activeFilters.length
     ? `${filtered.length} game${filtered.length !== 1 ? 's' : ''} filtered · ${enrichedGames.length} total`
     : `Aggregated across ${enrichedGames.length} game${enrichedGames.length !== 1 ? 's' : ''}`
@@ -865,26 +855,6 @@ function AggregateView({ enrichedGames }) {
                 {colors.map(c => <InkDot key={c} color={matchupFilter === key ? null : c} />)}
                 <span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span>
               </button>
-            ))}
-          </div>
-        )}
-        {opponents.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-gray-500 font-medium">vs opponent:</span>
-            <button
-              onClick={() => setOppFilter(null)}
-              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                oppFilter === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
-              }`}
-            >All</button>
-            {opponents.map(name => (
-              <button
-                key={name}
-                onClick={() => setOppFilter(oppFilter === name ? null : name)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  oppFilter === name ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
-                }`}
-              >{name}</button>
             ))}
           </div>
         )}

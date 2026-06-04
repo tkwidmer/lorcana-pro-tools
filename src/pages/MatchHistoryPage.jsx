@@ -556,8 +556,19 @@ export function MatchHistoryPage() {
             break
           } catch (err) {
             if (err.message?.includes('429') && attempt < 3) {
-              setBulkOp(prev => ({ ...prev, label: 'Rate limited — waiting 65s…' }))
-              await new Promise(r => setTimeout(r, 65_000))
+              await new Promise(r => {
+                let remaining = 65
+                setBulkOp(prev => ({ ...prev, label: `Rate limited — waiting ${remaining}s…` }))
+                const interval = setInterval(() => {
+                  remaining--
+                  if (remaining <= 0) {
+                    clearInterval(interval)
+                    r()
+                  } else {
+                    setBulkOp(prev => ({ ...prev, label: `Rate limited — waiting ${remaining}s…` }))
+                  }
+                }, 1000)
+              })
               setBulkOp(prev => ({ ...prev, label: 'Importing gamelogs' }))
             } else {
               throw err

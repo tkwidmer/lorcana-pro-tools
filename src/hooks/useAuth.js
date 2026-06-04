@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
+async function ensureProfile(user) {
+  const { data } = await supabase.from('profiles').select('id').eq('user_id', user.id).single()
+  if (!data) {
+    await supabase.from('profiles').insert({ user_id: user.id, email: user.email })
+  }
+}
+
 export function useAuth() {
   const [user, setUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -14,8 +21,10 @@ export function useAuth() {
         const { data, error } = await supabase.auth.getSession()
         if (error) throw error
         if (isMounted) {
-          setUser(data.session?.user ?? null)
+          const u = data.session?.user ?? null
+          setUser(u)
           setError(null)
+          if (u) ensureProfile(u)
         }
       } catch (err) {
         if (isMounted) {
@@ -34,9 +43,10 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        if (isMounted) {
-          setUser(session?.user ?? null)
-        }
+        if (!isMounted) return
+        const u = session?.user ?? null
+        setUser(u)
+        if (u) ensureProfile(u)
       }
     )
 

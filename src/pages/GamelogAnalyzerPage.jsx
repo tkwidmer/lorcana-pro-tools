@@ -1439,12 +1439,18 @@ export function GamelogAnalyzerPage() {
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
   const dateFilteredLogs = dateCutoff ? gamelogs.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : gamelogs
   const allQueues = [...new Set(dateFilteredLogs.map(g => g.queue_name).filter(Boolean))].sort()
-  const allPlayerNames = [...new Set(dateFilteredLogs.flatMap(g => [g.p1Name, g.p2Name]).filter(Boolean))].sort()
+  const playerOptions = useMemo(() => {
+    const gameUserIds = new Set(dateFilteredLogs.map(g => g.userId).filter(Boolean))
+    if (gameUserIds.size < 2) return []
+    return getTokens()
+      .filter(t => t.userId && gameUserIds.has(t.userId))
+      .map(t => ({ userId: t.userId, label: t.username || t.label }))
+  }, [dateFilteredLogs])
 
   // Filter pipeline
   const queueFilteredLogs = filterQueue ? dateFilteredLogs.filter(g => g.queue_name === filterQueue) : dateFilteredLogs
   const userFilteredLogs = filterUser
-    ? queueFilteredLogs.filter(g => g.p1Name === filterUser || g.p2Name === filterUser)
+    ? queueFilteredLogs.filter(g => g.userId === filterUser)
     : queueFilteredLogs
   const allEnrichedGames = userFilteredLogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
   const myColorOptions = [...new Set(allEnrichedGames.map(g => colorKey(g.myInkCombo)).filter(k => k && k.split('/').length === 2))].sort()
@@ -1588,13 +1594,16 @@ export function GamelogAnalyzerPage() {
               ))}
             </div>
           )}
-          {allPlayerNames.length > 2 && (
+          {playerOptions.length > 1 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Player</span>
-              {allPlayerNames.map(name => (
-                <button key={name} onClick={() => setFilterUser(prev => prev === name ? null : name)}
-                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterUser === name ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
-                >{name}</button>
+              <button onClick={() => setFilterUser(null)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterUser === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+              >All</button>
+              {playerOptions.map(p => (
+                <button key={p.userId} onClick={() => setFilterUser(prev => prev === p.userId ? null : p.userId)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterUser === p.userId ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
+                >{p.label}</button>
               ))}
             </div>
           )}

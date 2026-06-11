@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getToken, getTokens, getActiveTokenId, setTokenUserId, fetchMatchHistory, fetchGamelogBuffer, fetchGamelogManifest, fetchDecks, fetchDeck } from '../lib/duelsApi'
-import { saveGamelog, getGamelog } from '../lib/gamelogHistory'
+import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { useCards } from '../hooks/useCards'
 
@@ -101,41 +101,38 @@ function ImportGamelogButton({ game }) {
   async function handleImport() {
     setStatus('loading')
     try {
+      const buf = await fetchGamelogBuffer(game.gamelog_id)
+      const text = await decompressGzip(buf)
+      const logs = JSON.parse(text)
       const id = game.gamelog_id
-      const existing = await getGamelog(id)
-      if (!existing) {
-        const buf = await fetchGamelogBuffer(id)
-        const text = await decompressGzip(buf)
-        const logs = JSON.parse(text)
-        const storedMyName = localStorage.getItem('lorcana_my_name') ?? ''
-        const storedDeckNames = JSON.parse(localStorage.getItem(DECK_NAMES_KEY) ?? '{}')
-        const deckName = game.your_deck_id ? (storedDeckNames[game.your_deck_id] ?? null) : null
-        const parsed = parseGamelog(id, logs, {
-          yourResult: game.result,
-          yourPlayerNum: game.your_player,
-          opponentName: game.opp_display_name,
-          yourDisplayName: game.your_display_name || storedMyName || undefined,
-          yourColors: game.your_deck_colors,
-          oppColors: game.opp_deck_colors,
-          wentFirst: game.went_first,
-          endReason: game.end_reason,
-          yourDecklist: game.your_decklist,
-          startedAt: game.started_at,
-          mmr_delta: game.mmr_delta,
-          mmr_before: game.mmr_before,
-          mmr_after: game.mmr_after,
-          duration_seconds: game.duration_seconds,
-          match_id: game.match_id,
-          match_format: game.match_format,
-          match_game_number: game.match_game_number,
-          deckName,
-          deck_id: game.your_deck_id ?? null,
-          queue_name: game.queue_name,
-        })
-        await saveGamelog(id, parsed, logs)
-      }
+      const storedMyName = localStorage.getItem('lorcana_my_name') ?? ''
+      const storedDeckNames = JSON.parse(localStorage.getItem(DECK_NAMES_KEY) ?? '{}')
+      const deckName = game.your_deck_id ? (storedDeckNames[game.your_deck_id] ?? null) : null
+      const parsed = parseGamelog(id, logs, {
+        yourResult: game.result,
+        yourPlayerNum: game.your_player,
+        opponentName: game.opp_display_name,
+        yourDisplayName: game.your_display_name || storedMyName || undefined,
+        yourColors: game.your_deck_colors,
+        oppColors: game.opp_deck_colors,
+        wentFirst: game.went_first,
+        endReason: game.end_reason,
+        yourDecklist: game.your_decklist,
+        startedAt: game.started_at,
+        mmr_delta: game.mmr_delta,
+        mmr_before: game.mmr_before,
+        mmr_after: game.mmr_after,
+        duration_seconds: game.duration_seconds,
+        match_id: game.match_id,
+        match_format: game.match_format,
+        match_game_number: game.match_game_number,
+        deckName,
+        deck_id: game.your_deck_id ?? null,
+        queue_name: game.queue_name,
+      })
+      await saveGamelog(id, parsed, logs)
       setStatus('done')
-      navigate(`/gamelog-analyzer?id=${encodeURIComponent(id)}`)
+      navigate('/gamelog-analyzer')
     } catch {
       setStatus('error')
       setTimeout(() => setStatus(null), 3000)
@@ -147,9 +144,9 @@ function ImportGamelogButton({ game }) {
       onClick={handleImport}
       disabled={status === 'loading'}
       className="text-xs text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-40 whitespace-nowrap"
-      title="View this game's replay in the Gamelog Analyzer"
+      title="Import gamelog into Gamelog Analyzer"
     >
-      {status === 'loading' ? 'Loading…' : status === 'error' ? 'Failed' : '↗ Replay'}
+      {status === 'loading' ? 'Importing…' : status === 'error' ? 'Failed' : '↗ Gamelog'}
     </button>
   )
 }

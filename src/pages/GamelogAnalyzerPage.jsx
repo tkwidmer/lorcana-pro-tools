@@ -1315,6 +1315,16 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
               {myWon ? 'Win' : 'Loss'}
             </span>
           )}
+          {gamelog.replay_url && (
+            <a
+              href={gamelog.replay_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-semibold px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-900 transition-colors"
+            >
+              ↗ Watch Replay
+            </a>
+          )}
         </div>
         <div className="text-sm text-gray-500">{metaBits.join(' · ')}</div>
       </div>

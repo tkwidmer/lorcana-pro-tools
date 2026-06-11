@@ -129,6 +129,7 @@ function ImportGamelogButton({ game }) {
         deckName,
         deck_id: game.your_deck_id ?? null,
         queue_name: game.queue_name,
+        replay_url: game.replay_url,
       })
       await saveGamelog(id, parsed, logs)
       setStatus('done')
@@ -627,6 +628,7 @@ export function MatchHistoryPage() {
           deck_id: game.your_deck_id ?? null,
           queue_name: game.queue_name,
           userId: game.your_user_id ?? null,
+          replay_url: game.replay_url,
         })
         await saveGamelog(game.gamelog_id, parsed, logs)
         done++

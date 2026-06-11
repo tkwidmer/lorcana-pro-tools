@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { saveGamelog, getAllGamelogs, deleteGamelog, clearAllGamelogs } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { createGameExportZip } from '../lib/gameExport'
@@ -1377,8 +1378,9 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
 // --- Main page ---
 
 export function GamelogAnalyzerPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [gamelogs, setGamelogs] = useState([])
-  const [activeId, setActiveId] = useState(null)
+  const [activeId, setActiveId] = useState(() => searchParams.get('id') ?? null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
@@ -1469,7 +1471,14 @@ export function GamelogAnalyzerPage() {
   }
 
   useEffect(() => {
-    getAllGamelogs().then(all => setGamelogs([...all].sort((a, b) => (b.playedAt ?? b.savedAt) - (a.playedAt ?? a.savedAt)))).catch(() => {})
+    getAllGamelogs().then(all => {
+      setGamelogs([...all].sort((a, b) => (b.playedAt ?? b.savedAt) - (a.playedAt ?? a.savedAt)))
+      const wantedId = searchParams.get('id')
+      if (wantedId) {
+        if (all.some(g => g.id === wantedId)) setActiveId(wantedId)
+        setSearchParams(params => { params.delete('id'); return params }, { replace: true })
+      }
+    }).catch(() => {})
 
     const pending = sessionStorage.getItem('lorcana_pending_gamelog')
     if (pending) {

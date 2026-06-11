@@ -6,6 +6,7 @@ import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { useCards } from '../hooks/useCards'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
+const DECK_DETAILS_KEY = 'lorcana_deck_details'
 
 function DeckCardList({ cardIds, cardIdToName }) {
   const counts = {}
@@ -387,7 +388,10 @@ export function MatchHistoryPage() {
   const [deckNames, setDeckNames] = useState(() => {
     try { return JSON.parse(localStorage.getItem(DECK_NAMES_KEY) ?? '{}') } catch { return {} }
   })
-  const [deckDetailMap, setDeckDetailMap] = useState({}) // { [deckId]: { status, deck } }
+  const [deckDetailMap, setDeckDetailMap] = useState(() => {
+    const cached = JSON.parse(localStorage.getItem(DECK_DETAILS_KEY) ?? '{}')
+    return Object.fromEntries(Object.entries(cached).map(([id, deck]) => [id, { status: 'loaded', deck }]))
+  })
   const [expandedDeckKey, setExpandedDeckKey] = useState(null)
   const [insightsLoading, setInsightsLoading] = useState(null)
   const fetchedDeckIds = useRef(new Set())
@@ -460,7 +464,7 @@ export function MatchHistoryPage() {
         const merged = { ...prev }
         let changed = false
         for (const deck of decks) {
-          if (deck.id && deck.name && !merged[deck.id]) {
+          if (deck.id && deck.name && merged[deck.id] !== deck.name) {
             merged[deck.id] = deck.name
             changed = true
           }
@@ -503,7 +507,14 @@ export function MatchHistoryPage() {
       fetchedDeckIds.current.add(deckId)
       setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loading', deck: null } }))
       fetchDeck(deckId)
-        .then(data => setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loaded', deck: data.deck } })))
+        .then(data => {
+          setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loaded', deck: data.deck } }))
+          if (data.deck) {
+            const cached = JSON.parse(localStorage.getItem(DECK_DETAILS_KEY) ?? '{}')
+            cached[deckId] = data.deck
+            localStorage.setItem(DECK_DETAILS_KEY, JSON.stringify(cached))
+          }
+        })
         .catch(() => setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'error', deck: null } })))
     }
   }, [deckStats]) // eslint-disable-line react-hooks/exhaustive-deps

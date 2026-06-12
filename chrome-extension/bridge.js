@@ -63,7 +63,7 @@ async function getCardLookup() {
   // Try extension storage cache first (24-hour TTL)
   const cached = await new Promise(resolve => chrome.storage.local.get(['lorcana_card_lookup', 'lorcana_card_lookup_ts'], resolve))
   const age = Date.now() - (cached.lorcana_card_lookup_ts ?? 0)
-  if (cached.lorcana_card_lookup && Object.keys(cached.lorcana_card_lookup).length > 0 && age < 86_400_000) {
+  if (cached.lorcana_card_lookup?.byId && Object.keys(cached.lorcana_card_lookup.byId).length > 0 && age < 86_400_000) {
     cardLookup = cached.lorcana_card_lookup
     return cardLookup
   }
@@ -71,25 +71,54 @@ async function getCardLookup() {
   // Fetch from same-origin API
   try {
     const res = await fetch('/api/cards')
-    if (!res.ok) return {}
+    if (!res.ok) return { byId: {}, byName: {} }
     const data = await res.json()
-    const lookup = {}
-    for (const card of (data.cards ?? [])) {
-      const entry = { color: card.color }
-      if (card.fullName) lookup[card.fullName] = entry
-      if (card.name) lookup[card.name] = entry
+    const cards = data.cards ?? []
+
+    // When LorcanaJSON has multiple entries with the same setCode-number (e.g. promo reprints),
+    // prefer non-promo cards, then Core > Infinity > other format cards, then higher set number on ties.
+    const score = c => {
+      const promoBonus = (c.promoGrouping == null && c.promoSourceCategory == null) ? 10 : 0
+      if (c.allowedInFormats?.Core?.allowed) return promoBonus + 2
+      if (c.allowedInFormats?.Infinity?.allowed) return promoBonus + 1
+      return promoBonus
     }
+    const cardById = {}
+    for (const c of cards) {
+      if (c.setCode == null || c.number == null) continue
+      const key = `${c.setCode}-${c.number}`
+      const existing = cardById[key]
+      if (!existing) { cardById[key] = c; continue }
+      const ts = score(c), es = score(existing)
+      if (ts > es) { cardById[key] = c; continue }
+      if (ts === es && (parseInt(c.setCode) || 0) > (parseInt(existing.setCode) || 0)) cardById[key] = c
+    }
+
+    const byId = {}
+    for (const [key, c] of Object.entries(cardById)) {
+      byId[key] = { color: c.color, name: c.name, fullName: c.fullName }
+    }
+
+    const byName = {}
+    for (const card of cards) {
+      const entry = { color: card.color, name: card.name, fullName: card.fullName }
+      if (card.fullName) byName[card.fullName] = entry
+      if (card.name) byName[card.name] = entry
+    }
+
+    const lookup = { byId, byName }
     cardLookup = lookup
     chrome.storage.local.set({ lorcana_card_lookup: lookup, lorcana_card_lookup_ts: Date.now() })
     return lookup
   } catch {
-    return {}
+    return { byId: {}, byName: {} }
   }
 }
 
 // --- Game parsing (mirrors parseLiveGame / buildObservedDeck in GameScraperPage) ---
 
-function buildObservedDeck(logs, fieldCards, playerNum, lookup) {
+function buildObservedDeck(logs, fieldCards, playerNum, lookup = {}) {
+  const byName = lookup.byName ?? {}
   const RELEVANT = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED', 'CARD_DRAWN'])
   const cards = {}
   const colors = new Set()
@@ -103,7 +132,7 @@ function buildObservedDeck(logs, fieldCards, playerNum, lookup) {
       if (log.type === 'CARD_PLAYED') cards[ref.id].plays++
       else if (log.type === 'CARD_INKED') cards[ref.id].inked++
       else if (log.type === 'CARD_DISCARDED') cards[ref.id].discarded++
-      const ink = resolveInkName(lookup[ref.name]?.color)
+      const ink = resolveInkName(byName[ref.name]?.color)
       if (ink) colors.add(ink)
     }
   }
@@ -111,7 +140,7 @@ function buildObservedDeck(logs, fieldCards, playerNum, lookup) {
   for (const card of fieldCards) {
     if (!card.definitionId) continue
     if (!cards[card.definitionId]) cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
-    const ink = resolveInkName((lookup[card.fullName] ?? lookup[card.name])?.color)
+    const ink = resolveInkName((byName[card.fullName] ?? byName[card.name])?.color)
     if (ink) colors.add(ink)
   }
 
@@ -124,23 +153,31 @@ function buildObservedDeck(logs, fieldCards, playerNum, lookup) {
   return { cards: cardList, colors: Array.from(colors).sort() }
 }
 
-function parseGame(rawGame, lookup) {
+function parseGame(rawGame, lookup = {}) {
   const names = rawGame.playerNames ?? {}
   const p1 = rawGame.player1 ?? {}
   const p2 = rawGame.player2 ?? {}
   const logs = rawGame.logs ?? []
 
   const defIdToName = {}
+  const defIdToFullName = {}
   for (const log of logs) {
     for (const ref of (log.cardRefs ?? [])) {
-      if (ref.id && ref.name) defIdToName[ref.id] = ref.name
+      if (ref.id && ref.name) {
+        defIdToName[ref.id] = ref.name
+        defIdToFullName[ref.id] = ref.fullName ?? ref.name
+      }
     }
+  }
+  for (const [id, card] of Object.entries(lookup.byId ?? {})) {
+    if (card.name && !defIdToName[id]) defIdToName[id] = card.name
+    if (!defIdToFullName[id]) defIdToFullName[id] = card.fullName ?? card.name
   }
 
   const enrichField = (field) => (field ?? []).map(c => ({
     ...c,
     name: defIdToName[c.definitionId] ?? c.name ?? c.definitionId,
-    fullName: defIdToName[c.definitionId] ?? c.fullName ?? c.name ?? c.definitionId,
+    fullName: defIdToFullName[c.definitionId] ?? c.fullName ?? c.name ?? c.definitionId,
   }))
 
   const p1Field = enrichField(p1.field)

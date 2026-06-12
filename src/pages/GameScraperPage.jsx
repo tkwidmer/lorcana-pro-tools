@@ -4,29 +4,56 @@ import { resolveInkName } from '../lib/inkColors'
 import { saveGame } from '../lib/gameHistory'
 import { GameView } from '../components/GameView'
 
-// Cache for card data (name -> { color, etc })
+// Cache for card data: { byId: {setCode-number -> {color, name, fullName}}, byName: {name/fullName -> {...}} }
 let cardDataCache = null
 async function loadCardData() {
   if (cardDataCache) return cardDataCache
   try {
     const res = await fetch('/api/cards')
-    if (!res.ok) return {}
+    if (!res.ok) return { byId: {}, byName: {} }
     const data = await res.json()
     const cards = data.cards ?? []
-    const lookup = {}
-    for (const card of cards) {
-      if (card.fullName) lookup[card.fullName] = { color: card.color, name: card.name, fullName: card.fullName }
-      if (card.name) lookup[card.name] = { color: card.color, name: card.name, fullName: card.fullName }
+
+    // When LorcanaJSON has multiple entries with the same setCode-number (e.g. promo reprints),
+    // prefer non-promo cards, then Core > Infinity > other format cards, then higher set number on ties.
+    const score = c => {
+      const promoBonus = (c.promoGrouping == null && c.promoSourceCategory == null) ? 10 : 0
+      if (c.allowedInFormats?.Core?.allowed) return promoBonus + 2
+      if (c.allowedInFormats?.Infinity?.allowed) return promoBonus + 1
+      return promoBonus
     }
-    cardDataCache = lookup
-    return lookup
+    const cardById = {}
+    for (const c of cards) {
+      if (c.setCode == null || c.number == null) continue
+      const key = `${c.setCode}-${c.number}`
+      const existing = cardById[key]
+      if (!existing) { cardById[key] = c; continue }
+      const ts = score(c), es = score(existing)
+      if (ts > es) { cardById[key] = c; continue }
+      if (ts === es && (parseInt(c.setCode) || 0) > (parseInt(existing.setCode) || 0)) cardById[key] = c
+    }
+
+    const byId = {}
+    for (const [key, c] of Object.entries(cardById)) {
+      byId[key] = { color: c.color, name: c.name, fullName: c.fullName }
+    }
+
+    const byName = {}
+    for (const card of cards) {
+      if (card.fullName) byName[card.fullName] = { color: card.color, name: card.name, fullName: card.fullName }
+      if (card.name) byName[card.name] = { color: card.color, name: card.name, fullName: card.fullName }
+    }
+
+    cardDataCache = { byId, byName }
+    return cardDataCache
   } catch (e) {
     console.error('Failed to load card data:', e)
-    return {}
+    return { byId: {}, byName: {} }
   }
 }
 
-function buildObservedDeck(logs, fieldCards, playerNum, cardLookup) {
+function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
+  const byName = cardLookup.byName ?? {}
   const RELEVANT_ACTIONS = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED', 'CARD_DRAWN'])
   const cards = {}
   const colors = new Set()
@@ -44,7 +71,7 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup) {
       else if (log.type === 'CARD_INKED') cards[ref.id].inked++
       else if (log.type === 'CARD_DISCARDED') cards[ref.id].discarded++
 
-      const cardDef = cardLookup[ref.name]
+      const cardDef = byName[ref.name]
       if (cardDef?.color) {
         const name = resolveInkName(cardDef.color)
         if (name) colors.add(name)
@@ -57,7 +84,7 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup) {
     if (!cards[card.definitionId]) {
       cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
     }
-    const cardDef = cardLookup[card.fullName] || cardLookup[card.name]
+    const cardDef = byName[card.fullName] || byName[card.name]
     if (cardDef?.color) {
       const name = resolveInkName(cardDef.color)
       if (name) colors.add(name)
@@ -77,18 +104,23 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup) {
   return { cards: cardList, colors: Array.from(colors).sort() }
 }
 
-function parseLiveGame(data, cardLookup = {}) {
+function parseLiveGame(data, cardLookup = { byId: {}, byName: {} }) {
   const game = data.game ?? data
 
   const defIdToName = {}
+  const defIdToFullName = {}
   const logs = game.logs ?? []
   for (const log of logs) {
     for (const ref of (log.cardRefs ?? [])) {
-      if (ref.id && ref.name) defIdToName[ref.id] = ref.name
+      if (ref.id && ref.name) {
+        defIdToName[ref.id] = ref.name
+        defIdToFullName[ref.id] = ref.fullName ?? ref.name
+      }
     }
   }
-  for (const [id, card] of Object.entries(cardLookup)) {
+  for (const [id, card] of Object.entries(cardLookup.byId ?? {})) {
     if (card.name && !defIdToName[id]) defIdToName[id] = card.name
+    if (!defIdToFullName[id]) defIdToFullName[id] = card.fullName ?? card.name
   }
 
   const p1 = game.player1 ?? {}
@@ -101,7 +133,7 @@ function parseLiveGame(data, cardLookup = {}) {
   const enrichField = (field) => (field ?? []).map(card => ({
     ...card,
     name: defIdToName[card.definitionId] ?? card.name ?? card.definitionId,
-    fullName: defIdToName[card.definitionId] ?? card.fullName ?? card.name ?? card.definitionId,
+    fullName: defIdToFullName[card.definitionId] ?? card.fullName ?? card.name ?? card.definitionId,
   }))
 
   const p1Field = enrichField(p1.field)
@@ -338,7 +370,7 @@ export function GameScraperPage() {
   const [rawGame, setRawGame] = useState(null)
   const [gameData, setGameData] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [cardLookup, setCardLookup] = useState({})
+  const [cardLookup, setCardLookup] = useState({ byId: {}, byName: {} })
   const [extensionActive, setExtensionActive] = useState(false)
 
   useEffect(() => {

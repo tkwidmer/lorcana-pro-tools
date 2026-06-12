@@ -54,6 +54,7 @@ async function loadCardData() {
 
 function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
   const byName = cardLookup.byName ?? {}
+  const byId = cardLookup.byId ?? {}
   const RELEVANT_ACTIONS = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED', 'CARD_DRAWN'])
   const cards = {}
   const colors = new Set()
@@ -65,7 +66,7 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
     for (const ref of (log.cardRefs ?? [])) {
       if (!ref.id || !ref.name) continue
       if (!cards[ref.id]) {
-        cards[ref.id] = { name: ref.name, plays: 0, inked: 0, discarded: 0 }
+        cards[ref.id] = { name: ref.fullName ?? byId[ref.id]?.fullName ?? ref.name, plays: 0, inked: 0, discarded: 0 }
       }
       if (log.type === 'CARD_PLAYED') cards[ref.id].plays++
       else if (log.type === 'CARD_INKED') cards[ref.id].inked++
@@ -82,7 +83,7 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
   for (const card of fieldCards) {
     if (!card.definitionId) continue
     if (!cards[card.definitionId]) {
-      cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
+      cards[card.definitionId] = { name: card.fullName ?? card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
     }
     const cardDef = byName[card.fullName] || byName[card.name]
     if (cardDef?.color) {

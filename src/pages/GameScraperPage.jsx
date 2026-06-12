@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { resolveInkName } from '../lib/inkColors'
 import { saveGame } from '../lib/gameHistory'
@@ -52,8 +52,25 @@ async function loadCardData() {
   }
 }
 
+// spectator_update payloads only include a recent window of log entries, not the
+// full game history. Merge by finding where the new window overlaps the tail of
+// what we've already accumulated, so the observed-cards list grows across turns
+// instead of resetting each update.
+function mergeLogs(prevLogs, newLogs) {
+  if (!prevLogs.length) return newLogs
+  if (!newLogs.length) return prevLogs
+  const maxOverlap = Math.min(prevLogs.length, newLogs.length)
+  for (let k = maxOverlap; k > 0; k--) {
+    if (JSON.stringify(prevLogs.slice(-k)) === JSON.stringify(newLogs.slice(0, k))) {
+      return [...prevLogs, ...newLogs.slice(k)]
+    }
+  }
+  return [...prevLogs, ...newLogs]
+}
+
 function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
   const byName = cardLookup.byName ?? {}
+  const byId = cardLookup.byId ?? {}
   const RELEVANT_ACTIONS = new Set(['CARD_PLAYED', 'CARD_INKED', 'CARD_DISCARDED', 'CARD_DRAWN'])
   const cards = {}
   const colors = new Set()
@@ -65,7 +82,7 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
     for (const ref of (log.cardRefs ?? [])) {
       if (!ref.id || !ref.name) continue
       if (!cards[ref.id]) {
-        cards[ref.id] = { name: ref.name, plays: 0, inked: 0, discarded: 0 }
+        cards[ref.id] = { name: ref.fullName ?? byId[ref.id]?.fullName ?? ref.name, plays: 0, inked: 0, discarded: 0 }
       }
       if (log.type === 'CARD_PLAYED') cards[ref.id].plays++
       else if (log.type === 'CARD_INKED') cards[ref.id].inked++
@@ -82,7 +99,7 @@ function buildObservedDeck(logs, fieldCards, playerNum, cardLookup = {}) {
   for (const card of fieldCards) {
     if (!card.definitionId) continue
     if (!cards[card.definitionId]) {
-      cards[card.definitionId] = { name: card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
+      cards[card.definitionId] = { name: card.fullName ?? card.name ?? card.definitionId, plays: 0, inked: 0, discarded: 0 }
     }
     const cardDef = byName[card.fullName] || byName[card.name]
     if (cardDef?.color) {
@@ -372,6 +389,7 @@ export function GameScraperPage() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [cardLookup, setCardLookup] = useState({ byId: {}, byName: {} })
   const [extensionActive, setExtensionActive] = useState(false)
+  const bookmarkletLogsRef = useRef({}) // uuid → accumulated logs (legacy bookmarklet protocol)
 
   useEffect(() => {
     const paramUuid = searchParams.get('uuid')
@@ -412,13 +430,17 @@ export function GameScraperPage() {
       if (event.data?.type === 'lorcana_game_data' && event.data?.game) {
         const incomingUuid = event.data.uuid ?? `bookmarklet-${Date.now()}`
         setExtensionActive(true)
+        const prevLogs = bookmarkletLogsRef.current[incomingUuid] ?? []
+        const mergedLogs = mergeLogs(prevLogs, event.data.game.logs ?? [])
+        bookmarkletLogsRef.current[incomingUuid] = mergedLogs
+        const mergedGame = { ...event.data.game, logs: mergedLogs }
         setActiveGames(prev => ({
           ...prev,
-          [incomingUuid]: { game: event.data.game, uuid: incomingUuid, timestamp: Date.now() },
+          [incomingUuid]: { game: mergedGame, uuid: incomingUuid, timestamp: Date.now() },
         }))
         setActiveUuid(incomingUuid)
         setLastUpdated(new Date())
-        const parsed = parseLiveGame(event.data.game, cardLookup)
+        const parsed = parseLiveGame(mergedGame, cardLookup)
         saveGame(incomingUuid, parsed).catch(e => console.error('Failed to save game:', e))
       }
     }

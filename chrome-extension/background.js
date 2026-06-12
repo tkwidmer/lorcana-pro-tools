@@ -8,6 +8,22 @@ function extractUuid(url) {
   return match ? match[1] : null
 }
 
+// spectator_update payloads only include a recent window of log entries, not the
+// full game history. Merge by finding where the new window overlaps the tail of
+// what we've already accumulated, so the observed-cards list grows across turns
+// instead of resetting each update.
+function mergeLogs(prevLogs, newLogs) {
+  if (!prevLogs.length) return newLogs
+  if (!newLogs.length) return prevLogs
+  const maxOverlap = Math.min(prevLogs.length, newLogs.length)
+  for (let k = maxOverlap; k > 0; k--) {
+    if (JSON.stringify(prevLogs.slice(-k)) === JSON.stringify(newLogs.slice(0, k))) {
+      return [...prevLogs, ...newLogs.slice(k)]
+    }
+  }
+  return [...prevLogs, ...newLogs]
+}
+
 chrome.runtime.onMessage.addListener((request) => {
   if (request.type !== 'GAME_DATA') return
 
@@ -30,7 +46,8 @@ chrome.runtime.onMessage.addListener((request) => {
     // Merge with previous meta so any field that ever appeared is retained.
     const { game, ...rest } = payload
     const prevMeta = games[uuid]?.meta ?? {}
-    games[uuid] = { game, meta: { ...prevMeta, ...rest }, uuid, timestamp: now }
+    const mergedLogs = mergeLogs(games[uuid]?.game?.logs ?? [], game.logs ?? [])
+    games[uuid] = { game: { ...game, logs: mergedLogs }, meta: { ...prevMeta, ...rest }, uuid, timestamp: now }
     chrome.storage.local.set({ [ACTIVE_GAMES_KEY]: games })
   })
 })

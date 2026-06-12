@@ -509,7 +509,7 @@ function DeckStats({ filteredGames, subtitle }) {
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Mulliganed</h3>
-          <p className="text-[10px] text-gray-400 mb-1.5">Count · % of opening hand appearances</p>
+          <p className="text-[10px] text-gray-400 mb-1.5">Games fully mulliganed · % of games card was in opening hand</p>
           <MulliganTable rows={topSentBack} emptyText="No mulligan data." />
         </div>
       </div>

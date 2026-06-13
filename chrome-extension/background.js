@@ -24,6 +24,28 @@ function mergeLogs(prevLogs, newLogs) {
   return [...prevLogs, ...newLogs]
 }
 
+function getStoredGames() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(ACTIVE_GAMES_KEY, (result) => resolve(result[ACTIVE_GAMES_KEY] ?? {}))
+  })
+}
+
+function setStoredGames(games) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [ACTIVE_GAMES_KEY]: games }, resolve)
+  })
+}
+
+// spectator_update messages can arrive in rapid bursts (especially during game
+// setup, when many log entries land within milliseconds of each other). Each
+// update does an async get-then-set against chrome.storage.local; without
+// serialization, overlapping updates read the same stale snapshot and the
+// later write clobbers the earlier one's merged logs, silently dropping
+// previously-accumulated log entries (and the cards/actions derived from them).
+// Chain all updates through this promise so each one sees the previous one's
+// result.
+let updateQueue = Promise.resolve()
+
 chrome.runtime.onMessage.addListener((request) => {
   if (request.type !== 'GAME_DATA') return
 
@@ -33,21 +55,23 @@ chrome.runtime.onMessage.addListener((request) => {
   const uuid = extractUuid(request.url)
   if (!uuid) return
 
-  chrome.storage.local.get(ACTIVE_GAMES_KEY, (result) => {
-    const games = result[ACTIVE_GAMES_KEY] ?? {}
+  updateQueue = updateQueue
+    .then(async () => {
+      const games = await getStoredGames()
 
-    // Prune stale games older than 2 hours
-    const now = Date.now()
-    Object.keys(games).forEach(id => {
-      if (now - games[id].timestamp > MAX_AGE_MS) delete games[id]
+      // Prune stale games older than 2 hours
+      const now = Date.now()
+      Object.keys(games).forEach(id => {
+        if (now - games[id].timestamp > MAX_AGE_MS) delete games[id]
+      })
+
+      // Store full payload so callers can inspect top-level fields (e.g. mmr, rating).
+      // Merge with previous meta so any field that ever appeared is retained.
+      const { game, ...rest } = payload
+      const prevMeta = games[uuid]?.meta ?? {}
+      const mergedLogs = mergeLogs(games[uuid]?.game?.logs ?? [], game.logs ?? [])
+      games[uuid] = { game: { ...game, logs: mergedLogs }, meta: { ...prevMeta, ...rest }, uuid, timestamp: now }
+      await setStoredGames(games)
     })
-
-    // Store full payload so callers can inspect top-level fields (e.g. mmr, rating).
-    // Merge with previous meta so any field that ever appeared is retained.
-    const { game, ...rest } = payload
-    const prevMeta = games[uuid]?.meta ?? {}
-    const mergedLogs = mergeLogs(games[uuid]?.game?.logs ?? [], game.logs ?? [])
-    games[uuid] = { game: { ...game, logs: mergedLogs }, meta: { ...prevMeta, ...rest }, uuid, timestamp: now }
-    chrome.storage.local.set({ [ACTIVE_GAMES_KEY]: games })
-  })
+    .catch((err) => console.error('[Lorcana] Failed to process game update:', err))
 })

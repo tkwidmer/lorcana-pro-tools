@@ -333,7 +333,7 @@ function BookmarkletPanel({ uuid }) {
 // --- Raw Payload Inspector (debug) ---
 
 function RawPayloadInspector({ entry }) {
-  const { game, meta, uuid, rawMessages } = entry
+  const { game, meta, uuid, rawMessages, backfillDebug } = entry
   const topLevelKeys = meta ? Object.keys(meta) : []
   const gameKeys = game ? Object.keys(game) : []
 
@@ -427,6 +427,35 @@ function RawPayloadInspector({ entry }) {
                 {JSON.stringify(game.logs, null, 2)}
               </pre>
             </details>
+          </div>
+        )}
+        {backfillDebug?.length > 0 && (
+          <div>
+            <div className="font-semibold text-gray-700 mb-1">
+              Backfill endpoint probe (experimental)
+            </div>
+            <div className="space-y-2">
+              {backfillDebug.map((r, i) => (
+                <div key={i} className="border border-gray-200 rounded p-2">
+                  <div className="font-mono">
+                    {r.path} → {r.error ? <span className="text-red-600">{r.error}</span> : `${r.status} ${r.contentType ?? ''}`}
+                  </div>
+                  {r.topLevelKeys && (
+                    <div className="mt-1">keys: {r.topLevelKeys.join(', ') || '(none)'}</div>
+                  )}
+                  {r.logsLength != null && (
+                    <div className="mt-1">
+                      logs: {r.logsLength} entries
+                      {r.firstLog && <span> — first: {r.firstLog.type} (turn {r.firstLog.turnNumber})</span>}
+                      {r.lastLog && <span>, last: {r.lastLog.type} (turn {r.lastLog.turnNumber})</span>}
+                    </div>
+                  )}
+                  {r.textSample && (
+                    <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all mt-1">{r.textSample}</pre>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

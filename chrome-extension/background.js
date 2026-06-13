@@ -89,7 +89,7 @@ chrome.runtime.onMessage.addListener((request) => {
       }
       const rawMessages = [...(games[uuid]?.rawMessages ?? []), rawEntry].slice(-MAX_RAW_HISTORY)
 
-      games[uuid] = { game: { ...game, logs: mergedLogs }, meta: { ...prevMeta, ...rest }, uuid, timestamp: now, rawMessages }
+      games[uuid] = { game: { ...game, logs: mergedLogs }, meta: { ...prevMeta, ...rest }, uuid, timestamp: now, rawMessages, backfillDebug: games[uuid]?.backfillDebug }
       await setStoredGames(games)
     })
     .catch((err) => console.error('[Lorcana] Failed to process game update:', err))

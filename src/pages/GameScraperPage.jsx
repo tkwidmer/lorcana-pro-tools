@@ -333,7 +333,7 @@ function BookmarkletPanel({ uuid }) {
 // --- Raw Payload Inspector (debug) ---
 
 function RawPayloadInspector({ entry }) {
-  const { game, meta, uuid } = entry
+  const { game, meta, uuid, rawMessages } = entry
   const topLevelKeys = meta ? Object.keys(meta) : []
   const gameKeys = game ? Object.keys(game) : []
 
@@ -373,6 +373,62 @@ function RawPayloadInspector({ entry }) {
             ))}
           </div>
         </div>
+        {rawMessages?.length > 0 && (
+          <div>
+            <div className="font-semibold text-gray-700 mb-1">
+              Incoming spectator_update messages (last {rawMessages.length})
+            </div>
+            <div className="overflow-auto max-h-64">
+              <table className="font-mono text-xs border-collapse w-full">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="pr-3 py-0.5">Time</th>
+                    <th className="pr-3 py-0.5">Prev logs</th>
+                    <th className="pr-3 py-0.5">Incoming logs</th>
+                    <th className="pr-3 py-0.5">Merged logs</th>
+                    <th className="pr-3 py-0.5">First incoming</th>
+                    <th className="pr-3 py-0.5">Last incoming</th>
+                    <th className="pr-3 py-0.5"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rawMessages.map((m, i) => (
+                    <tr key={i} className="border-t border-gray-100 align-top">
+                      <td className="pr-3 py-0.5 whitespace-nowrap">{new Date(m.timestamp).toLocaleTimeString()}</td>
+                      <td className="pr-3 py-0.5">{m.prevCount}</td>
+                      <td className="pr-3 py-0.5">{m.incomingCount}</td>
+                      <td className="pr-3 py-0.5">{m.mergedCount}</td>
+                      <td className="pr-3 py-0.5 whitespace-nowrap">{m.firstIncoming ? `${m.firstIncoming.type} (turn ${m.firstIncoming.turn}, p${m.firstIncoming.player})` : '—'}</td>
+                      <td className="pr-3 py-0.5 whitespace-nowrap">{m.lastIncoming ? `${m.lastIncoming.type} (turn ${m.lastIncoming.turn}, p${m.lastIncoming.player})` : '—'}</td>
+                      <td className="pr-3 py-0.5">
+                        {m.incomingLogs?.length > 0 && (
+                          <details>
+                            <summary className="cursor-pointer text-blue-600">logs</summary>
+                            <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-64 whitespace-pre-wrap break-all">
+                              {JSON.stringify(m.incomingLogs, null, 2)}
+                            </pre>
+                          </details>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        {game?.logs?.length > 0 && (
+          <div>
+            <details>
+              <summary className="cursor-pointer font-semibold text-gray-700">
+                Full accumulated log ({game.logs.length} entries)
+              </summary>
+              <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-96 font-mono whitespace-pre-wrap break-all mt-1">
+                {JSON.stringify(game.logs, null, 2)}
+              </pre>
+            </details>
+          </div>
+        )}
       </div>
     </details>
   )

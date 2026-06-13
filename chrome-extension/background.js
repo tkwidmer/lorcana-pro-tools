@@ -2,6 +2,7 @@
 
 const ACTIVE_GAMES_KEY = 'lorcana_active_games'
 const MAX_AGE_MS = 2 * 60 * 60 * 1000 // 2 hours
+const MAX_RAW_HISTORY = 20 // full incoming logs are stored per entry, so keep this modest
 
 function extractUuid(url) {
   const match = (url ?? '').match(/spectate\/([a-f0-9-]+)/i)
@@ -69,8 +70,26 @@ chrome.runtime.onMessage.addListener((request) => {
       // Merge with previous meta so any field that ever appeared is retained.
       const { game, ...rest } = payload
       const prevMeta = games[uuid]?.meta ?? {}
-      const mergedLogs = mergeLogs(games[uuid]?.game?.logs ?? [], game.logs ?? [])
-      games[uuid] = { game: { ...game, logs: mergedLogs }, meta: { ...prevMeta, ...rest }, uuid, timestamp: now }
+      const incomingLogs = game.logs ?? []
+      const prevLogs = games[uuid]?.game?.logs ?? []
+      const mergedLogs = mergeLogs(prevLogs, incomingLogs)
+
+      // Debug trail: one entry per spectator_update, so the raw payload
+      // inspector can show exactly what window of logs arrived on each
+      // message (e.g. to check whether a reconnect resets to a later turn).
+      const logSummary = (l) => l ? { type: l.type, turn: l.turnNumber, player: l.player } : null
+      const rawEntry = {
+        timestamp: now,
+        incomingCount: incomingLogs.length,
+        prevCount: prevLogs.length,
+        mergedCount: mergedLogs.length,
+        firstIncoming: logSummary(incomingLogs[0]),
+        lastIncoming: logSummary(incomingLogs[incomingLogs.length - 1]),
+        incomingLogs,
+      }
+      const rawMessages = [...(games[uuid]?.rawMessages ?? []), rawEntry].slice(-MAX_RAW_HISTORY)
+
+      games[uuid] = { game: { ...game, logs: mergedLogs }, meta: { ...prevMeta, ...rest }, uuid, timestamp: now, rawMessages }
       await setStoredGames(games)
     })
     .catch((err) => console.error('[Lorcana] Failed to process game update:', err))

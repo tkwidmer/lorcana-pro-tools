@@ -101,24 +101,3 @@ chrome.runtime.onMessage.addListener((request) => {
     })
     .catch((err) => console.error('[Lorcana] Failed to process game update:', err))
 })
-
-// Experimental: results of probing duels.ink REST endpoints for full game
-// history (see relay.js). Stored alongside the game so the raw payload
-// inspector can show what each candidate endpoint returned.
-chrome.runtime.onMessage.addListener((request) => {
-  if (request.type !== 'GAME_BACKFILL_DEBUG') return
-
-  const uuid = extractUuid(request.url)
-  if (!uuid) return
-
-  updateQueue = updateQueue
-    .then(async () => {
-      const games = await getStoredGames()
-      if (!games[uuid]) {
-        games[uuid] = { game: { logs: [] }, meta: {}, uuid, timestamp: Date.now() }
-      }
-      games[uuid].backfillDebug = request.payload
-      await setStoredGames(games)
-    })
-    .catch((err) => console.error('[Lorcana] Failed to process backfill debug:', err))
-})

@@ -22,39 +22,153 @@ When creating a pull request:
 
 ## Stack
 
-React 19 + React Router 7 + Tailwind CSS 4 + Vite 8, deployed on Vercel. Serverless API routes live in `/api/*.ts` (TypeScript). No backend database — all user data is stored client-side in IndexedDB or localStorage.
+React 19 + React Router 7 + Tailwind CSS 4 + Vite 8, deployed on Vercel. Serverless API routes live in `/api/*.ts` (TypeScript). Authentication via Supabase + Google OAuth. All game data is stored client-side in IndexedDB or localStorage — Supabase is used only for auth, not as a data store.
+
+## Environment Variables
+
+Required in `.env` for local development:
+
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+Vercel also accepts `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` prefixes (both are checked in `supabaseClient.js`).
 
 ## Architecture
 
 ### Pages → Shared Libs → Storage
 
-Pages are in `src/pages/`. Each page is self-contained. Shared logic lives in `src/lib/`:
+Pages are in `src/pages/`. Each page is self-contained. Shared logic lives in `src/lib/`.
 
-| File | Purpose |
-|---|---|
-| `duelsApi.js` | duels.ink API client (match history, gamelog, replay fetches) |
-| `parseGamelog.js` | Decompress + parse gzip gamelogs into rich game state |
-| `gamelogHistory.js` | IndexedDB store for parsed gamelogs (`lorcana_gamelogs` db) |
-| `gameHistory.js` | IndexedDB store for manually-entered game snapshots (`lorcana_pro_tools` db) |
-| `gameStats.js` | Aggregate stats across game records (matchups, card plays, ink curves) |
-| `gameSnapshot.js` | Export/import game records as JSON files |
-| `playerProfiles.js` | Build player deck profiles and win rates from game history |
-| `handInference.js` | Hypergeometric hand probability calculator |
-| `inkColors.js` | Ink color constants and normalization utilities |
+### Pages & Routes
 
-### Routing
+Defined in `src/App.jsx`:
 
-Defined in `src/App.jsx`. Several legacy routes redirect to current ones:
+| Route | Page File | Purpose |
+|---|---|---|
+| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Deckbuilding, Coaching, Tournament, Scouting sections |
+| `/login` | `LoginPage.jsx` | Google OAuth sign-in via Supabase |
+| `/auth/callback` | `AuthCallbackPage.jsx` | OAuth redirect handler; checks session and redirects |
+| `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, build print sheets (9/page) |
+| `/cut-calculator` | `TournamentCutPage.jsx` | Swiss cut probability calculator using binomial/trinomial models |
+| `/limited-guide` | `LimitedGuidePage.jsx` | Limited format reference — BREAD framework, mana curves, uninkable counts |
+| `/deck-insights` | `DrawOddsPage.jsx` | Comprehensive deck analytics: draw odds, mulligan/scry simulation, keyword analysis, brickability, quest pressure curves |
+| `/game-scraper` | `GameScraperPage.jsx` | Live game state viewer via Chrome extension (automatic) or bookmarklet (manual) |
+| `/library` | `LibraryPage.jsx` | Saved games (`?tab=history`) and opponent player profiles (`?tab=players`) |
+| `/game-history/:uuid` | `GameHistoryDetailPage.jsx` | Full game state replay with action log |
+| `/players/:name` | `PlayerProfilePage.jsx` | Per-opponent stats — win rates, deck archetypes, matchup data |
+| `/deck-comparison` | `DeckComparisonPage.jsx` | Paste two decklists to highlight differences |
+| `/settings` | `SettingsPage.jsx` | Auth management and preferences |
+| `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
+| `/gamelog` | `GamelogViewerPage.jsx` | Load and display JSON gamelog files |
+| `/gamelog-analyzer` | `GamelogAnalyzerPage.jsx` | Gamelog draw sequence, hand info, and mulligan analysis |
+| `/hand-trainer` | `HandTrainerPage.jsx` | Practice inferring opponent's hand; compare guesses vs hypergeometric odds |
+| `/game-library` | `GameLibraryPage.jsx` | Team analytics — combine shared game exports, metagame breakdown, card frequency heatmaps |
+| `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
+| `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
+| `/leaderboard` | `LeaderboardPage.jsx` | duels.ink top 50 players by queue, MMR distribution |
+| `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis |
+| `/lore-tracker` | `LoreTrackerPage.jsx` | Mobile in-game lore counter with tap controls and audit log |
+
+**Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
+
+Legacy redirects:
 - `/replay-analyzer` → `/gamelog-analyzer`
 - `/game-history` → `/library?tab=history`
 - `/players` → `/library?tab=players`
+- `/shared` → `/library`
 - `/legality-checker` → `/deck-insights`
+
+### Components
+
+In `src/components/`:
+
+| File | Purpose |
+|---|---|
+| `Nav.jsx` | Top navigation bar — auth status, settings link; hidden on `/lore-tracker` |
+| `GameView.jsx` | Unified game display — player panels (lore bar, ink meter, field, hand predictor), action log, export button; reused across `GameScraperPage`, `LibraryPage`, `GameHistoryDetailPage` |
+| `HandPredictor.jsx` | Bayesian hand inference display — shows top 12 cards with P(≥1 in hand) given observed deck + player profile |
+| `SearchBar.jsx` | Fuzzy card search dropdown with quantity selector (×1–×4); used by proxy generator |
+| `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts |
+
+Ink color images are rendered inline in each page — there is no shared `InkIcons` component. `MatchHistoryPage` defines a local `InkIcons` function; `GamelogAnalyzerPage` defines a local `InkImg` function. Both render `<img src={/ink/${inkName}.png} />`.
+
+### Hooks
+
+In `src/hooks/`:
+
+| File | Returns | Purpose |
+|---|---|---|
+| `useAuth.js` | `{ user, isLoading, error }` | Supabase session — checks on mount and subscribes to auth state changes |
+| `useCards.js` | `{ cards, loading, error }` | Fetches card data from `/api/cards`, falls back to IndexedDB cache via `cardsCache.js` |
+
+### Shared Libraries
+
+In `src/lib/`:
+
+| File | Purpose |
+|---|---|
+| `supabaseClient.js` | Supabase client init; exports `loginWithGoogle`, `logout`, `getSession`, `getCurrentUser` |
+| `db.js` | IndexedDB abstraction for the `lorcana_pro_tools` DB — `openDB()`, `getTx()`, `promisify()` |
+| `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
+| `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
+| `gameHistory.js` | IndexedDB CRUD for scraped game snapshots (`games` store, keyed by `uuid`) |
+| `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
+| `gameStats.js` | Aggregate stats across game records — matchups, card plays, ink curves |
+| `gameSnapshot.js` | Export/import game state as JSON files for sharing |
+| `playerProfiles.js` | Build opponent deck profiles and win rates from saved game history |
+| `handInference.js` | Hypergeometric P(≥1 in hand) calculator — powers `HandPredictor` |
+| `handReading.js` | Hand reading inference engine for `HandTrainerPage` |
+| `leakDetection.js` | Detect when hand information is leaked (quests, zones) |
+| `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
+| `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
+| `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
+| `duelsApi.js` | duels.ink API client — match history, gamelog, replay fetches |
+| `leaderboardApi.js` | Fetches duels.ink ranked leaderboards via `/api/duels-leaderboard` |
+| `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
+| `gameExport.js` | Serialize game records for sharing (used by `GameLibraryPage`) |
+| `gameImport.js` | Deserialize imported game records |
+| `exportGameIds.js` | CSV export of game IDs |
+
+### API Routes
+
+Vercel serverless functions in `/api/*.ts`. All are thin forwarding proxies with error handling and caching headers. No server-side auth — tokens are forwarded from the client.
+
+| Endpoint | Upstream | Auth | Notes |
+|---|---|---|---|
+| `/api/duels-match-history` | duels.ink `/api/me/match-history` | Bearer token | |
+| `/api/duels-stats` | duels.ink stats | Bearer token | |
+| `/api/duels-leaderboard` | duels.ink leaderboard | Public | |
+| `/api/duels-replay` | duels.ink replay | Bearer token | |
+| `/api/duels-deck` | duels.ink deck | Bearer token | |
+| `/api/duels-gamelog` | `https://duels.ink/g/{id}` | Bearer token | Returns gzip binary |
+| `/api/duels-gamelog-bulk` | Multiple gamelog fetches | Bearer token | Batch endpoint |
+| `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`; handles pagination |
+| `/api/proxy` | duels.ink spectate | Cookie-based | Tries 3 endpoints; used by bookmarklet/direct URL approach |
+
+LorcanaJSON card data (`/api/cards`) is a rewrite, not a serverless function — handled by Vite proxy in dev and by `vercel.json` in production, both pointing to `https://lorcanajson.org/files/current/en/allCards.json`.
+
+### Storage
+
+| Layer | DB / Key | Contents |
+|---|---|---|
+| IndexedDB `lorcana_pro_tools` v2 | `games` store (key: `uuid`) | Scraped game snapshots from `GameScraperPage` |
+| IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
+| IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `GamelogAnalyzerPage` |
+| localStorage `duels_api_token` | — | duels.ink Bearer token |
+| localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
+| localStorage (various) | — | Form state for `DrawOddsPage`, filter state, etc. |
+| `chrome.storage.local` | `lorcana_active_games` | Active game states captured by the Chrome extension (2-hour TTL) |
+| Supabase | auth session only | Google OAuth user session; no game data stored server-side |
 
 ### External APIs
 
-**duels.ink** — Authenticated via Bearer token stored in localStorage (`duels_api_token`). The Vercel serverless routes in `/api/` are thin forwarding proxies — they pass the token through and add caching headers. No server-side auth of their own.
+**duels.ink** — Authenticated via Bearer token stored in localStorage (`duels_api_token`). Token is passed through the Vercel proxy routes. No server-side validation.
 
-**LorcanaJSON** — Card data fetched from `https://lorcanajson.org/files/current/en/allCards.json`. In dev, `vite.config.js` proxies `/api/cards` to this URL. In production, `vercel.json` handles the same rewrite.
+**LorcanaJSON** — Card data from `https://lorcanajson.org/files/current/en/allCards.json`. Cached in IndexedDB after first load. In dev, `vite.config.js` proxies `/api/cards`; in production, `vercel.json` rewrites it.
+
+**Ravensburger Tournament API** — Public API for live tournament events. Accessed via `/api/tournament` which routes by `?type=` param. Pagination is handled by `fetchAllRegistrations()` in `tournamentApi.js` which loops until `next_page_number === null`. The `getTournamentStructure()` helper resolves current round, advancement requirements, and top-cut info from the raw event response.
 
 ### Gamelog Pipeline
 
@@ -70,6 +184,21 @@ Key parsing details in `parseGamelog.js`:
 - `CARD_PUT_INTO_INKWELL` with `fromZone === 'field'` means the *other* player caused the removal (e.g. Let It Go, Hades) — attribute as effectRemovals on the other player's last played card
 - `lastPlayedByPlayer` tracks the most recently played card per player for effect attribution
 
+### Chrome Extension
+
+`/chrome-extension/` is a separate artifact built with Manifest V3. `npm run build` calls `build-extension.js` which packages it into `/public/lorcana-extension.zip`. It does not share source with the main React app.
+
+Data flow when spectating a duels.ink game:
+
+1. User visits `duels.ink/spectate/{uuid}`
+2. `patch.js` (MAIN world, `document_start`) patches `WebSocket.prototype` to intercept all game messages
+3. `relay.js` (ISOLATED world) receives `postMessage` from `patch.js` and forwards to `background.js`
+4. `background.js` (service worker) stores game state in `chrome.storage.local` under `lorcana_active_games`, keyed by UUID; prunes entries older than 2 hours
+5. `bridge.js` (injected on lorcana-pro-tools pages) polls `chrome.storage.local` and posts a `lorcana_active_games` message to the page
+6. `GameScraperPage` listens for the message and renders the live game state
+
+The extension merges incoming `spectator_update` payloads — any field that ever appeared in a game's `meta` is retained across updates.
+
 ### Match History Filters
 
 `MatchHistoryPage` uses a cascading filter pattern where each filter layer narrows the options available to filters below it:
@@ -80,7 +209,7 @@ games → afterDate → afterQueue → afterMyColors → afterOppColors → filt
 
 Color options exclude 3+ ink entries (sealed/limited formats). Deck identity uses `your_deck_id` (stable API field) with `deckFingerprint(your_decklist)` as fallback. Deck names are stored in localStorage under `lorcana_deck_names`.
 
-### Match history game object shape
+### Match History Game Object Shape
 
 Key fields on game objects from the duels.ink API:
 - `your_player` (1 or 2), `your_deck_id`, `your_deck_colors` ("ruby/sapphire"), `your_decklist` (array of `{cardId, count}`)
@@ -88,10 +217,35 @@ Key fields on game objects from the duels.ink API:
 - `started_at` (ISO string — game time), `went_first`, `result`, `queue_name`
 - `gamelog_id`, `mmr_delta`, `your_lore`, `opp_lore`
 
-### Ink color icons
+### Winrate Matrix & Metagame Analysis
 
-PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapphire, steel. Use the `InkIcons` component in `MatchHistoryPage` or the `InkImg` component in `GamelogAnalyzerPage` to render them.
+`WinrateMatrixPage` and `GameLibraryPage` both use game records from `gameHistory.js`. The matrix is built by `buildWinrateMatrix.js`:
+- Groups games by `(myColors, oppColors)` pair using sorted JSON string keys
+- Tracks wins, games, and first/second player splits per matchup
+- Returns `{ matchups, colorPairs, totalGames, winLossMatrix }` — the matrix is a nested map `[playerColorKey][oppColorKey]`
 
-### Chrome Extension
+`metagameAnalysis.js` (`analyzeOpponentMetagame`) groups by opponent color pair and returns frequency + win rate sorted by game count.
 
-`/chrome-extension` is a separate artifact. `npm run build` calls `build-extension.js` which packages it into a zip under `/public`. It does not share source with the main React app.
+### Tournament Lookup
+
+`TournamentLookupPage` accepts a Ravensburger tournament URL and extracts the event ID. It uses `tournamentApi.js` for all data:
+- `fetchEventDetails` → raw event + phases + rounds
+- `getTournamentStructure` → resolved current round, top-cut size, rounds remaining, advancement requirements
+- `fetchTournamentStandings` → paginated standings for a specific round
+- `fetchAllRegistrations` → all registered players (paginated loop)
+- `analyzeId` → ID safety analysis: compares player's points buffer vs cut line, counts players who could pass them if everyone wins
+- `analyzeAdvancement` → status (secured/possible/eliminated) toward the next phase cutoff
+
+### Ink Color Icons
+
+PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapphire, steel. Each page that needs them renders `<img src={/ink/${inkName}.png} />` directly — there is no shared component. Use `resolveColors()` from `inkColors.js` to normalize raw color strings (e.g. "red/blue", "Ruby") before using them as icon keys.
+
+### Key Algorithms
+
+**Draw odds (DrawOddsPage / `deck-insights`)** — Uses log-space binomial coefficients to avoid overflow. Hypergeometric distribution for exact card draw probabilities. Monte Carlo simulation (10,000 iterations) for mulligan decisions, scry effects, multi-group joint probabilities, and 12-turn quest pressure curves.
+
+**Hand inference (handInference.js + HandPredictor.jsx)** — Hypergeometric P(≥1 copy in hand) given remaining deck size and current hand size. Combines observed deck composition with historical player profiles as a prior.
+
+**Cut calculator (TournamentCutPage)** — Upper bound uses a pure W/L binomial; lower bound uses a trinomial W/D/L with empirical draw rate. Estimates safe cutline range and advises on intentional draw risk.
+
+**Tournament ID analysis (tournamentApi.js `analyzeId`)** — After an ID, player gains 1 point. Counts how many players below the cut could leapfrog them if those players all win (+3 pts). Classifies as safe (≥3 point buffer), borderline (1–2 buffer), or danger (0 or outside cut).

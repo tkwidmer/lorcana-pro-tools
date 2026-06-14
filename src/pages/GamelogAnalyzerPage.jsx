@@ -844,57 +844,14 @@ function GameLeaks({ gamelog, myPlayerNum }) {
 }
 
 function AggregateView({ enrichedGames }) {
-  const [matchupFilter, setMatchupFilter] = useState(null)
   if (!enrichedGames.length) return null
 
-  // Build matchup filter entries (by opponent ink combo when available)
-  const hasInkData = enrichedGames.some(g => g.oppInkCombo?.length > 0)
-  const matchups = []
-  const seenMatchups = new Set()
-  for (const g of enrichedGames) {
-    const key = g.oppInkCombo?.length ? g.oppInkCombo.join('/') : null
-    if (key && !seenMatchups.has(key)) { seenMatchups.add(key); matchups.push({ key, colors: g.oppInkCombo }) }
-  }
-
-  const filtered = enrichedGames.filter(g => {
-    if (matchupFilter && (g.oppInkCombo?.join('/') || null) !== matchupFilter) return false
-    return true
-  })
-
-  const activeFilters = [matchupFilter].filter(Boolean)
-  const subtitle = activeFilters.length
-    ? `${filtered.length} game${filtered.length !== 1 ? 's' : ''} filtered · ${enrichedGames.length} total`
-    : `Aggregated across ${enrichedGames.length} game${enrichedGames.length !== 1 ? 's' : ''}`
+  const subtitle = `Aggregated across ${enrichedGames.length} game${enrichedGames.length !== 1 ? 's' : ''}`
 
   return (
     <div className="mt-2">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
-        {hasInkData && matchups.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-gray-500 font-medium">vs matchup:</span>
-            <button
-              onClick={() => setMatchupFilter(null)}
-              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                matchupFilter === null ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
-              }`}
-            >All</button>
-            {matchups.map(({ key, colors }) => (
-              <button
-                key={key}
-                onClick={() => setMatchupFilter(matchupFilter === key ? null : key)}
-                className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  matchupFilter === key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
-                }`}
-              >
-                {colors.map(c => <InkDot key={c} color={matchupFilter === key ? null : c} />)}
-                <span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <DeckStats filteredGames={filtered} subtitle={subtitle} />
-      <ChallengeStats filteredGames={filtered} subtitle={subtitle} />
+      <DeckStats filteredGames={enrichedGames} subtitle={subtitle} />
+      <ChallengeStats filteredGames={enrichedGames} subtitle={subtitle} />
     </div>
   )
 }

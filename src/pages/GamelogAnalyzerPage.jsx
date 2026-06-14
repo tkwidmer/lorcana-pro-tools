@@ -1,11 +1,29 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { saveGamelog, getAllGamelogs, deleteGamelog, clearAllGamelogs } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { createGameExportZip } from '../lib/gameExport'
 import { detectLeaks, summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
 import { getTokens } from '../lib/duelsApi'
+import { useCards } from '../hooks/useCards'
 
 const MY_NAME_KEY = 'lorcana_my_name'
+
+function deckFingerprint(decklist) {
+  if (!decklist) return null
+  const cards = Array.isArray(decklist) ? decklist : Object.values(decklist)
+  const key = cards
+    .map(c => typeof c === 'string' ? c : `${c?.cardId ?? c?.name ?? c?.id ?? ''}x${c?.count ?? 1}`)
+    .filter(s => s && s !== 'x1')
+    .sort()
+    .join('|')
+  if (!key) return null
+  let h = 5381
+  for (let i = 0; i < key.length; i++) {
+    h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0
+  }
+  return String(Math.abs(h))
+}
 
 // --- Data adapter ---
 
@@ -662,6 +680,22 @@ function InkDot({ color }) {
   const c = DOT[color?.toLowerCase()]
   if (!c) return null
   return <span className={`inline-block w-3 h-3 rounded-full flex-shrink-0 ${c}`} title={color} />
+}
+
+function DecklistDisplay({ decklist, cardIdToName }) {
+  const entries = [...decklist].sort((a, b) =>
+    b.count - a.count || (cardIdToName[a.cardId] ?? a.cardId).localeCompare(cardIdToName[b.cardId] ?? b.cardId)
+  )
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-0.5">
+      {entries.map(({ cardId, count }) => (
+        <div key={cardId} className="flex items-baseline gap-1.5 min-w-0">
+          <span className="text-xs text-gray-400 flex-shrink-0 w-4 text-right">{count}×</span>
+          <span className="text-xs text-gray-800 truncate">{cardIdToName[cardId] ?? cardId}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function InkImg({ color, size = 'w-4 h-4' }) {
@@ -1387,6 +1421,7 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
 // --- Main page ---
 
 export function GamelogAnalyzerPage() {
+  const navigate = useNavigate()
   const [gamelogs, setGamelogs] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -1398,6 +1433,32 @@ export function GamelogAnalyzerPage() {
   const [filterMyColors, setFilterMyColors] = useState(null)
   const [filterUser, setFilterUser] = useState(null)
   const [filterDate, setFilterDate] = useState(null)
+  const [filterDeck, setFilterDeck] = useState(null)
+  const [expandedDeckKey, setExpandedDeckKey] = useState(null)
+  const [insightsLoading, setInsightsLoading] = useState(null)
+
+  const { cards } = useCards()
+  const cardIdToName = useMemo(() => {
+    const cardByKey = {}
+    const score = c => {
+      const promoBonus = (c.promoGrouping == null && c.promoSourceCategory == null) ? 10 : 0
+      if (c.allowedInFormats?.Core?.allowed) return promoBonus + 2
+      if (c.allowedInFormats?.Infinity?.allowed) return promoBonus + 1
+      return promoBonus
+    }
+    for (const c of cards) {
+      if (c.setCode == null || c.number == null) continue
+      const key = `${c.setCode}-${c.number}`
+      const existing = cardByKey[key]
+      if (!existing) { cardByKey[key] = c; continue }
+      const ts = score(c), es = score(existing)
+      if (ts > es) { cardByKey[key] = c; continue }
+      if (ts === es && (parseInt(c.setCode) || 0) > (parseInt(existing.setCode) || 0)) cardByKey[key] = c
+    }
+    const map = {}
+    for (const [key, c] of Object.entries(cardByKey)) map[key] = c.fullName ?? c.name
+    return map
+  }, [cards])
 
   const userIdToLabel = useMemo(() => {
     const map = {}
@@ -1434,9 +1495,36 @@ export function GamelogAnalyzerPage() {
     : queueFilteredLogs
   const allEnrichedGames = userFilteredLogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
   const myColorOptions = [...new Set(allEnrichedGames.map(g => colorKey(g.myInkCombo)).filter(k => k && k.split('/').length === 2))].sort()
-  const enrichedGames = filterMyColors
+  const colorFilteredGames = filterMyColors
     ? allEnrichedGames.filter(g => colorKey(g.myInkCombo) === filterMyColors)
     : allEnrichedGames
+
+  // Build deck stats from color-filtered games
+  const getDeckKey = (g) => g.deck_id ?? deckFingerprint(g.yourDecklist)
+  const deckStatMap = new Map()
+  for (const g of colorFilteredGames) {
+    const key = getDeckKey(g)
+    if (!key) continue
+    if (!deckStatMap.has(key)) {
+      deckStatMap.set(key, {
+        fp: key,
+        colors: g.myInkCombo ?? [],
+        name: g.deckName ?? null,
+        wins: 0, losses: 0, loreTotal: 0, loreGames: 0,
+        latestDecklist: g.yourDecklist ?? null,
+      })
+    }
+    const stat = deckStatMap.get(key)
+    if (g.won) stat.wins++
+    else stat.losses++
+    const myLore = g.myPlayerNum === 1 ? g.p1FinalLore : g.myPlayerNum === 2 ? g.p2FinalLore : null
+    if (myLore != null) { stat.loreTotal += myLore; stat.loreGames++ }
+  }
+  const deckStats = [...deckStatMap.values()].sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
+
+  const enrichedGames = filterDeck
+    ? colorFilteredGames.filter(g => getDeckKey(g) === filterDeck)
+    : colorFilteredGames
 
   const activeMyPlayerNum = activeGamelog
     ? (activeGamelog.myPlayerNum ?? getMyPlayerNum(activeGamelog, myName))
@@ -1446,6 +1534,18 @@ export function GamelogAnalyzerPage() {
     const trimmed = name.trim()
     setMyName(trimmed)
     localStorage.setItem(MY_NAME_KEY, trimmed)
+  }
+
+  async function handleLoadInsights(deckStat) {
+    setInsightsLoading(deckStat.fp)
+    try {
+      if (!deckStat.latestDecklist?.length) return
+      const lines = deckStat.latestDecklist.map(({ cardId, count }) => `${count} ${cardIdToName[cardId] ?? cardId}`)
+      localStorage.setItem('drawOdds.deckText', lines.join('\n'))
+      navigate('/deck-insights')
+    } finally {
+      setInsightsLoading(null)
+    }
   }
 
   async function processBuffer(arrayBuffer, filename) {
@@ -1599,13 +1699,93 @@ export function GamelogAnalyzerPage() {
               ))}
             </div>
           )}
-          {(filterDate || filterQueue || filterUser || filterMyColors) && (
+          {(filterDate || filterQueue || filterUser || filterMyColors || filterDeck) && (
             <div className="text-xs text-gray-400">
               {enrichedGames.length} game{enrichedGames.length !== 1 ? 's' : ''} shown
               {' · '}
-              <button onClick={() => { setFilterDate(null); setFilterQueue(null); setFilterUser(null); setFilterMyColors(null) }} className="underline hover:text-gray-600">Clear filters</button>
+              <button onClick={() => { setFilterDate(null); setFilterQueue(null); setFilterUser(null); setFilterMyColors(null); setFilterDeck(null) }} className="underline hover:text-gray-600">Clear filters</button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* By Deck */}
+      {deckStats.length > 1 && (
+        <div className="mb-5">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">By Deck</div>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {deckStats.map((stat) => {
+              const { fp, colors, name, wins, losses, loreTotal, loreGames, latestDecklist } = stat
+              const total = wins + losses
+              const wr = total > 0 ? wins / total : null
+              const avgLore = loreGames > 0 ? (loreTotal / loreGames).toFixed(1) : null
+              const isSelected = filterDeck === fp
+              const isExpanded = expandedDeckKey === fp
+              return (
+                <div
+                  key={fp}
+                  onClick={() => setFilterDeck(prev => prev === fp ? null : fp)}
+                  className={`flex-shrink-0 text-left border rounded-lg px-3 py-2.5 cursor-pointer transition-colors min-w-[140px] ${isSelected ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'}`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    {colors.map(c => <InkImg key={c} color={c} size="w-5 h-5" />)}
+                  </div>
+                  {name && <div className={`text-[11px] font-medium truncate max-w-[130px] mb-1 ${isSelected ? 'text-gray-300' : 'text-gray-600'}`}>{name}</div>}
+                  <div className={`text-sm font-bold ${isSelected ? 'text-white' : wr != null && wr >= 0.5 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {wins}–{losses}
+                    {wr != null && <span className="ml-1.5 text-xs font-normal text-gray-400">{Math.round(wr * 100)}%</span>}
+                  </div>
+                  {avgLore && <div className="text-[11px] text-gray-400">{avgLore} avg lore</div>}
+                  {latestDecklist?.length > 0 && (
+                    <div
+                      className={`flex gap-1.5 mt-2 pt-2 border-t ${isSelected ? 'border-gray-700' : 'border-gray-100'}`}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => setExpandedDeckKey(prev => prev === fp ? null : fp)}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${isExpanded ? (isSelected ? 'bg-gray-600 border-gray-500 text-white' : 'bg-gray-100 border-gray-300 text-gray-700') : (isSelected ? 'border-gray-600 text-gray-300 hover:border-gray-400' : 'border-gray-200 text-gray-500 hover:border-gray-400')}`}
+                      >
+                        Cards
+                      </button>
+                      <button
+                        onClick={() => handleLoadInsights(stat)}
+                        disabled={insightsLoading === fp}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors disabled:opacity-40 ${isSelected ? 'border-gray-600 text-gray-300 hover:border-gray-400' : 'border-gray-200 text-gray-500 hover:border-gray-400'}`}
+                      >
+                        {insightsLoading === fp ? '…' : '→ Insights'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {expandedDeckKey && (() => {
+            const stat = deckStats.find(d => d.fp === expandedDeckKey)
+            if (!stat?.latestDecklist?.length) return null
+            return (
+              <div className="mt-3 border border-gray-200 rounded-lg bg-white overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900 text-sm">{stat.name ?? 'Deck'}</span>
+                    {stat.colors.map(c => <InkImg key={c} color={c} size="w-4 h-4" />)}
+                  </div>
+                  <button onClick={() => setExpandedDeckKey(null)} className="text-xs text-gray-400 hover:text-gray-700 ml-4 flex-shrink-0">✕</button>
+                </div>
+                <div className="p-4">
+                  <DecklistDisplay decklist={stat.latestDecklist} cardIdToName={cardIdToName} />
+                  <button
+                    onClick={() => handleLoadInsights(stat)}
+                    disabled={insightsLoading === stat.fp}
+                    className="mt-4 text-xs px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-40"
+                  >
+                    {insightsLoading === stat.fp ? 'Loading…' : '→ Load into Deck Insights'}
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 

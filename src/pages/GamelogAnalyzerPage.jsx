@@ -9,6 +9,14 @@ import { useCards } from '../hooks/useCards'
 
 const MY_NAME_KEY = 'lorcana_my_name'
 
+const REPLAY_ID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+
+function replayViewerUrl(replayUrl) {
+  if (!replayUrl) return null
+  const match = replayUrl.match(REPLAY_ID_RE)
+  return match ? `https://duels.ink/replay/${match[1]}` : replayUrl
+}
+
 function deckFingerprint(decklist) {
   if (!decklist) return null
   const cards = Array.isArray(decklist) ? decklist : Object.values(decklist)
@@ -1308,7 +1316,7 @@ function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
           )}
           {gamelog.replay_url && (
             <a
-              href={gamelog.replay_url}
+              href={replayViewerUrl(gamelog.replay_url)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-semibold px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-900 transition-colors"

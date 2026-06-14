@@ -1431,6 +1431,7 @@ export function GamelogAnalyzerPage() {
   const [nameInput, setNameInput] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
   const [filterQueue, setFilterQueue] = useState(null)
   const [filterMyColors, setFilterMyColors] = useState(null)
+  const [filterOppColors, setFilterOppColors] = useState(null)
   const [filterUser, setFilterUser] = useState(null)
   const [filterDate, setFilterDate] = useState(null)
   const [filterDeck, setFilterDeck] = useState(null)
@@ -1495,14 +1496,20 @@ export function GamelogAnalyzerPage() {
     : queueFilteredLogs
   const allEnrichedGames = userFilteredLogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
   const myColorOptions = [...new Set(allEnrichedGames.map(g => colorKey(g.myInkCombo)).filter(k => k && k.split('/').length === 2))].sort()
-  const colorFilteredGames = filterMyColors
-    ? allEnrichedGames.filter(g => colorKey(g.myInkCombo) === filterMyColors)
-    : allEnrichedGames
+  const myColorFilteredLogs = filterMyColors
+    ? userFilteredLogs.filter(g => colorKey(g.myInkCombo) === filterMyColors)
+    : userFilteredLogs
+
+  const oppColorOptions = [...new Set(myColorFilteredLogs.map(g => colorKey(g.oppInkCombo)).filter(k => k && k.split('/').length === 2))].sort()
+  const oppColorFilteredLogs = filterOppColors
+    ? myColorFilteredLogs.filter(g => colorKey(g.oppInkCombo) === filterOppColors)
+    : myColorFilteredLogs
 
   // Build deck stats from color-filtered games
   const getDeckKey = (g) => g.deck_id ?? deckFingerprint(g.yourDecklist)
+  const preDeckEnriched = oppColorFilteredLogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
   const deckStatMap = new Map()
-  for (const g of colorFilteredGames) {
+  for (const g of preDeckEnriched) {
     const key = getDeckKey(g)
     if (!key) continue
     if (!deckStatMap.has(key)) {
@@ -1522,9 +1529,11 @@ export function GamelogAnalyzerPage() {
   }
   const deckStats = [...deckStatMap.values()].sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
 
-  const enrichedGames = filterDeck
-    ? colorFilteredGames.filter(g => getDeckKey(g) === filterDeck)
-    : colorFilteredGames
+  const filteredGamelogs = filterDeck
+    ? oppColorFilteredLogs.filter(g => getDeckKey(g) === filterDeck)
+    : oppColorFilteredLogs
+
+  const enrichedGames = filteredGamelogs.flatMap(g => { const e = enrichGame(g, myName); return e ? [e] : [] })
 
   const activeMyPlayerNum = activeGamelog
     ? (activeGamelog.myPlayerNum ?? getMyPlayerNum(activeGamelog, myName))
@@ -1699,11 +1708,23 @@ export function GamelogAnalyzerPage() {
               ))}
             </div>
           )}
-          {(filterDate || filterQueue || filterUser || filterMyColors || filterDeck) && (
+          {oppColorOptions.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">Opp Colors</span>
+              {oppColorOptions.map(k => (
+                <button key={k} onClick={() => setFilterOppColors(prev => prev === k ? null : k)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${filterOppColors === k ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'}`}
+                >
+                  {k.split('/').map(c => <InkImg key={c} color={c} size="w-5 h-5" />)}
+                </button>
+              ))}
+            </div>
+          )}
+          {(filterDate || filterQueue || filterUser || filterMyColors || filterOppColors || filterDeck) && (
             <div className="text-xs text-gray-400">
               {enrichedGames.length} game{enrichedGames.length !== 1 ? 's' : ''} shown
               {' · '}
-              <button onClick={() => { setFilterDate(null); setFilterQueue(null); setFilterUser(null); setFilterMyColors(null); setFilterDeck(null) }} className="underline hover:text-gray-600">Clear filters</button>
+              <button onClick={() => { setFilterDate(null); setFilterQueue(null); setFilterUser(null); setFilterMyColors(null); setFilterOppColors(null); setFilterDeck(null) }} className="underline hover:text-gray-600">Clear filters</button>
             </div>
           )}
         </div>
@@ -1829,7 +1850,11 @@ export function GamelogAnalyzerPage() {
       {gamelogs.length > 0 && (
         <div className="mt-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{gamelogs.length} game{gamelogs.length !== 1 ? 's' : ''}</span>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {filteredGamelogs.length === gamelogs.length
+                ? `${gamelogs.length} game${gamelogs.length !== 1 ? 's' : ''}`
+                : `${filteredGamelogs.length} of ${gamelogs.length} game${gamelogs.length !== 1 ? 's' : ''}`}
+            </span>
             <div className="flex gap-2">
               <button
                 onClick={() => createGameExportZip(gamelogs, 'lorcana-games')}
@@ -1845,8 +1870,11 @@ export function GamelogAnalyzerPage() {
               </button>
             </div>
           </div>
+          {filteredGamelogs.length === 0 && (
+            <p className="text-sm text-gray-400 py-2">No games match the current filters.</p>
+          )}
           <div className="space-y-1">
-          {gamelogs.map(g => {
+          {filteredGamelogs.map(g => {
             const isActive = activeId === g.id
             const myNum = g.myPlayerNum
             const won = myNum != null && (g.winner === myNum || g.winner === String(myNum))

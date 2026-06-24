@@ -173,6 +173,7 @@ export async function fetchDeck(id) {
   })
 
   if (res.status === 401) throw new Error('Invalid or expired API token')
+  if (res.status === 404) { const e = new Error('Deck not found'); e.status = 404; throw e }
   if (!res.ok) throw new Error(`API error ${res.status}`)
 
   return res.json() // { deck: DeckDetail }

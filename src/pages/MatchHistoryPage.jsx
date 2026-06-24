@@ -7,6 +7,16 @@ import { useCards } from '../hooks/useCards'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
 const DECK_DETAILS_KEY = 'lorcana_deck_details'
+const DELETED_DECKS_KEY = 'lorcana_deleted_deck_ids'
+
+function getDeletedDeckIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(DELETED_DECKS_KEY) ?? '[]')) } catch { return new Set() }
+}
+function markDeckDeleted(id) {
+  const ids = getDeletedDeckIds()
+  ids.add(id)
+  localStorage.setItem(DELETED_DECKS_KEY, JSON.stringify([...ids]))
+}
 
 function DeckCardList({ cardIds, cardIdToName }) {
   const counts = {}
@@ -503,8 +513,13 @@ export function MatchHistoryPage() {
 
   // Background-fetch deck details for all constructed decks with a real deckId
   useEffect(() => {
+    const deletedIds = getDeletedDeckIds()
     for (const { deckId } of deckStats) {
       if (!deckId || fetchedDeckIds.current.has(deckId)) continue
+      if (deletedIds.has(deckId)) {
+        setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'deleted', deck: null } }))
+        continue
+      }
       fetchedDeckIds.current.add(deckId)
       setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loading', deck: null } }))
       fetchDeck(deckId)
@@ -516,7 +531,14 @@ export function MatchHistoryPage() {
             localStorage.setItem(DECK_DETAILS_KEY, JSON.stringify(cached))
           }
         })
-        .catch(() => setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'error', deck: null } })))
+        .catch(err => {
+          if (err?.status === 404) {
+            markDeckDeleted(deckId)
+            setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'deleted', deck: null } }))
+          } else {
+            setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'error', deck: null } }))
+          }
+        })
     }
   }, [deckStats]) // eslint-disable-line react-hooks/exhaustive-deps
 

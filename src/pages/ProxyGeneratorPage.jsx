@@ -30,6 +30,17 @@ function chunk(arr, size) {
   return result
 }
 
+// Each blank-line-separated paragraph becomes one ability entry.
+// **Keyword** rest → { name, effect }; otherwise → { fullText }
+function parseAbilities(text) {
+  const blocks = text.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean)
+  return blocks.map(block => {
+    const match = block.match(/^\*\*(.+?)\*\*\s*([\s\S]*)$/)
+    if (match) return { name: match[1].trim(), effect: match[2].trim() }
+    return { fullText: block }
+  })
+}
+
 function buildCustomCardObject(fields) {
   const { abilityText, subtypesText, color1, color2, ...rest } = fields
   const color = color1 && color2 ? `${color1}/${color2}` : (color1 || color2 || '')
@@ -38,7 +49,7 @@ function buildCustomCardObject(fields) {
     ...rest,
     color,
     subtypes,
-    abilities: abilityText.trim() ? [{ fullText: abilityText.trim() }] : [],
+    abilities: parseAbilities(abilityText),
     effects: [],
     artistsText: 'Custom',
     setCode: 'CUSTOM',
@@ -200,7 +211,7 @@ function CustomCardForm({ onAdd }) {
         <textarea
           className={inputCls + ' resize-y'}
           rows={3}
-          placeholder="Bodyguard (This character may enter play exerted. An opposing character who challenges one of your characters must instead challenge this one if able.)"
+          placeholder={"**Shift** 2\n\n**Evasive**\n\n**Welcome Return** — Whenever this character quests, you may return a chosen character with cost 1 to your hand."}
           value={form.abilityText}
           onChange={e => set('abilityText', e.target.value)}
         />

@@ -129,6 +129,8 @@ function StatsBar({ card: c }) {
 }
 
 function AbilityText({ ability, first }) {
+  // effect is italic when it looks like a parenthetical keyword explanation
+  const effectIsItalic = ability.effect && ability.effect.trimStart().startsWith('(')
   return (
     <div style={{ marginBottom: '3pt' }}>
       {!first && (
@@ -138,12 +140,14 @@ function AbilityText({ ability, first }) {
         ? (
           <span>
             <span style={{ fontWeight: 'bold', fontFamily: 'Arial, sans-serif' }}>
-              {ability.name}{' '}
+              {ability.name}{ability.effect ? ' ' : ''}
             </span>
-            <span style={{ fontStyle: 'italic' }}>{ability.effect}</span>
+            {ability.effect && (
+              <span style={{ fontStyle: effectIsItalic ? 'italic' : 'normal' }}>{ability.effect}</span>
+            )}
           </span>
         )
-        : <span>{ability.fullText}</span>
+        : <span style={{ whiteSpace: 'pre-wrap' }}>{ability.fullText}</span>
       }
     </div>
   )

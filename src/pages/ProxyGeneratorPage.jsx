@@ -5,16 +5,20 @@ import { ProxyCard } from '../components/ProxyCard'
 
 const CARDS_PER_SHEET = 9
 
+const INK_COLORS = ['Amber', 'Amethyst', 'Emerald', 'Ruby', 'Sapphire', 'Steel']
+
 const BLANK_CUSTOM = {
   name: '',
   version: '',
   type: 'Character',
   cost: 3,
-  color: '',
+  color1: '',
+  color2: '',
   inkwell: true,
   strength: 2,
   willpower: 2,
   lore: 1,
+  subtypesText: '',
   abilityText: '',
 }
 
@@ -27,12 +31,15 @@ function chunk(arr, size) {
 }
 
 function buildCustomCardObject(fields) {
-  const { abilityText, ...rest } = fields
+  const { abilityText, subtypesText, color1, color2, ...rest } = fields
+  const color = color1 && color2 ? `${color1}/${color2}` : (color1 || color2 || '')
+  const subtypes = subtypesText.split(',').map(s => s.trim()).filter(Boolean)
   return {
     ...rest,
+    color,
+    subtypes,
     abilities: abilityText.trim() ? [{ fullText: abilityText.trim() }] : [],
     effects: [],
-    subtypes: [],
     artistsText: 'Custom',
     setCode: 'CUSTOM',
     number: '',
@@ -45,9 +52,10 @@ function CustomCardForm({ onAdd }) {
 
   const set = (key, value) => setForm(prev => ({ ...prev, [key]: value }))
 
-  const handleAdd = () => {
+  const handleAdd = (qty) => {
     if (!form.name.trim()) return
-    onAdd(buildCustomCardObject(form))
+    const card = buildCustomCardObject(form)
+    for (let i = 0; i < qty; i++) onAdd(card)
     setForm(BLANK_CUSTOM)
   }
 
@@ -60,6 +68,13 @@ function CustomCardForm({ onAdd }) {
   const labelCls = 'block text-xs font-medium text-gray-600 mb-1'
   const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-black'
   const numInputCls = inputCls + ' text-center'
+
+  const colorOptions = (
+    <>
+      <option value="">—</option>
+      {INK_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+    </>
+  )
 
   return (
     <div className="border border-gray-200 rounded-lg bg-white p-5 mb-6">
@@ -100,7 +115,7 @@ function CustomCardForm({ onAdd }) {
         </div>
       </div>
 
-      {/* Row 2: cost + color + inkable + strength + willpower + lore */}
+      {/* Row 2: cost + ink colors + inkable + stats */}
       <div className="flex flex-wrap gap-3 mb-3">
         <div style={{ width: '60px' }}>
           <label className={labelCls}>Cost</label>
@@ -111,20 +126,16 @@ function CustomCardForm({ onAdd }) {
             onChange={e => set('cost', Number(e.target.value))}
           />
         </div>
-        <div style={{ minWidth: '120px', flex: 1 }}>
+        <div style={{ minWidth: '110px', flex: 1 }}>
           <label className={labelCls}>Ink color</label>
-          <select
-            className={inputCls}
-            value={form.color}
-            onChange={e => set('color', e.target.value)}
-          >
-            <option value="">—</option>
-            <option value="Amber">Amber</option>
-            <option value="Amethyst">Amethyst</option>
-            <option value="Emerald">Emerald</option>
-            <option value="Ruby">Ruby</option>
-            <option value="Sapphire">Sapphire</option>
-            <option value="Steel">Steel</option>
+          <select className={inputCls} value={form.color1} onChange={e => set('color1', e.target.value)}>
+            {colorOptions}
+          </select>
+        </div>
+        <div style={{ minWidth: '110px', flex: 1 }}>
+          <label className={labelCls}>Second ink <span className="font-normal text-gray-400">(dual)</span></label>
+          <select className={inputCls} value={form.color2} onChange={e => set('color2', e.target.value)}>
+            {colorOptions}
           </select>
         </div>
         <div className="flex items-end pb-1 gap-1">
@@ -172,7 +183,18 @@ function CustomCardForm({ onAdd }) {
         )}
       </div>
 
-      {/* Row 3: ability text */}
+      {/* Row 3: subtypes */}
+      <div className="mb-3">
+        <label className={labelCls}>Subtypes / attributes <span className="font-normal text-gray-400">(comma-separated)</span></label>
+        <input
+          className={inputCls}
+          placeholder="Hero, Storyborn, Inventor"
+          value={form.subtypesText}
+          onChange={e => set('subtypesText', e.target.value)}
+        />
+      </div>
+
+      {/* Row 4: ability text */}
       <div className="mb-4">
         <label className={labelCls}>Ability text</label>
         <textarea
@@ -184,13 +206,19 @@ function CustomCardForm({ onAdd }) {
         />
       </div>
 
-      <button
-        onClick={handleAdd}
-        disabled={!form.name.trim()}
-        className="bg-black text-white text-sm px-4 py-2 rounded hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        Add to sheet
-      </button>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500">Add to sheet:</span>
+        {[1, 2, 3, 4].map(qty => (
+          <button
+            key={qty}
+            onClick={() => handleAdd(qty)}
+            disabled={!form.name.trim()}
+            className="w-9 h-8 text-sm font-medium border border-gray-300 rounded hover:bg-black hover:text-white hover:border-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            ×{qty}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -271,7 +299,7 @@ export function ProxyGeneratorPage() {
           </div>
 
           {showCustomForm && (
-            <CustomCardForm onAdd={(card) => { addCard(card); setShowCustomForm(false) }} />
+            <CustomCardForm onAdd={addCard} />
           )}
 
           {selected.length === 0 && !showCustomForm ? (

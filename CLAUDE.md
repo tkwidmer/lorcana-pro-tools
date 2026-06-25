@@ -7,11 +7,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev        # Start Vite dev server (port 5173 or $PORT)
 npm run build      # Build app + package Chrome extension
+npm run build:ext  # Package the Chrome extension only
 npm run lint       # ESLint (React hooks + refresh rules)
 npm run preview    # Preview production build locally
+npm test           # Run the Vitest unit suite once
+npm run test:watch # Run Vitest in watch mode
 ```
 
-There is no test suite — validation is manual.
+Unit tests live in `src/lib/__tests__/` (Vitest) and cover the pure-logic libs:
+`gameStats`, `handInference`, `inkColors`, `leakDetection`, `parseGamelog`,
+`tournamentApi`. CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
+UI and integration behavior is still validated manually.
 
 ## Pull Requests
 
@@ -22,7 +28,7 @@ When creating a pull request:
 
 ## Stack
 
-React 19 + React Router 7 + Tailwind CSS 4 + Vite 8, deployed on Vercel. Serverless API routes live in `/api/*.ts` (TypeScript). Authentication via Supabase + Google OAuth. All game data is stored client-side in IndexedDB or localStorage — Supabase is used only for auth, not as a data store.
+React 19 + React Router 7 + Tailwind CSS 4 + Vite 8, deployed on Vercel. Serverless API routes live in `/api/*.ts` (TypeScript). Authentication via Supabase + Google OAuth. All game data is stored client-side in IndexedDB or localStorage. Supabase stores only the auth session plus a small `profiles` table that records each user's supporter tier (`supporter`/`admin`) — no game data is stored server-side.
 
 ## Environment Variables
 
@@ -63,15 +69,19 @@ Defined in `src/App.jsx`:
 | `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
 | `/gamelog` | `GamelogViewerPage.jsx` | Load and display JSON gamelog files |
 | `/gamelog-analyzer` | `GamelogAnalyzerPage.jsx` | Gamelog draw sequence, hand info, and mulligan analysis |
-| `/hand-trainer` | `HandTrainerPage.jsx` | Practice inferring opponent's hand; compare guesses vs hypergeometric odds |
 | `/game-library` | `GameLibraryPage.jsx` | Team analytics — combine shared game exports, metagame breakdown, card frequency heatmaps |
 | `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
 | `/leaderboard` | `LeaderboardPage.jsx` | duels.ink top 50 players by queue, MMR distribution |
 | `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis |
 | `/lore-tracker` | `LoreTrackerPage.jsx` | Mobile in-game lore counter with tap controls and audit log |
+| `/admin` | `AdminPage.jsx` | Admin-only — search users by email and grant/revoke supporter access |
 
 **Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
+
+**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/game-history/:uuid`, `/players/:name`, `/match-history`, `/gamelog-analyzer`, `/game-library`, `/practice-plan`, `/tournament-lookup`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
+
+All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname`) so a render-time throw in one tool shows a fallback instead of white-screening the SPA; `Nav` sits outside the boundary and stays usable.
 
 Legacy redirects:
 - `/replay-analyzer` → `/gamelog-analyzer`
@@ -86,7 +96,9 @@ In `src/components/`:
 
 | File | Purpose |
 |---|---|
-| `Nav.jsx` | Top navigation bar — auth status, settings link; hidden on `/lore-tracker` |
+| `Nav.jsx` | Top navigation bar — settings link + a username dropdown (logout, plus an Admin link for admins); hidden on `/lore-tracker` |
+| `ErrorBoundary.jsx` | Class-based error boundary with a "Something broke" fallback (Try again / Reload / Back to tools; dev-only stack trace). Resets when its `resetKey` prop changes. Wraps the routes in `App.jsx` |
+| `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise a "Supporters only" gate (sign-in CTA when logged out). Reads `useSupporter` |
 | `GameView.jsx` | Unified game display — player panels (lore bar, ink meter, field, hand predictor), action log, export button; reused across `GameScraperPage`, `LibraryPage`, `GameHistoryDetailPage` |
 | `HandPredictor.jsx` | Bayesian hand inference display — shows top 12 cards with P(≥1 in hand) given observed deck + player profile |
 | `SearchBar.jsx` | Fuzzy card search dropdown with quantity selector (×1–×4); used by proxy generator |
@@ -100,7 +112,8 @@ In `src/hooks/`:
 
 | File | Returns | Purpose |
 |---|---|---|
-| `useAuth.js` | `{ user, isLoading, error }` | Supabase session — checks on mount and subscribes to auth state changes |
+| `useAuth.js` | `{ user, isLoading, error }` | Supabase session — checks on mount, subscribes to auth state changes, and ensures a `profiles` row exists for the user |
+| `useSupporter.js` | `{ user, isAdmin, isSupporter, tier, isLoading }` | Reads the user's `supporter_tier` from the `profiles` table; `isSupporter` is true for both `supporter` and `admin` |
 | `useCards.js` | `{ cards, loading, error }` | Fetches card data from `/api/cards`, falls back to IndexedDB cache via `cardsCache.js` |
 
 ### Shared Libraries
@@ -110,6 +123,7 @@ In `src/lib/`:
 | File | Purpose |
 |---|---|
 | `supabaseClient.js` | Supabase client init; exports `loginWithGoogle`, `logout`, `getSession`, `getCurrentUser` |
+| `access.js` | `SUPPORTER_PATHS` set + `isSupporterPath()` — single source of truth for supporter-gated routes (used by `App.jsx` and `HomePage`) |
 | `db.js` | IndexedDB abstraction for the `lorcana_pro_tools` DB — `openDB()`, `getTx()`, `promisify()` |
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
 | `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
@@ -119,8 +133,8 @@ In `src/lib/`:
 | `gameSnapshot.js` | Export/import game state as JSON files for sharing |
 | `playerProfiles.js` | Build opponent deck profiles and win rates from saved game history |
 | `handInference.js` | Hypergeometric P(≥1 in hand) calculator — powers `HandPredictor` |
-| `handReading.js` | Hand reading inference engine for `HandTrainerPage` |
-| `leakDetection.js` | Detect when hand information is leaked (quests, zones) |
+| `leakDetection.js` | Detect when hand information is leaked (quests, zones); used by `PracticePlanPage` and `GamelogAnalyzerPage` |
+| `tournamentShareImage.js` | Renders a shareable summary image (canvas) for tournament/practice results |
 | `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
 | `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
 | `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
@@ -130,6 +144,13 @@ In `src/lib/`:
 | `gameExport.js` | Serialize game records for sharing (used by `GameLibraryPage`) |
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
+
+**Dead / unused files (not imported anywhere):** `src/pages/GameHistoryPage.jsx`, `src/pages/PlayersPage.jsx`, `src/pages/SharedGamePage.jsx` (superseded by `LibraryPage`/`GameHistoryDetailPage`), and `src/lib/handReading.js` (was written for a hand-trainer tool that no longer exists). Safe to delete; don't extend them.
+
+### Access Control & Supporters
+
+- Supabase `profiles` table (`supabase/migrations/001_profiles.sql`, `002_admin.sql`) holds `supporter_tier` (`supporter` | `admin`), `supporter_source`, `supporter_since`. RLS lets users read their own row; only admins (via the `is_admin()` security-definer function, with `tkwidmer@gmail.com` as a JWT-email bootstrap fallback) may update tiers. A trigger auto-creates a profile row on signup.
+- `useSupporter` reads the tier; `SupporterRoute` gates the routes in `SUPPORTER_PATHS`; `AdminPage` is the UI for granting/revoking access. Gating is client-side UX only — the `/api/*` proxies do **not** check supporter status.
 
 ### API Routes
 
@@ -156,15 +177,16 @@ LorcanaJSON card data (`/api/cards`) is a rewrite, not a serverless function —
 | IndexedDB `lorcana_pro_tools` v2 | `games` store (key: `uuid`) | Scraped game snapshots from `GameScraperPage` |
 | IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
 | IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `GamelogAnalyzerPage` |
-| localStorage `duels_api_token` | — | duels.ink Bearer token |
+| localStorage `duels_api_tokens` | — | Array of duels.ink Bearer tokens (multi-account); `duels_api_active_token_id` selects the active one. Legacy single-token `duels_api_token` is auto-migrated on first access (see `duelsApi.js`) |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
-| localStorage (various) | — | Form state for `DrawOddsPage`, filter state, etc. |
+| localStorage (various) | — | Form state for `DrawOddsPage`, filter state, lore tracker (`lorcana_lore_tracker`), etc. |
 | `chrome.storage.local` | `lorcana_active_games` | Active game states captured by the Chrome extension (2-hour TTL) |
-| Supabase | auth session only | Google OAuth user session; no game data stored server-side |
+| Supabase `auth` | session | Google OAuth user session |
+| Supabase `profiles` table | row per user | Supporter tier metadata only (see Access Control); no game data stored server-side |
 
 ### External APIs
 
-**duels.ink** — Authenticated via Bearer token stored in localStorage (`duels_api_token`). Token is passed through the Vercel proxy routes. No server-side validation.
+**duels.ink** — Authenticated via Bearer token. Tokens are stored in localStorage (`duels_api_tokens`, with `duels_api_active_token_id` choosing the active account) and managed on the Settings page. The active token is passed through the Vercel proxy routes. No server-side validation.
 
 **LorcanaJSON** — Card data from `https://lorcanajson.org/files/current/en/allCards.json`. Cached in IndexedDB after first load. In dev, `vite.config.js` proxies `/api/cards`; in production, `vercel.json` rewrites it.
 

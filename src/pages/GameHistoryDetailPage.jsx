@@ -18,7 +18,7 @@ export function GameHistoryDetailPage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-4">
-        <Link to="/game-history" className="text-xs text-gray-500 hover:text-gray-900">
+        <Link to="/library?tab=history" className="text-xs text-gray-500 hover:text-gray-900">
           ← Back to history
         </Link>
       </div>
@@ -28,7 +28,7 @@ export function GameHistoryDetailPage() {
       ) : !record ? (
         <div className="text-center py-12 text-gray-500">
           <div className="text-sm mb-2">Game not found.</div>
-          <Link to="/game-history" className="text-sm text-blue-600 hover:underline">
+          <Link to="/library?tab=history" className="text-sm text-blue-600 hover:underline">
             Back to history →
           </Link>
         </div>

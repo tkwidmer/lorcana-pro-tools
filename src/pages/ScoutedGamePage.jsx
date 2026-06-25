@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getGame } from '../lib/gameHistory'
+import { getGame } from '../lib/scoutedGames'
 import { GameView } from '../components/GameView'
 
-export function GameHistoryDetailPage() {
+export function ScoutedGamePage() {
   const { uuid } = useParams()
   const [record, setRecord] = useState(null)
   const [loading, setLoading] = useState(true)

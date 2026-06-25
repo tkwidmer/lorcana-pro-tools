@@ -62,14 +62,14 @@ Defined in `src/App.jsx`:
 | `/deck-insights` | `DrawOddsPage.jsx` | Comprehensive deck analytics: draw odds, mulligan/scry simulation, keyword analysis, brickability, quest pressure curves |
 | `/game-scraper` | `GameScraperPage.jsx` | Live game state viewer via Chrome extension (automatic) or bookmarklet (manual) |
 | `/library` | `LibraryPage.jsx` | Saved games (`?tab=history`) and opponent player profiles (`?tab=players`) |
-| `/game-history/:uuid` | `GameHistoryDetailPage.jsx` | Full game state replay with action log |
+| `/scouting/game/:uuid` | `ScoutedGamePage.jsx` | Full game state replay with action log (single scraped snapshot) |
 | `/players/:name` | `PlayerProfilePage.jsx` | Per-opponent stats — win rates, deck archetypes, matchup data |
 | `/deck-comparison` | `DeckComparisonPage.jsx` | Paste two decklists to highlight differences |
 | `/settings` | `SettingsPage.jsx` | Auth management and preferences |
 | `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
 | `/gamelog` | `GamelogViewerPage.jsx` | Load and display JSON gamelog files |
 | `/gamelog-analyzer` | `GamelogAnalyzerPage.jsx` | Gamelog draw sequence, hand info, and mulligan analysis |
-| `/game-library` | `GameLibraryPage.jsx` | Team analytics — combine shared game exports, metagame breakdown, card frequency heatmaps |
+| `/team-analytics` | `TeamAnalyticsPage.jsx` | Team analytics — combine shared game exports (imported gamelogs), metagame breakdown, card frequency heatmaps |
 | `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
 | `/leaderboard` | `LeaderboardPage.jsx` | duels.ink top 50 players by queue, MMR distribution |
@@ -79,12 +79,13 @@ Defined in `src/App.jsx`:
 
 **Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
 
-**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/game-history/:uuid`, `/players/:name`, `/match-history`, `/gamelog-analyzer`, `/game-library`, `/practice-plan`, `/tournament-lookup`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
+**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/gamelog-analyzer`, `/team-analytics`, `/practice-plan`, `/tournament-lookup`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
 
 All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname`) so a render-time throw in one tool shows a fallback instead of white-screening the SPA; `Nav` sits outside the boundary and stays usable.
 
 Legacy redirects:
 - `/replay-analyzer` → `/gamelog-analyzer`
+- `/game-library` → `/team-analytics`
 - `/shared` → `/library`
 - `/legality-checker` → `/deck-insights`
 
@@ -97,7 +98,7 @@ In `src/components/`:
 | `Nav.jsx` | Top navigation bar — settings link + a username dropdown (logout, plus an Admin link for admins); hidden on `/lore-tracker` |
 | `ErrorBoundary.jsx` | Class-based error boundary with a "Something broke" fallback (Try again / Reload / Back to tools; dev-only stack trace). Resets when its `resetKey` prop changes. Wraps the routes in `App.jsx` |
 | `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise a "Supporters only" gate (sign-in CTA when logged out). Reads `useSupporter` |
-| `GameView.jsx` | Unified game display — player panels (lore bar, ink meter, field, hand predictor), action log, export button; reused across `GameScraperPage`, `LibraryPage`, `GameHistoryDetailPage` |
+| `GameView.jsx` | Unified game display — player panels (lore bar, ink meter, field, hand predictor), action log, export button; reused across `GameScraperPage`, `LibraryPage`, `ScoutedGamePage` |
 | `HandPredictor.jsx` | Bayesian hand inference display — shows top 12 cards with P(≥1 in hand) given observed deck + player profile |
 | `SearchBar.jsx` | Fuzzy card search dropdown with quantity selector (×1–×4); used by proxy generator |
 | `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts |
@@ -125,7 +126,7 @@ In `src/lib/`:
 | `db.js` | IndexedDB abstraction for the `lorcana_pro_tools` DB — `openDB()`, `getTx()`, `promisify()` |
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
 | `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
-| `gameHistory.js` | IndexedDB CRUD for scraped game snapshots (`games` store, keyed by `uuid`) |
+| `scoutedGames.js` | IndexedDB CRUD for scraped game snapshots (`lorcana_pro_tools` DB, `games` store, keyed by `uuid`) — powers the Scouting Library |
 | `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
 | `gameStats.js` | Aggregate stats across game records — matchups, card plays, ink curves |
 | `gameSnapshot.js` | Export/import game state as JSON files for sharing |
@@ -139,7 +140,7 @@ In `src/lib/`:
 | `duelsApi.js` | duels.ink API client — match history, gamelog, replay fetches |
 | `leaderboardApi.js` | Fetches duels.ink ranked leaderboards via `/api/duels-leaderboard` |
 | `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
-| `gameExport.js` | Serialize game records for sharing (used by `GameLibraryPage`) |
+| `gameExport.js` | Serialize game records for sharing (used by `TeamAnalyticsPage`) |
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
 
@@ -237,7 +238,7 @@ Key fields on game objects from the duels.ink API:
 
 ### Winrate Matrix & Metagame Analysis
 
-`WinrateMatrixPage` and `GameLibraryPage` both use game records from `gameHistory.js`. The matrix is built by `buildWinrateMatrix.js`:
+`TeamAnalyticsPage` builds its matchup matrix from imported gamelogs (`gamelogHistory.js`) via `buildWinrateMatrix.js`. (`WinrateMatrixPage` is unrelated — it pulls public meta stats from the duels.ink API via `fetchStats`, not local records.) `buildWinrateMatrix.js`:
 - Groups games by `(myColors, oppColors)` pair using sorted JSON string keys
 - Tracks wins, games, and first/second player splits per matchup
 - Returns `{ matchups, colorPairs, totalGames, winLossMatrix }` — the matrix is a nested map `[playerColorKey][oppColorKey]`

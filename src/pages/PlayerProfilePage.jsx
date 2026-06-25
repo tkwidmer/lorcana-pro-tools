@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getAllGames } from '../lib/gameHistory'
+import { getAllGames } from '../lib/scoutedGames'
 import { buildPlayerProfile } from '../lib/playerProfiles'
 import { resolveColors } from '../lib/inkColors'
 
@@ -101,7 +101,7 @@ function DeckCard({ deck }) {
                 return (
                   <Link
                     key={g.record.uuid}
-                    to={`/game-history/${g.record.uuid}`}
+                    to={`/scouting/game/${g.record.uuid}`}
                     className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded"
                   >
                     <span className={`w-12 font-medium ${won ? 'text-green-700' : lost ? 'text-red-700' : 'text-gray-400'}`}>

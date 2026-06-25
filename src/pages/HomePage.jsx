@@ -46,8 +46,8 @@ const SECTIONS = [
         description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
       },
       {
-        path: '/game-library',
-        name: 'Game Library',
+        path: '/team-analytics',
+        name: 'Team Analytics',
         description: 'Import shared game exports to build team-wide analytics — opponent metagame breakdown, card frequency by archetype, matchup matrix, and win rate trends.',
       },
       {

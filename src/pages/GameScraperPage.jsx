@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { resolveInkName } from '../lib/inkColors'
-import { saveGame } from '../lib/gameHistory'
+import { saveGame } from '../lib/scoutedGames'
 import { GameView } from '../components/GameView'
 
 // Cache for card data: { byId: {setCode-number -> {color, name, fullName}}, byName: {name/fullName -> {...}} }

@@ -145,8 +145,6 @@ In `src/lib/`:
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
 
-**Dead / unused files (not imported anywhere):** `src/pages/GameHistoryPage.jsx`, `src/pages/PlayersPage.jsx`, `src/pages/SharedGamePage.jsx` (superseded by `LibraryPage`/`GameHistoryDetailPage`), and `src/lib/handReading.js` (was written for a hand-trainer tool that no longer exists). Safe to delete; don't extend them.
-
 ### Access Control & Supporters
 
 - Supabase `profiles` table (`supabase/migrations/001_profiles.sql`, `002_admin.sql`) holds `supporter_tier` (`supporter` | `admin`), `supporter_source`, `supporter_since`. RLS lets users read their own row; only admins (via the `is_admin()` security-definer function, with `tkwidmer@gmail.com` as a JWT-email bootstrap fallback) may update tiers. A trigger auto-creates a profile row on signup.

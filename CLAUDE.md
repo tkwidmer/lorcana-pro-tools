@@ -85,8 +85,6 @@ All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname
 
 Legacy redirects:
 - `/replay-analyzer` → `/gamelog-analyzer`
-- `/game-history` → `/library?tab=history`
-- `/players` → `/library?tab=players`
 - `/shared` → `/library`
 - `/legality-checker` → `/deck-insights`
 

@@ -59,8 +59,6 @@ function RoutedContent() {
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />
         {/* Redirects from old routes */}
-        <Route path="/game-history" element={<Navigate to="/library?tab=history" replace />} />
-        <Route path="/players" element={<Navigate to="/library?tab=players" replace />} />
         <Route path="/shared" element={<Navigate to="/library" replace />} />
         <Route path="/legality-checker" element={<Navigate to="/deck-insights" replace />} />
       </Routes>

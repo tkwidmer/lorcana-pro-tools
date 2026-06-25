@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Nav } from './components/Nav'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { HomePage } from './pages/HomePage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { TournamentCutPage } from './pages/TournamentCutPage'
@@ -25,10 +26,13 @@ import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { AdminPage } from './pages/AdminPage'
 import { SupporterRoute } from './components/SupporterRoute'
 
-export default function App() {
+function RoutedContent() {
+  const location = useLocation()
   return (
-    <BrowserRouter>
-      <Nav />
+    // Reset the boundary on navigation so a crashed page doesn't persist its
+    // fallback after the user moves elsewhere. Nav lives outside the boundary
+    // so it stays usable even when the current page has thrown.
+    <ErrorBoundary resetKey={location.pathname}>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -60,6 +64,15 @@ export default function App() {
         <Route path="/shared" element={<Navigate to="/library" replace />} />
         <Route path="/legality-checker" element={<Navigate to="/deck-insights" replace />} />
       </Routes>
+    </ErrorBoundary>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Nav />
+      <RoutedContent />
     </BrowserRouter>
   )
 }

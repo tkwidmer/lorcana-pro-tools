@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { isSupporterPath } from '../lib/access'
 
 const SECTIONS = [
   {
@@ -99,14 +100,22 @@ const SECTIONS = [
 ]
 
 function ToolCard({ tool }) {
+  const supporterOnly = isSupporterPath(tool.path)
   return (
     <Link
       to={tool.path}
       className="group block border border-gray-200 rounded-lg p-6 hover:border-gray-900 transition-colors"
     >
-      <h3 className="text-base font-bold text-gray-900 mb-2 group-hover:underline">
-        {tool.name}
-      </h3>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h3 className="text-base font-bold text-gray-900 group-hover:underline">
+          {tool.name}
+        </h3>
+        {supporterOnly && (
+          <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
+            Supporters
+          </span>
+        )}
+      </div>
       <p className="text-sm text-gray-500 leading-relaxed mb-4">
         {tool.description}
       </p>

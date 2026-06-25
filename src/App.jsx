@@ -23,6 +23,7 @@ import { LoreTrackerPage } from './pages/LoreTrackerPage'
 import { LoginPage } from './pages/LoginPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { AdminPage } from './pages/AdminPage'
+import { SupporterRoute } from './components/SupporterRoute'
 
 export default function App() {
   return (
@@ -35,22 +36,22 @@ export default function App() {
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
         <Route path="/cut-calculator" element={<TournamentCutPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
-        <Route path="/deck-insights" element={<DeckInsightsPage />} />
+        <Route path="/deck-insights" element={<SupporterRoute><DeckInsightsPage /></SupporterRoute>} />
         <Route path="/replay-analyzer" element={<Navigate to="/gamelog-analyzer" replace />} />
-        <Route path="/game-scraper" element={<GameScraperPage />} />
-        <Route path="/library" element={<LibraryPage />} />
-        <Route path="/game-history/:uuid" element={<GameHistoryDetailPage />} />
-        <Route path="/players/:name" element={<PlayerProfilePage />} />
+        <Route path="/game-scraper" element={<SupporterRoute><GameScraperPage /></SupporterRoute>} />
+        <Route path="/library" element={<SupporterRoute><LibraryPage /></SupporterRoute>} />
+        <Route path="/game-history/:uuid" element={<SupporterRoute><GameHistoryDetailPage /></SupporterRoute>} />
+        <Route path="/players/:name" element={<SupporterRoute><PlayerProfilePage /></SupporterRoute>} />
         <Route path="/deck-comparison" element={<DeckComparisonPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/match-history" element={<MatchHistoryPage />} />
+        <Route path="/match-history" element={<SupporterRoute><MatchHistoryPage /></SupporterRoute>} />
         <Route path="/gamelog" element={<GamelogViewerPage />} />
-        <Route path="/gamelog-analyzer" element={<GamelogAnalyzerPage />} />
-<Route path="/game-library" element={<GameLibraryPage />} />
+        <Route path="/gamelog-analyzer" element={<SupporterRoute><GamelogAnalyzerPage /></SupporterRoute>} />
+        <Route path="/game-library" element={<SupporterRoute><GameLibraryPage /></SupporterRoute>} />
         <Route path="/winrate-matrix" element={<WinrateMatrixPage />} />
-        <Route path="/practice-plan" element={<PracticePlanPage />} />
+        <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
-        <Route path="/tournament-lookup" element={<TournamentLookupPage />} />
+        <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />
         {/* Redirects from old routes */}

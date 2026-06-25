@@ -31,6 +31,7 @@ export function useSupporter() {
   }, [user, authLoading])
 
   return {
+    user,
     isAdmin: tier === 'admin',
     isSupporter: tier === 'supporter' || tier === 'admin',
     tier,

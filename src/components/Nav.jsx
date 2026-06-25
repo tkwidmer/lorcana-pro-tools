@@ -2,7 +2,62 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useSupporter } from '../hooks/useSupporter'
 import { logout } from '../lib/supabaseClient'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+
+function UserMenu({ user, isAdmin, onLogout, isLoggingOut }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <span>{user.email?.split('@')[0]}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
+        >
+          {isAdmin && (
+            <Link
+              to="/admin"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Admin
+            </Link>
+          )}
+          <button
+            role="menuitem"
+            onClick={() => { setOpen(false); onLogout() }}
+            disabled={isLoggingOut}
+            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {isLoggingOut ? 'Logging out…' : 'Logout'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function Nav() {
   const { pathname } = useLocation()
@@ -85,18 +140,12 @@ export function Nav() {
           </Link>
 
           {user ? (
-            <>
-              <span className="text-sm text-gray-500">
-                {user.email?.split('@')[0]}
-              </span>
-              <button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="text-sm text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-50"
-              >
-                {isLoggingOut ? 'Logging out...' : 'Logout'}
-              </button>
-            </>
+            <UserMenu
+              user={user}
+              isAdmin={isAdmin}
+              onLogout={handleLogout}
+              isLoggingOut={isLoggingOut}
+            />
           ) : (
             <Link
               to="/login"

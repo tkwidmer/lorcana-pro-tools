@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getToken, getTokens, getActiveTokenId, setTokenUserId, fetchMatchHistory, fetchGamelogBuffer, fetchGamelogManifest, fetchDecks, fetchDeck } from '../lib/duelsApi'
+import { getToken, getTokens, getActiveTokenId, setTokenUserId, fetchMatchHistory, fetchGamelogBuffer, fetchDecks, fetchDeck } from '../lib/duelsApi'
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { useCards } from '../hooks/useCards'
@@ -317,61 +317,6 @@ function FilterRow({ label, children }) {
   )
 }
 
-function DeckFilterPills({ deckOptions, deckNames, filterDeck, onSelect, onRename }) {
-  const [editingFp, setEditingFp] = useState(null)
-  const [editValue, setEditValue] = useState('')
-  const inputRef = useRef(null)
-
-  function startEdit(fp, currentName) {
-    setEditingFp(fp)
-    setEditValue(currentName)
-    setTimeout(() => inputRef.current?.focus(), 0)
-  }
-
-  function commitEdit() {
-    if (editingFp) onRename(editingFp, editValue)
-    setEditingFp(null)
-  }
-
-  return (
-    <FilterRow label="My Deck">
-      {deckOptions.map(({ fp, colors }, i) => {
-        const name = deckNames[fp] || null
-        const isActive = filterDeck === fp
-        const label = name ?? (deckOptions.length > 1 ? `Deck ${i + 1}` : 'My Deck')
-        return (
-          <div key={fp} className="flex items-center gap-0.5">
-            <button
-              onClick={() => onSelect(fp)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-colors text-xs ${isActive ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
-            >
-              <InkIcons colors={colors} />
-              <span>{label}</span>
-            </button>
-            {editingFp === fp ? (
-              <input
-                ref={inputRef}
-                value={editValue}
-                onChange={e => setEditValue(e.target.value)}
-                onBlur={commitEdit}
-                onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingFp(null) }}
-                className="ml-1 text-xs border border-gray-300 rounded px-1.5 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-gray-400"
-                placeholder="Deck name…"
-              />
-            ) : (
-              <button
-                onClick={() => startEdit(fp, deckNames[fp] ?? '')}
-                className="ml-0.5 text-gray-300 hover:text-gray-600 transition-colors text-xs"
-                title="Rename deck"
-              >✎</button>
-            )}
-          </div>
-        )
-      })}
-    </FilterRow>
-  )
-}
-
 export function MatchHistoryPage() {
   const navigate = useNavigate()
   const hasToken = Boolean(getToken())
@@ -667,12 +612,6 @@ export function MatchHistoryPage() {
     }
   }
 
-  function saveDeckName(fp, name) {
-    const updated = { ...deckNames, [fp]: name.trim() }
-    setDeckNames(updated)
-    localStorage.setItem(DECK_NAMES_KEY, JSON.stringify(updated))
-  }
-
   // Cascading filters — each layer narrows options for the next
 
   const dateFilterBounds = (() => {
@@ -709,7 +648,7 @@ export function MatchHistoryPage() {
   const oppColorOptions = [...new Set(afterMyColors.map(g => g.opp_deck_colors).filter(c => c && colorCount(c) <= 2))].sort()
   const afterOppColors = afterMyColors.filter(g => !filterOppColors || g.opp_deck_colors === filterOppColors)
 
-  const { deckOptions, seenDeckKeys } = useMemo(() => {
+  const { seenDeckKeys } = useMemo(() => {
     const options = []
     const keys = new Set()
     for (const g of afterOppColors) {

@@ -9,25 +9,31 @@ export function useSupporter() {
 
   useEffect(() => {
     if (authLoading) return
-
-    if (!user) {
-      setTier(null)
-      setIsLoading(false)
-      return
-    }
+    let cancelled = false
 
     const loadProfile = async () => {
+      if (!user) {
+        if (!cancelled) {
+          setTier(null)
+          setIsLoading(false)
+        }
+        return
+      }
+
       const { data } = await supabase
         .from('profiles')
         .select('supporter_tier')
         .eq('user_id', user.id)
         .single()
 
-      setTier(data?.supporter_tier ?? null)
-      setIsLoading(false)
+      if (!cancelled) {
+        setTier(data?.supporter_tier ?? null)
+        setIsLoading(false)
+      }
     }
 
     loadProfile()
+    return () => { cancelled = true }
   }, [user, authLoading])
 
   return {

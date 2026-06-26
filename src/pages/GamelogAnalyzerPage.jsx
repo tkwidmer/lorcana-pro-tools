@@ -1442,6 +1442,9 @@ export function GamelogAnalyzerPage() {
     { key: '21d', label: 'Last 21 days', days: 21 },
     { key: 'month', label: 'Last month', days: 30 },
   ]
+  // Reading the clock to compute a relative date-range cutoff for filtering; the
+  // value is only used for comparison, so a per-render read is intentional.
+  // eslint-disable-next-line react-hooks/purity
   const dateCutoff = filterDate ? Date.now() - (DATE_PRESETS.find(p => p.key === filterDate)?.days ?? 0) * 86400000 : null
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
   const dateFilteredLogs = dateCutoff ? gamelogs.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : gamelogs

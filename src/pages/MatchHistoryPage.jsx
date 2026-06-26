@@ -403,14 +403,6 @@ export function MatchHistoryPage() {
     }
   }
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (hasToken) {
-      load()
-      syncDeckNamesFromApi()
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
   async function syncDeckNamesFromApi() {
     try {
       const data = await fetchDecks()
@@ -432,6 +424,16 @@ export function MatchHistoryPage() {
       // silently ignore — deck names just won't be auto-filled
     }
   }
+
+  // Initial data load on mount. load() sets a loading flag synchronously, which
+  // is the intended behavior for a first fetch.
+  useEffect(() => {
+    if (!hasToken) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount
+    load()
+    syncDeckNamesFromApi()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const getDeckKey = useCallback((g) => g.your_deck_id ?? deckFingerprint(g.your_decklist), [])
 
@@ -462,6 +464,7 @@ export function MatchHistoryPage() {
     for (const { deckId } of deckStats) {
       if (!deckId || fetchedDeckIds.current.has(deckId)) continue
       if (deletedIds.has(deckId)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- background sync of fetch status
         setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'deleted', deck: null } }))
         continue
       }
@@ -485,7 +488,7 @@ export function MatchHistoryPage() {
           }
         })
     }
-  }, [deckStats]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deckStats])
 
   async function handleLoadInsights(deckStat) {
     setInsightsLoading(deckStat.key)

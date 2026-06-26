@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getAllGames } from '../lib/gameHistory'
+import { getAllGames } from '../lib/scoutedGames'
 import { buildPlayerProfile } from '../lib/playerProfiles'
 import { resolveColors } from '../lib/inkColors'
 
@@ -101,7 +101,7 @@ function DeckCard({ deck }) {
                 return (
                   <Link
                     key={g.record.uuid}
-                    to={`/game-history/${g.record.uuid}`}
+                    to={`/scouting/game/${g.record.uuid}`}
                     className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded"
                   >
                     <span className={`w-12 font-medium ${won ? 'text-green-700' : lost ? 'text-red-700' : 'text-gray-400'}`}>
@@ -147,7 +147,7 @@ export function PlayerProfilePage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-4">
-        <Link to="/players" className="text-xs text-gray-500 hover:text-gray-900">← All players</Link>
+        <Link to="/library?tab=players" className="text-xs text-gray-500 hover:text-gray-900">← All players</Link>
       </div>
 
       {loading ? (
@@ -155,7 +155,7 @@ export function PlayerProfilePage() {
       ) : !profile ? (
         <div className="text-center py-12 text-gray-500">
           <div className="text-sm mb-2">No games found for "{decodedName}".</div>
-          <Link to="/players" className="text-sm text-blue-600 hover:underline">All players →</Link>
+          <Link to="/library?tab=players" className="text-sm text-blue-600 hover:underline">All players →</Link>
         </div>
       ) : (
         <>

@@ -37,7 +37,7 @@ function saveImportedGameIds(ids) {
   localStorage.setItem(IMPORTED_GAMES_KEY, JSON.stringify(Array.from(ids)))
 }
 
-export function GameLibraryPage() {
+export function TeamAnalyticsPage() {
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { computeStats } from '../lib/gameStats'
 import { listPlayers } from '../lib/playerProfiles'
 import { parseSnapshot } from '../lib/gameSnapshot'
-import { getAllGames, deleteGame, clearAllGames, summarizeGame, saveGame as saveHistoryGame } from '../lib/gameHistory'
+import { getAllGames, deleteGame, clearAllGames, summarizeGame, saveGame as saveHistoryGame } from '../lib/scoutedGames'
 import { resolveColors } from '../lib/inkColors'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { GameView } from '../components/GameView'
@@ -127,7 +127,7 @@ function ImportPanel() {
                 {saved ? 'Saved' : 'Save to history'}
               </button>
               {saved && snapshot.uuid && (
-                <Link to={`/game-history/${snapshot.uuid}`} className="text-xs text-blue-600 hover:underline">
+                <Link to={`/scouting/game/${snapshot.uuid}`} className="text-xs text-blue-600 hover:underline">
                   View →
                 </Link>
               )}
@@ -252,7 +252,7 @@ function HistoryTab({ records, onDelete, onClearAll }) {
       </div>
       <div className="grid grid-cols-1 gap-2">
         {summaries.map(s => (
-          <Link key={s.uuid} to={`/game-history/${s.uuid}`}
+          <Link key={s.uuid} to={`/scouting/game/${s.uuid}`}
             className="group flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-900 transition-colors">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">

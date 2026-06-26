@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { inferHand } from '../lib/handInference'
-import { getAllGames } from '../lib/gameHistory'
+import { getAllGames } from '../lib/scoutedGames'
 import { buildPlayerProfile } from '../lib/playerProfiles'
 import { matchupKey } from '../lib/inkColors'
 

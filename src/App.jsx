@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Nav } from './components/Nav'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { routeTitle } from './lib/routeTitle'
 import { HomePage } from './pages/HomePage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { TournamentCutPage } from './pages/TournamentCutPage'
@@ -28,6 +30,11 @@ import { SupporterRoute } from './components/SupporterRoute'
 
 function RoutedContent() {
   const location = useLocation()
+
+  useEffect(() => {
+    document.title = routeTitle(location.pathname)
+  }, [location.pathname])
+
   return (
     // Reset the boundary on navigation so a crashed page doesn't persist its
     // fallback after the user moves elsewhere. Nav lives outside the boundary

@@ -235,33 +235,45 @@ export function generateShareImage({ playerName, rank, totalPlayers, record, mat
   return canvas
 }
 
-export function downloadShareImage(canvas, filename = 'tournament-result.jpg') {
-  canvas.toBlob(
-    (blob) => {
-      const url = URL.createObjectURL(blob)
-      const a   = document.createElement('a')
-      a.href     = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
-    },
-    'image/jpeg',
-    0.95,
-  )
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob)
+      else reject(new Error('Failed to render share image'))
+    }, type, quality)
+  })
+}
+
+export async function downloadShareImage(canvas, filename = 'tournament-result.jpg') {
+  const blob = await canvasToBlob(canvas, 'image/jpeg', 0.95)
+  const url = URL.createObjectURL(blob)
+  const a   = document.createElement('a')
+  a.href     = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export async function copyShareImageToClipboard(canvas) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      async (blob) => {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-          resolve()
-        } catch (e) {
-          reject(e)
-        }
-      },
-      'image/png',
-    )
-  })
+  const blob = await canvasToBlob(canvas, 'image/png')
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+}
+
+// Native share sheet (iOS/Android) — the only reliable way to "share" an
+// image on mobile, where clipboard image writes and anchor downloads are
+// inconsistently supported across browsers.
+export async function canNativeShareImage() {
+  if (!navigator.canShare) return false
+  const probe = new File([new Uint8Array([0])], 'probe.jpg', { type: 'image/jpeg' })
+  try {
+    return navigator.canShare({ files: [probe] })
+  } catch {
+    return false
+  }
+}
+
+export async function nativeShareImage(canvas, filename, title) {
+  const blob = await canvasToBlob(canvas, 'image/jpeg', 0.95)
+  const file = new File([blob], filename, { type: 'image/jpeg' })
+  await navigator.share({ files: [file], title })
 }

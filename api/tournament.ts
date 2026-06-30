@@ -7,31 +7,46 @@ function str(v: string | string[] | undefined): string | undefined {
   return v
 }
 
+// Tournament/round IDs are short alphanumeric tokens (numeric or UUID-style).
+// Reject anything else so they can't traverse paths or inject into the upstream
+// query string.
+const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+function clampInt(v: string | undefined, def: number, max: number): number {
+  const n = parseInt(v ?? '', 10)
+  if (!Number.isFinite(n) || n < 1) return def
+  return Math.min(n, max)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const type = str(req.query.type)
   const eventId = str(req.query.eventId)
   const roundId = str(req.query.roundId)
-  const page = str(req.query.page) ?? '1'
-  const pageSize = str(req.query.pageSize) ?? '10'
+  const page = clampInt(str(req.query.page), 1, 10000)
+  const pageSize = clampInt(str(req.query.pageSize), 10, 200)
 
   let url: string
 
   switch (type) {
     case 'event':
       if (!eventId) return res.status(400).json({ error: 'Missing eventId' })
-      url = `${RAVEN_BASE}/events/${eventId}`
+      if (!ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
+      url = `${RAVEN_BASE}/events/${encodeURIComponent(eventId)}`
       break
     case 'registrations':
       if (!eventId) return res.status(400).json({ error: 'Missing eventId' })
-      url = `${RAVEN_BASE}/events/${eventId}/registrations/?page=${page}&page_size=${pageSize}`
+      if (!ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
+      url = `${RAVEN_BASE}/events/${encodeURIComponent(eventId)}/registrations/?page=${page}&page_size=${pageSize}`
       break
     case 'standings':
       if (!roundId) return res.status(400).json({ error: 'Missing roundId' })
-      url = `${RAVEN_BASE}/tournament-rounds/${roundId}/standings/paginated/?page=${page}&page_size=${pageSize}`
+      if (!ID_RE.test(roundId)) return res.status(400).json({ error: 'Invalid roundId' })
+      url = `${RAVEN_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/standings/paginated/?page=${page}&page_size=${pageSize}`
       break
     case 'matches':
       if (!roundId) return res.status(400).json({ error: 'Missing roundId' })
-      url = `${RAVEN_BASE}/tournament-rounds/${roundId}/matches/`
+      if (!ID_RE.test(roundId)) return res.status(400).json({ error: 'Invalid roundId' })
+      url = `${RAVEN_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/matches/`
       break
     default:
       return res.status(400).json({ error: 'Missing or invalid type param' })

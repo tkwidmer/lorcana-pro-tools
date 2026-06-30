@@ -1,5 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 
+// Only log request internals / return debug details outside production, so we
+// don't leak cookie presence, attempted endpoints, or error messages to clients.
+const DEBUG = process.env.NODE_ENV !== 'production'
+const log = DEBUG ? console.log : (..._args: unknown[]) => {}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { uuid } = req.query
 
@@ -13,7 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Forward cookies from the browser to duels.ink
   const cookies = req.headers.cookie || ''
-  console.log(`[Proxy] UUID: ${cleanUuid}, Cookies present: ${!!cookies}`)
+  log(`[Proxy] UUID: ${cleanUuid}, Cookies present: ${!!cookies}`)
 
   // Try multiple endpoints
   const endpoints = [
@@ -27,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const endpoint of endpoints) {
     try {
       const url = `https://duels.ink${endpoint}`
-      console.log(`[Proxy] Trying ${url}`)
+      log(`[Proxy] Trying ${url}`)
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -37,12 +42,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       })
 
-      console.log(`[Proxy] ${url} → ${response.status}`)
+      log(`[Proxy] ${url} → ${response.status}`)
       attempts.push({ endpoint, status: response.status })
 
       if (response.ok) {
         const data = await response.json()
-        console.log(`[Proxy] Success from ${endpoint}`)
+        log(`[Proxy] Success from ${endpoint}`)
         return res.status(200).json(data)
       }
 
@@ -51,15 +56,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         continue
       }
     } catch (e) {
-      console.log(`[Proxy] Error on ${endpoint}: ${e.message}`)
+      log(`[Proxy] Error on ${endpoint}: ${e.message}`)
       attempts.push({ endpoint, error: e.message })
       continue
     }
   }
 
-  console.log(`[Proxy] All endpoints failed:`, attempts)
+  log(`[Proxy] All endpoints failed:`, attempts)
   return res.status(404).json({
     error: 'Game not found or not accessible. Make sure you\'re logged into duels.ink in this browser and the spectate link is valid.',
-    debug: { attempts, hasCookies: !!cookies }
+    ...(DEBUG && { debug: { attempts, hasCookies: !!cookies } })
   })
 }

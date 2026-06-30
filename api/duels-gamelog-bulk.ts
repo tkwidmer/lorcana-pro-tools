@@ -10,9 +10,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Missing Bearer token' })
   }
 
+  const MAX_IDS = 500
   const { ids } = req.body ?? {}
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'ids must be a non-empty array' })
+  }
+  if (ids.length > MAX_IDS) {
+    return res.status(400).json({ error: `Too many ids (max ${MAX_IDS})` })
+  }
+  if (!ids.every((id) => typeof id === 'string')) {
+    return res.status(400).json({ error: 'ids must all be strings' })
   }
 
   try {

@@ -205,7 +205,16 @@ function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
   }
 
   const playerMatches = (allMatches ?? []).filter((m) => m.players.includes(playerId))
-  if (playerMatches.length === 0) return null
+  if (playerMatches.length === 0) {
+    return (
+      <div className="border border-gray-200 rounded-lg p-4 bg-white">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Match History</h3>
+        <p className="text-sm text-gray-500">
+          No completed match data available for this player yet. The share card becomes available once at least one match result loads.
+        </p>
+      </div>
+    )
+  }
 
   // Derive overall stats from matches
   const wins   = playerMatches.filter(m => !m.match_is_bye && m.winning_player === playerId).length

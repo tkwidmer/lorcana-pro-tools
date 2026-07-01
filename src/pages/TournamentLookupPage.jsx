@@ -20,6 +20,7 @@ import {
 
 const ANNOTATIONS_KEY = 'lorcana_tournament_match_annotations'
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
+const TEAM_KEY = 'lorcana_tournament_team'
 const LAST_URL_KEY = 'lorcana_tournament_last_url'
 
 function getAnnotations() {
@@ -61,6 +62,44 @@ function FavoriteStar({ active, onToggle, className = '' }) {
       {active ? '★' : '☆'}
     </button>
   )
+}
+
+// Single "my team" tag, keyed the same way as favorites — global across events.
+function getTeam() {
+  try { return JSON.parse(localStorage.getItem(TEAM_KEY) ?? '{}') } catch { return {} }
+}
+
+function toggleTeamStorage(playerId, name) {
+  const all = getTeam()
+  const key = String(playerId)
+  if (all[key]) {
+    delete all[key]
+  } else {
+    all[key] = { name, addedAt: Date.now() }
+  }
+  localStorage.setItem(TEAM_KEY, JSON.stringify(all))
+  return all
+}
+
+function TeamBadge({ active, onToggle, className = '' }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle() }}
+      title={active ? 'Remove from my team' : 'Add to my team'}
+      className={`w-5 h-5 rounded-full text-[10px] font-bold leading-none flex items-center justify-center transition-colors ${
+        active ? 'bg-purple-500 text-white hover:bg-purple-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-300'
+      } ${className}`}
+    >
+      T
+    </button>
+  )
+}
+
+// Parses a "W-D-L" record string into integer parts, defaulting missing/malformed segments to 0.
+function parseRecord(record) {
+  const [w, d, l] = String(record ?? '').split('-').map((n) => parseInt(n, 10))
+  return { w: w || 0, d: d || 0, l: l || 0 }
 }
 
 const INK_DOT_COLORS = {
@@ -140,6 +179,71 @@ function matchResultForPlayer(match, playerId) {
   const l = match.games_won_by_loser
   const score = won ? `${w}-${l}` : `${l}-${w}`
   return { result: won ? 'WIN' : 'LOSS', score, opponent: oppName }
+}
+
+// Shared by the Favorites and Team tabs — a flat roster of standings entries
+// with the same favorite/team toggles and click-through as the main Standings table.
+function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, registrationMap, onSelectPlayer, emptyMessage }) {
+  if (entries.length === 0) {
+    return <p className="text-sm text-gray-500 py-8 text-center px-4">{emptyMessage}</p>
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm min-w-[480px]">
+        <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+          <tr>
+            <th className="text-center px-2 py-2 w-16"></th>
+            <th className="text-left px-4 py-2 w-12">Rank</th>
+            <th className="text-left px-4 py-2">Player</th>
+            <th className="text-right px-4 py-2">Record</th>
+            <th className="text-right px-4 py-2">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => {
+            const regStatus = registrationMap?.get(entry.player.id)
+            const dropped = regStatus === 'ELIMINATED'
+            const isFavorite = Boolean(favorites[String(entry.player.id)])
+            const onTeam = Boolean(team[String(entry.player.id)])
+            return (
+              <tr
+                key={entry.id}
+                onClick={() => onSelectPlayer(entry)}
+                className={`border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors${dropped ? ' opacity-50' : ''}${isFavorite || onTeam ? ' bg-yellow-50' : ''}`}
+              >
+                <td className="px-2 py-2.5">
+                  <div className="flex items-center justify-center gap-1">
+                    <FavoriteStar
+                      active={isFavorite}
+                      onToggle={() => toggleFavorite(entry.player.id, entry.user_event_status.best_identifier)}
+                    />
+                    <TeamBadge
+                      active={onTeam}
+                      onToggle={() => toggleTeam(entry.player.id, entry.user_event_status.best_identifier)}
+                    />
+                  </div>
+                </td>
+                <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank}</td>
+                <td className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">
+                      {entry.user_event_status.best_identifier}
+                    </span>
+                    {dropped && (
+                      <span className="text-xs text-gray-400 font-normal">dropped</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400">{entry.player.best_identifier}</div>
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono text-gray-900">{entry.record}</td>
+                <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-900">{entry.match_points}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 function MatchesTab({ allMatches, matchesLoading }) {
@@ -471,6 +575,7 @@ export function TournamentLookupPage() {
   const [matchesLoading, setMatchesLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('standings')
   const [favorites, setFavorites] = useState(getFavorites)
+  const [team, setTeam] = useState(getTeam)
 
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
@@ -504,6 +609,10 @@ export function TournamentLookupPage() {
 
   function toggleFavorite(playerId, name) {
     setFavorites(toggleFavoriteStorage(playerId, name))
+  }
+
+  function toggleTeam(playerId, name) {
+    setTeam(toggleTeamStorage(playerId, name))
   }
 
   async function loadStandings(url) {
@@ -588,6 +697,21 @@ export function TournamentLookupPage() {
   const favoritedEntries = (allStandings ?? [])
     .filter((entry) => favorites[String(entry.player.id)])
     .sort((a, b) => a.rank - b.rank)
+
+  const teamEntries = (allStandings ?? [])
+    .filter((entry) => team[String(entry.player.id)])
+    .sort((a, b) => a.rank - b.rank)
+
+  const teamSummary = teamEntries.length > 0 ? teamEntries.reduce((acc, entry) => {
+    const { w, d, l } = parseRecord(entry.record)
+    acc.wins += w
+    acc.draws += d
+    acc.losses += l
+    acc.bestRank = Math.min(acc.bestRank, entry.rank)
+    acc.worstRank = Math.max(acc.worstRank, entry.rank)
+    if (structure?.topCutSize && entry.rank <= structure.topCutSize) acc.inCut += 1
+    return acc
+  }, { wins: 0, draws: 0, losses: 0, bestRank: Infinity, worstRank: -Infinity, inCut: 0 }) : null
 
   const tiebreakers = player ? formatTiebreakers(player, structure?.tiebreakers) : null
   const idAnalysis = player && structure ? analyzeId(player, allStandings, structure) : null
@@ -716,10 +840,10 @@ export function TournamentLookupPage() {
 
       {/* Tab switcher */}
       {allStandings && !player && (
-        <div className="flex gap-1 mb-4 border-b border-gray-200">
+        <div className="flex gap-1 mb-4 border-b border-gray-200 overflow-x-auto">
           <button
             onClick={() => setActiveTab('standings')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
               activeTab === 'standings'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -729,7 +853,7 @@ export function TournamentLookupPage() {
           </button>
           <button
             onClick={() => setActiveTab('matches')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'matches'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -745,7 +869,7 @@ export function TournamentLookupPage() {
           </button>
           <button
             onClick={() => setActiveTab('favorites')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'favorites'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -754,6 +878,19 @@ export function TournamentLookupPage() {
             ★ Favorites
             {favoritedEntries.length > 0 && (
               <span className="text-xs text-gray-400 font-normal">({favoritedEntries.length})</span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('team')}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'team'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            My Team
+            {teamEntries.length > 0 && (
+              <span className="text-xs text-gray-400 font-normal">({teamEntries.length})</span>
             )}
           </button>
         </div>
@@ -771,11 +908,11 @@ export function TournamentLookupPage() {
           />
 
           <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="max-h-[32rem] overflow-y-auto">
-              <table className="w-full text-sm">
+            <div className="max-h-[32rem] overflow-y-auto overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
                 <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 sticky top-0">
                   <tr>
-                    <th className="text-center px-2 py-2 w-8"></th>
+                    <th className="text-center px-2 py-2 w-16"></th>
                     <th className="text-left px-4 py-2 w-12">Rank</th>
                     <th className="text-left px-4 py-2">Player</th>
                     <th className="text-right px-4 py-2">Record</th>
@@ -788,6 +925,7 @@ export function TournamentLookupPage() {
                     const regStatus = registrationMap?.get(entry.player.id)
                     const dropped = regStatus === 'ELIMINATED'
                     const isFavorite = Boolean(favorites[String(entry.player.id)])
+                    const onTeam = Boolean(team[String(entry.player.id)])
                     return (
                       <Fragment key={entry.id}>
                         {atCutLine && (
@@ -799,13 +937,19 @@ export function TournamentLookupPage() {
                         )}
                         <tr
                           onClick={() => setPlayer(entry)}
-                          className={`border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors${dropped ? ' opacity-50' : ''}${isFavorite ? ' bg-yellow-50' : ''}`}
+                          className={`border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors${dropped ? ' opacity-50' : ''}${isFavorite || onTeam ? ' bg-yellow-50' : ''}`}
                         >
-                          <td className="px-2 py-2.5 text-center">
-                            <FavoriteStar
-                              active={isFavorite}
-                              onToggle={() => toggleFavorite(entry.player.id, entry.user_event_status.best_identifier)}
-                            />
+                          <td className="px-2 py-2.5">
+                            <div className="flex items-center justify-center gap-1">
+                              <FavoriteStar
+                                active={isFavorite}
+                                onToggle={() => toggleFavorite(entry.player.id, entry.user_event_status.best_identifier)}
+                              />
+                              <TeamBadge
+                                active={onTeam}
+                                onToggle={() => toggleTeam(entry.player.id, entry.user_event_status.best_identifier)}
+                              />
+                            </div>
                           </td>
                           <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank}</td>
                           <td className="px-4 py-2.5">
@@ -840,57 +984,56 @@ export function TournamentLookupPage() {
       {/* Favorites tab */}
       {allStandings && !player && activeTab === 'favorites' && (
         <div className="border border-gray-200 rounded-lg overflow-hidden">
-          {favoritedEntries.length === 0 ? (
-            <p className="text-sm text-gray-500 py-8 text-center px-4">
-              No favorited players yet. Tap the star next to a player in the Standings tab to track them here.
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="text-center px-2 py-2 w-8"></th>
-                  <th className="text-left px-4 py-2 w-12">Rank</th>
-                  <th className="text-left px-4 py-2">Player</th>
-                  <th className="text-right px-4 py-2">Record</th>
-                  <th className="text-right px-4 py-2">Pts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {favoritedEntries.map((entry) => {
-                  const regStatus = registrationMap?.get(entry.player.id)
-                  const dropped = regStatus === 'ELIMINATED'
-                  return (
-                    <tr
-                      key={entry.id}
-                      onClick={() => setPlayer(entry)}
-                      className={`border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors bg-yellow-50${dropped ? ' opacity-50' : ''}`}
-                    >
-                      <td className="px-2 py-2.5 text-center">
-                        <FavoriteStar
-                          active
-                          onToggle={() => toggleFavorite(entry.player.id, entry.user_event_status.best_identifier)}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">
-                            {entry.user_event_status.best_identifier}
-                          </span>
-                          {dropped && (
-                            <span className="text-xs text-gray-400 font-normal">dropped</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-400">{entry.player.best_identifier}</div>
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-mono text-gray-900">{entry.record}</td>
-                      <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-900">{entry.match_points}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <RosterTable
+            entries={favoritedEntries}
+            favorites={favorites}
+            team={team}
+            toggleFavorite={toggleFavorite}
+            toggleTeam={toggleTeam}
+            registrationMap={registrationMap}
+            onSelectPlayer={setPlayer}
+            emptyMessage="No favorited players yet. Tap the star next to a player in the Standings tab to track them here."
+          />
+        </div>
+      )}
+
+      {/* Team tab */}
+      {allStandings && !player && activeTab === 'team' && (
+        <div className="space-y-3">
+          {teamSummary && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                <div className="font-bold text-gray-900">{teamSummary.wins}-{teamSummary.draws}-{teamSummary.losses}</div>
+                <div className="text-xs text-gray-500">Combined W-D-L</div>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                <div className="font-bold text-gray-900">#{teamSummary.bestRank}–#{teamSummary.worstRank}</div>
+                <div className="text-xs text-gray-500">Rank spread</div>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                <div className="font-bold text-gray-900">{teamEntries.length}</div>
+                <div className="text-xs text-gray-500">Team members</div>
+              </div>
+              {structure?.topCutSize && (
+                <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                  <div className="font-bold text-gray-900">{teamSummary.inCut} / {teamEntries.length}</div>
+                  <div className="text-xs text-gray-500">In top {structure.topCutSize}</div>
+                </div>
+              )}
+            </div>
           )}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <RosterTable
+              entries={teamEntries}
+              favorites={favorites}
+              team={team}
+              toggleFavorite={toggleFavorite}
+              toggleTeam={toggleTeam}
+              registrationMap={registrationMap}
+              onSelectPlayer={setPlayer}
+              emptyMessage="No team members yet. Tap the T badge next to a player in the Standings tab to add them to your team."
+            />
+          </div>
         </div>
       )}
 
@@ -987,6 +1130,10 @@ export function TournamentLookupPage() {
                   <FavoriteStar
                     active={Boolean(favorites[String(player.player.id)])}
                     onToggle={() => toggleFavorite(player.player.id, player.user_event_status.best_identifier)}
+                  />
+                  <TeamBadge
+                    active={Boolean(team[String(player.player.id)])}
+                    onToggle={() => toggleTeam(player.player.id, player.user_event_status.best_identifier)}
                   />
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">

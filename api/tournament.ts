@@ -1,6 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 
 const RAVEN_BASE = 'https://api.ravensburgerplay.com/api/v2'
+// Match results are not exposed on RAVEN_BASE without an authenticated session
+// (401 "Authentication credentials were not provided"). The public tournament
+// results page instead reads match data through this Cloudflare-fronted proxy.
+const HYDRA_BASE = 'https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2'
 
 function str(v: string | string[] | undefined): string | undefined {
   if (Array.isArray(v)) return v[0]
@@ -46,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     case 'matches':
       if (!roundId) return res.status(400).json({ error: 'Missing roundId' })
       if (!ID_RE.test(roundId)) return res.status(400).json({ error: 'Invalid roundId' })
-      url = `${RAVEN_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/matches/`
+      url = `${HYDRA_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/matches/paginated/?page=${page}&page_size=${pageSize}&avoid_cache=false`
       break
     default:
       return res.status(400).json({ error: 'Missing or invalid type param' })

@@ -10,7 +10,13 @@ import {
   analyzeAdvancement,
 } from '../lib/tournamentApi'
 import { VALID_INKS } from '../lib/inkColors'
-import { generateShareImage, downloadShareImage, copyShareImageToClipboard } from '../lib/tournamentShareImage'
+import {
+  generateShareImage,
+  downloadShareImage,
+  copyShareImageToClipboard,
+  canNativeShareImage,
+  nativeShareImage,
+} from '../lib/tournamentShareImage'
 
 const ANNOTATIONS_KEY = 'lorcana_tournament_match_annotations'
 
@@ -179,7 +185,7 @@ function MatchesTab({ allMatches, matchesLoading }) {
 function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
   const playerId = player?.player?.id
   const [annotations, setAnnotations] = useState(getAnnotations)
-  const [shareStatus, setShareStatus] = useState(null) // null | 'copying' | 'copied' | 'error'
+  const [shareCard, setShareCard] = useState(null) // { canvas, imageUrl, filename } | null
 
   function updateAnnotation(matchId, patch) {
     saveAnnotation(matchId, patch)
@@ -208,7 +214,7 @@ function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
   const played = wins + losses + draws
   const winPct = played > 0 ? ((wins / played) * 100).toFixed(1) : '0.0'
 
-  function handleShare(action) {
+  function handleShare() {
     const rows = playerMatches.map(m => {
       const { result, score, opponent } = matchResultForPlayer(m, playerId)
       const ann = annotations[String(m.id)] ?? {}
@@ -233,37 +239,20 @@ function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
       rows,
     })
 
-    if (action === 'download') {
-      const name = (player?.user_event_status?.best_identifier ?? 'player').replace(/\s+/g, '-').toLowerCase()
-      downloadShareImage(canvas, `${name}-tournament.jpg`)
-    } else {
-      setShareStatus('copying')
-      copyShareImageToClipboard(canvas)
-        .then(() => { setShareStatus('copied'); setTimeout(() => setShareStatus(null), 2500) })
-        .catch(() => { setShareStatus('error'); setTimeout(() => setShareStatus(null), 2500) })
-    }
+    const name = (player?.user_event_status?.best_identifier ?? 'player').replace(/\s+/g, '-').toLowerCase()
+    setShareCard({ canvas, imageUrl: canvas.toDataURL('image/jpeg', 0.95), filename: `${name}-tournament.jpg` })
   }
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
       <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900">Match History</h3>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 mr-1">Share card:</span>
-          <button
-            onClick={() => handleShare('copy')}
-            disabled={shareStatus === 'copying'}
-            className="px-3 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {shareStatus === 'copying' ? 'Copying…' : shareStatus === 'copied' ? '✓ Copied' : shareStatus === 'error' ? 'Failed' : 'Copy Image'}
-          </button>
-          <button
-            onClick={() => handleShare('download')}
-            className="px-3 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Download JPG
-          </button>
-        </div>
+        <button
+          onClick={handleShare}
+          className="px-3 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Share card
+        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[600px]">
@@ -333,6 +322,94 @@ function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
             })}
           </tbody>
         </table>
+      </div>
+      {shareCard && (
+        <ShareCardModal shareCard={shareCard} onClose={() => setShareCard(null)} />
+      )}
+    </div>
+  )
+}
+
+function ShareCardModal({ shareCard, onClose }) {
+  const [nativeShareAvailable, setNativeShareAvailable] = useState(false)
+  const [status, setStatus] = useState(null) // null | 'copying' | 'copied' | 'error' | 'sharing'
+
+  useEffect(() => {
+    let cancelled = false
+    canNativeShareImage().then((ok) => { if (!cancelled) setNativeShareAvailable(ok) })
+    return () => { cancelled = true }
+  }, [])
+
+  function flash(next) {
+    setStatus(next)
+    setTimeout(() => setStatus(null), 2500)
+  }
+
+  async function handleNativeShare() {
+    setStatus('sharing')
+    try {
+      await nativeShareImage(shareCard.canvas, shareCard.filename, 'Tournament Result')
+      setStatus(null)
+    } catch (e) {
+      if (e?.name !== 'AbortError') flash('error')
+      else setStatus(null)
+    }
+  }
+
+  async function handleCopy() {
+    setStatus('copying')
+    try {
+      await copyShareImageToClipboard(shareCard.canvas)
+      flash('copied')
+    } catch {
+      flash('error')
+    }
+  }
+
+  async function handleDownload() {
+    await downloadShareImage(shareCard.canvas, shareCard.filename)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl border border-gray-200 max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+          <h2 className="text-sm font-semibold text-gray-900">Share card</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+        </div>
+        <div className="overflow-y-auto p-4">
+          <img src={shareCard.imageUrl} alt="Tournament result share card" className="w-full rounded-lg border border-gray-200" />
+        </div>
+        <div className="px-4 py-3 border-t border-gray-200 shrink-0 flex flex-wrap gap-2 justify-end">
+          {nativeShareAvailable && (
+            <button
+              onClick={handleNativeShare}
+              disabled={status === 'sharing'}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {status === 'sharing' ? 'Sharing…' : 'Share…'}
+            </button>
+          )}
+          <button
+            onClick={handleCopy}
+            disabled={status === 'copying'}
+            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {status === 'copying' ? 'Copying…' : status === 'copied' ? '✓ Copied' : status === 'error' ? 'Failed' : 'Copy Image'}
+          </button>
+          <button
+            onClick={handleDownload}
+            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Download JPG
+          </button>
+        </div>
       </div>
     </div>
   )

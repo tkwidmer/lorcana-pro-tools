@@ -49,6 +49,9 @@ function loadInkImage(color) {
 }
 
 // rows: [{ round, result, score, opponent, oppColors: string[], onPlay: bool|null }]
+// Renders a portrait card (min 4:5, like an Instagram feed post) — each match is a
+// compact two-line entry rather than a wide table, since the wide layout this replaced
+// only worked in landscape and didn't fit social media crops/previews.
 export async function generateShareImage({ playerName, rank, totalPlayers, record, matchPoints, winPct, eventName, rows }) {
   const usedColors = [...new Set(rows.flatMap((r) => r.oppColors ?? []))]
   const inkImages = Object.fromEntries(
@@ -56,18 +59,19 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
   )
 
   const DPR   = 2
-  const W     = 1200
-  const PAD   = 52
+  const W     = 1080
+  const PAD   = 48
   const CW    = W - PAD * 2
 
-  const HEADER_H     = 64
-  const PLAYER_H     = 96
-  const TABLE_HDR_H  = 40
-  const ROW_H        = 54
-  const FOOTER_H     = 52
-  const DIVIDER      = 1
+  const HEADER_H  = 60
+  const PLAYER_H  = 132
+  const SECTION_H = 40
+  const ROW_H     = 80
+  const FOOTER_H  = 48
+  const MIN_H     = Math.round(W * 1.25) // 4:5 portrait floor regardless of row count
 
-  const H = HEADER_H + PLAYER_H + TABLE_HDR_H + rows.length * ROW_H + FOOTER_H + 20
+  const contentH = HEADER_H + PLAYER_H + SECTION_H + rows.length * ROW_H + FOOTER_H
+  const H = Math.max(contentH, MIN_H)
 
   const canvas = document.createElement('canvas')
   canvas.width  = W  * DPR
@@ -101,12 +105,12 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
     ctx.font = '13px ui-sans-serif, system-ui, sans-serif'
     ctx.fillStyle = '#475569'
     ctx.textAlign = 'right'
-    ctx.fillText(clip(eventName, 60), W - PAD, HEADER_H / 2)
+    ctx.fillText(clip(eventName, 40), W - PAD, HEADER_H / 2)
   }
 
   // Divider
   ctx.strokeStyle = '#1E293B'
-  ctx.lineWidth = DIVIDER
+  ctx.lineWidth = 1
   ctx.beginPath()
   ctx.moveTo(PAD, HEADER_H)
   ctx.lineTo(W - PAD, HEADER_H)
@@ -116,20 +120,22 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
   const playerMid = HEADER_H + PLAYER_H / 2
 
   ctx.textAlign = 'left'
-  ctx.font = 'bold 30px ui-sans-serif, system-ui, sans-serif'
+  ctx.font = 'bold 34px ui-sans-serif, system-ui, sans-serif'
   ctx.fillStyle = '#F1F5F9'
-  ctx.fillText(clip(playerName, 30), PAD + 6, playerMid - 16)
+  ctx.fillText(clip(playerName, 26), PAD + 6, playerMid - 30)
 
-  const statsItems = [
-    record,
-    `${matchPoints} pts`,
-    `${winPct}% WR`,
-    rank ? `Rank #${rank}` + (totalPlayers ? ` of ${totalPlayers}` : '') : null,
-  ].filter(Boolean)
+  if (rank) {
+    ctx.font = 'bold 20px ui-sans-serif, system-ui, sans-serif'
+    ctx.fillStyle = '#818CF8'
+    ctx.textAlign = 'right'
+    ctx.fillText(`#${rank}` + (totalPlayers ? ` / ${totalPlayers}` : ''), W - PAD, playerMid - 30)
+    ctx.textAlign = 'left'
+  }
 
-  ctx.font = '16px ui-sans-serif, system-ui, sans-serif'
+  const statsItems = [record, `${matchPoints} pts`, `${winPct}% WR`].filter(Boolean)
+  ctx.font = '17px ui-sans-serif, system-ui, sans-serif'
   ctx.fillStyle = '#94A3B8'
-  ctx.fillText(statsItems.join('  ·  '), PAD + 6, playerMid + 16)
+  ctx.fillText(statsItems.join('   ·   '), PAD + 6, playerMid + 12)
 
   // Divider
   ctx.strokeStyle = '#1E293B'
@@ -138,108 +144,92 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
   ctx.lineTo(W - PAD, HEADER_H + PLAYER_H)
   ctx.stroke()
 
-  // ── Column layout ────────────────────────────────────────────────────────────
-  //   Rnd  Result  Score  Opponent       OppColors        Play
-  const col = {
-    rnd:    PAD + 6,
-    result: PAD + 72,
-    score:  PAD + 196,
-    opp:    PAD + 300,
-    colors: PAD + 720,
-    play:   PAD + 900,
-  }
-
-  // Table header
-  const tblHdrY = HEADER_H + PLAYER_H + TABLE_HDR_H / 2
-  ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = '#334155'
+  // ── Section label ────────────────────────────────────────────────────────────
+  const sectionTop = HEADER_H + PLAYER_H
+  ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif'
+  ctx.fillStyle = '#475569'
   ctx.textAlign = 'left'
-  ;[
-    [col.rnd,    'RND'],
-    [col.result, 'RESULT'],
-    [col.score,  'SCORE'],
-    [col.opp,    'OPPONENT'],
-    [col.colors, 'OPP COLORS'],
-    [col.play,   'PLAY / DRAW'],
-  ].forEach(([x, label]) => ctx.fillText(label, x, tblHdrY))
+  ctx.fillText('MATCH HISTORY', PAD + 6, sectionTop + SECTION_H / 2)
 
-  // ── Rows ─────────────────────────────────────────────────────────────────────
-  const tableTop = HEADER_H + PLAYER_H + TABLE_HDR_H
+  // ── Rows (two lines each: round/result/score + opponent, then colors + play) ──
+  const tableTop = sectionTop + SECTION_H
 
   rows.forEach((row, i) => {
-    const rowY  = tableTop + i * ROW_H
-    const midY  = rowY + ROW_H / 2
+    const rowY   = tableTop + i * ROW_H
+    const line1Y = rowY + ROW_H * 0.34
+    const line2Y = rowY + ROW_H * 0.72
 
-    // Alternating stripe
     if (i % 2 === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.025)'
       ctx.fillRect(PAD, rowY, CW, ROW_H)
     }
 
     ctx.textBaseline = 'middle'
-    ctx.textAlign = 'left'
 
-    // Round
+    // Line 1, left: round + result badge + score
+    ctx.textAlign = 'left'
     ctx.font = 'bold 14px ui-sans-serif, system-ui, sans-serif'
     ctx.fillStyle = '#64748B'
-    ctx.fillText(`R${row.round}`, col.rnd, midY)
+    ctx.fillText(`R${row.round}`, PAD + 6, line1Y)
 
-    // Result badge
     const rs = RESULT_STYLES[row.result] ?? RESULT_STYLES.DRAW
     ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif'
     const badgeTxt = row.result
-    const badgeW   = ctx.measureText(badgeTxt).width + 20
-    const badgeH   = 24
-    roundRect(ctx, col.result, midY - badgeH / 2, badgeW, badgeH, 4)
+    const badgeW    = ctx.measureText(badgeTxt).width + 18
+    const badgeH    = 22
+    const badgeX    = PAD + 44
+    roundRect(ctx, badgeX, line1Y - badgeH / 2, badgeW, badgeH, 4)
     ctx.fillStyle = rs.bg
     ctx.fill()
     ctx.fillStyle = rs.text
     ctx.textAlign = 'center'
-    ctx.fillText(badgeTxt, col.result + badgeW / 2, midY)
+    ctx.fillText(badgeTxt, badgeX + badgeW / 2, line1Y)
+
     ctx.textAlign = 'left'
-
-    // Score
-    ctx.font = '14px ui-monospace, monospace'
+    ctx.font = '13px ui-monospace, monospace'
     ctx.fillStyle = '#64748B'
-    ctx.fillText(row.score || '—', col.score, midY)
+    ctx.fillText(row.score || '—', badgeX + badgeW + 12, line1Y)
 
-    // Opponent
-    ctx.font = '15px ui-sans-serif, system-ui, sans-serif'
-    ctx.fillStyle = '#CBD5E1'
-    ctx.fillText(clip(row.opponent, 26), col.opp, midY)
+    // Line 1, right: opponent name
+    ctx.font = '16px ui-sans-serif, system-ui, sans-serif'
+    ctx.fillStyle = '#E2E8F0'
+    ctx.textAlign = 'right'
+    ctx.fillText(clip(row.opponent, 22), W - PAD - 6, line1Y)
 
-    // Opp colors — ink icons + names
+    // Line 2, left: ink icons + color label
+    ctx.textAlign = 'left'
     if (row.oppColors?.length) {
-      const iconSize = 20
-      const step = iconSize + 6
+      const iconSize = 18
+      const step = iconSize + 5
       row.oppColors.forEach((color, ci) => {
-        const cx = col.colors + ci * step
+        const cx = PAD + 6 + ci * step
         const img = inkImages[color]
         if (img) {
-          ctx.drawImage(img, cx, midY - iconSize / 2, iconSize, iconSize)
+          ctx.drawImage(img, cx, line2Y - iconSize / 2, iconSize, iconSize)
         } else {
           ctx.beginPath()
-          ctx.arc(cx + iconSize / 2, midY, iconSize / 2, 0, Math.PI * 2)
+          ctx.arc(cx + iconSize / 2, line2Y, iconSize / 2, 0, Math.PI * 2)
           ctx.fillStyle = INK_HEX[color] ?? '#6B7280'
           ctx.fill()
         }
       })
-      const labelX = col.colors + row.oppColors.length * step + 4
+      const labelX = PAD + 6 + row.oppColors.length * step + 4
       ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
       ctx.fillStyle = '#475569'
       const colorLabel = row.oppColors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(' / ')
-      ctx.fillText(colorLabel, labelX, midY)
+      ctx.fillText(colorLabel, labelX, line2Y)
     } else {
-      ctx.font = '13px ui-sans-serif, system-ui, sans-serif'
-      ctx.fillStyle = '#1E293B'
-      ctx.fillText('—', col.colors, midY)
+      ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
+      ctx.fillStyle = '#334155'
+      ctx.fillText('—', PAD + 6, line2Y)
     }
 
-    // Play / Draw
+    // Line 2, right: play/draw
     const pd = row.onPlay === true ? 'PLAY' : row.onPlay === false ? 'DRAW' : '—'
-    ctx.font = `bold 13px ui-sans-serif, system-ui, sans-serif`
-    ctx.fillStyle = row.onPlay === true ? '#4ADE80' : row.onPlay === false ? '#93C5FD' : '#1E293B'
-    ctx.fillText(pd, col.play, midY)
+    ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif'
+    ctx.fillStyle = row.onPlay === true ? '#4ADE80' : row.onPlay === false ? '#93C5FD' : '#334155'
+    ctx.textAlign = 'right'
+    ctx.fillText(pd, W - PAD - 6, line2Y)
 
     // Row divider
     ctx.strokeStyle = '#1E293B'

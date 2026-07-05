@@ -102,15 +102,6 @@ function parseRecord(record) {
   return { w: w || 0, d: d || 0, l: l || 0 }
 }
 
-const INK_DOT_COLORS = {
-  amber:    'bg-yellow-400',
-  amethyst: 'bg-violet-500',
-  emerald:  'bg-emerald-500',
-  ruby:     'bg-red-500',
-  sapphire: 'bg-blue-500',
-  steel:    'bg-gray-400',
-}
-
 function ColorPicker({ selected, onChange }) {
   function toggle(color) {
     const next = selected.includes(color)
@@ -125,10 +116,12 @@ function ColorPicker({ selected, onChange }) {
           key={color}
           title={color.charAt(0).toUpperCase() + color.slice(1)}
           onClick={() => toggle(color)}
-          className={`w-5 h-5 rounded-full border-2 transition-all ${INK_DOT_COLORS[color]} ${
-            selected.includes(color) ? 'border-white scale-110' : 'border-transparent opacity-40 hover:opacity-70'
+          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+            selected.includes(color) ? 'border-blue-500 scale-110 bg-blue-50' : 'border-transparent opacity-40 hover:opacity-70'
           }`}
-        />
+        >
+          <img src={`/ink/${color}.png`} alt={color} className="w-4 h-4" />
+        </button>
       ))}
     </div>
   )
@@ -360,7 +353,7 @@ function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
   const played = wins + losses + draws
   const winPct = played > 0 ? ((wins / played) * 100).toFixed(1) : '0.0'
 
-  function handleShare() {
+  async function handleShare() {
     const rows = playerMatches.map(m => {
       const { result, score, opponent } = matchResultForPlayer(m, playerId)
       const ann = annotations[String(m.id)] ?? {}
@@ -374,7 +367,7 @@ function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
       }
     })
 
-    const canvas = generateShareImage({
+    const canvas = await generateShareImage({
       playerName:   player?.user_event_status?.best_identifier ?? '—',
       rank:         player?.rank ?? null,
       totalPlayers: null,

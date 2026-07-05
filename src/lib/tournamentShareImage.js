@@ -33,8 +33,28 @@ function clip(str, max) {
   return str.length <= max ? str : str.slice(0, max - 1) + '…'
 }
 
+// Cached by color — the same handful of ink icons get reused across every row/regeneration.
+const inkImageCache = new Map()
+
+function loadInkImage(color) {
+  if (inkImageCache.has(color)) return inkImageCache.get(color)
+  const promise = new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = `/ink/${color}.png`
+  })
+  inkImageCache.set(color, promise)
+  return promise
+}
+
 // rows: [{ round, result, score, opponent, oppColors: string[], onPlay: bool|null }]
-export function generateShareImage({ playerName, rank, totalPlayers, record, matchPoints, winPct, eventName, rows }) {
+export async function generateShareImage({ playerName, rank, totalPlayers, record, matchPoints, winPct, eventName, rows }) {
+  const usedColors = [...new Set(rows.flatMap((r) => r.oppColors ?? []))]
+  const inkImages = Object.fromEntries(
+    await Promise.all(usedColors.map(async (c) => [c, await loadInkImage(c)]))
+  )
+
   const DPR   = 2
   const W     = 1200
   const PAD   = 52
@@ -188,17 +208,23 @@ export function generateShareImage({ playerName, rank, totalPlayers, record, mat
     ctx.fillStyle = '#CBD5E1'
     ctx.fillText(clip(row.opponent, 26), col.opp, midY)
 
-    // Opp colors — dots + names
+    // Opp colors — ink icons + names
     if (row.oppColors?.length) {
-      const dotR = 9
+      const iconSize = 20
+      const step = iconSize + 6
       row.oppColors.forEach((color, ci) => {
-        const cx = col.colors + ci * (dotR * 2 + 8) + dotR
-        ctx.beginPath()
-        ctx.arc(cx, midY, dotR, 0, Math.PI * 2)
-        ctx.fillStyle = INK_HEX[color] ?? '#6B7280'
-        ctx.fill()
+        const cx = col.colors + ci * step
+        const img = inkImages[color]
+        if (img) {
+          ctx.drawImage(img, cx, midY - iconSize / 2, iconSize, iconSize)
+        } else {
+          ctx.beginPath()
+          ctx.arc(cx + iconSize / 2, midY, iconSize / 2, 0, Math.PI * 2)
+          ctx.fillStyle = INK_HEX[color] ?? '#6B7280'
+          ctx.fill()
+        }
       })
-      const labelX = col.colors + row.oppColors.length * (dotR * 2 + 8) + 6
+      const labelX = col.colors + row.oppColors.length * step + 4
       ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
       ctx.fillStyle = '#475569'
       const colorLabel = row.oppColors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(' / ')

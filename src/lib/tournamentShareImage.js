@@ -58,7 +58,7 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
     await Promise.all(usedColors.map(async (c) => [c, await loadInkImage(c)]))
   )
 
-  const DPR   = 2
+  const DPR   = 4
   const W     = 1080
   const PAD   = 48
   const CW    = W - PAD * 2

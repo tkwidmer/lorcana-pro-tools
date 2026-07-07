@@ -1,44 +1,32 @@
-# Lorcana Pro Tools Discord Bot
+# Discord Bot — Command Registration
 
-A small standalone Discord bot for the Lorcana Pro Tools community server.
-It currently provides two commands:
+The actual bot logic (both commands below) runs as a Vercel serverless
+function, `api/discord-interactions.ts` in the main app — it's deployed
+automatically with every push, no separate process to keep running. This
+folder just holds the one-time (or on-change) script that registers the
+bot's commands with Discord.
+
+## Commands
 
 - **Apps → Decode Deck QR** (message context menu) — reads the QR code
   embedded in a duels.ink deck list image and replies with the decoded
-  `duels.ink` URL, so anyone in the channel can jump straight to the deck
-  instead of retyping it.
-- **`/tournament`** (slash command) — looks up a live Ravensburger tournament
-  by event URL. Without a `player` option it posts a summary embed (round,
-  cut size, top standings); with `player:<name>` it looks up that
-  competitor's rank, record, and whether it's safe to intentional draw.
+  `duels.ink` URL.
+- **`/tournament url:<event url> [player:<name>]`** (slash command) — looks
+  up a live Ravensburger tournament. Without `player` it posts a summary
+  (round, cut size, top standings); with `player:<name>` it looks up that
+  competitor's rank, record, and ID (intentional draw) recommendation.
 
-This is a separate Node.js project from the main Vite app in this repo (like
-`chrome-extension/`) and runs as its own always-on process — it is **not**
-deployed to Vercel.
+See `api/discord-interactions.ts` and `api/_lib/` in the repo root for the
+implementation.
 
-## How it works
+## How interactions reach the bot
 
-**Decode Deck QR:**
-1. A user posts a deck list image (the one with the QR code in the corner)
-   in a channel.
-2. Anyone right-clicks (or long-presses on mobile) that message, opens
-   **Apps**, and picks **Decode Deck QR**.
-3. The bot downloads the image attachment(s) on that message, decodes the QR
-   code with [`jsqr`](https://www.npmjs.com/package/jsqr) (pixels extracted
-   via `sharp`), and replies in the channel with the decoded URL.
-
-No message content is read or stored — the bot only ever looks at the
-attachments on the specific message a user invokes the command on.
-
-**`/tournament url:<event url> [player:<name>]`:**
-1. The bot extracts the event ID from the URL and calls the public
-   Ravensburger tournament API directly (`src/tournamentApi.js` — a
-   standalone port of `src/lib/tournamentApi.js` from the main app, since
-   this process isn't behind the app's `/api/tournament` Vercel proxy).
-2. It resolves the current round, fetches full standings, and either posts a
-   tournament summary or — if `player` is given — that player's rank,
-   record, and ID (intentional draw) recommendation, matching the logic in
-   `TournamentLookupPage`.
+Discord calls a URL you configure once in the Developer Portal (the
+**Interactions Endpoint URL**) with a signed HTTP request for every
+slash command / context menu invocation — there's no gateway connection to
+keep alive. The Vercel function verifies the request signature, immediately
+acknowledges it, then edits in the real reply once it's done the work
+(QR decode, tournament API calls).
 
 ## Setup
 
@@ -46,14 +34,19 @@ attachments on the specific message a user invokes the command on.
 
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
    and create a new application.
-2. Under **Bot**, add a bot user and copy the token — this is `DISCORD_TOKEN`.
-3. Under **General Information**, copy the **Application ID** — this is
-   `DISCORD_CLIENT_ID`.
+2. Under **Bot**, add a bot user and copy the token — this is `DISCORD_TOKEN`
+   (only needed locally, to run the registration script below; it's never
+   deployed anywhere).
+3. Under **General Information**:
+   - Copy the **Application ID** — this is `DISCORD_CLIENT_ID` (also used as
+     `VITE_DISCORD_CLIENT_ID` for the web app's "Add to Discord" button).
+   - Copy the **Public Key** — this is `DISCORD_PUBLIC_KEY`, needed by the
+     Vercel function to verify request signatures.
 4. Under **OAuth2 → URL Generator**, check the `bot` and `applications.commands`
    scopes. Under bot permissions, `Send Messages` and `Read Message History`
    are enough. Use the generated URL to invite the bot to your server.
 
-### 2. Configure environment
+### 2. Register the commands
 
 ```bash
 cd discord-bot
@@ -61,39 +54,40 @@ cp .env.example .env
 # fill in DISCORD_TOKEN and DISCORD_CLIENT_ID
 # optionally set DISCORD_GUILD_ID to a test server's ID while developing —
 # guild-scoped commands show up instantly, global ones can take up to an hour
-```
-
-### 3. Install and register the command
-
-```bash
 npm install
 npm run register
 ```
 
-Re-run `npm run register` any time the command definition changes.
+Re-run `npm run register` any time the command definitions in
+`src/deployCommands.js` change. This only needs to run once per environment
+(or whenever commands change) — it does not need to stay running.
 
-### 4. Run the bot
+### 3. Configure Vercel
 
-```bash
-npm start
-```
-
-The bot needs to stay running to receive interactions (it uses the Discord
-gateway, not a public webhook). For always-on hosting, run it under a process
-manager or a small always-on host, e.g.:
-
-- `pm2 start src/index.js --name lorcana-qr-bot`
-- a systemd service
-- a Railway/Fly.io/Render worker process
+1. In the Vercel project settings, add an environment variable
+   `DISCORD_PUBLIC_KEY` (from step 1) — this is the only server-side secret
+   the interactions endpoint needs.
+2. Deploy (or redeploy) the app so `api/discord-interactions.ts` goes live at
+   `https://<your-domain>/api/discord-interactions`.
+3. Back in the Discord Developer Portal, set that URL as the application's
+   **Interactions Endpoint URL**. Discord immediately sends a test PING to
+   verify it — if `DISCORD_PUBLIC_KEY` is set correctly, it'll succeed right
+   away.
 
 ## Notes
 
 - Large deck images are downscaled before scanning (see `MAX_DIMENSION` in
-  `src/qrDecode.js`) to keep decoding fast; this doesn't affect the QR code's
-  readability in practice.
-- If a message has multiple image attachments, each is scanned independently
-  and every successfully decoded result is included in the reply.
+  `api/_lib/discordQr.ts`) to keep decoding fast; this doesn't affect the QR
+  code's readability in practice. Image decoding uses `jimp` (pure JS)
+  rather than `sharp`, since `sharp`'s native binaries are a portability
+  risk in a serverless function bundle.
 - `/tournament` only looks at the current round's standings (same as the web
   tool) — it doesn't paginate historical rounds or match-by-match data.
 - If more than one standings entry matches the `player` name, the bot lists
   the matches instead of guessing; pass a more specific name to disambiguate.
+- Vercel functions have a max execution duration (`maxDuration: 60` is set in
+  `api/discord-interactions.ts`, but Hobby-tier accounts are capped at 10s
+  regardless). A `/tournament` lookup against a very large event's standings
+  could theoretically exceed that on Hobby — if so, the deferred reply will
+  never get its follow-up edit and Discord will eventually show the
+  interaction as failed.

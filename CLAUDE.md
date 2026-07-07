@@ -41,7 +41,9 @@ VITE_SUPABASE_ANON_KEY=...
 
 Vercel also accepts `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` prefixes (both are checked in `supabaseClient.js`).
 
-Optional: `VITE_DISCORD_CLIENT_ID` — the Application ID of the Discord bot in `discord-bot/` (not a secret). When set, `HomePage` shows an "Add to Discord" card under a Community section linking to the bot's OAuth invite URL; when unset, that card is omitted.
+Optional: `VITE_DISCORD_CLIENT_ID` — the Application ID of the Discord bot (not a secret). When set, `HomePage` shows an "Add to Discord" card under a Community section linking to the bot's OAuth invite URL; when unset, that card is omitted.
+
+Server-side only (set in Vercel, not `.env`): `DISCORD_PUBLIC_KEY` — used by `/api/discord-interactions` to verify Discord's request signature. See `discord-bot/README.md`.
 
 ## Architecture
 
@@ -153,7 +155,7 @@ In `src/lib/`:
 
 ### API Routes
 
-Vercel serverless functions in `/api/*.ts`. All are thin forwarding proxies with error handling and caching headers. No server-side auth — tokens are forwarded from the client.
+Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies with error handling and caching headers. No server-side auth on those — tokens are forwarded from the client.
 
 | Endpoint | Upstream | Auth | Notes |
 |---|---|---|---|
@@ -166,8 +168,13 @@ Vercel serverless functions in `/api/*.ts`. All are thin forwarding proxies with
 | `/api/duels-gamelog-bulk` | Multiple gamelog fetches | Bearer token | Batch endpoint |
 | `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`; handles pagination |
 | `/api/proxy` | duels.ink spectate | Cookie-based | Tries 3 endpoints; used by bookmarklet/direct URL approach |
+| `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's two commands (Decode Deck QR, `/tournament`) directly. See `discord-bot/README.md`. |
 
 LorcanaJSON card data (`/api/cards`) is a rewrite, not a serverless function — handled by Vite proxy in dev and by `vercel.json` in production, both pointing to `https://lorcanajson.org/files/current/en/allCards.json`.
+
+### Discord Bot (`api/discord-interactions.ts`)
+
+The Discord bot (message command "Decode Deck QR" + `/tournament` slash command) is implemented as a Vercel serverless function receiving Discord's HTTP Interactions webhook — not a persistent gateway process. `discord-bot/` only holds a one-time script to register the commands with Discord's API; the actual command logic lives in `api/discord-interactions.ts` and `api/_lib/discordQr.ts` / `discordTournamentApi.ts` / `discordTournamentEmbeds.ts`. Image QR decoding uses `jimp` + `jsqr` (not `sharp`, whose native binaries are a portability risk in a serverless bundle). `discordTournamentApi.ts` is a standalone port of `src/lib/tournamentApi.js` that calls the public Ravensburger API directly, since this function isn't behind `/api/tournament`. Requires a `DISCORD_PUBLIC_KEY` env var in Vercel for request signature verification. See `discord-bot/README.md` for full setup.
 
 ### Storage
 

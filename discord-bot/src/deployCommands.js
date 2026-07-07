@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import { REST, Routes, ApplicationCommandType, ApplicationCommandOptionType } from 'discord.js';
 
 const { DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID } = process.env;
 
@@ -8,42 +7,54 @@ if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
   process.exit(1);
 }
 
+// Discord application command types: 1 = CHAT_INPUT, 3 = MESSAGE (context menu)
+// https://discord.com/developers/docs/interactions/application-commands
 const commands = [
   {
     name: 'Decode Deck QR',
-    type: ApplicationCommandType.Message,
+    type: 3,
   },
   {
     name: 'tournament',
     description: 'Look up a Ravensburger Lorcana tournament',
-    type: ApplicationCommandType.ChatInput,
+    type: 1,
     options: [
       {
         name: 'url',
         description: 'Tournament event URL, e.g. https://tcg.ravensburgerplay.com/events/12345',
-        type: ApplicationCommandOptionType.String,
+        type: 3, // STRING
         required: true,
       },
       {
         name: 'player',
         description: 'Player name to look up (partial match) instead of the full standings',
-        type: ApplicationCommandOptionType.String,
+        type: 3, // STRING
         required: false,
       },
     ],
   },
 ];
 
-const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
-
 const route = DISCORD_GUILD_ID
-  ? Routes.applicationGuildCommands(DISCORD_CLIENT_ID, DISCORD_GUILD_ID)
-  : Routes.applicationCommands(DISCORD_CLIENT_ID);
+  ? `https://discord.com/api/v10/applications/${DISCORD_CLIENT_ID}/guilds/${DISCORD_GUILD_ID}/commands`
+  : `https://discord.com/api/v10/applications/${DISCORD_CLIENT_ID}/commands`;
 
-await rest.put(route, { body: commands });
+const response = await fetch(route, {
+  method: 'PUT',
+  headers: {
+    Authorization: `Bot ${DISCORD_TOKEN}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify(commands),
+});
+
+if (!response.ok) {
+  console.error(`Failed to register commands (HTTP ${response.status}):`, await response.text());
+  process.exit(1);
+}
 
 console.log(
   DISCORD_GUILD_ID
-    ? `Registered "Decode Deck QR" command for guild ${DISCORD_GUILD_ID}.`
-    : 'Registered "Decode Deck QR" command globally (may take up to an hour to show up).'
+    ? `Registered commands for guild ${DISCORD_GUILD_ID}.`
+    : 'Registered commands globally (may take up to an hour to show up).'
 );

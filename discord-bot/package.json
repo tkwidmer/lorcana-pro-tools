@@ -1,22 +1,15 @@
 {
-  "name": "lorcana-discord-qr-bot",
+  "name": "lorcana-discord-register-commands",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
-    "register": "node src/deployCommands.js",
-    "start": "node src/index.js"
+    "register": "node src/deployCommands.js"
   },
   "dependencies": {
-    "discord.js": "^14.16.3",
-    "dotenv": "^16.4.5",
-    "jsqr": "^1.4.0",
-    "sharp": "^0.34.5"
-  },
-  "overrides": {
-    "undici": "^6.27.0"
+    "dotenv": "^16.4.5"
   }
 }

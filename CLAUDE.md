@@ -41,6 +41,8 @@ VITE_SUPABASE_ANON_KEY=...
 
 Vercel also accepts `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` prefixes (both are checked in `supabaseClient.js`).
 
+Optional: `VITE_DISCORD_CLIENT_ID` — the Application ID of the Discord bot in `discord-bot/` (not a secret). When set, `HomePage` shows an "Add to Discord" card under a Community section linking to the bot's OAuth invite URL; when unset, that card is omitted.
+
 ## Architecture
 
 ### Pages → Shared Libs → Storage

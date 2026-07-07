@@ -1,12 +1,12 @@
-import { EmbedBuilder } from 'discord.js'
-
-const ID_RECOMMENDATION_LABELS = {
+// Builds plain Discord embed objects (the raw JSON shape, not a client
+// library wrapper) for the /tournament command's HTTP interaction replies.
+const ID_RECOMMENDATION_LABELS: Record<string, string> = {
   safe: '✅ Safe to ID',
   borderline: '⚠️ Borderline — check tiebreakers',
   danger: '❌ Do not ID — you need the win',
 }
 
-const ADVANCEMENT_LABELS = {
+const ADVANCEMENT_LABELS: Record<string, (a: any) => string> = {
   secured: (a) => `✅ Secured advancement to ${a.nextPhaseName}`,
   possible: (a) =>
     a.type === 'points'
@@ -17,7 +17,7 @@ const ADVANCEMENT_LABELS = {
   outside_cut: (a) => `⚠️ Currently outside top ${a.value} → ${a.nextPhaseName}`,
 }
 
-function roundLabel(structure) {
+function roundLabel(structure: any): string {
   if (structure.isElimination) {
     return `${structure.currentPhaseName || 'Elimination'} · Round ${structure.currentRoundNumber}`
   }
@@ -25,19 +25,15 @@ function roundLabel(structure) {
   return `Round ${structure.currentRoundNumber}${total}`
 }
 
-export function buildSummaryEmbed(structure, standings, eventUrl) {
-  const embed = new EmbedBuilder()
-    .setTitle(structure.eventName || 'Tournament')
-    .setURL(eventUrl)
-    .setColor(0x2563eb)
-
+export function buildSummaryEmbed(structure: any, standings: any[], eventUrl: string) {
   const infoLines = [roundLabel(structure)]
   if (!structure.isElimination && structure.swissRoundsRemaining > 0) {
     infoLines.push(`${structure.swissRoundsRemaining} round(s) remaining`)
   }
   if (structure.topCutSize) infoLines.push(`Top ${structure.topCutSize} cut`)
   infoLines.push(`${standings.length} player(s)`)
-  embed.addFields({ name: 'Status', value: infoLines.join(' · ') })
+
+  const fields = [{ name: 'Status', value: infoLines.join(' · ') }]
 
   if (structure.advancementRequirement) {
     const req = structure.advancementRequirement
@@ -45,7 +41,7 @@ export function buildSummaryEmbed(structure, standings, eventUrl) {
       req.type === 'points'
         ? `Need ${req.value} pts → ${req.nextPhaseName}`
         : `Need top ${req.value} → ${req.nextPhaseName}`
-    embed.addFields({ name: 'Advancement', value })
+    fields.push({ name: 'Advancement', value })
   }
 
   const top = [...standings].sort((a, b) => a.rank - b.rank).slice(0, 10)
@@ -53,29 +49,43 @@ export function buildSummaryEmbed(structure, standings, eventUrl) {
     const lines = top.map(
       (e) => `**${e.rank}.** ${e.user_event_status.best_identifier} — ${e.record} (${e.match_points} pts)`
     )
-    embed.addFields({ name: 'Top Standings', value: lines.join('\n') })
+    fields.push({ name: 'Top Standings', value: lines.join('\n') })
   }
 
-  embed.setFooter({ text: 'Use the player option to look up a specific competitor.' })
-  return embed
+  return {
+    title: structure.eventName || 'Tournament',
+    url: eventUrl,
+    color: 0x2563eb,
+    fields,
+    footer: { text: 'Use the player option to look up a specific competitor.' },
+  }
 }
 
-export function buildPlayerEmbed(structure, entry, idAnalysis, advancementAnalysis, eventUrl) {
-  const embed = new EmbedBuilder()
-    .setTitle(entry.user_event_status.best_identifier)
-    .setURL(eventUrl)
-    .setColor(idAnalysis?.recommendation === 'danger' ? 0xdc2626 : idAnalysis?.recommendation === 'borderline' ? 0xd97706 : 0x16a34a)
-    .setDescription(`${structure.eventName || ''} · ${roundLabel(structure)}`)
-    .addFields(
-      { name: 'Rank', value: `#${entry.rank} of ${structure.startingPlayerCount ?? '—'}`, inline: true },
-      { name: 'Record', value: entry.record, inline: true },
-      { name: 'Match Points', value: String(entry.match_points), inline: true }
-    )
+export function buildPlayerEmbed(
+  structure: any,
+  entry: any,
+  idAnalysis: any,
+  advancementAnalysis: any,
+  eventUrl: string
+) {
+  const color =
+    idAnalysis?.recommendation === 'danger'
+      ? 0xdc2626
+      : idAnalysis?.recommendation === 'borderline'
+      ? 0xd97706
+      : 0x16a34a
+
+  const fields = [
+    { name: 'Rank', value: `#${entry.rank} of ${structure.startingPlayerCount ?? '—'}`, inline: true },
+    { name: 'Record', value: entry.record, inline: true },
+    { name: 'Match Points', value: String(entry.match_points), inline: true },
+  ]
 
   if (advancementAnalysis) {
-    embed.addFields({
+    fields.push({
       name: 'Advancement',
       value: ADVANCEMENT_LABELS[advancementAnalysis.status]?.(advancementAnalysis) ?? '—',
+      inline: false,
     })
   }
 
@@ -90,11 +100,18 @@ export function buildPlayerEmbed(structure, entry, idAnalysis, advancementAnalys
       `After ID: ${idAnalysis.afterIdPoints} pts · After win: ${idAnalysis.afterWinPoints} pts`,
     ].filter(Boolean)
 
-    embed.addFields({
+    fields.push({
       name: ID_RECOMMENDATION_LABELS[idAnalysis.recommendation] ?? 'ID Analysis',
       value: details.join('\n'),
+      inline: false,
     })
   }
 
-  return embed
+  return {
+    title: entry.user_event_status.best_identifier,
+    url: eventUrl,
+    color,
+    description: `${structure.eventName || ''} · ${roundLabel(structure)}`,
+    fields,
+  }
 }

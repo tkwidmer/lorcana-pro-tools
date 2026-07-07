@@ -1,19 +1,20 @@
-// Standalone port of src/lib/tournamentApi.js from the main app. The web app
-// calls its own /api/tournament Vercel proxy; this bot isn't deployed there,
-// so it talks to the (public, unauthenticated) Ravensburger API directly.
+// Standalone port of src/lib/tournamentApi.js for the Discord /tournament
+// command. The web app calls its own /api/tournament Vercel proxy; this
+// module is itself a Vercel function, so it talks to the (public,
+// unauthenticated) Ravensburger API directly.
 const RAVEN_BASE = 'https://api.ravensburgerplay.com/api/v2'
 
 // Tournament/round IDs are short alphanumeric tokens. Reject anything else
 // before interpolating into the upstream URL.
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 
-function assertValidId(id, label) {
+function assertValidId(id: string | null | undefined, label: string) {
   if (!id || !ID_RE.test(id)) {
     throw new Error(`Invalid ${label}`)
   }
 }
 
-async function ravenFetch(path) {
+async function ravenFetch(path: string) {
   const response = await fetch(`${RAVEN_BASE}${path}`)
   if (!response.ok) {
     throw new Error(`Tournament API error (HTTP ${response.status})`)
@@ -21,17 +22,17 @@ async function ravenFetch(path) {
   return response.json()
 }
 
-export function extractEventId(url) {
+export function extractEventId(url: string | null | undefined): string | null {
   const match = String(url).match(/\/events\/(\d+)/)
   return match ? match[1] : null
 }
 
-export async function fetchEventDetails(eventId) {
+export async function fetchEventDetails(eventId: string) {
   assertValidId(eventId, 'eventId')
   return ravenFetch(`/events/${encodeURIComponent(eventId)}`)
 }
 
-async function fetchStandingsPage(roundId, page, pageSize) {
+async function fetchStandingsPage(roundId: string, page: number, pageSize: number) {
   assertValidId(roundId, 'roundId')
   return ravenFetch(
     `/tournament-rounds/${encodeURIComponent(roundId)}/standings/paginated/?page=${page}&page_size=${pageSize}`
@@ -40,8 +41,8 @@ async function fetchStandingsPage(roundId, page, pageSize) {
 
 // Fetches every page of standings for a round and normalizes match_points to
 // the current total (the standings snapshot field is stale mid-event).
-export async function fetchAllStandings(roundId) {
-  const all = []
+export async function fetchAllStandings(roundId: string) {
+  const all: any[] = []
   let page = 1
   let hasMore = true
 
@@ -58,14 +59,14 @@ export async function fetchAllStandings(roundId) {
   }))
 }
 
-export function getTournamentStructure(eventDetails) {
+export function getTournamentStructure(eventDetails: any) {
   if (!eventDetails || !eventDetails.tournament_phases) return null
 
   const phases = eventDetails.tournament_phases
-  const swissPhases = phases.filter((p) => p.round_type === 'SWISS')
-  const eliminationPhase = phases.find((p) => p.round_type === 'RANKED_SINGLE_ELIMINATION')
+  const swissPhases = phases.filter((p: any) => p.round_type === 'SWISS')
+  const eliminationPhase = phases.find((p: any) => p.round_type === 'RANKED_SINGLE_ELIMINATION')
 
-  const totalSwissRounds = swissPhases.reduce((sum, p) => sum + (p.number_of_rounds || 0), 0)
+  const totalSwissRounds = swissPhases.reduce((sum: number, p: any) => sum + (p.number_of_rounds || 0), 0)
 
   const topCutSize =
     eventDetails.top_cut_size || eliminationPhase?.rank_required_to_enter_phase || null
@@ -81,7 +82,7 @@ export function getTournamentStructure(eventDetails) {
     if (!phase.rounds) continue
 
     const inProgressWithStandings = phase.rounds.find(
-      (r) => r.status === 'IN_PROGRESS' && r.standings_status === 'GENERATED'
+      (r: any) => r.status === 'IN_PROGRESS' && r.standings_status === 'GENERATED'
     )
     if (inProgressWithStandings) {
       currentRoundId = inProgressWithStandings.id
@@ -93,7 +94,7 @@ export function getTournamentStructure(eventDetails) {
     }
 
     const completedWithStandings = phase.rounds.filter(
-      (r) => r.status === 'COMPLETE' && r.standings_status === 'GENERATED'
+      (r: any) => r.status === 'COMPLETE' && r.standings_status === 'GENERATED'
     )
     if (completedWithStandings.length > 0) {
       const last = completedWithStandings[completedWithStandings.length - 1]
@@ -107,14 +108,14 @@ export function getTournamentStructure(eventDetails) {
 
   const isElimination = currentPhaseType === 'RANKED_SINGLE_ELIMINATION'
   const swissRoundsRemaining =
-    currentPhaseType === 'SWISS' ? totalSwissRounds - currentRoundNumber : 0
+    currentPhaseType === 'SWISS' ? totalSwissRounds - (currentRoundNumber as number) : 0
 
   const nextPhase =
     currentPhaseIndex >= 0 && currentPhaseIndex + 1 < phases.length
       ? phases[currentPhaseIndex + 1]
       : null
 
-  let advancementRequirement = null
+  let advancementRequirement: any = null
   if (nextPhase && !isElimination) {
     if (nextPhase.rank_required_to_enter_phase) {
       advancementRequirement = {
@@ -157,7 +158,7 @@ export function getTournamentStructure(eventDetails) {
   }
 }
 
-export function analyzeAdvancement(playerEntry, structure) {
+export function analyzeAdvancement(playerEntry: any, structure: any) {
   if (!playerEntry || !structure?.advancementRequirement) return null
 
   const { advancementRequirement, swissRoundsRemaining } = structure
@@ -189,7 +190,7 @@ export function analyzeAdvancement(playerEntry, structure) {
   return null
 }
 
-export function analyzeId(playerEntry, allStandings, structure) {
+export function analyzeId(playerEntry: any, allStandings: any[], structure: any) {
   if (!playerEntry || !allStandings || !structure?.topCutSize) return null
 
   const { topCutSize, swissRoundsRemaining } = structure
@@ -211,9 +212,9 @@ export function analyzeId(playerEntry, allStandings, structure) {
   let recommendation
   if (myRank > topCutSize) {
     recommendation = 'danger'
-  } else if (pointsAboveCut >= 3) {
+  } else if (pointsAboveCut !== null && pointsAboveCut >= 3) {
     recommendation = 'safe'
-  } else if (pointsAboveCut >= 1) {
+  } else if (pointsAboveCut !== null && pointsAboveCut >= 1) {
     recommendation = 'borderline'
   } else {
     recommendation = 'danger'

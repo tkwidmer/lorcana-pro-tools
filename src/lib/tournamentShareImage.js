@@ -49,9 +49,9 @@ function loadInkImage(color) {
 }
 
 // rows: [{ round, result, score, opponent, oppColors: string[], onPlay: bool|null }]
-// Renders a portrait card (min 4:5, like an Instagram feed post) — each match is a
-// compact two-line entry rather than a wide table, since the wide layout this replaced
-// only worked in landscape and didn't fit social media crops/previews.
+// Renders a compact card sized to fit its content — each match is a two-line entry
+// (rather than a wide table) so the card stays legible and portrait-ish for social
+// media at any round count, without padding short match histories out further.
 export async function generateShareImage({ playerName, rank, totalPlayers, record, matchPoints, winPct, eventName, rows }) {
   const usedColors = [...new Set(rows.flatMap((r) => r.oppColors ?? []))]
   const inkImages = Object.fromEntries(
@@ -59,19 +59,20 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
   )
 
   const DPR   = 4
-  const W     = 1080
-  const PAD   = 48
+  // Narrow enough that a typical 5-9 round match history is naturally taller than
+  // wide, without needing a fixed portrait floor that pads short histories with
+  // empty space — height always tracks content directly.
+  const W     = 640
+  const PAD   = 40
   const CW    = W - PAD * 2
 
-  const HEADER_H  = 60
-  const PLAYER_H  = 132
-  const SECTION_H = 40
-  const ROW_H     = 80
-  const FOOTER_H  = 48
-  const MIN_H     = Math.round(W * 1.25) // 4:5 portrait floor regardless of row count
+  const HEADER_H  = 56
+  const PLAYER_H  = 120
+  const SECTION_H = 36
+  const ROW_H     = 72
+  const FOOTER_H  = 44
 
-  const contentH = HEADER_H + PLAYER_H + SECTION_H + rows.length * ROW_H + FOOTER_H
-  const H = Math.max(contentH, MIN_H)
+  const H = HEADER_H + PLAYER_H + SECTION_H + rows.length * ROW_H + FOOTER_H
 
   const canvas = document.createElement('canvas')
   canvas.width  = W  * DPR
@@ -102,10 +103,10 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
   ctx.fillText('LORCANA PRO TOOLS', PAD + 6, HEADER_H / 2)
 
   if (eventName) {
-    ctx.font = '13px ui-sans-serif, system-ui, sans-serif'
+    ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
     ctx.fillStyle = '#475569'
     ctx.textAlign = 'right'
-    ctx.fillText(clip(eventName, 40), W - PAD, HEADER_H / 2)
+    ctx.fillText(clip(eventName, 24), W - PAD, HEADER_H / 2)
   }
 
   // Divider
@@ -120,22 +121,22 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
   const playerMid = HEADER_H + PLAYER_H / 2
 
   ctx.textAlign = 'left'
-  ctx.font = 'bold 34px ui-sans-serif, system-ui, sans-serif'
+  ctx.font = 'bold 27px ui-sans-serif, system-ui, sans-serif'
   ctx.fillStyle = '#F1F5F9'
-  ctx.fillText(clip(playerName, 26), PAD + 6, playerMid - 30)
+  ctx.fillText(clip(playerName, 19), PAD + 6, playerMid - 26)
 
   if (rank) {
-    ctx.font = 'bold 20px ui-sans-serif, system-ui, sans-serif'
+    ctx.font = 'bold 17px ui-sans-serif, system-ui, sans-serif'
     ctx.fillStyle = '#818CF8'
     ctx.textAlign = 'right'
-    ctx.fillText(`#${rank}` + (totalPlayers ? ` / ${totalPlayers}` : ''), W - PAD, playerMid - 30)
+    ctx.fillText(`#${rank}` + (totalPlayers ? ` / ${totalPlayers}` : ''), W - PAD, playerMid - 26)
     ctx.textAlign = 'left'
   }
 
   const statsItems = [record, `${matchPoints} pts`, `${winPct}% WR`].filter(Boolean)
-  ctx.font = '17px ui-sans-serif, system-ui, sans-serif'
+  ctx.font = '14px ui-sans-serif, system-ui, sans-serif'
   ctx.fillStyle = '#94A3B8'
-  ctx.fillText(statsItems.join('   ·   '), PAD + 6, playerMid + 12)
+  ctx.fillText(statsItems.join('   ·   '), PAD + 6, playerMid + 10)
 
   // Divider
   ctx.strokeStyle = '#1E293B'
@@ -191,10 +192,10 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
     ctx.fillText(row.score || '—', badgeX + badgeW + 12, line1Y)
 
     // Line 1, right: opponent name
-    ctx.font = '16px ui-sans-serif, system-ui, sans-serif'
+    ctx.font = '14px ui-sans-serif, system-ui, sans-serif'
     ctx.fillStyle = '#E2E8F0'
     ctx.textAlign = 'right'
-    ctx.fillText(clip(row.opponent, 22), W - PAD - 6, line1Y)
+    ctx.fillText(clip(row.opponent, 16), W - PAD - 6, line1Y)
 
     // Line 2, left: ink icons + color label
     ctx.textAlign = 'left'

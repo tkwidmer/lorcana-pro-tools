@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 import { verifyKey } from 'discord-interactions'
-import { decodeQrFromImageUrl } from './_lib/discordQr'
+import { decodeQrFromImageUrl } from './_lib/discordQr.js'
 import {
   extractEventId,
   fetchEventDetails,
@@ -8,8 +8,8 @@ import {
   getTournamentStructure,
   analyzeId,
   analyzeAdvancement,
-} from './_lib/discordTournamentApi'
-import { buildSummaryEmbed, buildPlayerEmbed } from './_lib/discordTournamentEmbeds'
+} from './_lib/discordTournamentApi.js'
+import { buildSummaryEmbed, buildPlayerEmbed } from './_lib/discordTournamentEmbeds.js'
 
 // Discord requires the raw request body to verify the Ed25519 signature, so
 // this function is not compatible with Vercel's default JSON body parsing.

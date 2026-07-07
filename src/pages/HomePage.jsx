@@ -1,6 +1,14 @@
 import { Link } from 'react-router-dom'
 import { isSupporterPath } from '../lib/access'
 
+// Send Messages (0x800) + Read Message History (0x10000) — the only
+// permissions the Discord QR-decoding bot needs.
+const DISCORD_BOT_PERMISSIONS = 67584
+const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID
+const DISCORD_INVITE_URL = DISCORD_CLIENT_ID
+  ? `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&scope=bot+applications.commands&permissions=${DISCORD_BOT_PERMISSIONS}`
+  : null
+
 const SECTIONS = [
   {
     title: 'Deckbuilding',
@@ -97,9 +105,44 @@ const SECTIONS = [
       },
     ],
   },
+  ...(DISCORD_INVITE_URL
+    ? [
+        {
+          title: 'Community',
+          tools: [
+            {
+              href: DISCORD_INVITE_URL,
+              name: 'Add to Discord',
+              description: 'Invite the Lorcana Pro Tools bot to your server. Right-click any deck list image and pick "Decode Deck QR" to get a clickable duels.ink link to the deck.',
+            },
+          ],
+        },
+      ]
+    : []),
 ]
 
 function ToolCard({ tool }) {
+  if (tool.href) {
+    return (
+      <a
+        href={tool.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group block border border-gray-200 rounded-lg p-6 hover:border-gray-900 transition-colors"
+      >
+        <h3 className="text-base font-bold text-gray-900 group-hover:underline mb-2">
+          {tool.name}
+        </h3>
+        <p className="text-sm text-gray-500 leading-relaxed mb-4">
+          {tool.description}
+        </p>
+        <span className="text-sm font-medium text-gray-900">
+          Add to Discord →
+        </span>
+      </a>
+    )
+  }
+
   const supporterOnly = isSupporterPath(tool.path)
   return (
     <Link
@@ -145,7 +188,7 @@ export function HomePage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {section.tools.map(tool => (
-                <ToolCard key={tool.path} tool={tool} />
+                <ToolCard key={tool.path || tool.href} tool={tool} />
               ))}
             </div>
           </div>

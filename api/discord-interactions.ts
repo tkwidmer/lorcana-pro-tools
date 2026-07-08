@@ -11,6 +11,7 @@ import {
   analyzeAdvancement,
 } from './_lib/discordTournamentApi.js'
 import { buildSummaryEmbed, buildPlayerEmbed } from './_lib/discordTournamentEmbeds.js'
+import { addFavorite, removeFavorites, listActiveFavorites } from './_lib/discordFavorites.js'
 
 // Discord requires the raw request body to verify the Ed25519 signature, so
 // this function is not compatible with Vercel's default JSON body parsing.
@@ -98,31 +99,26 @@ async function handleDecodeQr(interaction: any) {
   return { content: lines.join('\n') }
 }
 
-async function handleTournament(interaction: any) {
-  const options: Array<{ name: string; value: string }> = interaction.data.options ?? []
-  const url = options.find((o) => o.name === 'url')?.value
-  const playerQuery = options.find((o) => o.name === 'player')?.value
-
+// Shared by /tournament player: and /favorite — resolves an event URL +
+// player name query down to a single standings entry, or an error message
+// for the no-match / ambiguous-match / bad-url / no-active-round cases.
+async function resolveEventAndPlayer(url: string | undefined, playerQuery: string) {
   const eventId = extractEventId(url)
   if (!eventId) {
     return {
-      content:
+      error:
         "That doesn't look like a Ravensburger event URL. Expected something like `https://tcg.ravensburgerplay.com/events/12345`.",
-    }
+    } as const
   }
 
   const eventDetails = await fetchEventDetails(eventId)
   const structure = getTournamentStructure(eventDetails)
 
   if (!structure?.currentRoundId) {
-    return { content: 'Could not find an active round for this event.' }
+    return { error: 'Could not find an active round for this event.' } as const
   }
 
   const standings = await fetchAllStandings(structure.currentRoundId)
-
-  if (!playerQuery) {
-    return { embeds: [buildSummaryEmbed(structure, standings, url as string)] }
-  }
 
   const query = playerQuery.toLowerCase()
   const matches = standings.filter(
@@ -132,7 +128,7 @@ async function handleTournament(interaction: any) {
   )
 
   if (matches.length === 0) {
-    return { content: `No player matching "${playerQuery}" found in the current standings.` }
+    return { error: `No player matching "${playerQuery}" found in the current standings.` } as const
   }
 
   if (matches.length > 1) {
@@ -140,13 +136,103 @@ async function handleTournament(interaction: any) {
       .slice(0, 10)
       .map((entry) => `${entry.user_event_status.best_identifier} (#${entry.rank})`)
       .join(', ')
-    return { content: `Multiple players match "${playerQuery}": ${names}. Try a more specific name.` }
+    return { error: `Multiple players match "${playerQuery}": ${names}. Try a more specific name.` } as const
   }
 
-  const entry = matches[0]
+  return { eventId, structure, standings, entry: matches[0] } as const
+}
+
+async function handleTournament(interaction: any) {
+  const options: Array<{ name: string; value: string }> = interaction.data.options ?? []
+  const url = options.find((o) => o.name === 'url')?.value
+  const playerQuery = options.find((o) => o.name === 'player')?.value
+
+  if (!playerQuery) {
+    const eventId = extractEventId(url)
+    if (!eventId) {
+      return {
+        content:
+          "That doesn't look like a Ravensburger event URL. Expected something like `https://tcg.ravensburgerplay.com/events/12345`.",
+      }
+    }
+    const eventDetails = await fetchEventDetails(eventId)
+    const structure = getTournamentStructure(eventDetails)
+    if (!structure?.currentRoundId) {
+      return { content: 'Could not find an active round for this event.' }
+    }
+    const standings = await fetchAllStandings(structure.currentRoundId)
+    return { embeds: [buildSummaryEmbed(structure, standings, url as string)] }
+  }
+
+  const resolved = await resolveEventAndPlayer(url, playerQuery)
+  if ('error' in resolved) return { content: resolved.error }
+
+  const { structure, standings, entry } = resolved
   const idAnalysis = analyzeId(entry, standings, structure)
   const advancementAnalysis = analyzeAdvancement(entry, structure)
   return { embeds: [buildPlayerEmbed(structure, entry, idAnalysis, advancementAnalysis, url as string)] }
+}
+
+function interactionChannelId(interaction: any): string {
+  return interaction.channel_id ?? interaction.channel?.id
+}
+
+function interactionUserId(interaction: any): string {
+  return interaction.member?.user?.id ?? interaction.user?.id ?? 'unknown'
+}
+
+async function handleFavorite(interaction: any) {
+  const options: Array<{ name: string; value: string }> = interaction.data.options ?? []
+  const url = options.find((o) => o.name === 'url')?.value
+  const playerQuery = options.find((o) => o.name === 'player')?.value
+
+  const resolved = await resolveEventAndPlayer(url, playerQuery)
+  if ('error' in resolved) return { content: resolved.error }
+
+  const { eventId, entry } = resolved
+
+  await addFavorite({
+    guildId: interaction.guild_id ?? 'dm',
+    channelId: interactionChannelId(interaction),
+    eventId,
+    eventUrl: url as string,
+    playerId: entry.player.id,
+    playerName: entry.user_event_status.best_identifier,
+    requestedBy: interactionUserId(interaction),
+    rank: entry.rank,
+    record: entry.record,
+    matchPoints: entry.match_points,
+  })
+
+  return {
+    content: `📌 Now tracking **${entry.user_event_status.best_identifier}** (rank #${entry.rank}) in this channel — I'll post here when their rank or record changes.`,
+  }
+}
+
+async function handleUnfavorite(interaction: any) {
+  const options: Array<{ name: string; value: string }> = interaction.data.options ?? []
+  const playerQuery = options.find((o) => o.name === 'player')?.value
+
+  if (!playerQuery) return { content: 'Please provide a player name.' }
+
+  const removed = await removeFavorites(interactionChannelId(interaction), playerQuery)
+  if (removed === 0) {
+    return { content: `No tracked player matching "${playerQuery}" found in this channel.` }
+  }
+  return { content: `Stopped tracking ${removed} player(s) matching "${playerQuery}" in this channel.` }
+}
+
+async function handleFavorites(interaction: any) {
+  const favorites = await listActiveFavorites(interactionChannelId(interaction))
+
+  if (favorites.length === 0) {
+    return { content: 'No players are currently being tracked in this channel.' }
+  }
+
+  const lines = favorites.map(
+    (f) => `**${f.player_name}** — rank #${f.last_rank ?? '?'}, ${f.last_record ?? '—'} (<${f.event_url}>)`
+  )
+  return { content: `Tracking ${favorites.length} player(s) in this channel:\n${lines.join('\n')}` }
 }
 
 async function handleCommand(interaction: any) {
@@ -159,6 +245,21 @@ async function handleCommand(interaction: any) {
 
   if (data.name === 'tournament') {
     await editOriginalReply(interaction, await handleTournament(interaction))
+    return
+  }
+
+  if (data.name === 'favorite') {
+    await editOriginalReply(interaction, await handleFavorite(interaction))
+    return
+  }
+
+  if (data.name === 'unfavorite') {
+    await editOriginalReply(interaction, await handleUnfavorite(interaction))
+    return
+  }
+
+  if (data.name === 'favorites') {
+    await editOriginalReply(interaction, await handleFavorites(interaction))
     return
   }
 

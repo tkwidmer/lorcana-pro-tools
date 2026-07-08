@@ -6,7 +6,13 @@
 // function bundle. Jimp has no native dependencies, trading a bit of speed
 // for guaranteed portability.
 import { Jimp } from 'jimp'
-import jsQR from 'jsqr'
+import { createRequire } from 'node:module'
+
+// jsqr ships a CJS default export; requiring it directly avoids any
+// esModuleInterop ambiguity over how `import jsQR from 'jsqr'` resolves.
+const require = createRequire(import.meta.url)
+const jsQR: (data: Uint8ClampedArray, width: number, height: number) => { data: string } | null =
+  require('jsqr')
 
 // Deck share images can be large; downscaling keeps decoding fast without
 // losing enough resolution to read the QR code.

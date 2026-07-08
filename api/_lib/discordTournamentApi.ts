@@ -41,13 +41,20 @@ async function fetchStandingsPage(roundId: string, page: number, pageSize: numbe
 
 // Fetches every page of standings for a round and normalizes match_points to
 // the current total (the standings snapshot field is stale mid-event).
+//
+// The bot has a tight (Vercel Hobby-tier) execution budget, so a large page
+// size is used to cover most events in a single round trip instead of the
+// web app's sequential-fetch-friendly 50 per page; the loop below still
+// falls back to further pages for events larger than that.
+const STANDINGS_PAGE_SIZE = 500
+
 export async function fetchAllStandings(roundId: string) {
   const all: any[] = []
   let page = 1
   let hasMore = true
 
   while (hasMore) {
-    const data = await fetchStandingsPage(roundId, page, 50)
+    const data = await fetchStandingsPage(roundId, page, STANDINGS_PAGE_SIZE)
     all.push(...data.results)
     hasMore = data.next_page_number !== null
     page = data.next_page_number || page + 1

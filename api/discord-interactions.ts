@@ -1,5 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 import { verifyKey } from 'discord-interactions'
+import { waitUntil } from '@vercel/functions'
 import { decodeQrFromImageUrl } from './_lib/discordQr.js'
 import {
   extractEventId,
@@ -35,6 +36,28 @@ function readRawBody(req: VercelRequest): Promise<Buffer> {
 
 function headerString(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
+}
+
+class TimeoutError extends Error {}
+
+// Leaves headroom under the platform's own hard execution limit (Vercel
+// Hobby caps functions at 10s regardless of the maxDuration config above)
+// so a slow run gets an explicit reply instead of being killed mid-flight
+// with the interaction stuck on "thinking" forever.
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new TimeoutError(`Timed out after ${ms}ms`)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }
 
 async function editOriginalReply(interaction: any, payload: Record<string, unknown>) {
@@ -176,15 +199,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  // Acknowledge immediately (Discord requires a response within 3s), then
-  // keep running in this same invocation to do the real work and edit the
-  // deferred reply in place via the followup webhook.
+  // Acknowledge immediately (Discord requires a response within 3s). The
+  // real work happens after this point — it's kept alive two ways: a
+  // direct await (what the classic Node.js Functions runtime needs) and
+  // waitUntil (what Vercel's Fluid Compute runtime needs instead, since it
+  // may otherwise suspend the invocation once the response is sent).
   res.status(200).json({ type: DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE })
 
-  try {
-    await handleCommand(interaction)
-  } catch (error) {
+  const workPromise = withTimeout(handleCommand(interaction), 8000).catch((error) => {
     console.error('Interaction handling failed:', error)
-    await editOriginalReply(interaction, { content: 'Something went wrong handling that command.' })
-  }
+    return editOriginalReply(interaction, {
+      content:
+        error instanceof TimeoutError
+          ? 'That took too long to process — please try again.'
+          : 'Something went wrong handling that command.',
+    })
+  })
+
+  waitUntil(workPromise)
+  await workPromise
 }

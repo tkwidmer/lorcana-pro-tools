@@ -33,6 +33,43 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'favorite',
+    description: 'Track a player in this channel — post updates here when their rank or record changes',
+    type: 1,
+    options: [
+      {
+        name: 'url',
+        description: 'Tournament event URL, e.g. https://tcg.ravensburgerplay.com/events/12345',
+        type: 3, // STRING
+        required: true,
+      },
+      {
+        name: 'player',
+        description: 'Player name to track (partial match)',
+        type: 3, // STRING
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'unfavorite',
+    description: 'Stop tracking a player in this channel',
+    type: 1,
+    options: [
+      {
+        name: 'player',
+        description: 'Player name to stop tracking (partial match)',
+        type: 3, // STRING
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'favorites',
+    description: 'List players currently being tracked in this channel',
+    type: 1,
+  },
 ];
 
 const route = DISCORD_GUILD_ID

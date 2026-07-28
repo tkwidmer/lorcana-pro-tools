@@ -1002,16 +1002,6 @@ function BuildView({ initialDeck, cards, onBack }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
         <div>
-          <div className="border border-gray-200 rounded-lg bg-white p-4 mb-6 flex gap-4">
-            {imageUrl && <img src={imageUrl} alt="" className="w-20 aspect-[2.5/3.5] object-cover rounded flex-shrink-0" />}
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                {coconutDisplayName(coconutCard)}
-              </p>
-              <p className="text-sm text-gray-700 whitespace-pre-line">{coconutCard.ability}</p>
-            </div>
-          </div>
-
           <CardBrowser
             cards={cards}
             coconutCard={coconutCard}
@@ -1023,6 +1013,16 @@ function BuildView({ initialDeck, cards, onBack }) {
         </div>
 
         <div className="lg:sticky lg:top-6 space-y-4">
+          <div className="border border-gray-200 rounded-lg bg-white p-4">
+            {imageUrl && (
+              <img src={imageUrl} alt="" className="w-40 mx-auto aspect-[2.5/3.5] object-cover rounded mb-3" />
+            )}
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              {coconutDisplayName(coconutCard)}
+            </p>
+            <p className="text-sm text-gray-700 whitespace-pre-line">{coconutCard.ability}</p>
+          </div>
+
           <div className={`text-sm rounded-lg px-4 py-3 border ${
             validity.isValid ? 'bg-green-50 text-green-800 border-green-200' : 'bg-amber-50 text-amber-800 border-amber-200'
           }`}>

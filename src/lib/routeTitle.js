@@ -10,6 +10,7 @@ const HOME_TITLE = `${SITE} — Competitive tools for Disney Lorcana`
 const TITLES = {
   '/login': 'Sign in',
   '/proxy': 'Proxy Generator',
+  '/coconut-deck-builder': 'Coconut Deck Builder',
   '/cut-calculator': 'Cut Calculator',
   '/limited-guide': 'Limited Guide',
   '/deck-insights': 'Deck Insights',

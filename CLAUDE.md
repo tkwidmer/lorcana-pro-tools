@@ -67,6 +67,7 @@ Defined in `src/App.jsx`:
 | `/login` | `LoginPage.jsx` | Google OAuth sign-in via Supabase |
 | `/auth/callback` | `AuthCallbackPage.jsx` | OAuth redirect handler; checks session and redirects |
 | `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, build print sheets (9/page) |
+| `/coconut-deck-builder` | `CoconutDeckBuilderPage.jsx` | [Format Coconut] deck builder — pick a Coconut card, lock in up to 3 inks, build a singleton 60+ card deck with the format's copy-count exceptions enforced |
 | `/cut-calculator` | `TournamentCutPage.jsx` | Swiss cut probability calculator using binomial/trinomial models |
 | `/limited-guide` | `LimitedGuidePage.jsx` | Limited format reference — BREAD framework, mana curves, uninkable counts |
 | `/deck-insights` | `DrawOddsPage.jsx` | Comprehensive deck analytics: draw odds, mulligan/scry simulation, keyword analysis, brickability, quest pressure curves |
@@ -137,6 +138,9 @@ In `src/lib/`:
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
 | `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
 | `scoutedGames.js` | IndexedDB CRUD for scraped game snapshots (`lorcana_pro_tools` DB, `games` store, keyed by `uuid`) — powers the Scouting Library |
+| `coconutCards.js` | Static data for the 18 beta [Format Coconut] cards — ink, associated base card `fullName`, ability text, and the Nick Wilde → Pawpsicle extra-copy exception |
+| `coconutFormat.js` | [Format Coconut] deck rules — `getCardLimit()` (1, or 4 for the Coconut card/its extra-copy exception), ink legality, and `validateDeck()` (60+ cards, singleton, ink) |
+| `coconutDecks.js` | IndexedDB CRUD for saved Coconut decks (`lorcana_pro_tools` DB, `coconutDecks` store, keyed by `id`) |
 | `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
 | `gameStats.js` | Aggregate stats across game records — matchups, card plays, ink curves |
 | `gameSnapshot.js` | Export/import game state as JSON files for sharing |
@@ -191,6 +195,7 @@ The Discord bot (message command "Decode Deck QR" + `/tournament`, `/favorite`, 
 |---|---|---|
 | IndexedDB `lorcana_pro_tools` v2 | `games` store (key: `uuid`) | Scraped game snapshots from `GameScraperPage` |
 | IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
+| IndexedDB `lorcana_pro_tools` v3 | `coconutDecks` store (key: `id`) | Saved [Format Coconut] decks from `CoconutDeckBuilderPage` |
 | IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `GamelogAnalyzerPage` |
 | localStorage `duels_api_tokens` | — | Array of duels.ink Bearer tokens (multi-account); `duels_api_active_token_id` selects the active one. Legacy single-token `duels_api_token` is auto-migrated on first access (see `duelsApi.js`) |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
@@ -286,3 +291,14 @@ PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapp
 **Cut calculator (TournamentCutPage)** — Upper bound uses a pure W/L binomial; lower bound uses a trinomial W/D/L with empirical draw rate. Estimates safe cutline range and advises on intentional draw risk.
 
 **Tournament ID analysis (tournamentApi.js `analyzeId`)** — After an ID, player gains 1 point. Counts how many players below the cut could leapfrog them if those players all win (+3 pts). Classifies as safe (≥3 point buffer), borderline (1–2 buffer), or danger (0 or outside cut).
+
+### [Format Coconut] Deck Builder
+
+`CoconutDeckBuilderPage` walks through: pick one of the 18 beta Coconut cards (`coconutCards.js`) → lock in up to 3 ink types, one of which must match the Coconut card's ink → build a 60+ card singleton deck around it. Each Coconut card reuses its associated Disney Lorcana card's real stats (matched by `fullName` against the live `useCards()` data) rather than being a distinct printed card — the base card's ability is replaced on screen with the Coconut card's alternate ability text (`coconutCards.js`'s `ability` field), since we don't have separate art or a separate database entry for the Coconut variant.
+
+`coconutFormat.js` enforces the format's deck-building rules:
+- 1 copy max per card, except up to 4 copies of the card matching the chosen Coconut card's `baseFullName`, and (Nick Wilde – "Wily Fox" only) up to 4 copies of an item named Pawpsicle, via the `extraCopy` field on that Coconut card entry.
+- Every card must be within the deck's locked ink colors (`isCardInkLegal`, using `resolveColors()` from `inkColors.js`).
+- At least 60 total cards (`MIN_DECK_SIZE`).
+
+Decks are saved to IndexedDB via `coconutDecks.js` (autosaved with a short debounce as the user edits, consistent with the "no server-side game data" ethos — decks never leave the browser).

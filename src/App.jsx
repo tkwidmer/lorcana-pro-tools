@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { routeTitle } from './lib/routeTitle'
 import { HomePage } from './pages/HomePage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
+import { CoconutDeckBuilderPage } from './pages/CoconutDeckBuilderPage'
 import { TournamentCutPage } from './pages/TournamentCutPage'
 import { LimitedGuidePage } from './pages/LimitedGuidePage'
 import { DeckInsightsPage } from './pages/DrawOddsPage'
@@ -45,6 +46,7 @@ function RoutedContent() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
+        <Route path="/coconut-deck-builder" element={<CoconutDeckBuilderPage />} />
         <Route path="/cut-calculator" element={<TournamentCutPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
         <Route path="/deck-insights" element={<SupporterRoute><DeckInsightsPage /></SupporterRoute>} />

@@ -33,6 +33,11 @@ const SECTIONS = [
         name: 'Deck Comparison',
         description: 'Paste your paper deck and your updated online list to see exactly which cards to swap — no more mis-registrations when transitioning between testing and paper.',
       },
+      {
+        path: '/coconut-deck-builder',
+        name: 'Coconut Deck Builder',
+        description: 'Build decks for the [Format Coconut] multiplayer format — pick a Coconut card, lock in your inks, and build a singleton deck around it with the copy-count exceptions enforced automatically.',
+      },
     ],
   },
   {

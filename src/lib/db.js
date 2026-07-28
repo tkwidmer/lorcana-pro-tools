@@ -1,5 +1,11 @@
 const DB_NAME = 'lorcana_pro_tools'
-const DB_VERSION = 2
+const DB_VERSION = 3
+
+const STORE_KEY_PATHS = {
+  games: 'uuid',
+  cards: 'version',
+  coconutDecks: 'id',
+}
 
 let dbPromise = null
 
@@ -9,11 +15,9 @@ export function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const db = req.result
-      const stores = ['games', 'cards']
-      for (const store of stores) {
+      for (const store of Object.keys(STORE_KEY_PATHS)) {
         if (!db.objectStoreNames.contains(store)) {
-          const keyPath = store === 'cards' ? 'version' : 'uuid'
-          db.createObjectStore(store, { keyPath })
+          db.createObjectStore(store, { keyPath: STORE_KEY_PATHS[store] })
         }
       }
     }

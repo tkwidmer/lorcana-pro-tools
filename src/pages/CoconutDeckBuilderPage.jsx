@@ -166,19 +166,33 @@ function compareBySetNumber(a, b) {
   return String(a.setCode).localeCompare(String(b.setCode)) || (a.number ?? 0) - (b.number ?? 0)
 }
 
+// Same idea as compareBySetNumber but newest set first — used as the
+// tie-break for Cost and Ink Color sorts, where "same cost" or "same ink"
+// cards should surface the most recently printed version first.
+function compareBySetNumberDesc(a, b) {
+  const an = parseInt(a.setCode, 10)
+  const bn = parseInt(b.setCode, 10)
+  const aIsNum = !Number.isNaN(an)
+  const bIsNum = !Number.isNaN(bn)
+  if (aIsNum && bIsNum && an !== bn) return bn - an
+  if (aIsNum !== bIsNum) return aIsNum ? -1 : 1
+  if (aIsNum && bIsNum) return (a.number ?? 0) - (b.number ?? 0)
+  return String(b.setCode).localeCompare(String(a.setCode)) || (a.number ?? 0) - (b.number ?? 0)
+}
+
 function compareByInk(a, b) {
   const ai = VALID_INKS.indexOf(resolveColors([a.color])[0] ?? '')
   const bi = VALID_INKS.indexOf(resolveColors([b.color])[0] ?? '')
   const aRank = ai === -1 ? VALID_INKS.length : ai
   const bRank = bi === -1 ? VALID_INKS.length : bi
   if (aRank !== bRank) return aRank - bRank
-  return a.cost - b.cost || a.fullName.localeCompare(b.fullName)
+  return (a.cost - b.cost) || compareBySetNumberDesc(a, b)
 }
 
 function compareCards(a, b, sortBy) {
   switch (sortBy) {
-    case 'cost-asc': return (a.cost - b.cost) || a.fullName.localeCompare(b.fullName)
-    case 'cost-desc': return (b.cost - a.cost) || a.fullName.localeCompare(b.fullName)
+    case 'cost-asc': return (a.cost - b.cost) || compareBySetNumberDesc(a, b)
+    case 'cost-desc': return (b.cost - a.cost) || compareBySetNumberDesc(a, b)
     case 'name-asc': return a.fullName.localeCompare(b.fullName)
     case 'name-desc': return b.fullName.localeCompare(a.fullName)
     case 'ink': return compareByInk(a, b)
@@ -533,7 +547,7 @@ function StatFilterGroup({ label, buckets, selected, onChange }) {
   )
 }
 
-const RESULT_CAP = 150
+const RESULT_CAP = 1000
 
 function QtyStepper({ qty, limit, onDecrement, onIncrement }) {
   return (

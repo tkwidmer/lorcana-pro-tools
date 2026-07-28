@@ -40,6 +40,14 @@ function coconutDisplayName(coconutCard) {
   return `${coconutCard.name} – "${coconutCard.version}"`
 }
 
+// Real beta [Format Coconut] card art, bundled locally (public/coconut-cards/)
+// since these are alternate-ability variants with their own printed card face —
+// not the same image LorcanaJSON serves for the base card.
+function getCoconutCardImageUrl(coconutCard) {
+  if (!coconutCard) return null
+  return `/coconut-cards/${coconutCard.id}.jpg`
+}
+
 // LorcanaJSON's card image field isn't exercised anywhere else in this repo
 // (every other page renders text-only), so this checks a few plausible
 // shapes rather than assuming one exact key.
@@ -206,7 +214,7 @@ function DeckListView({ decks, loading, cardsLoading, onNew, onOpen, onDelete })
 
 // ---------- Step 1: pick a Coconut card ----------
 
-function PickCoconutCardView({ cardsByFullName, onPick, onCancel }) {
+function PickCoconutCardView({ onPick, onCancel }) {
   const groups = useMemo(() => {
     const byInk = {}
     for (const c of COCONUT_CARDS) {
@@ -239,8 +247,7 @@ function PickCoconutCardView({ cardsByFullName, onPick, onCancel }) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {(groups[ink] ?? []).map(cc => {
-                const baseCard = cardsByFullName.get(cc.baseFullName.toLowerCase())
-                const imageUrl = getCardImageUrl(baseCard)
+                const imageUrl = getCoconutCardImageUrl(cc)
                 return (
                   <button
                     key={cc.id}
@@ -587,10 +594,6 @@ function BuildView({ initialDeck, cards, onBack }) {
   const saveTimer = useRef(null)
 
   const coconutCard = getCoconutCard(deck.coconutCardId)
-  const baseCard = useMemo(
-    () => cards.find(c => c.fullName?.toLowerCase() === coconutCard?.baseFullName?.toLowerCase()) ?? null,
-    [cards, coconutCard]
-  )
 
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -663,7 +666,7 @@ function BuildView({ initialDeck, cards, onBack }) {
     )
   }
 
-  const imageUrl = getCardImageUrl(baseCard)
+  const imageUrl = getCoconutCardImageUrl(coconutCard)
 
   return (
     <div className="max-w-[90rem] mx-auto px-6 py-8">
@@ -843,7 +846,7 @@ export function CoconutDeckBuilderPage() {
   }
 
   if (view === 'pick-coconut') {
-    return <PickCoconutCardView cardsByFullName={cardsByFullName} onPick={handlePickCoconut} onCancel={handleBack} />
+    return <PickCoconutCardView onPick={handlePickCoconut} onCancel={handleBack} />
   }
 
   if (view === 'pick-inks' && draftCoconutId) {

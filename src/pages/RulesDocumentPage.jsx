@@ -156,10 +156,13 @@ function ChapterSidebar({ doc, version, chapters, activeChapter }) {
   return (
     <nav className="space-y-4">
       {chapters.map(chapter => {
-        const entries = getChapterEntries(version, chapter.id).filter(
-          e => e.type === 'rule' && ruleDepth(e.id) === 0
-        )
         const isActive = chapter.id === activeChapter?.id
+        // Sections (e.g. "4.1 General") are one level below the chapter
+        // itself, so depth 1 — only worth computing for the active chapter,
+        // since that's the only one whose sub-items are shown.
+        const entries = isActive
+          ? getChapterEntries(version, chapter.id).filter(e => e.type === 'rule' && ruleDepth(e.id) === 1)
+          : []
         return (
           <div key={chapter.id}>
             <Link

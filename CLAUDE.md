@@ -63,7 +63,7 @@ Defined in `src/App.jsx`:
 
 | Route | Page File | Purpose |
 |---|---|---|
-| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Deckbuilding, Coaching, Tournament, Scouting sections |
+| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching, Tournament, Scouting sections |
 | `/login` | `LoginPage.jsx` | Google OAuth sign-in via Supabase |
 | `/auth/callback` | `AuthCallbackPage.jsx` | OAuth redirect handler; checks session and redirects |
 | `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, build print sheets (9/page) |

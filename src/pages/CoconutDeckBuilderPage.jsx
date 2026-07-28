@@ -56,6 +56,15 @@ function getCardImageUrl(card) {
   return card.images?.full || card.images?.large || card.images?.thumbnail || card.images?.small || card.imageUrl || null
 }
 
+// LorcanaJSON represents Song cards as `type: "Action"` with a "Song" entry
+// in `subtypes` rather than a distinct type — songs are treated as their own
+// card type everywhere in this browser, so this derives the type players
+// actually think in terms of.
+function getEffectiveType(card) {
+  if (card.type === 'Action' && card.subtypes?.includes('Song')) return 'Song'
+  return card.type
+}
+
 function getCardKeywords(card) {
   if (Array.isArray(card.keywordAbilities) && card.keywordAbilities.length > 0) {
     return card.keywordAbilities
@@ -102,6 +111,50 @@ function inRange(value, min, max) {
   return true
 }
 
+const SORT_OPTIONS = [
+  { value: 'set-number', label: 'Set # / Card #' },
+  { value: 'cost-asc', label: 'Cost: Low to High' },
+  { value: 'cost-desc', label: 'Cost: High to Low' },
+  { value: 'ink', label: 'Ink Color' },
+  { value: 'name-asc', label: 'Name: A to Z' },
+  { value: 'name-desc', label: 'Name: Z to A' },
+]
+
+// Set codes are mostly numeric strings ("1".."9") but promos/quests use
+// letter-prefixed codes (e.g. "Q1") — numeric sets sort first, in order,
+// then any non-numeric codes fall back to a plain string compare.
+function compareBySetNumber(a, b) {
+  const an = parseInt(a.setCode, 10)
+  const bn = parseInt(b.setCode, 10)
+  const aIsNum = !Number.isNaN(an)
+  const bIsNum = !Number.isNaN(bn)
+  if (aIsNum && bIsNum && an !== bn) return an - bn
+  if (aIsNum !== bIsNum) return aIsNum ? -1 : 1
+  if (aIsNum && bIsNum) return (a.number ?? 0) - (b.number ?? 0)
+  return String(a.setCode).localeCompare(String(b.setCode)) || (a.number ?? 0) - (b.number ?? 0)
+}
+
+function compareByInk(a, b) {
+  const ai = VALID_INKS.indexOf(resolveColors([a.color])[0] ?? '')
+  const bi = VALID_INKS.indexOf(resolveColors([b.color])[0] ?? '')
+  const aRank = ai === -1 ? VALID_INKS.length : ai
+  const bRank = bi === -1 ? VALID_INKS.length : bi
+  if (aRank !== bRank) return aRank - bRank
+  return a.cost - b.cost || a.fullName.localeCompare(b.fullName)
+}
+
+function compareCards(a, b, sortBy) {
+  switch (sortBy) {
+    case 'cost-asc': return (a.cost - b.cost) || a.fullName.localeCompare(b.fullName)
+    case 'cost-desc': return (b.cost - a.cost) || a.fullName.localeCompare(b.fullName)
+    case 'name-asc': return a.fullName.localeCompare(b.fullName)
+    case 'name-desc': return b.fullName.localeCompare(a.fullName)
+    case 'ink': return compareByInk(a, b)
+    case 'set-number':
+    default: return compareBySetNumber(a, b)
+  }
+}
+
 const EMPTY_FILTERS = {
   query: '',
   inks: [],
@@ -129,7 +182,7 @@ function hasActiveFilters(filters) {
 function cardMatchesFilters(card, filters) {
   const cardInks = resolveColors([card.color])
   if (filters.inks.length && !cardInks.some(ink => filters.inks.includes(ink))) return false
-  if (filters.types.length && !filters.types.includes(card.type)) return false
+  if (filters.types.length && !filters.types.includes(getEffectiveType(card))) return false
   if (filters.inkable === 'yes' && !card.inkwell) return false
   if (filters.inkable === 'no' && card.inkwell) return false
   if (!inRange(card.cost, filters.costMin, filters.costMax)) return false
@@ -335,18 +388,7 @@ function PickInksView({ coconutCard, onConfirm, onCancel }) {
 
 // ---------- Step 3: build the deck ----------
 
-function FacetDropdown({ label, options, selected, onChange }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
+function CheckboxGroup({ label, options, selected, onChange }) {
   if (options.length === 0) return null
 
   const toggle = (value) => {
@@ -354,30 +396,80 @@ function FacetDropdown({ label, options, selected, onChange }) {
   }
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`text-xs px-3 py-1.5 rounded border whitespace-nowrap transition-colors ${
-          selected.length ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
-        }`}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+        {selected.length > 0 && (
+          <button onClick={() => onChange([])} className="text-xs text-gray-400 hover:text-gray-700 underline">
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 max-h-40 overflow-y-auto pr-1">
+        {options.map(opt => (
+          <label key={opt} className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer whitespace-nowrap">
+            <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} />
+            {opt}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CardFilterModal({
+  filters, setFilter, setOptions, rarityOptions, keywordOptions, classificationOptions, franchiseOptions, onReset, onClose,
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
+      <div
+        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-xl border border-gray-200 max-h-[90vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
       >
-        {label}{selected.length ? ` (${selected.length})` : ''}
-      </button>
-      {open && (
-        <div className="absolute z-30 mt-1 w-56 max-h-64 overflow-y-auto bg-white border border-gray-300 rounded shadow-lg p-2">
-          {selected.length > 0 && (
-            <button onClick={() => onChange([])} className="text-xs text-gray-400 hover:text-gray-700 underline mb-1">
-              Clear
-            </button>
-          )}
-          {options.map(opt => (
-            <label key={opt} className="flex items-center gap-2 text-xs py-1 cursor-pointer">
-              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} />
-              {opt}
-            </label>
-          ))}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+          <h2 className="text-sm font-semibold text-gray-900">Filters</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
         </div>
-      )}
+
+        <div className="overflow-y-auto p-4 space-y-5">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Inkable</p>
+            <div className="flex border border-gray-300 rounded overflow-hidden text-xs w-fit">
+              {[['any', 'Any'], ['yes', 'Inkable'], ['no', 'Uninkable']].map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setFilter('inkable', value)}
+                  className={`px-3 py-1.5 transition-colors ${filters.inkable === value ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <RangeInputs label="Cost" lo={filters.costMin} hi={filters.costMax} onChangeLo={v => setFilter('costMin', v)} onChangeHi={v => setFilter('costMax', v)} />
+            <RangeInputs label="Strength" lo={filters.strengthMin} hi={filters.strengthMax} onChangeLo={v => setFilter('strengthMin', v)} onChangeHi={v => setFilter('strengthMax', v)} />
+            <RangeInputs label="Willpower" lo={filters.willpowerMin} hi={filters.willpowerMax} onChangeLo={v => setFilter('willpowerMin', v)} onChangeHi={v => setFilter('willpowerMax', v)} />
+            <RangeInputs label="Lore" lo={filters.loreMin} hi={filters.loreMax} onChangeLo={v => setFilter('loreMin', v)} onChangeHi={v => setFilter('loreMax', v)} />
+          </div>
+
+          <CheckboxGroup label="Set" options={setOptions} selected={filters.sets} onChange={v => setFilter('sets', v)} />
+          <CheckboxGroup label="Rarity" options={rarityOptions} selected={filters.rarities} onChange={v => setFilter('rarities', v)} />
+          <CheckboxGroup label="Keywords" options={keywordOptions} selected={filters.keywords} onChange={v => setFilter('keywords', v)} />
+          <CheckboxGroup label="Classification" options={classificationOptions} selected={filters.classifications} onChange={v => setFilter('classifications', v)} />
+          <CheckboxGroup label="Franchise" options={franchiseOptions} selected={filters.franchises} onChange={v => setFilter('franchises', v)} />
+        </div>
+
+        <div className="px-4 py-3 border-t border-gray-200 shrink-0 flex justify-between">
+          <button onClick={onReset} className="px-3 py-1.5 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50 transition-colors">
+            Reset
+          </button>
+          <button onClick={onClose} className="px-4 py-1.5 text-xs font-medium rounded bg-black text-white hover:bg-gray-800 transition-colors">
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -396,8 +488,62 @@ function RangeInputs({ label, lo, hi, onChangeLo, onChangeHi }) {
 
 const RESULT_CAP = 150
 
-function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
+function QtyStepper({ qty, limit, onDecrement, onIncrement }) {
+  return (
+    <div className="flex items-center gap-1.5 flex-shrink-0">
+      <button
+        onClick={onDecrement}
+        disabled={qty <= 0}
+        className="w-6 h-6 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        −
+      </button>
+      <span className="text-xs text-gray-500 w-10 text-center">{qty}/{limit}</span>
+      <button
+        onClick={onIncrement}
+        disabled={qty >= limit}
+        className="w-6 h-6 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+function GridIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  )
+}
+
+function ListIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+    </svg>
+  )
+}
+
+function countModalFilters(filters) {
+  let n = 0
+  if (filters.inkable !== 'any') n++
+  for (const k of ['costMin', 'costMax', 'strengthMin', 'strengthMax', 'willpowerMin', 'willpowerMax', 'loreMin', 'loreMax']) {
+    if (filters[k] !== '') n++
+  }
+  for (const k of ['sets', 'rarities', 'keywords', 'classifications', 'franchises']) {
+    if (filters[k].length) n++
+  }
+  return n
+}
+
+function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd, onChangeQty }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [sortBy, setSortBy] = useState('set-number')
+  const [layout, setLayout] = useState('list')
+  const [filtersModalOpen, setFiltersModalOpen] = useState(false)
   const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }))
 
   const legalCards = useMemo(
@@ -406,7 +552,7 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
   )
 
   const typeOptions = useMemo(
-    () => TYPE_ORDER.filter(t => legalCards.some(c => c.type === t)),
+    () => TYPE_ORDER.filter(t => legalCards.some(c => getEffectiveType(c) === t)),
     [legalCards]
   )
   const setOptions = useMemo(() => distinctSorted(legalCards, c => c.setCode), [legalCards])
@@ -415,7 +561,10 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
     [legalCards]
   )
   const keywordOptions = useMemo(() => distinctSorted(legalCards, getCardKeywords), [legalCards])
-  const classificationOptions = useMemo(() => distinctSorted(legalCards, c => c.subtypes), [legalCards])
+  const classificationOptions = useMemo(
+    () => distinctSorted(legalCards, c => (c.subtypes ?? []).filter(s => s !== 'Song')),
+    [legalCards]
+  )
   const franchiseOptions = useMemo(() => distinctSorted(legalCards, c => c.story), [legalCards])
 
   const deckQtyByFullName = useMemo(() => {
@@ -434,12 +583,15 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
       seen.add(key)
       out.push(c)
     }
-    out.sort((a, b) => a.cost - b.cost || a.fullName.localeCompare(b.fullName))
+    out.sort((a, b) => compareCards(a, b, sortBy))
     return out
-  }, [legalCards, filters])
+  }, [legalCards, filters, sortBy])
 
   const shown = results.slice(0, RESULT_CAP)
   const filtersActive = hasActiveFilters(filters)
+  const modalFilterCount = countModalFilters(filters)
+
+  const resetAll = () => setFilters(EMPTY_FILTERS)
 
   return (
     <div>
@@ -481,74 +633,136 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
             </button>
           )
         })}
-        <div className="flex border border-gray-300 rounded overflow-hidden text-xs">
-          {[['any', 'Inkable: Any'], ['yes', 'Inkable'], ['no', 'Uninkable']].map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => setFilter('inkable', value)}
-              className={`px-2.5 py-1.5 transition-colors ${filters.inkable === value ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-            >
-              {label}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500">Sort by</label>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-gray-500"
+          >
+            {SORT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFiltersModalOpen(true)}
+            className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+              modalFilterCount > 0 ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+            }`}
+          >
+            Filters{modalFilterCount > 0 ? ` (${modalFilterCount})` : ''}
+          </button>
+          {filtersActive && (
+            <button onClick={resetAll} className="text-xs text-gray-400 hover:text-gray-700 underline">
+              Reset all
             </button>
-          ))}
+          )}
+          <div className="flex border border-gray-300 rounded overflow-hidden">
+            <button
+              onClick={() => setLayout('list')}
+              title="List view"
+              className={`p-1.5 transition-colors ${layout === 'list' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+            >
+              <ListIcon />
+            </button>
+            <button
+              onClick={() => setLayout('grid')}
+              title="Grid view"
+              className={`p-1.5 transition-colors ${layout === 'grid' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+            >
+              <GridIcon />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <RangeInputs label="Cost" lo={filters.costMin} hi={filters.costMax} onChangeLo={v => setFilter('costMin', v)} onChangeHi={v => setFilter('costMax', v)} />
-        <RangeInputs label="Strength" lo={filters.strengthMin} hi={filters.strengthMax} onChangeLo={v => setFilter('strengthMin', v)} onChangeHi={v => setFilter('strengthMax', v)} />
-        <RangeInputs label="Willpower" lo={filters.willpowerMin} hi={filters.willpowerMax} onChangeLo={v => setFilter('willpowerMin', v)} onChangeHi={v => setFilter('willpowerMax', v)} />
-        <RangeInputs label="Lore" lo={filters.loreMin} hi={filters.loreMax} onChangeLo={v => setFilter('loreMin', v)} onChangeHi={v => setFilter('loreMax', v)} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <FacetDropdown label="Set" options={setOptions} selected={filters.sets} onChange={v => setFilter('sets', v)} />
-        <FacetDropdown label="Rarity" options={rarityOptions} selected={filters.rarities} onChange={v => setFilter('rarities', v)} />
-        <FacetDropdown label="Keywords" options={keywordOptions} selected={filters.keywords} onChange={v => setFilter('keywords', v)} />
-        <FacetDropdown label="Classification" options={classificationOptions} selected={filters.classifications} onChange={v => setFilter('classifications', v)} />
-        <FacetDropdown label="Franchise" options={franchiseOptions} selected={filters.franchises} onChange={v => setFilter('franchises', v)} />
-        {filtersActive && (
-          <button onClick={() => setFilters(EMPTY_FILTERS)} className="text-xs text-gray-400 hover:text-gray-700 underline">
-            Reset filters
-          </button>
-        )}
-      </div>
+      {filtersModalOpen && (
+        <CardFilterModal
+          filters={filters}
+          setFilter={setFilter}
+          setOptions={setOptions}
+          rarityOptions={rarityOptions}
+          keywordOptions={keywordOptions}
+          classificationOptions={classificationOptions}
+          franchiseOptions={franchiseOptions}
+          onReset={resetAll}
+          onClose={() => setFiltersModalOpen(false)}
+        />
+      )}
 
       <p className="text-xs text-gray-400 mb-2">
         {results.length} card{results.length === 1 ? '' : 's'} match{results.length > RESULT_CAP ? ` — showing first ${RESULT_CAP}` : ''}
       </p>
 
-      <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-[32rem] overflow-y-auto">
-        {shown.map(card => {
-          const limit = getCardLimit(card, coconutCard)
-          const qty = deckQtyByFullName.get(card.fullName.toLowerCase()) ?? 0
-          const atLimit = qty >= limit
-          const imageUrl = getCardImageUrl(card)
-          return (
-            <div key={card.fullName} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50">
-              <div className="min-w-0 mr-3 flex items-center gap-2">
-                {imageUrl && <img src={imageUrl} alt="" className="w-8 aspect-[2.5/3.5] object-cover rounded flex-shrink-0" />}
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{card.fullName}</div>
-                  <div className="text-xs text-gray-400 truncate">
-                    {card.color} · {card.type} · Cost {card.cost}{card.rarity ? ` · ${card.rarity}` : ''}{qty > 0 ? ` · ${qty}/${limit} in deck` : ''}
+      {layout === 'list' ? (
+        <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-[32rem] overflow-y-auto">
+          {shown.map(card => {
+            const limit = getCardLimit(card, coconutCard)
+            const qty = deckQtyByFullName.get(card.fullName.toLowerCase()) ?? 0
+            const imageUrl = getCardImageUrl(card)
+            return (
+              <div key={card.fullName} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50">
+                <div className="min-w-0 mr-3 flex items-center gap-2">
+                  {imageUrl && <img src={imageUrl} alt="" className="w-8 aspect-[2.5/3.5] object-cover rounded flex-shrink-0" />}
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{card.fullName}</div>
+                    <div className="text-xs text-gray-400 truncate">
+                      {card.color} · {getEffectiveType(card)} · Cost {card.cost}{card.rarity ? ` · ${card.rarity}` : ''}
+                    </div>
                   </div>
                 </div>
+                <QtyStepper
+                  qty={qty}
+                  limit={limit}
+                  onDecrement={() => onChangeQty(card.fullName, qty - 1)}
+                  onIncrement={() => { if (qty < limit) onAdd(card) }}
+                />
               </div>
-              <button
-                onClick={() => { if (!atLimit) onAdd(card) }}
-                disabled={atLimit}
-                className="text-xs font-medium border border-gray-300 rounded px-3 py-1.5 hover:bg-black hover:text-white hover:border-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap flex-shrink-0"
-              >
-                {atLimit ? 'Max' : 'Add'}
-              </button>
-            </div>
-          )
-        })}
-        {shown.length === 0 && (
-          <div className="text-center text-gray-400 text-sm py-10">No cards match these filters.</div>
-        )}
-      </div>
+            )
+          })}
+          {shown.length === 0 && (
+            <div className="text-center text-gray-400 text-sm py-10">No cards match these filters.</div>
+          )}
+        </div>
+      ) : (
+        <div className="max-h-[32rem] overflow-y-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+            {shown.map(card => {
+              const limit = getCardLimit(card, coconutCard)
+              const qty = deckQtyByFullName.get(card.fullName.toLowerCase()) ?? 0
+              const imageUrl = getCardImageUrl(card)
+              return (
+                <div key={card.fullName} className="border border-gray-200 rounded-lg overflow-hidden hover:border-gray-400 transition-colors flex flex-col">
+                  <div className="aspect-[2.5/3.5] bg-gray-100">
+                    {imageUrl && <img src={imageUrl} alt="" className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="p-2 flex-1 flex flex-col">
+                    <div className="text-xs font-medium text-gray-900 truncate" title={card.fullName}>{card.fullName}</div>
+                    <div className="text-xs text-gray-400 truncate mb-2">
+                      {getEffectiveType(card)} · Cost {card.cost}
+                    </div>
+                    <div className="mt-auto flex justify-center">
+                      <QtyStepper
+                        qty={qty}
+                        limit={limit}
+                        onDecrement={() => onChangeQty(card.fullName, qty - 1)}
+                        onIncrement={() => { if (qty < limit) onAdd(card) }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {shown.length === 0 && (
+            <div className="text-center text-gray-400 text-sm py-10">No cards match these filters.</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -618,7 +832,7 @@ function BuildView({ initialDeck, cards, onBack }) {
           version: card.version,
           cost: card.cost,
           color: card.color,
-          type: card.type,
+          type: getEffectiveType(card),
           qty: 1,
         }]
       }
@@ -706,6 +920,7 @@ function BuildView({ initialDeck, cards, onBack }) {
             lockedInks={deck.inks}
             deckEntries={deck.cards}
             onAdd={addCard}
+            onChangeQty={changeQty}
           />
         </div>
 
@@ -801,7 +1016,7 @@ export function CoconutDeckBuilderPage() {
           version: baseCard.version,
           cost: baseCard.cost,
           color: baseCard.color,
-          type: baseCard.type,
+          type: getEffectiveType(baseCard),
           qty: 4,
         }]
       : []

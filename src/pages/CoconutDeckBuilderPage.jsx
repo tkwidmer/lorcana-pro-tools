@@ -148,7 +148,7 @@ function cardMatchesFilters(card, filters) {
 
 function DeckListView({ decks, loading, cardsLoading, onNew, onOpen, onDelete }) {
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Coconut Deck Builder</h1>
@@ -217,7 +217,7 @@ function PickCoconutCardView({ cardsByFullName, onPick, onCancel }) {
   }, [])
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Choose your Coconut card</h1>
@@ -248,7 +248,7 @@ function PickCoconutCardView({ cardsByFullName, onPick, onCancel }) {
                     className="text-left border border-gray-200 rounded-lg p-4 hover:border-gray-900 transition-colors flex gap-3"
                   >
                     {imageUrl && (
-                      <img src={imageUrl} alt="" className="w-16 h-auto rounded flex-shrink-0" />
+                      <img src={imageUrl} alt="" className="w-16 aspect-[2.5/3.5] object-cover rounded flex-shrink-0" />
                     )}
                     <div className="min-w-0">
                       <h3 className="text-sm font-bold text-gray-900">{cc.name}</h3>
@@ -520,7 +520,7 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
           return (
             <div key={card.fullName} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50">
               <div className="min-w-0 mr-3 flex items-center gap-2">
-                {imageUrl && <img src={imageUrl} alt="" className="w-8 h-auto rounded flex-shrink-0" />}
+                {imageUrl && <img src={imageUrl} alt="" className="w-8 aspect-[2.5/3.5] object-cover rounded flex-shrink-0" />}
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{card.fullName}</div>
                   <div className="text-xs text-gray-400 truncate">
@@ -657,7 +657,7 @@ function BuildView({ initialDeck, cards, onBack }) {
 
   if (!coconutCard) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8 text-sm text-red-500">
+      <div className="max-w-7xl mx-auto px-6 py-8 text-sm text-red-500">
         This deck's Coconut card could not be found.
       </div>
     )
@@ -666,7 +666,7 @@ function BuildView({ initialDeck, cards, onBack }) {
   const imageUrl = getCardImageUrl(baseCard)
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="max-w-[90rem] mx-auto px-6 py-8">
       <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-700 underline mb-4">
         ← All decks
       </button>
@@ -688,7 +688,7 @@ function BuildView({ initialDeck, cards, onBack }) {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
         <div>
           <div className="border border-gray-200 rounded-lg bg-white p-4 mb-6 flex gap-4">
-            {imageUrl && <img src={imageUrl} alt="" className="w-20 h-auto rounded flex-shrink-0" />}
+            {imageUrl && <img src={imageUrl} alt="" className="w-20 aspect-[2.5/3.5] object-cover rounded flex-shrink-0" />}
             <div className="min-w-0">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
                 {coconutDisplayName(coconutCard)}
@@ -836,7 +836,7 @@ export function CoconutDeckBuilderPage() {
 
   if (cardsError) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="text-sm text-red-500 border border-red-200 rounded px-4 py-2 bg-white">{cardsError}</div>
       </div>
     )
@@ -858,7 +858,7 @@ export function CoconutDeckBuilderPage() {
 
   if (view === 'build' && activeDeck) {
     if (cardsLoading) {
-      return <div className="max-w-5xl mx-auto px-6 py-8 text-sm text-gray-400">Loading card data…</div>
+      return <div className="max-w-7xl mx-auto px-6 py-8 text-sm text-gray-400">Loading card data…</div>
     }
     return <BuildView key={activeDeck.id} initialDeck={activeDeck} cards={cards} onBack={handleBack} />
   }

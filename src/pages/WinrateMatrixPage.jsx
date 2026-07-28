@@ -164,7 +164,7 @@ export function WinrateMatrixPage() {
     .sort((a, b) => b.winRate - a.winRate)
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12">
+    <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Winrate Matrix</h1>
         <p className="text-gray-500">Head-to-head matchup winrates for {stats.meta?.queue?.name || selectedQueue}</p>

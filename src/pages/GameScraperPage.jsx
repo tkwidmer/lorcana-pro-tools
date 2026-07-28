@@ -520,7 +520,7 @@ export function GameScraperPage() {
   const gameList = Object.values(activeGames).sort((a, b) => b.timestamp - a.timestamp)
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Game Scraper</h1>
         <p className="text-sm text-gray-500 mt-1">

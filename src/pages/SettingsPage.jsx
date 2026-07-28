@@ -109,7 +109,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12">
+    <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Settings</h1>
         <p className="text-gray-500 text-sm">Configure integrations and API tokens.</p>

@@ -124,6 +124,7 @@ function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceList) {
   const isTarget = new Uint8Array(N)
   const isKeep = new Uint8Array(N)   // alwaysKeep = isTarget && keepInMulligan
   const scryLookAt = new Uint8Array(N)
+  const scryKeep = new Uint8Array(N) // max cards actually kept from that scry (rest are bottomed)
   let pos = 0
   for (const card of cards) {
     const t = targetSet.has(card.name)
@@ -133,10 +134,11 @@ function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceList) {
       isTarget[pos] = t ? 1 : 0
       isKeep[pos] = (t && keepInMulligan) ? 1 : 0
       scryLookAt[pos] = s ? s.lookAt : 0
+      scryKeep[pos] = s ? Math.max(1, Math.min(s.keep || s.lookAt, s.lookAt)) : 0
       pos++
     }
   }
-  return { isTarget, isKeep, scryLookAt }
+  return { isTarget, isKeep, scryLookAt, scryKeep }
 }
 
 // Build typed arrays for an N-group joint simulation.
@@ -149,6 +151,7 @@ function buildMCJointDeckN(N, cards, groupList, scrySourceList) {
   const targets = groupList.map(() => new Uint8Array(N))
   const keeps = groupList.map(() => new Uint8Array(N))
   const scryLookAt = new Uint8Array(N)
+  const scryKeep = new Uint8Array(N) // max cards actually kept from that scry (rest are bottomed)
   let pos = 0
   for (const card of cards) {
     const s = scryByName.get(card.name)
@@ -160,16 +163,18 @@ function buildMCJointDeckN(N, cards, groupList, scrySourceList) {
         keeps[gi][pos] = (t && groupList[gi].keepInMulligan) ? 1 : 0
       }
       scryLookAt[pos] = s ? s.lookAt : 0
+      scryKeep[pos] = s ? Math.max(1, Math.min(s.keep || s.lookAt, s.lookAt)) : 0
       pos++
     }
   }
-  return { targets, keeps, scryLookAt }
+  return { targets, keeps, scryLookAt, scryKeep }
 }
 
 // Simulate P(find ≥need targets by T gameplay draws with M-card mulligan).
 // keepInMulligan cards are never sent back; when need>1, partial target progress is also kept.
-// Scry cards: when drawn, look at next `lookAt` cards; if enough targets found, win; else go to bottom.
-function mcSim({ isTarget, isKeep, scryLookAt, N, M, T, need = 1 }) {
+// Scry cards: when drawn, look at next `lookAt` cards; of any targets among them, only
+// `scryKeep` many can actually be kept (the rest are bottomed) — matters when need > 1.
+function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, N, M, T, need = 1 }) {
   const order = new Int32Array(N)
   for (let i = 0; i < N; i++) order[i] = i
   const pool = new Int32Array(N)
@@ -208,9 +213,12 @@ function mcSim({ isTarget, isKeep, scryLookAt, N, M, T, need = 1 }) {
           if (isTarget[c]) { count++; if (count >= need) { found = true; break } }
           if (scryLookAt[c] > 0 && dp < poolSize) {
             const look = Math.min(scryLookAt[c], poolSize - dp)
-            for (let s = 0; s < look && !found; s++) {
-              if (isTarget[pool[dp + s]]) { count++; if (count >= need) found = true }
+            let targetsSeen = 0
+            for (let s = 0; s < look; s++) {
+              if (isTarget[pool[dp + s]]) targetsSeen++
             }
+            count += Math.min(targetsSeen, scryKeep[c])
+            if (count >= need) found = true
             dp += look
           }
         }
@@ -222,9 +230,12 @@ function mcSim({ isTarget, isKeep, scryLookAt, N, M, T, need = 1 }) {
         if (isTarget[c]) { count++; if (count >= need) { found = true; break } }
         if (scryLookAt[c] > 0 && dp < N) {
           const look = Math.min(scryLookAt[c], N - dp)
-          for (let s = 0; s < look && !found; s++) {
-            if (isTarget[order[dp + s]]) { count++; if (count >= need) found = true }
+          let targetsSeen = 0
+          for (let s = 0; s < look; s++) {
+            if (isTarget[order[dp + s]]) targetsSeen++
           }
+          count += Math.min(targetsSeen, scryKeep[c])
+          if (count >= need) found = true
           dp += look
         }
       }
@@ -235,7 +246,10 @@ function mcSim({ isTarget, isKeep, scryLookAt, N, M, T, need = 1 }) {
 }
 
 // Simulate P(find ≥need_i of group i by T_i, for EVERY group, with M mulligan).
-function mcJointSimN({ targets, keeps, scryLookAt, N, M, Ts, needs }) {
+// Groups are disjoint, so a scry-revealed card matches at most one group; if more useful
+// cards are revealed than `scryKeep` allows, only the first `scryKeep` (in reveal order)
+// are actually kept — the rest are bottomed and don't count toward any group.
+function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, N, M, Ts, needs }) {
   const G = targets.length
   const T = Math.max(...Ts)
   const order = new Int32Array(N)
@@ -296,10 +310,16 @@ function mcJointSimN({ targets, keeps, scryLookAt, N, M, Ts, needs }) {
           if (!anyLeft) break
           if (scryLookAt[c] > 0 && dp < poolSize) {
             const look = Math.min(scryLookAt[c], poolSize - dp)
-            for (let s = 0; s < look; s++) {
+            const keepCap = scryKeep[c]
+            let kept = 0
+            for (let s = 0; s < look && kept < keepCap; s++) {
               const sc = pool[dp + s]
               for (let gi = 0; gi < G; gi++) {
-                if (!found[gi] && draw < Ts[gi] && targets[gi][sc]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
+                if (!found[gi] && draw < Ts[gi] && targets[gi][sc]) {
+                  cnt[gi]++; kept++
+                  if (cnt[gi] >= needs[gi]) found[gi] = 1
+                  break
+                }
               }
             }
             anyLeft = false
@@ -321,10 +341,16 @@ function mcJointSimN({ targets, keeps, scryLookAt, N, M, Ts, needs }) {
         if (!anyLeft) break
         if (scryLookAt[c] > 0 && dp < N) {
           const look = Math.min(scryLookAt[c], N - dp)
-          for (let s = 0; s < look; s++) {
+          const keepCap = scryKeep[c]
+          let kept = 0
+          for (let s = 0; s < look && kept < keepCap; s++) {
             const sc = order[dp + s]
             for (let gi = 0; gi < G; gi++) {
-              if (!found[gi] && draw < Ts[gi] && targets[gi][sc]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
+              if (!found[gi] && draw < Ts[gi] && targets[gi][sc]) {
+                cnt[gi]++; kept++
+                if (cnt[gi] >= needs[gi]) found[gi] = 1
+                break
+              }
             }
           }
           anyLeft = false
@@ -985,12 +1011,16 @@ function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations = 5000)
 
 // --- Quest Pressure Simulation ---
 // Simulates T1-T8 cumulative lore assuming:
-//   - Opening hand of 7, draw 1 per turn
+//   - Opening hand of 7 (+ additionalDraws, matching this page's convention that
+//     Additional Draws is a flat bonus already in hand from turn 1 on), draw 1 per turn
+//     (skipped on turn 1 only when going first — matches the Going First/Second toggle)
 //   - Ink 1 inkable card per turn (prefer non-questers, then lowest lore)
 //   - Play characters + locations greedily (highest lore first) within ink budget
 //   - Cards played on turn K can quest starting turn K+1 (they "dry" for one turn)
 //   - Locations generate lore passively each turn after played, no characters needed
-function questPressureSim(deckCards, iterations = 6000) {
+// Note: scry sources aren't modeled — this sim only plays Characters/Locations, never
+// the Action/Item cards scry sources (and other draw effects) would come from.
+function questPressureSim(deckCards, goingFirst, additionalDraws, iterations = 6000) {
   const N = deckCards.length
   if (N === 0) return {
     avgLore: new Array(SIM_TURNS).fill(0), estWinTurn: null,
@@ -1013,10 +1043,12 @@ function questPressureSim(deckCards, iterations = 6000) {
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp
     }
 
-    // inHand[i] = 1 if card i is in hand
+    // inHand[i] = 1 if card i is in hand. Additional Draws is modeled as already in
+    // hand from turn 1, matching gameDraws() elsewhere on this page.
+    const openingSize = Math.min(N, 7 + additionalDraws)
     const inHand = new Uint8Array(N)
-    for (let i = 0; i < 7 && i < N; i++) inHand[order[i]] = 1
-    let deckIdx = 7
+    for (let i = 0; i < openingSize; i++) inHand[order[i]] = 1
+    let deckIdx = openingSize
 
     let cumLore = 0
     let ink = 0
@@ -1026,8 +1058,8 @@ function questPressureSim(deckCards, iterations = 6000) {
     const justPlayed = []
 
     for (let t = 0; t < SIM_TURNS; t++) {
-      // Draw one card (not on T1 since we start with opening hand)
-      if (t > 0 && deckIdx < N) inHand[order[deckIdx++]] = 1
+      // Draw one card (skip only on T1 when going first — going second still draws T1)
+      if (!(goingFirst && t === 0) && deckIdx < N) inHand[order[deckIdx++]] = 1
 
       // Gain 1 permanent ink token
       ink++
@@ -1513,8 +1545,8 @@ export function DeckInsightsPage() {
 
   const questPressure = useMemo(() => {
     if (questDeckCards.length === 0) return null
-    return questPressureSim(questDeckCards)
-  }, [questDeckCards])
+    return questPressureSim(questDeckCards, goingFirst, additionalDraws)
+  }, [questDeckCards, goingFirst, additionalDraws])
 
   const keywordAnalysis = useMemo(() =>
     buildKeywordAnalysis(cards, allApiCards)
@@ -2110,7 +2142,10 @@ export function DeckInsightsPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-400 mt-2">Mull {maxMulligan} · dashed = 80%</p>
+                <p className="text-[10px] text-gray-400 mt-2">
+                  Mull {maxMulligan} · dashed = 80%
+                  {scrySources.length > 0 && <> · scry not included</>}
+                </p>
               </div>
             )
           })()}
@@ -2333,7 +2368,10 @@ export function DeckInsightsPage() {
                     <circle key={i} cx={tx(i).toFixed(1)} cy={ty(v).toFixed(1)} r="2" fill="#1d4ed8" />
                   ))}
                 </svg>
-                <p className="text-[10px] text-gray-400 mt-1">Line = average · shaded = 10th–90th percentile</p>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Line = average · shaded = 10th–90th percentile
+                  {scrySources.length > 0 && <> · doesn&apos;t model scry or other Action/Item effects</>}
+                </p>
               </div>
             )
           })()}

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useCards } from '../hooks/useCards'
 import { COCONUT_CARDS, getCoconutCard } from '../lib/coconutCards'
 import { getCardLimit, isCardInkLegal, validateDeck, MIN_DECK_SIZE, MAX_INKS } from '../lib/coconutFormat'
-import { VALID_INKS } from '../lib/inkColors'
+import { VALID_INKS, resolveColors } from '../lib/inkColors'
 import { saveDeck, getDeck, getAllDecks, deleteDeck } from '../lib/coconutDecks'
 
 const INK_LABELS = {
@@ -15,6 +15,14 @@ const INK_LABELS = {
 }
 
 const TYPE_ORDER = ['Character', 'Action', 'Song', 'Item', 'Location']
+const RARITY_ORDER = ['Common', 'Uncommon', 'Rare', 'Super Rare', 'Legendary', 'Enchanted']
+// Not all of these appear as a distinct `keywordAbilities` field across every
+// LorcanaJSON card — falling back to matching the leading word of each named
+// ability covers cards where the keyword is only present inline (e.g. "Shift 2").
+const KNOWN_KEYWORDS = [
+  'Bodyguard', 'Challenger', 'Evasive', 'Reckless', 'Resist', 'Rush',
+  'Shift', 'Singer', 'Support', 'Ward', 'Sing Together', 'Vanish',
+]
 
 function InkIcon({ ink, size = 20 }) {
   if (!ink) return null
@@ -30,6 +38,110 @@ function InkIcon({ ink, size = 20 }) {
 
 function coconutDisplayName(coconutCard) {
   return `${coconutCard.name} – "${coconutCard.version}"`
+}
+
+// LorcanaJSON's card image field isn't exercised anywhere else in this repo
+// (every other page renders text-only), so this checks a few plausible
+// shapes rather than assuming one exact key.
+function getCardImageUrl(card) {
+  if (!card) return null
+  return card.images?.full || card.images?.large || card.images?.thumbnail || card.images?.small || card.imageUrl || null
+}
+
+function getCardKeywords(card) {
+  if (Array.isArray(card.keywordAbilities) && card.keywordAbilities.length > 0) {
+    return card.keywordAbilities
+  }
+  const found = new Set()
+  for (const ability of card.abilities ?? []) {
+    const name = ability?.name
+    if (!name) continue
+    for (const keyword of KNOWN_KEYWORDS) {
+      if (name.startsWith(keyword)) found.add(keyword)
+    }
+  }
+  return Array.from(found)
+}
+
+function distinctSorted(cards, getter) {
+  const set = new Set()
+  for (const c of cards) {
+    const value = getter(c)
+    if (Array.isArray(value)) {
+      for (const v of value) if (v) set.add(v)
+    } else if (value) {
+      set.add(value)
+    }
+  }
+  return Array.from(set).sort()
+}
+
+function sortByKnownOrder(values, order) {
+  return [...values].sort((a, b) => {
+    const ai = order.indexOf(a)
+    const bi = order.indexOf(b)
+    if (ai === -1 && bi === -1) return a.localeCompare(b)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
+}
+
+function inRange(value, min, max) {
+  if (value == null) return min === '' && max === ''
+  if (min !== '' && value < Number(min)) return false
+  if (max !== '' && value > Number(max)) return false
+  return true
+}
+
+const EMPTY_FILTERS = {
+  query: '',
+  inks: [],
+  types: [],
+  inkable: 'any',
+  costMin: '', costMax: '',
+  strengthMin: '', strengthMax: '',
+  willpowerMin: '', willpowerMax: '',
+  loreMin: '', loreMax: '',
+  sets: [],
+  rarities: [],
+  keywords: [],
+  classifications: [],
+  franchises: [],
+}
+
+function hasActiveFilters(filters) {
+  return Object.entries(filters).some(([key, value]) => {
+    if (key === 'inkable') return value !== 'any'
+    if (Array.isArray(value)) return value.length > 0
+    return value !== ''
+  })
+}
+
+function cardMatchesFilters(card, filters) {
+  const cardInks = resolveColors([card.color])
+  if (filters.inks.length && !cardInks.some(ink => filters.inks.includes(ink))) return false
+  if (filters.types.length && !filters.types.includes(card.type)) return false
+  if (filters.inkable === 'yes' && !card.inkwell) return false
+  if (filters.inkable === 'no' && card.inkwell) return false
+  if (!inRange(card.cost, filters.costMin, filters.costMax)) return false
+  if (!inRange(card.strength, filters.strengthMin, filters.strengthMax)) return false
+  if (!inRange(card.willpower, filters.willpowerMin, filters.willpowerMax)) return false
+  if (!inRange(card.lore, filters.loreMin, filters.loreMax)) return false
+  if (filters.sets.length && !filters.sets.includes(card.setCode)) return false
+  if (filters.rarities.length && !filters.rarities.includes(card.rarity)) return false
+  if (filters.keywords.length) {
+    const keywords = getCardKeywords(card)
+    if (!filters.keywords.some(k => keywords.includes(k))) return false
+  }
+  if (filters.classifications.length) {
+    const subtypes = card.subtypes ?? []
+    if (!filters.classifications.some(c => subtypes.includes(c))) return false
+  }
+  if (filters.franchises.length && !filters.franchises.includes(card.story)) return false
+  const q = filters.query.trim().toLowerCase()
+  if (q && !(card.simpleName?.includes(q) || card.fullName?.toLowerCase().includes(q))) return false
+  return true
 }
 
 // ---------- Deck list (home view) ----------
@@ -128,7 +240,7 @@ function PickCoconutCardView({ cardsByFullName, onPick, onCancel }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {(groups[ink] ?? []).map(cc => {
                 const baseCard = cardsByFullName.get(cc.baseFullName.toLowerCase())
-                const imageUrl = baseCard?.images?.full || baseCard?.images?.thumbnail || null
+                const imageUrl = getCardImageUrl(baseCard)
                 return (
                   <button
                     key={cc.id}
@@ -136,7 +248,7 @@ function PickCoconutCardView({ cardsByFullName, onPick, onCancel }) {
                     className="text-left border border-gray-200 rounded-lg p-4 hover:border-gray-900 transition-colors flex gap-3"
                   >
                     {imageUrl && (
-                      <img src={imageUrl} alt="" className="w-14 h-auto rounded flex-shrink-0" />
+                      <img src={imageUrl} alt="" className="w-16 h-auto rounded flex-shrink-0" />
                     )}
                     <div className="min-w-0">
                       <h3 className="text-sm font-bold text-gray-900">{cc.name}</h3>
@@ -216,10 +328,88 @@ function PickInksView({ coconutCard, onConfirm, onCancel }) {
 
 // ---------- Step 3: build the deck ----------
 
-function CardSearchAdd({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
-  const [query, setQuery] = useState('')
+function FacetDropdown({ label, options, selected, onChange }) {
   const [open, setOpen] = useState(false)
-  const containerRef = useRef(null)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  if (options.length === 0) return null
+
+  const toggle = (value) => {
+    onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value])
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`text-xs px-3 py-1.5 rounded border whitespace-nowrap transition-colors ${
+          selected.length ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+        }`}
+      >
+        {label}{selected.length ? ` (${selected.length})` : ''}
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-56 max-h-64 overflow-y-auto bg-white border border-gray-300 rounded shadow-lg p-2">
+          {selected.length > 0 && (
+            <button onClick={() => onChange([])} className="text-xs text-gray-400 hover:text-gray-700 underline mb-1">
+              Clear
+            </button>
+          )}
+          {options.map(opt => (
+            <label key={opt} className="flex items-center gap-2 text-xs py-1 cursor-pointer">
+              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} />
+              {opt}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RangeInputs({ label, lo, hi, onChangeLo, onChangeHi }) {
+  const inputCls = 'w-12 border border-gray-300 rounded px-1 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-gray-500'
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-xs text-gray-500 w-16">{label}</span>
+      <input type="number" className={inputCls} placeholder="min" value={lo} onChange={e => onChangeLo(e.target.value)} />
+      <span className="text-xs text-gray-300">–</span>
+      <input type="number" className={inputCls} placeholder="max" value={hi} onChange={e => onChangeHi(e.target.value)} />
+    </div>
+  )
+}
+
+const RESULT_CAP = 150
+
+function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }))
+
+  const legalCards = useMemo(
+    () => cards.filter(c => c.fullName && isCardInkLegal(c, lockedInks)),
+    [cards, lockedInks]
+  )
+
+  const typeOptions = useMemo(
+    () => TYPE_ORDER.filter(t => legalCards.some(c => c.type === t)),
+    [legalCards]
+  )
+  const setOptions = useMemo(() => distinctSorted(legalCards, c => c.setCode), [legalCards])
+  const rarityOptions = useMemo(
+    () => sortByKnownOrder(distinctSorted(legalCards, c => c.rarity), RARITY_ORDER),
+    [legalCards]
+  )
+  const keywordOptions = useMemo(() => distinctSorted(legalCards, getCardKeywords), [legalCards])
+  const classificationOptions = useMemo(() => distinctSorted(legalCards, c => c.subtypes), [legalCards])
+  const franchiseOptions = useMemo(() => distinctSorted(legalCards, c => c.story), [legalCards])
 
   const deckQtyByFullName = useMemo(() => {
     const map = new Map()
@@ -228,68 +418,130 @@ function CardSearchAdd({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
   }, [deckEntries])
 
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return []
     const seen = new Set()
     const out = []
-    for (const c of cards) {
-      if (!c.fullName) continue
+    for (const c of legalCards) {
       const key = c.fullName.toLowerCase()
       if (seen.has(key)) continue
-      if (!isCardInkLegal(c, lockedInks)) continue
-      if (c.simpleName?.includes(q) || c.fullName.toLowerCase().includes(q)) {
-        seen.add(key)
-        out.push(c)
-        if (out.length >= 40) break
-      }
+      if (!cardMatchesFilters(c, filters)) continue
+      seen.add(key)
+      out.push(c)
     }
+    out.sort((a, b) => a.cost - b.cost || a.fullName.localeCompare(b.fullName))
     return out
-  }, [query, cards, lockedInks])
+  }, [legalCards, filters])
 
-  useEffect(() => {
-    function handleClick(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+  const shown = results.slice(0, RESULT_CAP)
+  const filtersActive = hasActiveFilters(filters)
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-xl mb-6">
+    <div>
       <input
         type="text"
-        value={query}
-        onChange={e => { setQuery(e.target.value); setOpen(true) }}
-        onFocus={() => query.trim() && setOpen(true)}
-        placeholder="Search for a card to add…"
-        className="w-full border border-gray-300 rounded px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-500"
+        value={filters.query}
+        onChange={e => setFilter('query', e.target.value)}
+        placeholder="Search by name…"
+        className="w-full border border-gray-300 rounded px-4 py-2 text-sm mb-3 focus:outline-none focus:ring-1 focus:ring-gray-500"
       />
-      {open && results.length > 0 && (
-        <ul className="absolute z-20 w-full bg-white border border-gray-300 rounded mt-1 shadow-lg max-h-80 overflow-y-auto">
-          {results.map(card => {
-            const limit = getCardLimit(card, coconutCard)
-            const qty = deckQtyByFullName.get(card.fullName.toLowerCase()) ?? 0
-            const atLimit = qty >= limit
-            return (
-              <li key={card.fullName} className="flex items-center justify-between px-3 py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <div className="min-w-0 mr-3">
+
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {lockedInks.map(ink => {
+          const active = filters.inks.includes(ink)
+          return (
+            <button
+              key={ink}
+              onClick={() => setFilter('inks', active ? filters.inks.filter(i => i !== ink) : [...filters.inks, ink])}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border transition-colors ${
+                active ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+              }`}
+            >
+              <InkIcon ink={ink} size={14} />
+              {INK_LABELS[ink]}
+            </button>
+          )
+        })}
+        {typeOptions.map(type => {
+          const active = filters.types.includes(type)
+          return (
+            <button
+              key={type}
+              onClick={() => setFilter('types', active ? filters.types.filter(t => t !== type) : [...filters.types, type])}
+              className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+                active ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+              }`}
+            >
+              {type}
+            </button>
+          )
+        })}
+        <div className="flex border border-gray-300 rounded overflow-hidden text-xs">
+          {[['any', 'Inkable: Any'], ['yes', 'Inkable'], ['no', 'Uninkable']].map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setFilter('inkable', value)}
+              className={`px-2.5 py-1.5 transition-colors ${filters.inkable === value ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <RangeInputs label="Cost" lo={filters.costMin} hi={filters.costMax} onChangeLo={v => setFilter('costMin', v)} onChangeHi={v => setFilter('costMax', v)} />
+        <RangeInputs label="Strength" lo={filters.strengthMin} hi={filters.strengthMax} onChangeLo={v => setFilter('strengthMin', v)} onChangeHi={v => setFilter('strengthMax', v)} />
+        <RangeInputs label="Willpower" lo={filters.willpowerMin} hi={filters.willpowerMax} onChangeLo={v => setFilter('willpowerMin', v)} onChangeHi={v => setFilter('willpowerMax', v)} />
+        <RangeInputs label="Lore" lo={filters.loreMin} hi={filters.loreMax} onChangeLo={v => setFilter('loreMin', v)} onChangeHi={v => setFilter('loreMax', v)} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <FacetDropdown label="Set" options={setOptions} selected={filters.sets} onChange={v => setFilter('sets', v)} />
+        <FacetDropdown label="Rarity" options={rarityOptions} selected={filters.rarities} onChange={v => setFilter('rarities', v)} />
+        <FacetDropdown label="Keywords" options={keywordOptions} selected={filters.keywords} onChange={v => setFilter('keywords', v)} />
+        <FacetDropdown label="Classification" options={classificationOptions} selected={filters.classifications} onChange={v => setFilter('classifications', v)} />
+        <FacetDropdown label="Franchise" options={franchiseOptions} selected={filters.franchises} onChange={v => setFilter('franchises', v)} />
+        {filtersActive && (
+          <button onClick={() => setFilters(EMPTY_FILTERS)} className="text-xs text-gray-400 hover:text-gray-700 underline">
+            Reset filters
+          </button>
+        )}
+      </div>
+
+      <p className="text-xs text-gray-400 mb-2">
+        {results.length} card{results.length === 1 ? '' : 's'} match{results.length > RESULT_CAP ? ` — showing first ${RESULT_CAP}` : ''}
+      </p>
+
+      <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-[32rem] overflow-y-auto">
+        {shown.map(card => {
+          const limit = getCardLimit(card, coconutCard)
+          const qty = deckQtyByFullName.get(card.fullName.toLowerCase()) ?? 0
+          const atLimit = qty >= limit
+          const imageUrl = getCardImageUrl(card)
+          return (
+            <div key={card.fullName} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50">
+              <div className="min-w-0 mr-3 flex items-center gap-2">
+                {imageUrl && <img src={imageUrl} alt="" className="w-8 h-auto rounded flex-shrink-0" />}
+                <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{card.fullName}</div>
-                  <div className="text-xs text-gray-400">
-                    {card.color} · {card.type} · Cost {card.cost}{qty > 0 ? ` · ${qty}/${limit} in deck` : ''}
+                  <div className="text-xs text-gray-400 truncate">
+                    {card.color} · {card.type} · Cost {card.cost}{card.rarity ? ` · ${card.rarity}` : ''}{qty > 0 ? ` · ${qty}/${limit} in deck` : ''}
                   </div>
                 </div>
-                <button
-                  onMouseDown={() => { if (!atLimit) onAdd(card) }}
-                  disabled={atLimit}
-                  className="text-xs font-medium border border-gray-300 rounded px-3 py-1.5 hover:bg-black hover:text-white hover:border-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  {atLimit ? 'Max' : 'Add'}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+              </div>
+              <button
+                onClick={() => { if (!atLimit) onAdd(card) }}
+                disabled={atLimit}
+                className="text-xs font-medium border border-gray-300 rounded px-3 py-1.5 hover:bg-black hover:text-white hover:border-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap flex-shrink-0"
+              >
+                {atLimit ? 'Max' : 'Add'}
+              </button>
+            </div>
+          )
+        })}
+        {shown.length === 0 && (
+          <div className="text-center text-gray-400 text-sm py-10">No cards match these filters.</div>
+        )}
+      </div>
     </div>
   )
 }
@@ -301,7 +553,6 @@ function DeckCardRow({ entry, limit, onChangeQty, onRemove }) {
       <div className="min-w-0 flex items-center gap-2">
         <span className="text-xs text-gray-400 w-6 text-right flex-shrink-0">{entry.qty}×</span>
         <span className="text-sm text-gray-900 truncate">{entry.fullName}</span>
-        <span className="text-xs text-gray-400 flex-shrink-0">Cost {entry.cost} · {entry.color}</span>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         {canAdjust ? (
@@ -336,6 +587,10 @@ function BuildView({ initialDeck, cards, onBack }) {
   const saveTimer = useRef(null)
 
   const coconutCard = getCoconutCard(deck.coconutCardId)
+  const baseCard = useMemo(
+    () => cards.find(c => c.fullName?.toLowerCase() === coconutCard?.baseFullName?.toLowerCase()) ?? null,
+    [cards, coconutCard]
+  )
 
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -408,8 +663,10 @@ function BuildView({ initialDeck, cards, onBack }) {
     )
   }
 
+  const imageUrl = getCardImageUrl(baseCard)
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-6xl mx-auto px-6 py-8">
       <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-700 underline mb-4">
         ← All decks
       </button>
@@ -428,61 +685,72 @@ function BuildView({ initialDeck, cards, onBack }) {
         <span className="text-sm text-gray-500 ml-1">Built around {coconutDisplayName(coconutCard)}</span>
       </div>
 
-      <div className="border border-gray-200 rounded-lg bg-white p-4 mb-6">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-          {coconutDisplayName(coconutCard)}
-        </p>
-        <p className="text-sm text-gray-700 whitespace-pre-line">{coconutCard.ability}</p>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+        <div>
+          <div className="border border-gray-200 rounded-lg bg-white p-4 mb-6 flex gap-4">
+            {imageUrl && <img src={imageUrl} alt="" className="w-20 h-auto rounded flex-shrink-0" />}
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                {coconutDisplayName(coconutCard)}
+              </p>
+              <p className="text-sm text-gray-700 whitespace-pre-line">{coconutCard.ability}</p>
+            </div>
+          </div>
 
-      <div className={`text-sm rounded-lg px-4 py-3 mb-6 border ${
-        validity.isValid ? 'bg-green-50 text-green-800 border-green-200' : 'bg-amber-50 text-amber-800 border-amber-200'
-      }`}>
-        <p className="font-medium mb-1">
-          {validity.totalCount} / {MIN_DECK_SIZE}+ cards{validity.isValid ? ' — deck is legal' : ''}
-        </p>
-        {validity.issues.length > 0 && (
-          <ul className="list-disc list-inside space-y-0.5">
-            {validity.issues.slice(0, 8).map((issue, i) => <li key={i}>{issue}</li>)}
-            {validity.issues.length > 8 && <li>…and {validity.issues.length - 8} more</li>}
-          </ul>
-        )}
-      </div>
-
-      <CardSearchAdd
-        cards={cards}
-        coconutCard={coconutCard}
-        lockedInks={deck.inks}
-        deckEntries={deck.cards}
-        onAdd={addCard}
-      />
-
-      {deck.cards.length === 0 ? (
-        <div className="text-center text-gray-400 text-sm py-16 border-2 border-dashed border-gray-200 rounded-lg">
-          Search for cards above to build your deck.
+          <CardBrowser
+            cards={cards}
+            coconutCard={coconutCard}
+            lockedInks={deck.inks}
+            deckEntries={deck.cards}
+            onAdd={addCard}
+          />
         </div>
-      ) : (
-        <div className="space-y-6">
-          {TYPE_ORDER.filter(t => grouped[t]?.length).map(type => (
-            <div key={type}>
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {type} ({grouped[type].reduce((s, e) => s + e.qty, 0)})
-              </h3>
-              <div>
-                {grouped[type].map(entry => (
-                  <DeckCardRow
-                    key={entry.fullName}
-                    entry={entry}
-                    limit={getCardLimit(entry, coconutCard)}
-                    onChangeQty={changeQty}
-                    onRemove={removeCard}
-                  />
+
+        <div className="lg:sticky lg:top-6 space-y-4">
+          <div className={`text-sm rounded-lg px-4 py-3 border ${
+            validity.isValid ? 'bg-green-50 text-green-800 border-green-200' : 'bg-amber-50 text-amber-800 border-amber-200'
+          }`}>
+            <p className="font-medium mb-1">
+              {validity.totalCount} / {MIN_DECK_SIZE}+ cards{validity.isValid ? ' — deck is legal' : ''}
+            </p>
+            {validity.issues.length > 0 && (
+              <ul className="list-disc list-inside space-y-0.5">
+                {validity.issues.slice(0, 8).map((issue, i) => <li key={i}>{issue}</li>)}
+                {validity.issues.length > 8 && <li>…and {validity.issues.length - 8} more</li>}
+              </ul>
+            )}
+          </div>
+
+          <div className="border border-gray-200 rounded-lg bg-white p-4 max-h-[36rem] overflow-y-auto">
+            {deck.cards.length === 0 ? (
+              <div className="text-center text-gray-400 text-sm py-8">
+                Add cards from the browser to build your deck.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {TYPE_ORDER.filter(t => grouped[t]?.length).map(type => (
+                  <div key={type}>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                      {type} ({grouped[type].reduce((s, e) => s + e.qty, 0)})
+                    </h3>
+                    <div>
+                      {grouped[type].map(entry => (
+                        <DeckCardRow
+                          key={entry.fullName}
+                          entry={entry}
+                          limit={getCardLimit(entry, coconutCard)}
+                          onChangeQty={changeQty}
+                          onRemove={removeCard}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
-            </div>
-          ))}
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

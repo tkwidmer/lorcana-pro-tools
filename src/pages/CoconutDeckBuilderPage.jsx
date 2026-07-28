@@ -825,10 +825,34 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd, onCha
   )
 }
 
-function DeckCardRow({ entry, limit, onChangeQty, onRemove }) {
+// Preview image + last cursor position; fixed-positioned so it floats above
+// everything and never gets clipped by the sidebar's own scroll container.
+function HoverCardPreview({ preview }) {
+  if (!preview) return null
+  const previewWidth = 192
+  const previewHeight = Math.round(previewWidth * 3.5 / 2.5)
+  const left = preview.x > window.innerWidth / 2 ? preview.x - previewWidth - 16 : preview.x + 16
+  const top = Math.min(Math.max(preview.y - previewHeight / 2, 8), window.innerHeight - previewHeight - 8)
+  return (
+    <div className="fixed z-50 pointer-events-none" style={{ left, top }}>
+      <img
+        src={preview.imageUrl}
+        alt=""
+        className="rounded-lg shadow-xl border border-gray-200 bg-white"
+        style={{ width: previewWidth, aspectRatio: '2.5 / 3.5', objectFit: 'cover' }}
+      />
+    </div>
+  )
+}
+
+function DeckCardRow({ entry, limit, imageUrl, onChangeQty, onRemove, onHoverMove, onHoverEnd }) {
   const canAdjust = limit > 1
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
+    <div
+      className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"
+      onMouseMove={imageUrl ? e => onHoverMove(imageUrl, e) : undefined}
+      onMouseLeave={onHoverEnd}
+    >
       <div className="min-w-0 flex items-center gap-2">
         <span className="text-xs text-gray-400 w-6 text-right flex-shrink-0">{entry.qty}×</span>
         <span className="text-sm text-gray-900 truncate">{entry.fullName}</span>
@@ -864,8 +888,22 @@ function BuildView({ initialDeck, cards, onBack }) {
   const [deck, setDeck] = useState(initialDeck)
   const [savedAt, setSavedAt] = useState(null)
   const saveTimer = useRef(null)
+  const [hoverPreview, setHoverPreview] = useState(null)
 
   const coconutCard = getCoconutCard(deck.coconutCardId)
+
+  const cardsByFullName = useMemo(() => {
+    const map = new Map()
+    for (const c of cards) {
+      if (c.fullName && !map.has(c.fullName.toLowerCase())) map.set(c.fullName.toLowerCase(), c)
+    }
+    return map
+  }, [cards])
+
+  const handleHoverMove = useCallback((imageUrl, e) => {
+    setHoverPreview({ imageUrl, x: e.clientX, y: e.clientY })
+  }, [])
+  const handleHoverEnd = useCallback(() => setHoverPreview(null), [])
 
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -942,6 +980,8 @@ function BuildView({ initialDeck, cards, onBack }) {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
+      <HoverCardPreview preview={hoverPreview} />
+
       <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-700 underline mb-4">
         ← All decks
       </button>
@@ -1015,8 +1055,11 @@ function BuildView({ initialDeck, cards, onBack }) {
                           key={entry.fullName}
                           entry={entry}
                           limit={getCardLimit(entry, coconutCard)}
+                          imageUrl={getCardImageUrl(cardsByFullName.get(entry.fullName.toLowerCase()))}
                           onChangeQty={changeQty}
                           onRemove={removeCard}
+                          onHoverMove={handleHoverMove}
+                          onHoverEnd={handleHoverEnd}
                         />
                       ))}
                     </div>

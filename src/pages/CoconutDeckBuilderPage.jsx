@@ -394,7 +394,7 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd }) {
   const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }))
 
   const legalCards = useMemo(
-    () => cards.filter(c => c.fullName && isCardInkLegal(c, lockedInks)),
+    () => cards.filter(c => c.fullName && c.allowedInFormats?.Infinity?.allowed && isCardInkLegal(c, lockedInks)),
     [cards, lockedInks]
   )
 

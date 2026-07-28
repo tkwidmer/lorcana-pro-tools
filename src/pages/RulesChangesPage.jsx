@@ -52,7 +52,7 @@ export function RulesChangesPage() {
 
   if (!doc || !version) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         <p className="text-gray-500">Document not found.</p>
         <Link to="/rules" className="text-sm font-medium text-gray-900">← Back to Rules</Link>
       </div>
@@ -61,7 +61,7 @@ export function RulesChangesPage() {
 
   if (!previousVersion || !diffResult) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         <Link to={`/rules/${doc.slug}?v=${version.version}`} className="text-sm text-gray-500 hover:text-gray-900">
           ← {doc.name}
         </Link>
@@ -80,7 +80,7 @@ export function RulesChangesPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="mb-6">
         <Link to={`/rules/${doc.slug}?v=${version.version}`} className="text-sm text-gray-500 hover:text-gray-900">
           ← {doc.name}

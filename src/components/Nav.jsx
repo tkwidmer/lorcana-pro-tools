@@ -94,6 +94,7 @@ export function Nav() {
               {pathname === '/proxy' ? 'Proxy Generator'
                 : pathname === '/cut-calculator' ? 'Cut Calculator'
                 : pathname === '/limited-guide' ? 'Limited Guide'
+                : pathname.startsWith('/rules') ? 'Rules'
                 : pathname === '/deck-insights' ? 'Deck Insights'
                 : pathname === '/game-scraper' ? 'Game Scraper'
                 : pathname === '/library' ? 'Library'

@@ -24,6 +24,11 @@ const SECTIONS = [
         description: 'Quick reference for sealed and draft: the BREAD framework, ideal mana curves, and uninkable targets for each format.',
       },
       {
+        path: '/rules',
+        name: 'Rules',
+        description: 'Browse the Comprehensive Rules, Tournament Rules, and Play Correction Guidelines. Version updates highlight exactly what changed.',
+      },
+      {
         path: '/deck-insights',
         name: 'Deck Insights',
         description: 'Paste a deck list to analyse your curve, consistency, lore pressure, draw odds, and check format legality for Core and Infinity formats.',

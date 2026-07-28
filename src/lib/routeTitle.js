@@ -13,6 +13,7 @@ const TITLES = {
   '/coconut-deck-builder': 'Coconut Deck Builder',
   '/cut-calculator': 'Cut Calculator',
   '/limited-guide': 'Limited Guide',
+  '/rules': 'Rules',
   '/deck-insights': 'Deck Insights',
   '/game-scraper': 'Game Scraper',
   '/library': 'Scouting Library',
@@ -34,6 +35,7 @@ const TITLES = {
 const PREFIXES = [
   ['/players/', 'Player Profile'],
   ['/scouting/game/', 'Scouted Game'],
+  ['/rules/', 'Rules'],
 ]
 
 export function routeTitle(pathname) {

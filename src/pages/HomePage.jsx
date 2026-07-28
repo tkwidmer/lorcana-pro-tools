@@ -11,7 +11,7 @@ const DISCORD_INVITE_URL = DISCORD_CLIENT_ID
 
 const SECTIONS = [
   {
-    title: 'Deckbuilding',
+    title: 'Resources',
     tools: [
       {
         path: '/proxy',
@@ -28,6 +28,11 @@ const SECTIONS = [
         name: 'Rules',
         description: 'Browse the Comprehensive Rules, Tournament Rules, and Play Correction Guidelines. Version updates highlight exactly what changed.',
       },
+    ],
+  },
+  {
+    title: 'Deckbuilding',
+    tools: [
       {
         path: '/deck-insights',
         name: 'Deck Insights',

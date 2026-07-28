@@ -80,7 +80,7 @@ function getCardKeywords(card) {
   return Array.from(found)
 }
 
-function distinctSorted(cards, getter) {
+function distinctSorted(cards, getter, compareFn) {
   const set = new Set()
   for (const c of cards) {
     const value = getter(c)
@@ -90,7 +90,21 @@ function distinctSorted(cards, getter) {
       set.add(value)
     }
   }
-  return Array.from(set).sort()
+  const arr = Array.from(set)
+  return compareFn ? arr.sort(compareFn) : arr.sort()
+}
+
+// Set codes are mostly numeric strings ("1".."9") but promos/quests use
+// letter-prefixed codes (e.g. "Q1") — numeric sets sort first, in numeric
+// order, then any non-numeric codes fall back to a plain string compare.
+function compareSetCodes(a, b) {
+  const an = parseInt(a, 10)
+  const bn = parseInt(b, 10)
+  const aIsNum = !Number.isNaN(an)
+  const bIsNum = !Number.isNaN(bn)
+  if (aIsNum && bIsNum) return an - bn
+  if (aIsNum !== bIsNum) return aIsNum ? -1 : 1
+  return a.localeCompare(b)
 }
 
 function sortByKnownOrder(values, order) {
@@ -104,11 +118,29 @@ function sortByKnownOrder(values, order) {
   })
 }
 
-function inRange(value, min, max) {
-  if (value == null) return min === '' && max === ''
-  if (min !== '' && value < Number(min)) return false
-  if (max !== '' && value > Number(max)) return false
-  return true
+// Builds `start, start+1, ..., cap-1, cap+` — the last bucket is a catch-all
+// for that value and anything higher (real cost/strength/willpower top out
+// around 12, so a "10+" bucket keeps the row from growing unbounded).
+function makeStatBuckets(start, cap) {
+  const buckets = []
+  for (let n = start; n < cap; n++) buckets.push({ value: n, label: String(n), isMax: false })
+  buckets.push({ value: cap, label: `${cap}+`, isMax: true })
+  return buckets
+}
+
+const COST_BUCKETS = makeStatBuckets(1, 10)
+const STRENGTH_BUCKETS = makeStatBuckets(0, 10)
+const WILLPOWER_BUCKETS = makeStatBuckets(1, 10)
+// Lore tops out at 5 across all printed cards, so every bucket is exact.
+const LORE_BUCKETS = [0, 1, 2, 3, 4, 5].map(n => ({ value: n, label: String(n), isMax: n === 5 }))
+
+function matchesStatBuckets(value, selected, bucketDefs) {
+  if (!selected.length) return true
+  if (value == null) return false
+  return selected.some(v => {
+    const def = bucketDefs.find(b => b.value === v)
+    return def ? (def.isMax ? value >= def.value : value === def.value) : false
+  })
 }
 
 const SORT_OPTIONS = [
@@ -160,10 +192,10 @@ const EMPTY_FILTERS = {
   inks: [],
   types: [],
   inkable: 'any',
-  costMin: '', costMax: '',
-  strengthMin: '', strengthMax: '',
-  willpowerMin: '', willpowerMax: '',
-  loreMin: '', loreMax: '',
+  costBuckets: [],
+  strengthBuckets: [],
+  willpowerBuckets: [],
+  loreBuckets: [],
   sets: [],
   rarities: [],
   keywords: [],
@@ -185,10 +217,10 @@ function cardMatchesFilters(card, filters) {
   if (filters.types.length && !filters.types.includes(getEffectiveType(card))) return false
   if (filters.inkable === 'yes' && !card.inkwell) return false
   if (filters.inkable === 'no' && card.inkwell) return false
-  if (!inRange(card.cost, filters.costMin, filters.costMax)) return false
-  if (!inRange(card.strength, filters.strengthMin, filters.strengthMax)) return false
-  if (!inRange(card.willpower, filters.willpowerMin, filters.willpowerMax)) return false
-  if (!inRange(card.lore, filters.loreMin, filters.loreMax)) return false
+  if (!matchesStatBuckets(card.cost, filters.costBuckets, COST_BUCKETS)) return false
+  if (!matchesStatBuckets(card.strength, filters.strengthBuckets, STRENGTH_BUCKETS)) return false
+  if (!matchesStatBuckets(card.willpower, filters.willpowerBuckets, WILLPOWER_BUCKETS)) return false
+  if (!matchesStatBuckets(card.lore, filters.loreBuckets, LORE_BUCKETS)) return false
   if (filters.sets.length && !filters.sets.includes(card.setCode)) return false
   if (filters.rarities.length && !filters.rarities.includes(card.rarity)) return false
   if (filters.keywords.length) {
@@ -447,12 +479,10 @@ function CardFilterModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <RangeInputs label="Cost" lo={filters.costMin} hi={filters.costMax} onChangeLo={v => setFilter('costMin', v)} onChangeHi={v => setFilter('costMax', v)} />
-            <RangeInputs label="Strength" lo={filters.strengthMin} hi={filters.strengthMax} onChangeLo={v => setFilter('strengthMin', v)} onChangeHi={v => setFilter('strengthMax', v)} />
-            <RangeInputs label="Willpower" lo={filters.willpowerMin} hi={filters.willpowerMax} onChangeLo={v => setFilter('willpowerMin', v)} onChangeHi={v => setFilter('willpowerMax', v)} />
-            <RangeInputs label="Lore" lo={filters.loreMin} hi={filters.loreMax} onChangeLo={v => setFilter('loreMin', v)} onChangeHi={v => setFilter('loreMax', v)} />
-          </div>
+          <StatFilterGroup label="Cost" buckets={COST_BUCKETS} selected={filters.costBuckets} onChange={v => setFilter('costBuckets', v)} />
+          <StatFilterGroup label="Strength" buckets={STRENGTH_BUCKETS} selected={filters.strengthBuckets} onChange={v => setFilter('strengthBuckets', v)} />
+          <StatFilterGroup label="Willpower" buckets={WILLPOWER_BUCKETS} selected={filters.willpowerBuckets} onChange={v => setFilter('willpowerBuckets', v)} />
+          <StatFilterGroup label="Lore" buckets={LORE_BUCKETS} selected={filters.loreBuckets} onChange={v => setFilter('loreBuckets', v)} />
 
           <CheckboxGroup label="Set" options={setOptions} selected={filters.sets} onChange={v => setFilter('sets', v)} />
           <CheckboxGroup label="Rarity" options={rarityOptions} selected={filters.rarities} onChange={v => setFilter('rarities', v)} />
@@ -474,14 +504,31 @@ function CardFilterModal({
   )
 }
 
-function RangeInputs({ label, lo, hi, onChangeLo, onChangeHi }) {
-  const inputCls = 'w-12 border border-gray-300 rounded px-1 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-gray-500'
+function StatFilterGroup({ label, buckets, selected, onChange }) {
+  const toggle = (value) => onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value])
   return (
-    <div className="flex items-center gap-1">
-      <span className="text-xs text-gray-500 w-16">{label}</span>
-      <input type="number" className={inputCls} placeholder="min" value={lo} onChange={e => onChangeLo(e.target.value)} />
-      <span className="text-xs text-gray-300">–</span>
-      <input type="number" className={inputCls} placeholder="max" value={hi} onChange={e => onChangeHi(e.target.value)} />
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+        {selected.length > 0 && (
+          <button onClick={() => onChange([])} className="text-xs text-gray-400 hover:text-gray-700 underline">
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {buckets.map(b => (
+          <button
+            key={b.value}
+            onClick={() => toggle(b.value)}
+            className={`min-w-[2.25rem] px-1.5 py-1 text-xs border rounded transition-colors ${
+              selected.includes(b.value) ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'
+            }`}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -530,10 +577,7 @@ function ListIcon() {
 function countModalFilters(filters) {
   let n = 0
   if (filters.inkable !== 'any') n++
-  for (const k of ['costMin', 'costMax', 'strengthMin', 'strengthMax', 'willpowerMin', 'willpowerMax', 'loreMin', 'loreMax']) {
-    if (filters[k] !== '') n++
-  }
-  for (const k of ['sets', 'rarities', 'keywords', 'classifications', 'franchises']) {
+  for (const k of ['costBuckets', 'strengthBuckets', 'willpowerBuckets', 'loreBuckets', 'sets', 'rarities', 'keywords', 'classifications', 'franchises']) {
     if (filters[k].length) n++
   }
   return n
@@ -555,7 +599,7 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd, onCha
     () => TYPE_ORDER.filter(t => legalCards.some(c => getEffectiveType(c) === t)),
     [legalCards]
   )
-  const setOptions = useMemo(() => distinctSorted(legalCards, c => c.setCode), [legalCards])
+  const setOptions = useMemo(() => distinctSorted(legalCards, c => c.setCode, compareSetCodes), [legalCards])
   const rarityOptions = useMemo(
     () => sortByKnownOrder(distinctSorted(legalCards, c => c.rarity), RARITY_ORDER),
     [legalCards]

@@ -21,6 +21,18 @@ function WordDiff({ oldText, newText }) {
   ))
 }
 
+function RuleText({ text, className = '' }) {
+  if (!text) return null
+  return text.split('\n\n').map((paragraph, i) => (
+    <p
+      key={i}
+      className={`${className} ${i > 0 ? 'mt-2' : ''} ${/^Example[^a-z]/.test(paragraph) ? 'italic text-gray-500' : ''}`}
+    >
+      {paragraph}
+    </p>
+  ))
+}
+
 const TABS = [
   { key: 'changed', label: 'Changed' },
   { key: 'added', label: 'Added' },
@@ -118,7 +130,7 @@ export function RulesChangesPage() {
                 <span className="font-mono text-sm text-gray-400">{a.id}</span>
                 {a.title && <span className="font-semibold text-gray-900">{a.title}</span>}
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed">{a.text}</p>
+              <RuleText text={a.text} className="text-sm text-gray-700 leading-relaxed" />
             </div>
           ))}
         </div>
@@ -132,7 +144,7 @@ export function RulesChangesPage() {
                 <span className="font-mono text-sm text-gray-400">{r.id}</span>
                 {r.title && <span className="font-semibold text-gray-900">{r.title}</span>}
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed line-through decoration-red-300">{r.text}</p>
+              <RuleText text={r.text} className="text-sm text-gray-700 leading-relaxed line-through decoration-red-300" />
             </div>
           ))}
         </div>
@@ -142,10 +154,11 @@ export function RulesChangesPage() {
         <div className="space-y-4">
           {diffResult.renumbered.map(r => (
             <div key={r.newId} className="border border-gray-200 rounded-lg p-4">
-              <div className="font-mono text-sm text-gray-400 mb-2">
-                {r.oldId} → {r.newId}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-mono text-sm text-gray-400">{r.oldId} → {r.newId}</span>
+                {r.title && <span className="font-semibold text-gray-900">{r.title}</span>}
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed">{r.text}</p>
+              <RuleText text={r.text} className="text-sm text-gray-700 leading-relaxed" />
             </div>
           ))}
         </div>

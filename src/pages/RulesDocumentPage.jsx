@@ -57,6 +57,18 @@ function ChangeBadge({ change }) {
   return null
 }
 
+function RuleText({ text, className = '' }) {
+  if (!text) return null
+  return text.split('\n\n').map((paragraph, i) => (
+    <p
+      key={i}
+      className={`${className} ${i > 0 ? 'mt-2' : ''} ${/^Example[^a-z]/.test(paragraph) ? 'italic text-gray-500' : ''}`}
+    >
+      {paragraph}
+    </p>
+  ))
+}
+
 function RuleEntry({ entry, change, showInline }) {
   const depth = ruleDepth(entry.id)
   return (
@@ -66,7 +78,7 @@ function RuleEntry({ entry, change, showInline }) {
         {entry.title && <span className="font-semibold text-gray-900">{entry.title}</span>}
         <ChangeBadge change={change} />
       </div>
-      <p className="text-sm text-gray-700 leading-relaxed mt-1">{entry.text}</p>
+      <RuleText text={entry.text} className="text-sm text-gray-700 leading-relaxed mt-1" />
       {showInline && change?.kind === 'changed' && (
         <div className="mt-2 border-l-2 border-blue-200 bg-blue-50/50 pl-3 py-2 text-sm leading-relaxed rounded-r">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 mb-1">

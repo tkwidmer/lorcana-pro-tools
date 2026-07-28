@@ -78,13 +78,23 @@ function drawOdds(N, K, M, g, scrySources = []) {
   return Math.max(0, Math.min(1, 1 - Math.exp(logPMiss)))
 }
 
-// P(at least 1 from group A AND at least 1 from group B), assuming disjoint groups.
-// Uses inclusion-exclusion: P(A∩B) = P(A) + P(B) - P(A∪B)
-// where P(A∪B) = drawOdds treating A+B as a single pool.
-function jointDrawOdds(N, kA, kB, M, g, scrySources = []) {
-  return Math.max(0, Math.min(1,
-    drawOdds(N, kA, M, g, scrySources) + drawOdds(N, kB, M, g, scrySources) - drawOdds(N, kA + kB, M, g, scrySources)
-  ))
+// P(at least 1 from every group in `ks`), assuming disjoint groups.
+// Uses inclusion-exclusion over "missed group S" events: for any subset S of groups,
+// P(miss every group in S) = 1 - drawOdds treating the union of S as a single pool.
+// P(hit every group) = 1 - P(union of "missed group i" events), expanded via inclusion-exclusion.
+// For two groups this reduces to the familiar P(A∩B) = P(A) + P(B) - P(A∪B).
+function jointDrawOddsN(N, ks, M, g, scrySources = []) {
+  const n = ks.length
+  let missUnion = 0
+  for (let mask = 1; mask < (1 << n); mask++) {
+    let sumK = 0, bits = 0
+    for (let i = 0; i < n; i++) {
+      if (mask & (1 << i)) { sumK += ks[i]; bits++ }
+    }
+    const sign = bits % 2 === 1 ? 1 : -1
+    missUnion += sign * (1 - drawOdds(N, sumK, M, g, scrySources))
+  }
+  return Math.max(0, Math.min(1, 1 - missUnion))
 }
 
 // P(drawing at least minCopies copies of a K-of card in n draws from N-card deck).
@@ -129,35 +139,31 @@ function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceList) {
   return { isTarget, isKeep, scryLookAt }
 }
 
-// Build typed arrays for a joint two-group simulation.
-function buildMCJointDeck(N, cards, gA, gB, scrySourceList) {
-  const setA = new Set(gA.cardNames)
-  const setB = new Set(gB.cardNames)
+// Build typed arrays for an N-group joint simulation.
+function buildMCJointDeckN(N, cards, groupList, scrySourceList) {
+  const sets = groupList.map(g => new Set(g.cardNames))
   const scryByName = new Map()
   for (const s of scrySourceList) {
     if (s.name && s.copies > 0 && s.lookAt > 0) scryByName.set(s.name, s)
   }
-  const isTargetA = new Uint8Array(N)
-  const isTargetB = new Uint8Array(N)
-  const isKeepA = new Uint8Array(N)
-  const isKeepB = new Uint8Array(N)
+  const targets = groupList.map(() => new Uint8Array(N))
+  const keeps = groupList.map(() => new Uint8Array(N))
   const scryLookAt = new Uint8Array(N)
   let pos = 0
   for (const card of cards) {
-    const tA = setA.has(card.name)
-    const tB = setB.has(card.name)
     const s = scryByName.get(card.name)
     const count = Math.min(card.count, N - pos)
     for (let i = 0; i < count; i++) {
-      isTargetA[pos] = tA ? 1 : 0
-      isTargetB[pos] = tB ? 1 : 0
-      isKeepA[pos] = (tA && gA.keepInMulligan) ? 1 : 0
-      isKeepB[pos] = (tB && gB.keepInMulligan) ? 1 : 0
+      for (let gi = 0; gi < groupList.length; gi++) {
+        const t = sets[gi].has(card.name)
+        targets[gi][pos] = t ? 1 : 0
+        keeps[gi][pos] = (t && groupList[gi].keepInMulligan) ? 1 : 0
+      }
       scryLookAt[pos] = s ? s.lookAt : 0
       pos++
     }
   }
-  return { isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt }
+  return { targets, keeps, scryLookAt }
 }
 
 // Simulate P(find ≥need targets by T gameplay draws with M-card mulligan).
@@ -228,34 +234,42 @@ function mcSim({ isTarget, isKeep, scryLookAt, N, M, T, need = 1 }) {
   return hits / MC_ITERS
 }
 
-// Simulate P(find ≥needA of A by T_A AND ≥needB of B by T_B, with M mulligan).
-function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, T_A, T_B, needA = 1, needB = 1 }) {
-  const T = Math.max(T_A, T_B)
+// Simulate P(find ≥need_i of group i by T_i, for EVERY group, with M mulligan).
+function mcJointSimN({ targets, keeps, scryLookAt, N, M, Ts, needs }) {
+  const G = targets.length
+  const T = Math.max(...Ts)
   const order = new Int32Array(N)
   for (let i = 0; i < N; i++) order[i] = i
   const pool = new Int32Array(N)
+  const cnt = new Int32Array(G)
+  const found = new Uint8Array(G)
   let hits = 0
   for (let iter = 0; iter < MC_ITERS; iter++) {
     for (let i = N - 1; i > 0; i--) {
       const j = (Math.random() * (i + 1)) | 0
       const t = order[i]; order[i] = order[j]; order[j] = t
     }
-    let cntA = 0, cntB = 0
+    cnt.fill(0)
     for (let i = 0; i < 7; i++) {
       const c = order[i]
-      if (isTargetA[c]) cntA++
-      if (isTargetB[c]) cntB++
+      for (let gi = 0; gi < G; gi++) if (targets[gi][c]) cnt[gi]++
     }
-    let foundA = cntA >= needA, foundB = cntB >= needB
-    if ((!foundA || !foundB) && M > 0) {
+    let allFound = true
+    for (let gi = 0; gi < G; gi++) {
+      found[gi] = cnt[gi] >= needs[gi] ? 1 : 0
+      if (!found[gi]) allFound = false
+    }
+    if (!allFound && M > 0) {
       let pi = 0
       for (let i = 7; i < N; i++) pool[pi++] = order[i]
       let sent = 0
       for (let i = 0; i < 7 && sent < M; i++) {
         const c = order[i]
-        const kA = isKeepA[c] || (needA > 1 && cntA < needA && isTargetA[c])
-        const kB = isKeepB[c] || (needB > 1 && cntB < needB && isTargetB[c])
-        if (!kA && !kB) { pool[pi++] = c; sent++ }
+        let keepThis = false
+        for (let gi = 0; gi < G; gi++) {
+          if (keeps[gi][c] || (needs[gi] > 1 && cnt[gi] < needs[gi] && targets[gi][c])) { keepThis = true; break }
+        }
+        if (!keepThis) { pool[pi++] = c; sent++ }
       }
       const actualM = sent, poolSize = pi
       for (let i = poolSize - 1; i > 0; i--) {
@@ -264,48 +278,65 @@ function mcJointSim({ isTargetA, isTargetB, isKeepA, isKeepB, scryLookAt, N, M, 
       }
       for (let i = 0; i < actualM; i++) {
         const c = pool[i]
-        if (isTargetA[c]) { cntA++; if (cntA >= needA) foundA = true }
-        if (isTargetB[c]) { cntB++; if (cntB >= needB) foundB = true }
+        for (let gi = 0; gi < G; gi++) {
+          if (!found[gi] && targets[gi][c]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
+        }
       }
-      if (!foundA || !foundB) {
+      allFound = true
+      for (let gi = 0; gi < G; gi++) if (!found[gi]) allFound = false
+      if (!allFound) {
         let dp = actualM
         for (let draw = 0; draw < T && dp < poolSize; draw++) {
           const c = pool[dp++]
-          if (!foundA && draw < T_A && isTargetA[c]) { cntA++; if (cntA >= needA) foundA = true }
-          if (!foundB && draw < T_B && isTargetB[c]) { cntB++; if (cntB >= needB) foundB = true }
-          if (foundA && foundB) break
+          let anyLeft = false
+          for (let gi = 0; gi < G; gi++) {
+            if (!found[gi] && draw < Ts[gi] && targets[gi][c]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
+            if (!found[gi]) anyLeft = true
+          }
+          if (!anyLeft) break
           if (scryLookAt[c] > 0 && dp < poolSize) {
             const look = Math.min(scryLookAt[c], poolSize - dp)
             for (let s = 0; s < look; s++) {
               const sc = pool[dp + s]
-              if (!foundA && draw < T_A && isTargetA[sc]) { cntA++; if (cntA >= needA) foundA = true }
-              if (!foundB && draw < T_B && isTargetB[sc]) { cntB++; if (cntB >= needB) foundB = true }
+              for (let gi = 0; gi < G; gi++) {
+                if (!found[gi] && draw < Ts[gi] && targets[gi][sc]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
+              }
             }
-            if (foundA && foundB) break
+            anyLeft = false
+            for (let gi = 0; gi < G; gi++) if (!found[gi]) anyLeft = true
             dp += look
+            if (!anyLeft) break
           }
         }
       }
-    } else if (!foundA || !foundB) {
+    } else if (!allFound) {
       let dp = 7
       for (let draw = 0; draw < T && dp < N; draw++) {
         const c = order[dp++]
-        if (!foundA && draw < T_A && isTargetA[c]) { cntA++; if (cntA >= needA) foundA = true }
-        if (!foundB && draw < T_B && isTargetB[c]) { cntB++; if (cntB >= needB) foundB = true }
-        if (foundA && foundB) break
+        let anyLeft = false
+        for (let gi = 0; gi < G; gi++) {
+          if (!found[gi] && draw < Ts[gi] && targets[gi][c]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
+          if (!found[gi]) anyLeft = true
+        }
+        if (!anyLeft) break
         if (scryLookAt[c] > 0 && dp < N) {
           const look = Math.min(scryLookAt[c], N - dp)
           for (let s = 0; s < look; s++) {
             const sc = order[dp + s]
-            if (!foundA && draw < T_A && isTargetA[sc]) { cntA++; if (cntA >= needA) foundA = true }
-            if (!foundB && draw < T_B && isTargetB[sc]) { cntB++; if (cntB >= needB) foundB = true }
+            for (let gi = 0; gi < G; gi++) {
+              if (!found[gi] && draw < Ts[gi] && targets[gi][sc]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
+            }
           }
-          if (foundA && foundB) break
+          anyLeft = false
+          for (let gi = 0; gi < G; gi++) if (!found[gi]) anyLeft = true
           dp += look
+          if (!anyLeft) break
         }
       }
     }
-    if (foundA && foundB) hits++
+    let win = true
+    for (let gi = 0; gi < G; gi++) if (!found[gi]) { win = false; break }
+    if (win) hits++
   }
   return hits / MC_ITERS
 }
@@ -1544,12 +1575,22 @@ export function DeckInsightsPage() {
         const gA = groups[i], gB = groups[j]
         if (gA.cardNames.length === 0 || gB.cardNames.length === 0) continue
         if (gA.targetTurn == null || gB.targetTurn == null) continue
-        const deck = buildMCJointDeck(N, cards, gA, gB, scrySources)
+        const deck = buildMCJointDeckN(N, cards, [gA, gB], scrySources)
         result[`${gA.id}-${gB.id}`] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
           m,
-          p: mcJointSim({ ...deck, N, M: m, T_A: gDraws(gA.targetTurn), T_B: gDraws(gB.targetTurn), needA: gA.need ?? 1, needB: gB.need ?? 1 }),
+          p: mcJointSimN({ ...deck, N, M: m, Ts: [gDraws(gA.targetTurn), gDraws(gB.targetTurn)], needs: [gA.need ?? 1, gB.need ?? 1] }),
         }))
       }
+    }
+
+    // Full intersection across all groups at once (shown alongside pairwise combos when 3+ groups exist).
+    if (groups.length >= 3 && groups.every(g => g.cardNames.length > 0 && g.targetTurn != null)) {
+      const key = groups.map(g => g.id).join('-')
+      const deck = buildMCJointDeckN(N, cards, groups, scrySources)
+      result[key] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
+        m,
+        p: mcJointSimN({ ...deck, N, M: m, Ts: groups.map(g => gDraws(g.targetTurn)), needs: groups.map(g => g.need ?? 1) }),
+      }))
     }
 
     return result
@@ -2928,73 +2969,79 @@ export function DeckInsightsPage() {
             pairs.push([groups[i], groups[j]])
           }
         }
+        const combos = groups.length >= 3 ? [groups, ...pairs] : pairs
+
+        function renderCombo(combo) {
+          const key = combo.map(g => g.id).join('-')
+          const isFullSet = combo.length > 2
+          const ks = combo.map(g => g.cardNames.reduce((s, n) => s + (cards.find(c => c.name === n)?.count || 0), 0))
+          const hasJointTarget = combo.every(g => g.targetTurn != null)
+          const opening = jointDrawOddsN(N, ks, 0, 0)
+          const turns = TURN_COLS.map(T => jointDrawOddsN(N, ks, 0, gameDraws(T), scrySources))
+          const jointMulliganRange = hasJointTarget ? (mcResults[key] ?? null) : null
+          const firstTurn = combo[0].targetTurn
+          const turnLabel = hasJointTarget
+            ? combo.every(g => g.targetTurn === firstTurn)
+              ? `By Turn ${firstTurn}`
+              : combo.map(g => `${g.name} by T${g.targetTurn}`).join(' · ')
+            : null
+          return (
+            <div key={key} className={`border rounded-lg p-4 ${isFullSet ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'}`}>
+              <p className="text-sm font-semibold text-gray-900 mb-3">
+                {combo.length === 2 ? (
+                  <>{combo[0].name} <span className="text-gray-400 font-normal">and</span> {combo[1].name}</>
+                ) : (
+                  combo.map(g => g.name).join(' + ')
+                )}
+                {combo.some(g => g.keepInMulligan) && (
+                  <span className="ml-2 text-xs font-normal text-green-600">always keep modeled</span>
+                )}
+              </p>
+              {jointMulliganRange != null ? (
+                <div>
+                  <div className="text-xs text-gray-400 mb-2">{turnLabel} <span className="text-gray-300">· simulated</span></div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-2">
+                    {jointMulliganRange.map(({ m, p }) => (
+                      <div key={m} className="text-center min-w-[3rem]">
+                        <div className={`text-sm font-bold tabular-nums ${oddsColor(p)}`}>{pct(p)}</div>
+                        <div className="text-xs text-gray-400">Mull {m}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    <div className="text-center min-w-[4rem]">
+                      <div className={`text-base font-bold tabular-nums ${oddsColor(opening)}`}>{pct(opening)}</div>
+                      <div className="text-xs text-gray-400">Opening</div>
+                    </div>
+                    {TURN_COLS.map((T, i) => (
+                      <div key={T} className="text-center min-w-[4rem]">
+                        <div className={`text-base font-bold tabular-nums ${oddsColor(turns[i])}`}>{pct(turns[i])}</div>
+                        <div className="text-xs text-gray-400">Turn {T}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Assumes no mulligan (M=0). Set a target turn on {combo.length === 2 ? 'both' : 'all'} groups to see simulated odds across mulligan counts.
+                  </p>
+                </div>
+              )}
+            </div>
+          )
+        }
+
         return (
           <div className="mt-6">
             <div className="mb-3">
               <h2 className="text-sm font-semibold text-gray-900">Joint Probability</h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                Odds of drawing at least 1 card from <em>both</em> groups simultaneously. Assumes groups don't share cards.
+                Odds of drawing at least 1 card from <em>every</em> group in a combination simultaneously. Assumes groups don't share cards.
               </p>
             </div>
             <div className="space-y-3">
-              {pairs.map(([gA, gB]) => {
-                const kA = gA.cardNames.reduce((s, n) => s + (cards.find(c => c.name === n)?.count || 0), 0)
-                const kB = gB.cardNames.reduce((s, n) => s + (cards.find(c => c.name === n)?.count || 0), 0)
-                const hasJointTarget = gA.targetTurn != null && gB.targetTurn != null
-                const T_A = gA.targetTurn
-                const T_B = gB.targetTurn
-                const opening = jointDrawOdds(N, kA, kB, 0, 0)
-                const turns = TURN_COLS.map(T => jointDrawOdds(N, kA, kB, 0, gameDraws(T), scrySources))
-                const jointMulliganRange = hasJointTarget
-                  ? (mcResults[`${gA.id}-${gB.id}`] ?? null)
-                  : null
-                const turnLabel = hasJointTarget
-                  ? T_A === T_B
-                    ? `By Turn ${T_A}`
-                    : `${gA.name} by T${T_A} · ${gB.name} by T${T_B}`
-                  : null
-                return (
-                  <div key={`${gA.id}-${gB.id}`} className="border border-gray-200 rounded-lg p-4">
-                    <p className="text-sm font-semibold text-gray-900 mb-3">
-                      {gA.name} <span className="text-gray-400 font-normal">and</span> {gB.name}
-                      {(gA.keepInMulligan || gB.keepInMulligan) && (
-                        <span className="ml-2 text-xs font-normal text-green-600">always keep modeled</span>
-                      )}
-                    </p>
-                    {jointMulliganRange != null ? (
-                      <div>
-                        <div className="text-xs text-gray-400 mb-2">{turnLabel} <span className="text-gray-300">· simulated</span></div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-2">
-                          {jointMulliganRange.map(({ m, p }) => (
-                            <div key={m} className="text-center min-w-[3rem]">
-                              <div className={`text-sm font-bold tabular-nums ${oddsColor(p)}`}>{pct(p)}</div>
-                              <div className="text-xs text-gray-400">Mull {m}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-2">
-                          <div className="text-center min-w-[4rem]">
-                            <div className={`text-base font-bold tabular-nums ${oddsColor(opening)}`}>{pct(opening)}</div>
-                            <div className="text-xs text-gray-400">Opening</div>
-                          </div>
-                          {TURN_COLS.map((T, i) => (
-                            <div key={T} className="text-center min-w-[4rem]">
-                              <div className={`text-base font-bold tabular-nums ${oddsColor(turns[i])}`}>{pct(turns[i])}</div>
-                              <div className="text-xs text-gray-400">Turn {T}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-xs text-gray-400 mt-2">
-                          Assumes no mulligan (M=0). Set a target turn on both groups to see simulated odds across mulligan counts.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              {combos.map(renderCombo)}
             </div>
           </div>
         )

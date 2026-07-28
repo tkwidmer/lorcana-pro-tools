@@ -301,7 +301,7 @@ export function TeamAnalyticsPage() {
   const totalPlayTime = filteredGames.reduce((sum, g) => sum + (g.duration_seconds || 0), 0)
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Game Library</h1>
         <p className="text-sm text-gray-500">Import shared game exports from teammates to build team-wide analytics.</p>

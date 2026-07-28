@@ -1599,7 +1599,7 @@ export function GamelogAnalyzerPage() {
   const handleDragLeave = useCallback(() => setDragOver(false), [])
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Gamelog Analyzer</h1>
         <p className="text-sm text-gray-500">Import .logs.gz files or use the ↗ Gamelog button from Match History.</p>

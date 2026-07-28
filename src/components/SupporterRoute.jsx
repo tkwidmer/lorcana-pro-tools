@@ -37,7 +37,7 @@ export function SupporterRoute({ children }) {
 
   if (isLoading) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-24 text-center text-sm text-gray-400">
+      <div className="max-w-7xl mx-auto px-6 py-24 text-center text-sm text-gray-400">
         Loading…
       </div>
     )

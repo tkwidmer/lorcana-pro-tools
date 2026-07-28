@@ -650,7 +650,7 @@ export function PracticePlanPage() {
 
   if (!hasToken) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-12">
+      <div className="max-w-7xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Practice Plan</h1>
         <p className="text-gray-500 mb-6">Build a focused practice schedule based on your weakest matchups and the expected meta.</p>
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-900">
@@ -666,7 +666,7 @@ export function PracticePlanPage() {
   const yourPairOptions = twoColorPairs.slice().sort((a, b) => (b.games ?? 0) - (a.games ?? 0))
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12">
+    <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Practice Plan</h1>
         <p className="text-gray-500">

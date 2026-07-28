@@ -927,7 +927,7 @@ function BuildView({ initialDeck, cards, onBack }) {
   const imageUrl = getCoconutCardImageUrl(coconutCard)
 
   return (
-    <div className="max-w-[90rem] mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-700 underline mb-4">
         ← All decks
       </button>

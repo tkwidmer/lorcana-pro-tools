@@ -14,13 +14,15 @@ function normalizeText(text) {
   return (text || '').trim().replace(/\s+/g, ' ')
 }
 
-// Section/chapter headers (e.g. "1.1 General") carry a `title` and no
-// `text`; numbered rules carry `text` and no `title`. Diff on whichever one
-// an entry actually has, so a header that got renamed (or a rule number
-// that got reused for unrelated new content) is still detected as changed
-// instead of two empty `text` fields silently comparing as equal.
+// Comprehensive Rules entries carry either a `title` (section headers) or
+// a `text` (numbered rules), never both. Other documents (Tournament
+// Rules, Play Correction Guidelines) have sections with a title *and*
+// prose text together. Concatenate both so a renamed heading is detected
+// as changed even when its body text didn't move, instead of two empty
+// `text` fields (or two identical bodies under a differently-worded
+// heading) silently comparing as equal.
 function contentOf(entry) {
-  return entry?.text || entry?.title || ''
+  return [entry?.title, entry?.text].filter(Boolean).join(' ')
 }
 
 // Below this length, text is too generic ("General", "Ready", "Songs") to

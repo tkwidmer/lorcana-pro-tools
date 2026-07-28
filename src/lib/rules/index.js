@@ -6,12 +6,18 @@ import { RULES_DOCUMENTS } from './registry'
 import { comprehensiveRulesVersions } from './content/comprehensiveRules'
 import { tournamentRulesVersions } from './content/tournamentRules'
 import { playGuideVersions } from './content/playGuide'
+import { coreLoreGuideVersions } from './content/coreLoreGuide'
+import { communityCodeVersions } from './content/communityCode'
+import { diversityInclusionPolicyVersions } from './content/diversityInclusionPolicy'
 import { diffVersions } from './diff'
 
 const VERSIONS_BY_DOC = {
   'comprehensive-rules': comprehensiveRulesVersions,
   'tournament-rules': tournamentRulesVersions,
   'play-guide': playGuideVersions,
+  'core-lore-guide': coreLoreGuideVersions,
+  'community-code': communityCodeVersions,
+  'diversity-inclusion-policy': diversityInclusionPolicyVersions,
 }
 
 export function getDocuments() {
@@ -76,13 +82,14 @@ export function getVersionDiff(slug, versionId) {
   return diffVersions(previous, version)
 }
 
-// Narrow a full-document diff down to the rules belonging to one chapter,
-// using the chapter's leading digit (chapter ids are "100", "200", ... so
-// every rule under it shares that leading digit).
+// Narrow a full-document diff down to the rules belonging to one chapter.
+// A rule "belongs" to a chapter if its id is the chapter id itself or
+// starts with "<chapterId>." — matched on the full id, not just a leading
+// digit, so chapter "1" and chapter "10" (which share a leading "1") don't
+// bleed into each other.
 export function getChapterDiff(diffResult, chapterId) {
   if (!diffResult) return null
-  const prefix = chapterId[0]
-  const belongs = id => id[0] === prefix
+  const belongs = id => id === chapterId || id.startsWith(`${chapterId}.`)
   return {
     changed: diffResult.changed.filter(c => belongs(c.id)),
     added: diffResult.added.filter(a => belongs(a.id)),

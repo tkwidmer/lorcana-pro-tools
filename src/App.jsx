@@ -7,6 +7,9 @@ import { HomePage } from './pages/HomePage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { TournamentCutPage } from './pages/TournamentCutPage'
 import { LimitedGuidePage } from './pages/LimitedGuidePage'
+import { RulesPage } from './pages/RulesPage'
+import { RulesDocumentPage } from './pages/RulesDocumentPage'
+import { RulesChangesPage } from './pages/RulesChangesPage'
 import { DeckInsightsPage } from './pages/DrawOddsPage'
 import { GameScraperPage } from './pages/GameScraperPage'
 import { LibraryPage } from './pages/LibraryPage'
@@ -47,6 +50,10 @@ function RoutedContent() {
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
         <Route path="/cut-calculator" element={<TournamentCutPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
+        <Route path="/rules" element={<RulesPage />} />
+        <Route path="/rules/:doc/changes" element={<RulesChangesPage />} />
+        <Route path="/rules/:doc/:chapterSlug" element={<RulesDocumentPage />} />
+        <Route path="/rules/:doc" element={<RulesDocumentPage />} />
         <Route path="/deck-insights" element={<SupporterRoute><DeckInsightsPage /></SupporterRoute>} />
         <Route path="/replay-analyzer" element={<Navigate to="/gamelog-analyzer" replace />} />
         <Route path="/game-scraper" element={<SupporterRoute><GameScraperPage /></SupporterRoute>} />

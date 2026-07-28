@@ -15,6 +15,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
     "@vercel/functions": "^3.7.5",
+    "diff": "^9.0.0",
     "discord-interactions": "^4.4.0",
     "jimp": "^1.6.1",
     "jsqr": "^1.4.0",

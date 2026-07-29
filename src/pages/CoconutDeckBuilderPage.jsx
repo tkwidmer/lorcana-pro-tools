@@ -606,8 +606,15 @@ function CardBrowser({ cards, coconutCard, lockedInks, deckEntries, onAdd, onCha
   const [filtersModalOpen, setFiltersModalOpen] = useState(false)
   const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }))
 
+  // Format Coconut has no ties to the official Core/Infinity banlist — a card
+  // banned there (e.g. Hiram Flaversham - Toymaker) is still fair game here.
+  // What actually needs excluding is LorcanaJSON's ~66 colorless "Illumineer's
+  // Quest" solo-adventure promos: they aren't real deckbuilding cards, and
+  // isCardInkLegal's "no color = always legal" branch would otherwise let them
+  // into every deck regardless of locked inks. A real printed card always has
+  // a resolvable color, so requiring one excludes exactly those promos.
   const legalCards = useMemo(
-    () => cards.filter(c => c.fullName && c.allowedInFormats?.Infinity?.allowed && isCardInkLegal(c, lockedInks)),
+    () => cards.filter(c => c.fullName && resolveColors([c.color]).length > 0 && isCardInkLegal(c, lockedInks)),
     [cards, lockedInks]
   )
 

@@ -6,6 +6,7 @@ import { VALID_INKS, resolveColors } from '../lib/inkColors'
 import { saveDeck, getDeck, getAllDecks, deleteDeck } from '../lib/coconutDecks'
 import { generateCoconutDeckShareImage } from '../lib/coconutShareImage'
 import { downloadShareImage, copyShareImageToClipboard, canNativeShareImage, nativeShareImage } from '../lib/tournamentShareImage'
+import { generateCoconutDecklistText, parseCoconutDecklist } from '../lib/coconutDecklistText'
 
 const INK_LABELS = {
   amber: 'Amber',
@@ -1098,6 +1099,92 @@ function ShareCardModal({ shareCard, onClose }) {
   )
 }
 
+function DecklistModal({ deck, coconutCard, cardsByFullName, onImport, onClose }) {
+  const [text, setText] = useState(() => generateCoconutDecklistText(deck, coconutCard))
+  const [copyStatus, setCopyStatus] = useState(null) // null | 'copied' | 'error'
+  const [importResult, setImportResult] = useState(null) // null | { ok: true, unmatchedCount } | { ok: false, message }
+
+  function flashCopy(next) {
+    setCopyStatus(next)
+    setTimeout(() => setCopyStatus(null), 2000)
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text)
+      flashCopy('copied')
+    } catch {
+      flashCopy('error')
+    }
+  }
+
+  function handleImport() {
+    const result = parseCoconutDecklist(text, cardsByFullName, getEffectiveType)
+    if (!result.coconutCard) {
+      setImportResult({
+        ok: false,
+        message: 'Could not identify the Coconut card. Add a "Coconut Card: <name>" line, or make sure exactly one card in the list is at 4 copies.',
+      })
+      return
+    }
+    if (result.entries.length === 0) {
+      setImportResult({ ok: false, message: 'No cards in the list could be matched against the card database.' })
+      return
+    }
+    onImport(result)
+    setImportResult({ ok: true, unmatchedCount: result.unmatchedNames.length })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
+      <div
+        className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl border border-gray-200 max-h-[90vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+          <h2 className="text-sm font-semibold text-gray-900">Copy / Import Decklist</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+        </div>
+        <div className="overflow-y-auto p-4 space-y-3">
+          <p className="text-xs text-gray-500">
+            Copy this deck as text to share it, or paste a decklist below and click Import to load it into this deck.
+          </p>
+          <textarea
+            value={text}
+            onChange={e => { setText(e.target.value); setImportResult(null) }}
+            rows={14}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-500"
+            spellCheck={false}
+          />
+          {importResult && (
+            <p className={`text-xs rounded px-3 py-2 border ${
+              importResult.ok ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+            }`}>
+              {importResult.ok
+                ? `Imported successfully.${importResult.unmatchedCount ? ` ${importResult.unmatchedCount} line${importResult.unmatchedCount === 1 ? '' : 's'} could not be matched and were skipped.` : ''}`
+                : importResult.message}
+            </p>
+          )}
+        </div>
+        <div className="px-4 py-3 border-t border-gray-200 shrink-0 flex flex-wrap gap-2 justify-end">
+          <button
+            onClick={handleCopy}
+            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            {copyStatus === 'copied' ? '✓ Copied' : copyStatus === 'error' ? 'Failed' : 'Copy to Clipboard'}
+          </button>
+          <button
+            onClick={handleImport}
+            className="px-3 py-1.5 text-xs font-medium rounded bg-black text-white hover:bg-gray-800 transition-colors"
+          >
+            Import
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function BuildView({ initialDeck, cards, onBack }) {
   const [deck, setDeck] = useState(initialDeck)
   const [savedAt, setSavedAt] = useState(null)
@@ -1106,6 +1193,7 @@ function BuildView({ initialDeck, cards, onBack }) {
   const [mainView, setMainView] = useState('browse') // 'browse' | 'deck'
   const [shareCard, setShareCard] = useState(null)
   const [exporting, setExporting] = useState(false)
+  const [decklistModalOpen, setDecklistModalOpen] = useState(false)
 
   const coconutCard = getCoconutCard(deck.coconutCardId)
 
@@ -1151,6 +1239,16 @@ function BuildView({ initialDeck, cards, onBack }) {
       setExporting(false)
     }
   }, [deck, coconutCard, cardsByFullName])
+
+  const handleImportDecklist = useCallback((result) => {
+    setDeck(prev => ({
+      ...prev,
+      name: result.deckName ?? prev.name,
+      coconutCardId: result.coconutCard.id,
+      inks: result.inks,
+      cards: result.entries,
+    }))
+  }, [])
 
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -1229,6 +1327,15 @@ function BuildView({ initialDeck, cards, onBack }) {
     <div className="max-w-7xl mx-auto px-6 py-8">
       <HoverCardPreview preview={hoverPreview} />
       {shareCard && <ShareCardModal shareCard={shareCard} onClose={() => setShareCard(null)} />}
+      {decklistModalOpen && (
+        <DecklistModal
+          deck={deck}
+          coconutCard={coconutCard}
+          cardsByFullName={cardsByFullName}
+          onImport={handleImportDecklist}
+          onClose={() => setDecklistModalOpen(false)}
+        />
+      )}
 
       <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-700 underline mb-4">
         ← All decks
@@ -1264,9 +1371,15 @@ function BuildView({ initialDeck, cards, onBack }) {
           </button>
         </div>
         <button
+          onClick={() => setDecklistModalOpen(true)}
+          className="ml-auto text-xs font-medium px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Copy / Import List
+        </button>
+        <button
           onClick={handleExport}
           disabled={exporting}
-          className="ml-auto text-xs font-medium px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          className="text-xs font-medium px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
         >
           {exporting ? 'Generating…' : 'Export / Share Deck'}
         </button>

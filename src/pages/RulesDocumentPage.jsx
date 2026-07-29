@@ -133,25 +133,6 @@ function ChangeSummary({ doc, version, diffResult }) {
   )
 }
 
-function ChapterGrid({ doc, version, chapters }) {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {chapters.map(chapter => (
-        <Link
-          key={chapter.id}
-          to={`/rules/${doc.slug}/${chapter.slug}?v=${version.version}`}
-          className="group block border border-gray-200 rounded-lg p-5 hover:border-gray-900 transition-colors"
-        >
-          <div className="text-xs text-gray-400 font-mono mb-1">{chapter.id}</div>
-          <h3 className="text-base font-bold text-gray-900 group-hover:underline">
-            {chapter.title}
-          </h3>
-        </Link>
-      ))}
-    </div>
-  )
-}
-
 function ChapterSidebar({ doc, version, chapters, activeChapter }) {
   return (
     <nav className="space-y-4">
@@ -212,7 +193,7 @@ export function RulesDocumentPage() {
   }
 
   const chapters = getChapters(version)
-  const activeChapter = chapterSlug ? getChapterBySlug(version, chapterSlug) : null
+  const activeChapter = chapterSlug ? getChapterBySlug(version, chapterSlug) : chapters[0]
 
   const handleVersionChange = newVersion => {
     const next = new URLSearchParams(searchParams)
@@ -257,12 +238,9 @@ export function RulesDocumentPage() {
         </div>
       </div>
 
-      {!activeChapter ? (
-        <>
-          <ChangeSummary doc={doc} version={version} diffResult={diffResult} />
-          <ChapterGrid doc={doc} version={version} chapters={chapters} />
-        </>
-      ) : (
+      <ChangeSummary doc={doc} version={version} diffResult={diffResult} />
+
+      {activeChapter && (
         <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8">
           <div className="hidden md:block">
             <ChapterSidebar doc={doc} version={version} chapters={chapters} activeChapter={activeChapter} />

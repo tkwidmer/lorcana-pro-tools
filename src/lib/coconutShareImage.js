@@ -47,10 +47,16 @@ function wrapText(ctx, text, maxWidth, maxLines) {
   return lines
 }
 
-// Card images come from LorcanaJSON's CDN (cross-origin) — setting
-// crossOrigin means a host without CORS support simply fails to load
-// (onerror) rather than silently tainting the canvas, so toBlob/toDataURL
-// always stays usable; failed loads just fall back to a plain color tile.
+// Card images come from LorcanaJSON's CDN, which doesn't send CORS headers —
+// drawing a cross-origin image without them taints the canvas and breaks
+// toBlob/toDataURL for the whole export. /api/card-image re-serves the same
+// bytes from our own origin (allow-listed to that one host server-side) so
+// the browser sees a same-origin image instead; local (non-Vercel) URLs like
+// the bundled Coconut card art pass through unchanged.
+function proxiedImageUrl(url) {
+  return url.startsWith('/') ? url : `/api/card-image?url=${encodeURIComponent(url)}`
+}
+
 const IMAGE_TIMEOUT_MS = 8000
 const imageCache = new Map()
 function loadImage(url) {
@@ -59,10 +65,9 @@ function loadImage(url) {
   const promise = new Promise((resolve) => {
     const img = new Image()
     const timer = setTimeout(() => resolve(null), IMAGE_TIMEOUT_MS)
-    img.crossOrigin = 'anonymous'
     img.onload = () => { clearTimeout(timer); resolve(img) }
     img.onerror = () => { clearTimeout(timer); resolve(null) }
-    img.src = url
+    img.src = proxiedImageUrl(url)
   })
   imageCache.set(url, promise)
   return promise

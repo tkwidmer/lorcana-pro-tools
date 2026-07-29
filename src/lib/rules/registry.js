@@ -36,4 +36,9 @@ export const RULES_DOCUMENTS = [
     name: 'Pack Rush Rules',
     tagline: 'Quick-start rules for the fast-paced two-booster-pack format.',
   },
+  {
+    slug: 'artist-policy',
+    name: 'Artist Policy',
+    tagline: 'Confidentiality and generative AI policies for Disney Lorcana TCG artists.',
+  },
 ]

@@ -10,6 +10,7 @@ import { coreLoreGuideVersions } from './content/coreLoreGuide'
 import { communityCodeVersions } from './content/communityCode'
 import { diversityInclusionPolicyVersions } from './content/diversityInclusionPolicy'
 import { packRushRulesVersions } from './content/packRushRules'
+import { artistPolicyVersions } from './content/artistPolicy'
 import { diffVersions } from './diff'
 
 const VERSIONS_BY_DOC = {
@@ -20,6 +21,7 @@ const VERSIONS_BY_DOC = {
   'community-code': communityCodeVersions,
   'diversity-inclusion-policy': diversityInclusionPolicyVersions,
   'pack-rush-rules': packRushRulesVersions,
+  'artist-policy': artistPolicyVersions,
 }
 
 export function getDocuments() {

@@ -120,7 +120,10 @@ function drawMiniCurve(ctx, x, y, w, h, curve) {
   })
 }
 
-function drawCard(ctx, img, entry, x, y, w, h) {
+// showBadges is off for the featured Coconut card — it isn't "in the deck"
+// at some cost/quantity in the traditional sense, it's the format anchor
+// that's always in effect, so it gets pure art with no cost pip or count.
+function drawCard(ctx, img, entry, x, y, w, h, showBadges = true) {
   roundRect(ctx, x, y, w, h, Math.max(4, w * 0.06))
   ctx.save()
   ctx.clip()
@@ -143,6 +146,8 @@ function drawCard(ctx, img, entry, x, y, w, h) {
   ctx.lineWidth = 1
   roundRect(ctx, x, y, w, h, Math.max(4, w * 0.06))
   ctx.stroke()
+
+  if (!showBadges) return
 
   // Cost pip (top-left)
   const pipR = Math.max(9, w * 0.11)
@@ -171,13 +176,12 @@ function drawCard(ctx, img, entry, x, y, w, h) {
 }
 
 // entries: [{ fullName, name, cost, type, color, qty, imageUrl, inkwell }] — the
-// Coconut card's own entry must also appear once in this list (it gets pulled out
-// and rendered oversized, not duplicated).
-export async function generateCoconutDeckShareImage({ deckName, coconutName, coconutBaseFullName, coconutImageUrl, inks, entries }) {
+// Coconut card's linked base card stays in this list like any other card (it's
+// still part of the 60, at its real cost and quantity); the featured artwork
+// above the grid is a separate, badge-free "built around this" header, not a
+// stand-in for that card's normal grid slot.
+export async function generateCoconutDeckShareImage({ deckName, coconutName, coconutImageUrl, inks, entries }) {
   const sorted = [...entries].sort((a, b) => (a.cost - b.cost) || a.fullName.localeCompare(b.fullName))
-  const coconutKey = coconutBaseFullName.toLowerCase()
-  const coconutEntry = sorted.find(e => e.fullName.toLowerCase() === coconutKey) ?? null
-  const otherEntries = sorted.filter(e => e !== coconutEntry)
 
   let totalCards = 0
   let uninkable = 0
@@ -190,9 +194,9 @@ export async function generateCoconutDeckShareImage({ deckName, coconutName, coc
     curveAll[costBucket(e.cost)] += e.qty
   }
 
-  const [coconutImg, ...otherImages] = await Promise.all([
+  const [coconutImg, ...cardImages] = await Promise.all([
     loadImage(coconutImageUrl),
-    ...otherEntries.map(e => loadImage(e.imageUrl)),
+    ...sorted.map(e => loadImage(e.imageUrl)),
   ])
 
   const DPR = 2
@@ -219,7 +223,7 @@ export async function generateCoconutDeckShareImage({ deckName, coconutName, coc
   const cellStepX = cellW + gap
   const cellStepY = cellH + gap
 
-  const totalCells = otherEntries.length + 4 // Coconut card reserves a 2x2 block
+  const totalCells = sorted.length + 4 // featured Coconut art reserves an extra 2x2 block
   const rows = Math.ceil(totalCells / cols)
   const gridH = rows * cellH + (rows - 1) * gap
 
@@ -261,21 +265,19 @@ export async function generateCoconutDeckShareImage({ deckName, coconutName, coc
 
   // ── Card grid ───────────────────────────────────────────────────────────
 
-  if (coconutEntry) {
-    drawCard(ctx, coconutImg, coconutEntry, PAD, gridTop, cellW * 2 + gap, cellH * 2 + gap)
-  }
+  drawCard(ctx, coconutImg, { name: coconutName, color: null }, PAD, gridTop, cellW * 2 + gap, cellH * 2 + gap, false)
 
-  let otherIdx = 0
-  for (let cellIdx = 0; cellIdx < rows * cols && otherIdx < otherEntries.length; cellIdx++) {
+  let idx = 0
+  for (let cellIdx = 0; cellIdx < rows * cols && idx < sorted.length; cellIdx++) {
     const col = cellIdx % cols
     const row = Math.floor(cellIdx / cols)
-    if (row < 2 && col < 2) continue // reserved for the Coconut card
-    const entry = otherEntries[otherIdx]
-    const img = otherImages[otherIdx]
+    if (row < 2 && col < 2) continue // reserved for the featured Coconut art
+    const entry = sorted[idx]
+    const img = cardImages[idx]
     const x = PAD + col * cellStepX
     const y = gridTop + row * cellStepY
     drawCard(ctx, img, entry, x, y, cellW, cellH)
-    otherIdx++
+    idx++
   }
 
   // ── Footer ──────────────────────────────────────────────────────────────

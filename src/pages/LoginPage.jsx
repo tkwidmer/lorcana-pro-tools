@@ -23,7 +23,7 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         <div className="bg-white py-12 px-6 shadow rounded-lg sm:px-12">
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">Lorcana Pro Tools</h1>
+            <h1 className="text-2xl font-bold text-gray-900">InkbornForge</h1>
             <p className="mt-2 text-sm text-gray-600">Sign in to your account</p>
           </div>
 

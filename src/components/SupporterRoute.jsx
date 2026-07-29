@@ -8,7 +8,7 @@ function Gate({ signedIn }) {
         Supporters only
       </h1>
       <p className="text-gray-500 mb-8 leading-relaxed">
-        This tool is available to Lorcana Pro Tools supporters.
+        This tool is available to InkbornForge supporters.
         {signedIn
           ? ' Your account doesn’t have supporter access yet.'
           : ' Sign in with a supporter account to continue.'}

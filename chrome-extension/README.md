@@ -20,5 +20,5 @@ Once installed, the extension automatically captures game data whenever you visi
 ## How It Works
 
 - Intercepts WebSocket messages from duels.ink spectate pages
-- Forwards game data to the Lorcana Pro Tools application
+- Forwards game data to the InkbornForge application
 - Works seamlessly with Game History, Player Profiles, and other tools

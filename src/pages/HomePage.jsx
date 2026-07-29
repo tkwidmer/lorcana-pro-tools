@@ -128,7 +128,7 @@ const SECTIONS = [
             {
               href: DISCORD_INVITE_URL,
               name: 'Add to Discord',
-              description: 'Invite the Lorcana Pro Tools bot to your server. Right-click any deck list image and pick "Decode Deck QR" to get a clickable duels.ink link to the deck.',
+              description: 'Invite the InkbornForge bot to your server. Right-click any deck list image and pick "Decode Deck QR" to get a clickable duels.ink link to the deck.',
             },
           ],
         },
@@ -189,7 +189,7 @@ export function HomePage() {
     <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">
-          Lorcana Pro Tools
+          InkbornForge
         </h1>
         <p className="text-gray-500">
           A growing suite of tools for Disney Lorcana players.

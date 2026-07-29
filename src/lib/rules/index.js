@@ -11,6 +11,8 @@ import { communityCodeVersions } from './content/communityCode'
 import { diversityInclusionPolicyVersions } from './content/diversityInclusionPolicy'
 import { packRushRulesVersions } from './content/packRushRules'
 import { artistPolicyVersions } from './content/artistPolicy'
+import { ccqEventTermSheetVersions } from './content/ccqEventTermSheet'
+import { formatCoconutRulesVersions } from './content/formatCoconutRules'
 import { diffVersions } from './diff'
 
 const VERSIONS_BY_DOC = {
@@ -22,6 +24,8 @@ const VERSIONS_BY_DOC = {
   'diversity-inclusion-policy': diversityInclusionPolicyVersions,
   'pack-rush-rules': packRushRulesVersions,
   'artist-policy': artistPolicyVersions,
+  'ccq-event-term-sheet': ccqEventTermSheetVersions,
+  'format-coconut-rules': formatCoconutRulesVersions,
 }
 
 export function getDocuments() {

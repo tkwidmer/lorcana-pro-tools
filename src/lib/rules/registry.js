@@ -41,4 +41,14 @@ export const RULES_DOCUMENTS = [
     name: 'Artist Policy',
     tagline: 'Confidentiality and generative AI policies for Disney Lorcana TCG artists.',
   },
+  {
+    slug: 'ccq-event-term-sheet',
+    name: 'CCQ Event Term Sheet',
+    tagline: 'Terms for organizers running third-party Challenge Championship Qualifier events.',
+  },
+  {
+    slug: 'format-coconut-rules',
+    name: '[Format Coconut] Beta Rules',
+    tagline: 'Rules for the thematic multiplayer beta format built around a favorite character.',
+  },
 ]

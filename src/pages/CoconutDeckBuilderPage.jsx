@@ -1134,7 +1134,6 @@ function BuildView({ initialDeck, cards, onBack }) {
       const canvas = await generateCoconutDeckShareImage({
         deckName: deck.name,
         coconutName: coconutDisplayName(coconutCard),
-        coconutBaseFullName: coconutCard.baseFullName,
         coconutImageUrl: getCoconutCardImageUrl(coconutCard),
         inks: deck.inks,
         entries,

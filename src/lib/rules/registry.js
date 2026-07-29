@@ -31,4 +31,24 @@ export const RULES_DOCUMENTS = [
     name: 'Diversity & Inclusion Policy',
     tagline: 'Commitments to a welcoming, inclusive Organized Play community.',
   },
+  {
+    slug: 'pack-rush-rules',
+    name: 'Pack Rush Rules',
+    tagline: 'Quick-start rules for the fast-paced two-booster-pack format.',
+  },
+  {
+    slug: 'artist-policy',
+    name: 'Artist Policy',
+    tagline: 'Confidentiality and generative AI policies for Disney Lorcana TCG artists.',
+  },
+  {
+    slug: 'ccq-event-term-sheet',
+    name: 'CCQ Event Term Sheet',
+    tagline: 'Terms for organizers running third-party Challenge Championship Qualifier events.',
+  },
+  {
+    slug: 'format-coconut-rules',
+    name: '[Format Coconut] Beta Rules',
+    tagline: 'Rules for the thematic multiplayer beta format built around a favorite character.',
+  },
 ]

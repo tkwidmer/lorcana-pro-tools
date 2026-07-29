@@ -1,14 +1,16 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   getDocument,
   getVersions,
-  getVersion,
-  getPreviousVersion,
+  getVersionMeta,
+  getPreviousVersionMeta,
+  loadVersion,
   getChapters,
   getChapterBySlug,
   getChapterEntries,
   ruleDepth,
-  getVersionDiff,
+  loadVersionDiff,
   getChapterDiff,
 } from '../lib/rules'
 import { changesById, wordDiff } from '../lib/rules/diff'
@@ -133,25 +135,6 @@ function ChangeSummary({ doc, version, diffResult }) {
   )
 }
 
-function ChapterGrid({ doc, version, chapters }) {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {chapters.map(chapter => (
-        <Link
-          key={chapter.id}
-          to={`/rules/${doc.slug}/${chapter.slug}?v=${version.version}`}
-          className="group block border border-gray-200 rounded-lg p-5 hover:border-gray-900 transition-colors"
-        >
-          <div className="text-xs text-gray-400 font-mono mb-1">{chapter.id}</div>
-          <h3 className="text-base font-bold text-gray-900 group-hover:underline">
-            {chapter.title}
-          </h3>
-        </Link>
-      ))}
-    </div>
-  )
-}
-
 function ChapterSidebar({ doc, version, chapters, activeChapter }) {
   return (
     <nav className="space-y-4">
@@ -192,27 +175,41 @@ function ChapterSidebar({ doc, version, chapters, activeChapter }) {
   )
 }
 
-export function RulesDocumentPage() {
-  const { doc: docSlug, chapterSlug } = useParams()
-  const [searchParams, setSearchParams] = useSearchParams()
+// Loads one version's entries + diff, then renders the document. Keyed by
+// `${docSlug}:${versionId}` from the parent so switching versions remounts
+// this component fresh (useState(null) is already the right "loading"
+// state on mount) instead of needing to reset state imperatively inside an
+// effect. Switching chapters within the same version does NOT remount it,
+// so already-loaded content stays put.
+function DocumentVersionView({ doc, docSlug, versionId, versions, chapterSlug, searchParams, setSearchParams }) {
+  const previousVersionMeta = getPreviousVersionMeta(docSlug, versionId)
 
-  const doc = getDocument(docSlug)
-  const versions = getVersions(docSlug)
-  const version = getVersion(docSlug, searchParams.get('v'))
-  const previousVersion = version ? getPreviousVersion(docSlug, version.version) : null
-  const diffResult = version ? getVersionDiff(docSlug, version.version) : null
+  const [version, setVersion] = useState(null)
+  const [diffResult, setDiffResult] = useState(null)
 
-  if (!doc || !version) {
+  useEffect(() => {
+    let cancelled = false
+    loadVersion(docSlug, versionId).then(v => {
+      if (!cancelled) setVersion(v)
+    })
+    loadVersionDiff(docSlug, versionId).then(d => {
+      if (!cancelled) setDiffResult(d)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [docSlug, versionId])
+
+  if (!version) {
     return (
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <p className="text-gray-500">Document not found.</p>
-        <Link to="/rules" className="text-sm font-medium text-gray-900">← Back to Rules</Link>
+        <p className="text-gray-400 text-sm">Loading…</p>
       </div>
     )
   }
 
   const chapters = getChapters(version)
-  const activeChapter = chapterSlug ? getChapterBySlug(version, chapterSlug) : null
+  const activeChapter = chapterSlug ? getChapterBySlug(version, chapterSlug) : chapters[0]
 
   const handleVersionChange = newVersion => {
     const next = new URLSearchParams(searchParams)
@@ -241,7 +238,7 @@ export function RulesDocumentPage() {
           </div>
           <div className="flex items-center gap-3">
             <VersionSelect versions={versions} current={version} onChange={handleVersionChange} />
-            {previousVersion && (
+            {previousVersionMeta && (
               <button
                 onClick={toggleInline}
                 className={`text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors ${
@@ -257,12 +254,9 @@ export function RulesDocumentPage() {
         </div>
       </div>
 
-      {!activeChapter ? (
-        <>
-          <ChangeSummary doc={doc} version={version} diffResult={diffResult} />
-          <ChapterGrid doc={doc} version={version} chapters={chapters} />
-        </>
-      ) : (
+      <ChangeSummary doc={doc} version={version} diffResult={diffResult} />
+
+      {activeChapter && (
         <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8">
           <div className="hidden md:block">
             <ChapterSidebar doc={doc} version={version} chapters={chapters} activeChapter={activeChapter} />
@@ -291,5 +285,36 @@ export function RulesDocumentPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export function RulesDocumentPage() {
+  const { doc: docSlug, chapterSlug } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const doc = getDocument(docSlug)
+  const versions = getVersions(docSlug)
+  const versionMeta = getVersionMeta(docSlug, searchParams.get('v'))
+
+  if (!doc || !versionMeta) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <p className="text-gray-500">Document not found.</p>
+        <Link to="/rules" className="text-sm font-medium text-gray-900">← Back to Rules</Link>
+      </div>
+    )
+  }
+
+  return (
+    <DocumentVersionView
+      key={`${docSlug}:${versionMeta.version}`}
+      doc={doc}
+      docSlug={docSlug}
+      versionId={versionMeta.version}
+      versions={versions}
+      chapterSlug={chapterSlug}
+      searchParams={searchParams}
+      setSearchParams={setSearchParams}
+    />
   )
 }

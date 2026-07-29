@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { getDocument, getVersion, getPreviousVersion, getVersionDiff } from '../lib/rules'
+import { getDocument, getVersionMeta, getPreviousVersionMeta, loadVersionDiff } from '../lib/rules'
 import { wordDiff } from '../lib/rules/diff'
 
 function WordDiff({ oldText, newText }) {
@@ -40,21 +40,33 @@ const TABS = [
   { key: 'renumbered', label: 'Renumbered' },
 ]
 
-export function RulesChangesPage() {
-  const { doc: docSlug } = useParams()
-  const [searchParams] = useSearchParams()
-  const doc = getDocument(docSlug)
-  const version = getVersion(docSlug, searchParams.get('v'))
-  const previousVersion = version ? getPreviousVersion(docSlug, version.version) : null
-  const diffResult = version ? getVersionDiff(docSlug, version.version) : null
+// Loads the diff for one version, then renders it. Keyed by
+// `${docSlug}:${versionId}` from the parent so switching versions remounts
+// this component fresh instead of needing to reset state imperatively
+// inside an effect.
+function ChangesVersionView({ doc, docSlug, versionId, version, previousVersion }) {
+  const [diffResult, setDiffResult] = useState(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    loadVersionDiff(docSlug, versionId).then(d => {
+      if (!cancelled) {
+        setDiffResult(d)
+        setLoaded(true)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [docSlug, versionId])
 
   const [tab, setTab] = useState('changed')
 
-  if (!doc || !version) {
+  if (!loaded) {
     return (
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <p className="text-gray-500">Document not found.</p>
-        <Link to="/rules" className="text-sm font-medium text-gray-900">← Back to Rules</Link>
+        <p className="text-gray-400 text-sm">Loading…</p>
       </div>
     )
   }
@@ -164,5 +176,33 @@ export function RulesChangesPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export function RulesChangesPage() {
+  const { doc: docSlug } = useParams()
+  const [searchParams] = useSearchParams()
+  const doc = getDocument(docSlug)
+  const version = getVersionMeta(docSlug, searchParams.get('v'))
+  const previousVersion = version ? getPreviousVersionMeta(docSlug, version.version) : null
+
+  if (!doc || !version) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <p className="text-gray-500">Document not found.</p>
+        <Link to="/rules" className="text-sm font-medium text-gray-900">← Back to Rules</Link>
+      </div>
+    )
+  }
+
+  return (
+    <ChangesVersionView
+      key={`${docSlug}:${version.version}`}
+      doc={doc}
+      docSlug={docSlug}
+      versionId={version.version}
+      version={version}
+      previousVersion={previousVersion}
+    />
   )
 }

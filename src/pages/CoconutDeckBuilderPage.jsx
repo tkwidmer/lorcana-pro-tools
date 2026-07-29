@@ -4,6 +4,8 @@ import { COCONUT_CARDS, getCoconutCard } from '../lib/coconutCards'
 import { getCardLimit, isCardInkLegal, validateDeck, MIN_DECK_SIZE, MAX_INKS } from '../lib/coconutFormat'
 import { VALID_INKS, resolveColors } from '../lib/inkColors'
 import { saveDeck, getDeck, getAllDecks, deleteDeck } from '../lib/coconutDecks'
+import { generateCoconutDeckShareImage } from '../lib/coconutShareImage'
+import { downloadShareImage, copyShareImageToClipboard, canNativeShareImage, nativeShareImage } from '../lib/tournamentShareImage'
 
 const INK_LABELS = {
   amber: 'Amber',
@@ -884,11 +886,219 @@ function DeckCardRow({ entry, limit, imageUrl, onChangeQty, onRemove, onHoverMov
   )
 }
 
+const CURVE_BUCKETS = [1, 2, 3, 4, 5, 6, 7]
+
+function costBucket(cost) {
+  const c = Math.max(1, cost ?? 1)
+  return c >= 7 ? 7 : c
+}
+
+function ManaCurveBar({ label, curve, barClassName }) {
+  const max = Math.max(1, ...CURVE_BUCKETS.map(b => curve[b] ?? 0))
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{label}</p>
+      <div className="flex items-end gap-2">
+        {CURVE_BUCKETS.map(b => {
+          const count = curve[b] ?? 0
+          return (
+            <div key={b} className="flex-1 flex flex-col items-center gap-1">
+              <span className="text-[10px] text-gray-400">{count || ''}</span>
+              <div className="w-full h-20 bg-gray-100 rounded flex items-end overflow-hidden">
+                <div className={`w-full rounded-t ${barClassName}`} style={{ height: `${(count / max) * 100}%` }} />
+              </div>
+              <span className="text-[10px] text-gray-400">{b === 7 ? '7+' : b}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Read-only gallery of every card in the deck plus the three insights the
+// deck builder promises: ink breakdown, type breakdown, and mana curve
+// (overall, and characters-only since actions/items/locations skew it low).
+function DeckOverview({ deck, cardsByFullName }) {
+  const insights = useMemo(() => {
+    const inkCounts = {}
+    const typeCounts = {}
+    const curveAll = {}
+    const curveChar = {}
+    for (const e of deck.cards) {
+      const ink = resolveColors([e.color])[0]
+      if (ink) inkCounts[ink] = (inkCounts[ink] ?? 0) + e.qty
+      typeCounts[e.type] = (typeCounts[e.type] ?? 0) + e.qty
+      const bucket = costBucket(e.cost)
+      curveAll[bucket] = (curveAll[bucket] ?? 0) + e.qty
+      if (e.type === 'Character') curveChar[bucket] = (curveChar[bucket] ?? 0) + e.qty
+    }
+    return { inkCounts, typeCounts, curveAll, curveChar }
+  }, [deck.cards])
+
+  const sortedEntries = useMemo(
+    () => [...deck.cards].sort((a, b) => (a.cost - b.cost) || a.fullName.localeCompare(b.fullName)),
+    [deck.cards]
+  )
+
+  return (
+    <div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div className="border border-gray-200 rounded-lg bg-white p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Ink</p>
+          <div className="space-y-1.5">
+            {VALID_INKS.filter(ink => insights.inkCounts[ink]).map(ink => (
+              <div key={ink} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-1.5"><InkIcon ink={ink} size={16} />{INK_LABELS[ink]}</span>
+                <span className="text-gray-500">{insights.inkCounts[ink]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="border border-gray-200 rounded-lg bg-white p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Type</p>
+          <div className="space-y-1.5">
+            {TYPE_ORDER.filter(t => insights.typeCounts[t]).map(t => (
+              <div key={t} className="flex items-center justify-between text-sm">
+                <span className="text-gray-700">{t}</span>
+                <span className="text-gray-500">{insights.typeCounts[t]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div className="border border-gray-200 rounded-lg bg-white p-4">
+          <ManaCurveBar label="Mana Curve" curve={insights.curveAll} barClassName="bg-gray-900" />
+        </div>
+        <div className="border border-gray-200 rounded-lg bg-white p-4">
+          <ManaCurveBar label="Mana Curve — Characters Only" curve={insights.curveChar} barClassName="bg-indigo-500" />
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-400 mb-2">
+        {sortedEntries.length} unique card{sortedEntries.length === 1 ? '' : 's'} · sorted by cost
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+        {sortedEntries.map(entry => {
+          const imageUrl = getCardImageUrl(cardsByFullName.get(entry.fullName.toLowerCase()))
+          return (
+            <div key={entry.fullName} className="border border-gray-200 rounded-lg overflow-hidden flex flex-col">
+              <div className="aspect-[2.5/3.5] bg-gray-100">
+                {imageUrl && <img src={imageUrl} alt="" className="w-full h-full object-cover" />}
+              </div>
+              <div className="p-2">
+                <div className="text-xs font-medium text-gray-900 truncate" title={entry.fullName}>{entry.fullName}</div>
+                <div className="text-xs text-gray-400">{entry.qty}× · Cost {entry.cost}</div>
+              </div>
+            </div>
+          )
+        })}
+        {sortedEntries.length === 0 && (
+          <div className="col-span-full text-center text-gray-400 text-sm py-16 border-2 border-dashed border-gray-200 rounded-lg">
+            No cards in this deck yet.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ShareCardModal({ shareCard, onClose }) {
+  const [nativeShareAvailable, setNativeShareAvailable] = useState(false)
+  const [status, setStatus] = useState(null) // null | 'copying' | 'copied' | 'error' | 'sharing'
+
+  useEffect(() => {
+    let cancelled = false
+    canNativeShareImage().then((ok) => { if (!cancelled) setNativeShareAvailable(ok) })
+    return () => { cancelled = true }
+  }, [])
+
+  function flash(next) {
+    setStatus(next)
+    setTimeout(() => setStatus(null), 2500)
+  }
+
+  async function handleNativeShare() {
+    setStatus('sharing')
+    try {
+      await nativeShareImage(shareCard.canvas, shareCard.filename, 'My Coconut Deck')
+      setStatus(null)
+    } catch (e) {
+      if (e?.name !== 'AbortError') flash('error')
+      else setStatus(null)
+    }
+  }
+
+  async function handleCopy() {
+    setStatus('copying')
+    try {
+      await copyShareImageToClipboard(shareCard.canvas)
+      flash('copied')
+    } catch {
+      flash('error')
+    }
+  }
+
+  async function handleDownload() {
+    await downloadShareImage(shareCard.canvas, shareCard.filename)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-xl border border-gray-200 max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+          <h2 className="text-sm font-semibold text-gray-900">Share deck</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+        </div>
+        <div className="overflow-y-auto p-4">
+          <img src={shareCard.imageUrl} alt="Deck share card" className="w-full rounded-lg border border-gray-200" />
+        </div>
+        <div className="px-4 py-3 border-t border-gray-200 shrink-0 flex flex-wrap gap-2 justify-end">
+          {nativeShareAvailable && (
+            <button
+              onClick={handleNativeShare}
+              disabled={status === 'sharing'}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {status === 'sharing' ? 'Sharing…' : 'Share…'}
+            </button>
+          )}
+          <button
+            onClick={handleCopy}
+            disabled={status === 'copying'}
+            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {status === 'copying' ? 'Copying…' : status === 'copied' ? '✓ Copied' : status === 'error' ? 'Failed' : 'Copy Image'}
+          </button>
+          <button
+            onClick={handleDownload}
+            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Download JPG
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function BuildView({ initialDeck, cards, onBack }) {
   const [deck, setDeck] = useState(initialDeck)
   const [savedAt, setSavedAt] = useState(null)
   const saveTimer = useRef(null)
   const [hoverPreview, setHoverPreview] = useState(null)
+  const [mainView, setMainView] = useState('browse') // 'browse' | 'deck'
+  const [shareCard, setShareCard] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
   const coconutCard = getCoconutCard(deck.coconutCardId)
 
@@ -904,6 +1114,37 @@ function BuildView({ initialDeck, cards, onBack }) {
     setHoverPreview({ imageUrl, x: e.clientX, y: e.clientY })
   }, [])
   const handleHoverEnd = useCallback(() => setHoverPreview(null), [])
+
+  const handleExport = useCallback(async () => {
+    setExporting(true)
+    try {
+      const entries = deck.cards.map(e => {
+        const real = cardsByFullName.get(e.fullName.toLowerCase())
+        return {
+          fullName: e.fullName,
+          name: e.name,
+          cost: e.cost,
+          type: e.type,
+          color: resolveColors([e.color])[0] ?? null,
+          qty: e.qty,
+          imageUrl: getCardImageUrl(real),
+          inkwell: real?.inkwell ?? null,
+        }
+      })
+      const canvas = await generateCoconutDeckShareImage({
+        deckName: deck.name,
+        coconutName: coconutDisplayName(coconutCard),
+        coconutBaseFullName: coconutCard.baseFullName,
+        coconutImageUrl: getCoconutCardImageUrl(coconutCard),
+        inks: deck.inks,
+        entries,
+      })
+      const filename = `${deck.name.replace(/\s+/g, '-').toLowerCase()}-coconut-deck.jpg`
+      setShareCard({ canvas, imageUrl: canvas.toDataURL('image/jpeg', 0.92), filename })
+    } finally {
+      setExporting(false)
+    }
+  }, [deck, coconutCard, cardsByFullName])
 
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -981,6 +1222,7 @@ function BuildView({ initialDeck, cards, onBack }) {
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
       <HoverCardPreview preview={hoverPreview} />
+      {shareCard && <ShareCardModal shareCard={shareCard} onClose={() => setShareCard(null)} />}
 
       <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-700 underline mb-4">
         ← All decks
@@ -1000,16 +1242,44 @@ function BuildView({ initialDeck, cards, onBack }) {
         <span className="text-sm text-gray-500 ml-1">Built around {coconutDisplayName(coconutCard)}</span>
       </div>
 
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex border border-gray-300 rounded overflow-hidden text-xs">
+          <button
+            onClick={() => setMainView('browse')}
+            className={`px-3 py-1.5 font-medium transition-colors ${mainView === 'browse' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+          >
+            Card Browser
+          </button>
+          <button
+            onClick={() => setMainView('deck')}
+            className={`px-3 py-1.5 font-medium transition-colors ${mainView === 'deck' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+          >
+            View Deck
+          </button>
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="ml-auto text-xs font-medium px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          {exporting ? 'Generating…' : 'Export / Share Deck'}
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
         <div>
-          <CardBrowser
-            cards={cards}
-            coconutCard={coconutCard}
-            lockedInks={deck.inks}
-            deckEntries={deck.cards}
-            onAdd={addCard}
-            onChangeQty={changeQty}
-          />
+          {mainView === 'browse' ? (
+            <CardBrowser
+              cards={cards}
+              coconutCard={coconutCard}
+              lockedInks={deck.inks}
+              deckEntries={deck.cards}
+              onAdd={addCard}
+              onChangeQty={changeQty}
+            />
+          ) : (
+            <DeckOverview deck={deck} cardsByFullName={cardsByFullName} />
+          )}
         </div>
 
         <div className="lg:sticky lg:top-6 space-y-4">

@@ -1,4 +1,4 @@
-const INK_HEX = {
+export const INK_HEX = {
   amber:    '#F59E0B',
   amethyst: '#8B5CF6',
   emerald:  '#10B981',

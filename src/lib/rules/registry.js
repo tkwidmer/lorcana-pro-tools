@@ -31,4 +31,9 @@ export const RULES_DOCUMENTS = [
     name: 'Diversity & Inclusion Policy',
     tagline: 'Commitments to a welcoming, inclusive Organized Play community.',
   },
+  {
+    slug: 'pack-rush-rules',
+    name: 'Pack Rush Rules',
+    tagline: 'Quick-start rules for the fast-paced two-booster-pack format.',
+  },
 ]

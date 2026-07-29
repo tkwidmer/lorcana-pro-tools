@@ -9,6 +9,7 @@ import { playGuideVersions } from './content/playGuide'
 import { coreLoreGuideVersions } from './content/coreLoreGuide'
 import { communityCodeVersions } from './content/communityCode'
 import { diversityInclusionPolicyVersions } from './content/diversityInclusionPolicy'
+import { packRushRulesVersions } from './content/packRushRules'
 import { diffVersions } from './diff'
 
 const VERSIONS_BY_DOC = {
@@ -18,6 +19,7 @@ const VERSIONS_BY_DOC = {
   'core-lore-guide': coreLoreGuideVersions,
   'community-code': communityCodeVersions,
   'diversity-inclusion-policy': diversityInclusionPolicyVersions,
+  'pack-rush-rules': packRushRulesVersions,
 }
 
 export function getDocuments() {

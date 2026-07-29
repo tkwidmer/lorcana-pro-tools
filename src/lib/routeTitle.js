@@ -3,10 +3,10 @@
 // still see the static index.html title. Keep the wording in sync with the
 // tool names on HomePage.
 
-const SITE = 'Lorcana Pro Tools'
+const SITE = 'InkbornForge'
 const HOME_TITLE = `${SITE} — Competitive tools for Disney Lorcana`
 
-// Exact-path titles (the page name shown before "· Lorcana Pro Tools").
+// Exact-path titles (the page name shown before "· InkbornForge").
 const TITLES = {
   '/login': 'Sign in',
   '/proxy': 'Proxy Generator',

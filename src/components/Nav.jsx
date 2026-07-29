@@ -85,7 +85,7 @@ export function Nav() {
     <nav className="no-print border-b border-gray-200 bg-white">
       <div className="max-w-7xl mx-auto px-6 h-12 flex items-center gap-4">
         <Link to="/" className="font-bold text-gray-900 tracking-tight hover:text-gray-600 transition-colors">
-          Lorcana Pro Tools
+          InkbornForge
         </Link>
         {!isHome && (
           <>

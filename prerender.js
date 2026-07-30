@@ -1,3 +1,4 @@
+/* global process */
 // Prerenders the public (non-supporter-gated) marketing routes to static HTML
 // after `vite build`, so crawlers that don't execute JS still see real
 // per-page content instead of the bare index.html shell. Vercel serves these

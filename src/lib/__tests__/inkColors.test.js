@@ -42,6 +42,11 @@ describe('resolveColors', () => {
     expect(resolveColors(['red/blue'])).toEqual(['ruby', 'sapphire'])
   })
 
+  it('parses hyphen-separated dual-ink card colors', () => {
+    expect(resolveColors(['Amber-Steel'])).toEqual(['amber', 'steel'])
+    expect(resolveColors(['Ruby-Sapphire'])).toEqual(['ruby', 'sapphire'])
+  })
+
   it('deduplicates and sorts output', () => {
     expect(resolveColors(['ruby', 'ruby', 'sapphire'])).toEqual(['ruby', 'sapphire'])
     expect(resolveColors(['steel', 'amber'])).toEqual(['amber', 'steel'])

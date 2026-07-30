@@ -17,7 +17,9 @@ export function resolveInkName(color) {
 export function resolveColors(colors) {
   const result = new Set()
   for (const c of (colors ?? [])) {
-    for (const part of String(c).split('/')) {
+    // LorcanaJSON's `color` field uses "/" for some multi-ink representations
+    // and "-" for dual-ink cards (e.g. "Amber-Steel"); split on either.
+    for (const part of String(c).split(/[/-]/)) {
       const name = resolveInkName(part.trim())
       if (name) result.add(name)
     }

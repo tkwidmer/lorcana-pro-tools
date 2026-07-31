@@ -7,6 +7,9 @@ const RAVEN_BASE = 'https://api.ravensburgerplay.com'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  test: {
+    exclude: ['**/node_modules/**', '**/dist/**', '.agents/**', '.claude/**'],
+  },
   server: {
     port: process.env.PORT ? parseInt(process.env.PORT) : 5173,
     proxy: {

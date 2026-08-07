@@ -499,18 +499,34 @@ export function AnalyticsPage() {
   const activeGamelog = games.find(g => g.id === activeId) ?? null
   const activeMyPlayerNum = activeGamelog ? (activeGamelog.myPlayerNum ?? getMyPlayerNum(activeGamelog, myName)) : null
 
-  // Calculate overall stats from filtered games
-  const gamesWithMyPlayer = filteredGames.filter(g => g.myPlayerNum != null)
-  const wins = gamesWithMyPlayer.filter(g => g.winner === String(g.myPlayerNum) || g.winner === g.myPlayerNum).length
-  const losses = gamesWithMyPlayer.length - wins
-  const winRate = gamesWithMyPlayer.length > 0 ? (wins / gamesWithMyPlayer.length * 100).toFixed(0) : 0
+  // Calculate overall stats from enriched games (picks up myName-resolved games too,
+  // and shares its win/first-player resolution with the personal-analysis section
+  // below instead of recomputing it a second way).
+  const wins = enrichedGames.filter(g => g.won).length
+  const losses = enrichedGames.length - wins
+  const winRate = enrichedGames.length > 0 ? (wins / enrichedGames.length * 100).toFixed(0) : 0
 
-  const gamesFirst = gamesWithMyPlayer.filter(g => g.wentFirst === g.myPlayerNum || g.wentFirst === String(g.myPlayerNum))
-  const gamesSecond = gamesWithMyPlayer.filter(g => g.wentFirst != null && g.wentFirst !== g.myPlayerNum && g.wentFirst !== String(g.myPlayerNum))
-  const winsFirst = gamesFirst.filter(g => g.winner === g.myPlayerNum || g.winner === String(g.myPlayerNum)).length
-  const winsSecond = gamesSecond.filter(g => g.winner === g.myPlayerNum || g.winner === String(g.myPlayerNum)).length
+  const gamesFirst = enrichedGames.filter(g => g.wentFirst)
+  const gamesSecond = enrichedGames.filter(g => !g.wentFirst)
+  const winsFirst = gamesFirst.filter(g => g.won).length
+  const winsSecond = gamesSecond.filter(g => g.won).length
   const winRateFirst = gamesFirst.length > 0 ? Math.round(winsFirst / gamesFirst.length * 100) : null
   const winRateSecond = gamesSecond.length > 0 ? Math.round(winsSecond / gamesSecond.length * 100) : null
+
+  // BO3 match-level record (2+ game wins/losses within a match_id)
+  const bo3Games = enrichedGames.filter(g => g.match_id)
+  const matchGroups = {}
+  for (const g of bo3Games) {
+    if (!matchGroups[g.match_id]) matchGroups[g.match_id] = []
+    matchGroups[g.match_id].push(g)
+  }
+  const completeMatches = Object.values(matchGroups).filter(matchGames => {
+    const w = matchGames.filter(g => g.won).length
+    const l = matchGames.filter(g => !g.won).length
+    return w >= 2 || l >= 2
+  })
+  const matchWins = completeMatches.filter(matchGames => matchGames.filter(g => g.won).length >= 2).length
+  const matchLosses = completeMatches.filter(matchGames => matchGames.filter(g => !g.won).length >= 2).length
 
   // Calculate MMR range from filtered games with MMR data
   const gamesWithMMR = filteredGames.filter(g => g.mmr_delta != null).sort((a, b) => a.playedAt - b.playedAt)
@@ -774,7 +790,7 @@ export function AnalyticsPage() {
 
 
       {/* Overall Stats */}
-      {gamesWithMyPlayer.length > 0 && (
+      {enrichedGames.length > 0 && (
         <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Overall</div>
@@ -793,6 +809,13 @@ export function AnalyticsPage() {
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Going 2nd</div>
               <div className="text-2xl font-bold text-gray-900">{winRateSecond}%</div>
               <div className="text-xs text-gray-400 mt-0.5">{winsSecond}–{gamesSecond.length - winsSecond}</div>
+            </div>
+          )}
+          {completeMatches.length > 0 && (
+            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">BO3 Matches</div>
+              <div className="text-2xl font-bold text-gray-900">{matchWins}–{matchLosses}</div>
+              <div className="text-xs text-gray-400 mt-0.5">{completeMatches.length} match{completeMatches.length !== 1 ? 'es' : ''}</div>
             </div>
           )}
         </div>
@@ -923,10 +946,11 @@ export function AnalyticsPage() {
         </div>
       )}
 
-      {/* Personal analysis — win rate breakdowns, leaks, per-card stats, challenge stats */}
+      {/* Personal analysis — leaks, per-card stats, challenge stats. Overall/first-second/BO3
+          win rate lives in the Overall Stats cards above, and opponent-matchup win rate in
+          Opponent Metagame / Matchup Matrix below — avoids a third view of the same numbers. */}
       {enrichedGames.length > 0 && (
         <div className="mt-2">
-          <WinRateStats enrichedGames={enrichedGames} />
           <LeakReport enrichedGames={enrichedGames} />
           {enrichedGames.length > 1 && (
             <>
@@ -1697,20 +1721,6 @@ function Section({ title, subtitle, children, collapsible, defaultOpen = true })
   )
 }
 
-function WinRateRow({ label, wins, losses }) {
-  const total = wins + losses
-  const pct = total > 0 ? Math.round((wins / total) * 100) : null
-  return (
-    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100 last:border-0">
-      <span className="flex-1 text-sm text-gray-700">{label}</span>
-      <span className="text-sm font-bold text-gray-900 w-12 text-right">{wins}–{losses}</span>
-      {pct !== null && (
-        <span className={`text-xs font-semibold w-10 text-right ${pct >= 50 ? 'text-emerald-600' : 'text-red-500'}`}>{pct}%</span>
-      )}
-    </div>
-  )
-}
-
 function StatTable({ rows, valueKey, emptyText }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
   return (
@@ -1740,97 +1750,6 @@ function MulliganTable({ rows, emptyText }) {
         )
       })}
     </div>
-  )
-}
-
-function WinRateStats({ enrichedGames }) {
-  const [expanded, setExpanded] = useState(new Set())
-  if (!enrichedGames.length) return null
-  const toggle = (key) => setExpanded(prev => {
-    const next = new Set(prev)
-    next.has(key) ? next.delete(key) : next.add(key)
-    return next
-  })
-
-  const tally = (subset) => ({ wins: subset.filter(g => g.won).length, losses: subset.filter(g => !g.won).length })
-  const first = enrichedGames.filter(g => g.wentFirst)
-  const second = enrichedGames.filter(g => !g.wentFirst)
-
-  const bo3Games = enrichedGames.filter(g => g.match_id)
-  const matchGroups = {}
-  for (const g of bo3Games) {
-    if (!matchGroups[g.match_id]) matchGroups[g.match_id] = []
-    matchGroups[g.match_id].push(g)
-  }
-  const completeMatches = Object.values(matchGroups).filter(games => {
-    const wins = games.filter(g => g.won).length
-    const losses = games.filter(g => !g.won).length
-    return wins >= 2 || losses >= 2
-  })
-  const matchWins = completeMatches.filter(games => games.filter(g => g.won).length >= 2).length
-  const matchLosses = completeMatches.filter(games => games.filter(g => !g.won).length >= 2).length
-
-  const hasInkData = enrichedGames.some(g => g.oppInkCombo?.length > 0)
-
-  const byMatchup = {}
-  for (const g of enrichedGames) {
-    const key = g.oppInkCombo?.length ? g.oppInkCombo.join('/') : (g.opponentName || 'Unknown')
-    if (!byMatchup[key]) byMatchup[key] = { label: key, colors: g.oppInkCombo ?? [], games: [] }
-    byMatchup[key].games.push(g)
-  }
-
-  return (
-    <Section collapsible title="Win Rate" subtitle={`${enrichedGames.length} game${enrichedGames.length !== 1 ? 's' : ''} recorded`}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Overall</h3>
-          <WinRateRow label="All games" {...tally(enrichedGames)} />
-          <WinRateRow label="Going first" {...tally(first)} />
-          <WinRateRow label="Going second" {...tally(second)} />
-          {completeMatches.length > 0 && (
-            <WinRateRow label={<span className="text-gray-500">BO3 matches</span>} wins={matchWins} losses={matchLosses} />
-          )}
-        </div>
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
-            {hasInkData ? 'vs Matchup' : 'vs Opponent'}
-          </h3>
-          {Object.values(byMatchup).map(({ label, colors, games }) => {
-            const isOpen = expanded.has(label)
-            const firstGames = games.filter(g => g.wentFirst)
-            const secondGames = games.filter(g => !g.wentFirst)
-            const hasBreakdown = firstGames.length > 0 || secondGames.length > 0
-            const matchupLabel = (
-              <button
-                onClick={() => hasBreakdown && toggle(label)}
-                className={`inline-flex items-center gap-1.5 ${hasBreakdown ? 'cursor-pointer hover:text-gray-900' : 'cursor-default'}`}
-              >
-                {colors.length > 0
-                  ? <>{colors.map(c => <InkDot key={c} color={c} />)}<span>{colors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('/')}</span></>
-                  : <span>{label}</span>
-                }
-                {hasBreakdown && (
-                  <svg className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                )}
-              </button>
-            )
-            return (
-              <div key={label}>
-                <WinRateRow label={matchupLabel} {...tally(games)} />
-                {isOpen && (
-                  <div className="pl-4 border-l-2 border-gray-100 ml-1 mb-1">
-                    {firstGames.length > 0 && <WinRateRow label={<span className="text-gray-400">Going first</span>} {...tally(firstGames)} />}
-                    {secondGames.length > 0 && <WinRateRow label={<span className="text-gray-400">Going second</span>} {...tally(secondGames)} />}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </Section>
   )
 }
 
@@ -2106,13 +2025,6 @@ function ChallengeStats({ filteredGames, subtitle }) {
       </div>
     </Section>
   )
-}
-
-function InkDot({ color }) {
-  const DOT = { amber: 'bg-amber-400', amethyst: 'bg-purple-500', emerald: 'bg-emerald-500', ruby: 'bg-red-500', sapphire: 'bg-blue-500', steel: 'bg-gray-400' }
-  const c = DOT[color?.toLowerCase()]
-  if (!c) return null
-  return <span className={`inline-block w-3 h-3 rounded-full flex-shrink-0 ${c}`} title={color} />
 }
 
 function InkImg({ color, size = 'w-4 h-4' }) {

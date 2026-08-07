@@ -9,7 +9,7 @@ import { downloadGameIds } from '../lib/exportGameIds'
 import { createGameExportZip } from '../lib/gameExport'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { detectLeaks, summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
-import { fetchDecks, getToken, getTokens } from '../lib/duelsApi'
+import { fetchDecks, fetchPersonalStats, getToken, getTokens } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
 
 const MY_NAME_KEY = 'lorcana_my_name'
@@ -217,6 +217,7 @@ export function AnalyticsPage() {
   const [myName, setMyName] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
   const [nameInput, setNameInput] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
   const [activeId, setActiveId] = useState(null)
+  const [deckVersionsByDeckId, setDeckVersionsByDeckId] = useState({})
 
   const navigate = useNavigate()
   const { cards } = useCards()
@@ -478,6 +479,18 @@ export function AnalyticsPage() {
   const filteredGames = filterDeck
     ? colorFilteredGames.filter(g => getDeckKey(g) === filterDeck)
     : colorFilteredGames
+
+  // Only a real duels.ink deck_id (not the local decklist-fingerprint fallback) can be
+  // looked up against the personal-stats API for authoritative per-version card lists.
+  const selectedDeckId = filterDeck && filteredGames.some(g => g.deck_id === filterDeck) ? filterDeck : null
+
+  useEffect(() => {
+    if (!selectedDeckId || !getToken() || deckVersionsByDeckId[selectedDeckId]) return
+    fetchPersonalStats({ deckId: selectedDeckId })
+      .then(data => setDeckVersionsByDeckId(prev => ({ ...prev, [selectedDeckId]: data.deckVersions ?? [] })))
+      .catch(() => setDeckVersionsByDeckId(prev => ({ ...prev, [selectedDeckId]: [] })))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDeckId])
 
   const importedGames = filteredGames.filter(g => importedIds.has(g.id))
   const personalGames = filteredGames.filter(g => !importedIds.has(g.id))
@@ -899,7 +912,12 @@ export function AnalyticsPage() {
           </button>
           {cardImpactOpen && (
             <div className="mt-6">
-              <CardImpactView games={enrichedGames} deckSelected={filterDeck != null} />
+              <CardImpactView
+                games={enrichedGames}
+                deckSelected={filterDeck != null}
+                deckVersions={selectedDeckId ? deckVersionsByDeckId[selectedDeckId] : null}
+                hasToken={!!getToken()}
+              />
             </div>
           )}
         </div>
@@ -1517,8 +1535,8 @@ function MMRTrendView({ games }) {
 
 const MULLIGAN_MIN_SAMPLE = 2
 
-function CardImpactView({ games, deckSelected }) {
-  const { results, totalGames } = computeCardImpact(games)
+function CardImpactView({ games, deckSelected, deckVersions, hasToken }) {
+  const { results, totalGames } = computeCardImpact(games, { deckVersions })
   const scored = results.filter(r => r.war != null)
 
   const mulliganByCard = {}
@@ -1541,8 +1559,13 @@ function CardImpactView({ games, deckSelected }) {
           Pick a deck above to compare like-for-like — mixing decks conflates deck strength with card strength.
         </div>
       )}
+      {deckSelected && !hasToken && (
+        <div className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          Add a duels.ink API token on the Settings page to pull this deck's exact version history from duels.ink — without it, deck-cut detection falls back to the decklist recorded on each individual game (less complete).
+        </div>
+      )}
       <div className="text-xs text-gray-400 mb-4">
-        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. A miss only counts toward "Games w/o" when that game's recorded decklist confirms the card was actually in the 60 — misses from games where the decklist shows the card had been cut, or where no decklist was recorded, are excluded so deck changes over time don't get held against a card (hover a "Games w/o" cell for the breakdown). Cards with fewer than 5 games on either side are low-confidence and shown faded. The Mulligan Δ column compares win rate when a card was kept in your opening hand vs. sent back during mulligan (shown only with 2+ games on each side).
+        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. A miss only counts toward "Games w/o" when we can confirm the card was actually in the 60 that game — preferably from duels.ink's own version history for this deck (each version's exact card list, matched to games by date), falling back to the decklist recorded on that individual game when version history isn't available. Misses that can't be confirmed either way, or that are confirmed as a cut card, are excluded so deck changes over time don't get held against a card (hover a "Games w/o" cell for the breakdown). Cards with fewer than 5 games on either side are low-confidence and shown faded. The Mulligan Δ column compares win rate when a card was kept in your opening hand vs. sent back during mulligan (shown only with 2+ games on each side).
       </div>
       {scored.length === 0 ? (
         <div className="text-sm text-gray-500">Not enough data yet — play or import more games with this deck.</div>

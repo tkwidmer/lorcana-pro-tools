@@ -193,6 +193,24 @@ export async function fetchDecks() {
   return res.json() // { decks: Deck[] }
 }
 
+export async function fetchPersonalStats({ deckId, source }) {
+  if (!deckId) throw new Error('deckId is required')
+  const token = getToken()
+  if (!token) throw new Error('No API token configured')
+
+  const params = new URLSearchParams({ deckId })
+  if (source) params.set('source', source)
+
+  const res = await fetch(`/api/duels-personal-stats?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (res.status === 401) throw new Error('Invalid or expired API token')
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+
+  return res.json() // { activity, colorPairs, matchups, deckVersions, filters }
+}
+
 export async function fetchStats({ queue, period, ranks }) {
   if (!queue) throw new Error('Queue is required')
   if (!period) throw new Error('Period is required')

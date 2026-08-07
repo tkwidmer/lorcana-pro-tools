@@ -175,6 +175,7 @@ Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies wit
 | `/api/duels-leaderboard` | duels.ink leaderboard | Public | |
 | `/api/duels-replay` | duels.ink replay | Bearer token | |
 | `/api/duels-deck` | duels.ink deck | Bearer token | |
+| `/api/duels-personal-stats` | duels.ink `/api/account/personal-stats` | Bearer token | Undocumented endpoint (not in duels.ink's `/api-docs.md`); per-deck stats including exact card list + timeframe per deck version, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game |
 | `/api/duels-gamelog` | `https://duels.ink/g/{id}` | Bearer token | Returns gzip binary |
 | `/api/duels-gamelog-bulk` | Multiple gamelog fetches | Bearer token | Batch endpoint |
 | `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`; handles pagination |

@@ -173,6 +173,24 @@ function aggregateCardWinRates(games) {
   return Object.values(map)
 }
 
+// Cross-tabs each card's mulligan-keep status (kept in opening hand vs sent to bottom)
+// against the game outcome, so we can compare win rate when a card is kept vs mulliganed.
+function aggregateMulliganWinRates(games) {
+  const map = {}
+  const bump = (key, status, won) => {
+    if (!map[key]) map[key] = { fullName: key, keptWins: 0, keptLosses: 0, sentWins: 0, sentLosses: 0 }
+    if (status === 'kept') won ? map[key].keptWins++ : map[key].keptLosses++
+    else won ? map[key].sentWins++ : map[key].sentLosses++
+  }
+  for (const game of games) {
+    const kept = game.mulligan?.kept ?? []
+    const sentBack = game.mulligan?.sentBack ?? []
+    for (const card of kept) bump(card.fullName || card.name, 'kept', game.won)
+    for (const card of sentBack) bump(card.fullName || card.name, 'sent', game.won)
+  }
+  return Object.values(map)
+}
+
 // --- Shared UI primitives ---
 
 function Section({ title, subtitle, children, collapsible, defaultOpen = true }) {
@@ -408,6 +426,70 @@ function CardWinRateTable({ games }) {
   )
 }
 
+function MulliganWinRateTable({ games }) {
+  const [minGames, setMinGames] = useState(2)
+  const rows = aggregateMulliganWinRates(games)
+    .map(c => {
+      const keptTotal = c.keptWins + c.keptLosses
+      const sentTotal = c.sentWins + c.sentLosses
+      return {
+        ...c,
+        keptTotal,
+        sentTotal,
+        keptPct: keptTotal ? Math.round((c.keptWins / keptTotal) * 100) : null,
+        sentPct: sentTotal ? Math.round((c.sentWins / sentTotal) * 100) : null,
+      }
+    })
+    .filter(c => c.keptTotal >= minGames && c.sentTotal >= minGames)
+    .sort((a, b) => (b.keptPct - b.sentPct) - (a.keptPct - a.sentPct))
+
+  return (
+    <div className="mt-6 pt-5 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Kept vs Mulliganed Win Rate</h3>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-gray-400">Min each side:</span>
+          {[2, 3, 5].map(n => (
+            <button
+              key={n}
+              onClick={() => setMinGames(n)}
+              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                minGames === n ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-500'
+              }`}
+            >{n}+</button>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-gray-400 mb-3">Win% when the card was kept in your opening hand vs. when it was sent to the bottom during mulligan</p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-400">Not enough data — need games where a card was both kept and mulliganed at least {minGames}× each.</p>
+      ) : (
+        <div className="text-sm">
+          <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 4.5rem 4.5rem 4rem' }}>
+            <span>Card</span>
+            <span className="text-center">Kept W%</span>
+            <span className="text-center">Sent W%</span>
+            <span className="text-right">Δ</span>
+          </div>
+          {rows.map(c => {
+            const delta = c.keptPct - c.sentPct
+            return (
+              <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 4.5rem 4.5rem 4rem' }}>
+                <span className="text-gray-800 truncate">{c.fullName}</span>
+                <span className="text-center font-semibold text-gray-700">{c.keptPct}% <span className="text-[10px] text-gray-400">({c.keptTotal})</span></span>
+                <span className="text-center font-semibold text-gray-700">{c.sentPct}% <span className="text-[10px] text-gray-400">({c.sentTotal})</span></span>
+                <span className={`text-right font-bold text-xs ${delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                  {delta > 0 ? '+' : ''}{delta}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DrawEffectsTable({ games }) {
   const cards = aggregateMyCards(games)
   const rows = cards
@@ -540,6 +622,7 @@ function DeckStats({ filteredGames, subtitle }) {
         </div>
       </div>
       {filteredGames.length > 1 && <CardWinRateTable games={filteredGames} />}
+      {filteredGames.length > 1 && <MulliganWinRateTable games={filteredGames} />}
       {filteredGames.length > 1 && (
         <div className="mt-6 pt-5 border-t border-gray-100">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Card Effects</h3>

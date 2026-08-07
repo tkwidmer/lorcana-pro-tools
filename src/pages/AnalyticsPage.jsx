@@ -1589,7 +1589,7 @@ function CardImpactView({ games, deckSelected, deckVersions, hasToken }) {
         </div>
       )}
       <div className="text-xs text-gray-400 mb-4">
-        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. A miss only counts toward "Games w/o" when we can confirm the card was actually in the 60 that game — preferably from duels.ink's own version history for this deck (each version's exact card list, matched to games by date), falling back to the decklist recorded on that individual game when version history isn't available. Misses that can't be confirmed either way, or that are confirmed as a cut card, are excluded so deck changes over time don't get held against a card (hover a "Games w/o" cell for the breakdown). Cards with fewer than 5 games on either side are low-confidence and shown faded. The Mulligan Δ column compares win rate when a card was kept in your opening hand vs. sent back during mulligan (shown only with 2+ games on each side).
+        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. A miss only counts toward "Games w/o" when we can confirm the card was actually in the 60 that game — preferably from duels.ink's own version history for this deck (each version's exact card list, matched to games by date), falling back to the decklist recorded on that individual game when version history isn't available. Misses that can't be confirmed either way, or that are confirmed as a cut card, are excluded so deck changes over time don't get held against a card (hover a "Games w/o" cell for the breakdown). Cards with fewer than 5 games on either side are low-confidence and shown faded. The "Kept % / Sent %" column shows win rate in games this card was kept in your opening hand vs. sent back during mulligan, with the difference in parentheses (shown only with 2+ games on each side).
       </div>
       {scored.length === 0 ? (
         <div className="text-sm text-gray-500">Not enough data yet — play or import more games with this deck.</div>
@@ -1604,7 +1604,7 @@ function CardImpactView({ games, deckSelected, deckVersions, hasToken }) {
                 <th className="py-2 px-3 text-right">WR w/o</th>
                 <th className="py-2 px-3 text-right">Games w/</th>
                 <th className="py-2 px-3 text-right">Games w/o</th>
-                <th className="py-2 pl-3 text-right">Mulligan Δ</th>
+                <th className="py-2 pl-3 text-right">Kept % / Sent %</th>
               </tr>
             </thead>
             <tbody>
@@ -1627,10 +1627,19 @@ function CardImpactView({ games, deckSelected, deckVersions, hasToken }) {
                       {r.gamesWithout}
                     </td>
                     <td
-                      className={`py-1.5 pl-3 text-right font-semibold ${mullDelta == null ? 'text-gray-300' : mullDelta > 0 ? 'text-emerald-600' : mullDelta < 0 ? 'text-red-500' : 'text-gray-400'}`}
-                      title={mull ? `Kept ${mull.keptPct}% (${mull.keptTotal}) · Sent ${mull.sentPct}% (${mull.sentTotal})` : 'Not enough mulligan data'}
+                      className="py-1.5 pl-3 text-right"
+                      title={mull ? `Win rate in games this card was kept in your opening hand (${mull.keptTotal} games) vs. sent back during mulligan (${mull.sentTotal} games)` : 'Not enough mulligan data — need 2+ games on both sides'}
                     >
-                      {mullDelta == null ? '—' : `${mullDelta > 0 ? '+' : ''}${mullDelta}`}
+                      {mull ? (
+                        <>
+                          <span className="text-gray-600">{mull.keptPct}% / {mull.sentPct}%</span>{' '}
+                          <span className={`font-semibold ${mullDelta > 0 ? 'text-emerald-600' : mullDelta < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                            ({mullDelta > 0 ? '+' : ''}{mullDelta})
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </td>
                   </tr>
                 )

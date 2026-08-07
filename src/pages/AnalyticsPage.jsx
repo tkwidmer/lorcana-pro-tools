@@ -148,6 +148,10 @@ function aggregateMulliganSentBack(games) {
 
 // Cross-tabs each card's mulligan-keep status (kept in opening hand vs sent to bottom)
 // against the game outcome, so we can compare win rate when a card is kept vs mulliganed.
+// Counts games, not copies: a game where 2 copies of a card were kept counts once
+// toward "kept" (not twice), and a game where one copy was kept while another copy
+// of the same card was sent back counts once toward each side — genuinely mixed
+// evidence, not double-counted evidence.
 function aggregateMulliganWinRates(games) {
   const map = {}
   const bump = (key, status, won) => {
@@ -158,8 +162,10 @@ function aggregateMulliganWinRates(games) {
   for (const game of games) {
     const kept = game.mulligan?.kept ?? []
     const sentBack = game.mulligan?.sentBack ?? []
-    for (const card of kept) bump(card.fullName || card.name, 'kept', game.won)
-    for (const card of sentBack) bump(card.fullName || card.name, 'sent', game.won)
+    const keptNames = new Set(kept.map(c => c.fullName || c.name))
+    const sentNames = new Set(sentBack.map(c => c.fullName || c.name))
+    for (const name of keptNames) bump(name, 'kept', game.won)
+    for (const name of sentNames) bump(name, 'sent', game.won)
   }
   return Object.values(map)
 }
@@ -1589,7 +1595,7 @@ function CardImpactView({ games, deckSelected, deckVersions, hasToken }) {
         </div>
       )}
       <div className="text-xs text-gray-400 mb-4">
-        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. A miss only counts toward "Games w/o" when we can confirm the card was actually in the 60 that game — preferably from duels.ink's own version history for this deck (each version's exact card list, matched to games by date), falling back to the decklist recorded on that individual game when version history isn't available. Misses that can't be confirmed either way, or that are confirmed as a cut card, are excluded so deck changes over time don't get held against a card (hover a "Games w/o" cell for the breakdown). Cards with fewer than 5 games on either side are low-confidence and shown faded. The "Kept % / Sent %" column shows win rate (with the copy count in parens) in games this card was kept in your opening hand vs. sent back during mulligan, plus the difference in parentheses when both sides have data — a side shows "—" if you've never done that with this card. Counts are per copy, not per game: keeping 2 copies in one game counts twice, and a game where you kept one copy while sending another of the same card counts toward both sides (hover a cell for the full breakdown). A side under 2 copies is low-confidence and shown faded.
+        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. A miss only counts toward "Games w/o" when we can confirm the card was actually in the 60 that game — preferably from duels.ink's own version history for this deck (each version's exact card list, matched to games by date), falling back to the decklist recorded on that individual game when version history isn't available. Misses that can't be confirmed either way, or that are confirmed as a cut card, are excluded so deck changes over time don't get held against a card (hover a "Games w/o" cell for the breakdown). Cards with fewer than 5 games on either side are low-confidence and shown faded. The "Kept % / Sent %" column shows win rate (with the game count in parens) in games this card was kept in your opening hand vs. sent back during mulligan, plus the difference in parentheses when both sides have data — a side shows "—" if you've never done that with this card. Counts are games, not copies: keeping 2 copies in one game still only counts once toward "kept," but a game where you kept one copy while sending another copy of the same card counts once toward each side, since that's genuinely mixed evidence (hover a cell for the full breakdown). A side under 2 games is low-confidence and shown faded.
       </div>
       {scored.length === 0 ? (
         <div className="text-sm text-gray-500">Not enough data yet — play or import more games with this deck.</div>
@@ -1630,7 +1636,7 @@ function CardImpactView({ games, deckSelected, deckVersions, hasToken }) {
                     <td
                       className={`py-1.5 pl-3 text-right ${mullLowSample ? 'opacity-50' : ''}`}
                       title={mull
-                        ? `Kept: ${mull.keptPct != null ? `${mull.keptPct}% (${mull.keptTotal} cop${mull.keptTotal !== 1 ? 'ies' : 'y'})` : 'never kept'} · Sent: ${mull.sentPct != null ? `${mull.sentPct}% (${mull.sentTotal} cop${mull.sentTotal !== 1 ? 'ies' : 'y'})` : 'never sent'}. Counts are per copy, not per game — a game where you kept one copy and sent another counts toward both sides.`
+                        ? `Kept: ${mull.keptPct != null ? `${mull.keptPct}% (${mull.keptTotal} game${mull.keptTotal !== 1 ? 's' : ''})` : 'never kept'} · Sent: ${mull.sentPct != null ? `${mull.sentPct}% (${mull.sentTotal} game${mull.sentTotal !== 1 ? 's' : ''})` : 'never sent'}. A game where you kept one copy and sent another copy of the same card counts once toward each side.`
                         : 'No mulligan data recorded for this card'
                       }
                     >

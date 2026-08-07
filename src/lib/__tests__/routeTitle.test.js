@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { routeTitle } from '../routeTitle'
+import { routeTitle, routeDescription } from '../routeTitle'
 
 describe('routeTitle', () => {
   it('returns the full branded title for home', () => {
@@ -18,5 +18,17 @@ describe('routeTitle', () => {
 
   it('falls back to the bare site name for unknown routes', () => {
     expect(routeTitle('/nope')).toBe('InkbornForge')
+  })
+})
+
+describe('routeDescription', () => {
+  it('returns a page-specific description for known public routes', () => {
+    expect(routeDescription('/proxy')).toMatch(/proxy sheets/)
+    expect(routeDescription('/cut-calculator')).toMatch(/top cut/)
+  })
+
+  it('falls back to the home description for unknown or gated routes', () => {
+    expect(routeDescription('/nope')).toBe(routeDescription('/'))
+    expect(routeDescription('/deck-insights')).toBe(routeDescription('/'))
   })
 })

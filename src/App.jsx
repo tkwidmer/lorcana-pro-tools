@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Nav } from './components/Nav'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { routeTitle } from './lib/routeTitle'
+import { routeTitle, routeDescription } from './lib/routeTitle'
 import { HomePage } from './pages/HomePage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { CoconutDeckBuilderPage } from './pages/CoconutDeckBuilderPage'
@@ -36,6 +36,12 @@ function RoutedContent() {
 
   useEffect(() => {
     document.title = routeTitle(location.pathname)
+
+    const description = document.querySelector('meta[name="description"]')
+    if (description) description.setAttribute('content', routeDescription(location.pathname))
+
+    const canonical = document.querySelector('link[rel="canonical"]')
+    if (canonical) canonical.setAttribute('href', `https://lorcana-pro-tools.vercel.app${location.pathname}`)
   }, [location.pathname])
 
   return (

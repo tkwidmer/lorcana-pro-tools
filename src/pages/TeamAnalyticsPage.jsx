@@ -4,6 +4,7 @@ import { getAllGamelogs, deleteGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip } from '../lib/gameImport'
 import { analyzeOpponentMetagame } from '../lib/metagameAnalysis'
 import { buildWinrateMatrixFromGames } from '../lib/buildWinrateMatrix'
+import { computeCardImpact } from '../lib/cardImpact'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { InkImg } from './GamelogAnalyzerPage'
 import { createGameExportZip } from '../lib/gameExport'
@@ -47,6 +48,7 @@ export function TeamAnalyticsPage() {
   const [personalOpen, setPersonalOpen] = useState(true)
   const [metagameOpen, setMetagameOpen] = useState(true)
   const [matchupOpen, setMatchupOpen] = useState(true)
+  const [cardImpactOpen, setCardImpactOpen] = useState(true)
   const [trendOpen, setTrendOpen] = useState(true)
   const [mmrTrendOpen, setMmrTrendOpen] = useState(true)
   const [turnDistOpen, setTurnDistOpen] = useState(true)
@@ -654,6 +656,26 @@ export function TeamAnalyticsPage() {
         </div>
       )}
 
+      {/* Card Impact (WAR) */}
+      {filteredGames.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setCardImpactOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          >
+            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Card Impact (WAR)</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${cardImpactOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {cardImpactOpen && (
+            <div className="mt-6">
+              <CardImpactView games={filteredGames} deckSelected={filterDeck != null} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Imported games section */}
       {importedGames.length > 0 && (
         <div className="mb-4">
@@ -1230,6 +1252,56 @@ function MMRTrendView({ games }) {
           </text>
         ))}
       </svg>
+    </div>
+  )
+}
+
+function CardImpactView({ games, deckSelected }) {
+  const { results, totalGames } = computeCardImpact(games)
+  const scored = results.filter(r => r.war != null)
+
+  return (
+    <div>
+      {!deckSelected && (
+        <div className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          Pick a deck above to compare like-for-like — mixing decks conflates deck strength with card strength.
+        </div>
+      )}
+      <div className="text-xs text-gray-400 mb-4">
+        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. Cards with fewer than 5 games on either side are low-confidence and shown faded.
+      </div>
+      {scored.length === 0 ? (
+        <div className="text-sm text-gray-500">Not enough data yet — play or import more games with this deck.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200">
+                <th className="py-2 pr-3">Card</th>
+                <th className="py-2 px-3 text-right">WAR</th>
+                <th className="py-2 px-3 text-right">WR w/</th>
+                <th className="py-2 px-3 text-right">WR w/o</th>
+                <th className="py-2 px-3 text-right">Games w/</th>
+                <th className="py-2 pl-3 text-right">Games w/o</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scored.map(r => (
+                <tr key={r.name} className={`border-b border-gray-100 ${r.lowSample ? 'opacity-40' : ''}`}>
+                  <td className="py-1.5 pr-3 text-gray-800 truncate max-w-[280px]">{r.name}</td>
+                  <td className={`py-1.5 px-3 text-right font-semibold ${r.war > 0 ? 'text-emerald-600' : r.war < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                    {r.war > 0 ? '+' : ''}{r.war.toFixed(1)}
+                  </td>
+                  <td className="py-1.5 px-3 text-right text-gray-600">{Math.round(r.winRateWith * 100)}%</td>
+                  <td className="py-1.5 px-3 text-right text-gray-600">{Math.round(r.winRateWithout * 100)}%</td>
+                  <td className="py-1.5 px-3 text-right text-gray-400">{r.gamesWith}</td>
+                  <td className="py-1.5 pl-3 text-right text-gray-400">{r.gamesWithout}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

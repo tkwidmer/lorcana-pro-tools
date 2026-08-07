@@ -1,6 +1,6 @@
 ---
 name: duels-api-docs
-description: Fetch the latest duels.ink API documentation before building or modifying any feature that talks to duels.ink (match history, gamelogs, replays, leaderboard, decks, stats, or the /api/duels-* proxy routes). Use this whenever a task touches duelsApi.js, leaderboardApi.js, parseGamelog.js, or any /api/duels-*.ts route, or when the shape/behavior of a duels.ink endpoint is unclear.
+description: Fetch the latest duels.ink API documentation before building or modifying any feature that talks to duels.ink (match history, gamelogs, replays, leaderboard, decks, stats, or the consolidated /api/duels proxy route). Use this whenever a task touches duelsApi.js, leaderboardApi.js, parseGamelog.js, or api/duels.ts, or when the shape/behavior of a duels.ink endpoint is unclear.
 ---
 
 # duels.ink API Docs
@@ -13,9 +13,12 @@ API can change.
 
 Before implementing or debugging anything involving:
 - `src/lib/duelsApi.js`, `src/lib/leaderboardApi.js`, `src/lib/parseGamelog.js`
-- Any `/api/duels-*.ts` serverless proxy route (`duels-match-history`,
-  `duels-stats`, `duels-leaderboard`, `duels-replay`, `duels-deck`,
-  `duels-gamelog`, `duels-gamelog-bulk`, `duels-proxy`)
+- `api/duels.ts` — the single consolidated serverless proxy for every
+  duels.ink endpoint, dispatched by `?endpoint=` (`match-history`, `gamelog`,
+  `gamelog-bulk`, `replay`, `deck`, `stats`, `leaderboard`). Folded into one
+  function because Vercel's Hobby plan caps a deployment at 12 serverless
+  functions — don't split it back into per-endpoint files without checking
+  the total function count in `api/*.ts` first.
 - Anything referencing duels.ink request/response shapes, auth, or new
   endpoints not already documented in this repo
 
@@ -28,7 +31,7 @@ Before implementing or debugging anything involving:
    (Use the WebFetch tool if `curl` isn't appropriate for the context.)
 2. Read the relevant section(s) for the endpoint(s) in scope.
 3. Cross-check against the existing implementation in `src/lib/duelsApi.js`
-   or the relevant `/api/duels-*.ts` file — note any drift (new fields,
+   or the relevant handler in `api/duels.ts` — note any drift (new fields,
    changed auth, new endpoints) before writing code.
 4. Implement/fix using the confirmed current behavior from the docs, not
    assumptions from prior sessions.

@@ -9,7 +9,7 @@ import { downloadGameIds } from '../lib/exportGameIds'
 import { createGameExportZip } from '../lib/gameExport'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { detectLeaks, summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
-import { fetchDecks, getToken, getTokens } from '../lib/duelsApi'
+import { fetchDecks, fetchPersonalStats, getToken, getTokens } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
 
 const MY_NAME_KEY = 'lorcana_my_name'
@@ -146,20 +146,6 @@ function aggregateMulliganSentBack(games) {
   return Object.values(map)
 }
 
-function aggregateCardWinRates(games) {
-  const map = {}
-  for (const game of games) {
-    for (const card of Object.values(game.myCards ?? {})) {
-      if (card.playedCount === 0 && card.inkedCount === 0) continue
-      const key = card.fullName
-      if (!map[key]) map[key] = { fullName: key, wins: 0, losses: 0 }
-      if (game.won) map[key].wins++
-      else map[key].losses++
-    }
-  }
-  return Object.values(map)
-}
-
 // Cross-tabs each card's mulligan-keep status (kept in opening hand vs sent to bottom)
 // against the game outcome, so we can compare win rate when a card is kept vs mulliganed.
 function aggregateMulliganWinRates(games) {
@@ -231,6 +217,7 @@ export function AnalyticsPage() {
   const [myName, setMyName] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
   const [nameInput, setNameInput] = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '')
   const [activeId, setActiveId] = useState(null)
+  const [deckVersionsByDeckId, setDeckVersionsByDeckId] = useState({})
 
   const navigate = useNavigate()
   const { cards } = useCards()
@@ -492,6 +479,18 @@ export function AnalyticsPage() {
   const filteredGames = filterDeck
     ? colorFilteredGames.filter(g => getDeckKey(g) === filterDeck)
     : colorFilteredGames
+
+  // Only a real duels.ink deck_id (not the local decklist-fingerprint fallback) can be
+  // looked up against the personal-stats API for authoritative per-version card lists.
+  const selectedDeckId = filterDeck && filteredGames.some(g => g.deck_id === filterDeck) ? filterDeck : null
+
+  useEffect(() => {
+    if (!selectedDeckId || !getToken() || deckVersionsByDeckId[selectedDeckId]) return
+    fetchPersonalStats({ deckId: selectedDeckId })
+      .then(data => setDeckVersionsByDeckId(prev => ({ ...prev, [selectedDeckId]: data.deckVersions ?? [] })))
+      .catch(() => setDeckVersionsByDeckId(prev => ({ ...prev, [selectedDeckId]: [] })))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDeckId])
 
   const importedGames = filteredGames.filter(g => importedIds.has(g.id))
   const personalGames = filteredGames.filter(g => !importedIds.has(g.id))
@@ -923,7 +922,7 @@ export function AnalyticsPage() {
       )}
 
       {/* Card Impact (WAR) */}
-      {filteredGames.length > 0 && (
+      {enrichedGames.length > 0 && (
         <div className="mb-4">
           <button
             onClick={() => setCardImpactOpen(o => !o)}
@@ -936,7 +935,12 @@ export function AnalyticsPage() {
           </button>
           {cardImpactOpen && (
             <div className="mt-6">
-              <CardImpactView games={filteredGames} deckSelected={filterDeck != null} />
+              <CardImpactView
+                games={enrichedGames}
+                deckSelected={filterDeck != null}
+                deckVersions={selectedDeckId ? deckVersionsByDeckId[selectedDeckId] : null}
+                hasToken={!!getToken()}
+              />
             </div>
           )}
         </div>
@@ -1553,9 +1557,24 @@ function MMRTrendView({ games }) {
   )
 }
 
-function CardImpactView({ games, deckSelected }) {
-  const { results, totalGames } = computeCardImpact(games)
+const MULLIGAN_MIN_SAMPLE = 2
+
+function CardImpactView({ games, deckSelected, deckVersions, hasToken }) {
+  const { results, totalGames } = computeCardImpact(games, { deckVersions })
   const scored = results.filter(r => r.war != null)
+
+  const mulliganByCard = {}
+  for (const m of aggregateMulliganWinRates(games)) {
+    const keptTotal = m.keptWins + m.keptLosses
+    const sentTotal = m.sentWins + m.sentLosses
+    if (keptTotal < MULLIGAN_MIN_SAMPLE || sentTotal < MULLIGAN_MIN_SAMPLE) continue
+    mulliganByCard[m.fullName] = {
+      keptPct: Math.round((m.keptWins / keptTotal) * 100),
+      sentPct: Math.round((m.sentWins / sentTotal) * 100),
+      keptTotal,
+      sentTotal,
+    }
+  }
 
   return (
     <div>
@@ -1564,8 +1583,13 @@ function CardImpactView({ games, deckSelected }) {
           Pick a deck above to compare like-for-like — mixing decks conflates deck strength with card strength.
         </div>
       )}
+      {deckSelected && !hasToken && (
+        <div className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          Add a duels.ink API token on the Settings page to pull this deck's exact version history from duels.ink — without it, deck-cut detection falls back to the decklist recorded on each individual game (less complete).
+        </div>
+      )}
       <div className="text-xs text-gray-400 mb-4">
-        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. Cards with fewer than 5 games on either side are low-confidence and shown faded.
+        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. A miss only counts toward "Games w/o" when we can confirm the card was actually in the 60 that game — preferably from duels.ink's own version history for this deck (each version's exact card list, matched to games by date), falling back to the decklist recorded on that individual game when version history isn't available. Misses that can't be confirmed either way, or that are confirmed as a cut card, are excluded so deck changes over time don't get held against a card (hover a "Games w/o" cell for the breakdown). Cards with fewer than 5 games on either side are low-confidence and shown faded. The Mulligan Δ column compares win rate when a card was kept in your opening hand vs. sent back during mulligan (shown only with 2+ games on each side).
       </div>
       {scored.length === 0 ? (
         <div className="text-sm text-gray-500">Not enough data yet — play or import more games with this deck.</div>
@@ -1579,22 +1603,38 @@ function CardImpactView({ games, deckSelected }) {
                 <th className="py-2 px-3 text-right">WR w/</th>
                 <th className="py-2 px-3 text-right">WR w/o</th>
                 <th className="py-2 px-3 text-right">Games w/</th>
-                <th className="py-2 pl-3 text-right">Games w/o</th>
+                <th className="py-2 px-3 text-right">Games w/o</th>
+                <th className="py-2 pl-3 text-right">Mulligan Δ</th>
               </tr>
             </thead>
             <tbody>
-              {scored.map(r => (
-                <tr key={r.name} className={`border-b border-gray-100 ${r.lowSample ? 'opacity-40' : ''}`}>
-                  <td className="py-1.5 pr-3 text-gray-800 truncate max-w-[280px]">{r.name}</td>
-                  <td className={`py-1.5 px-3 text-right font-semibold ${r.war > 0 ? 'text-emerald-600' : r.war < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                    {r.war > 0 ? '+' : ''}{r.war.toFixed(1)}
-                  </td>
-                  <td className="py-1.5 px-3 text-right text-gray-600">{Math.round(r.winRateWith * 100)}%</td>
-                  <td className="py-1.5 px-3 text-right text-gray-600">{Math.round(r.winRateWithout * 100)}%</td>
-                  <td className="py-1.5 px-3 text-right text-gray-400">{r.gamesWith}</td>
-                  <td className="py-1.5 pl-3 text-right text-gray-400">{r.gamesWithout}</td>
-                </tr>
-              ))}
+              {scored.map(r => {
+                const mull = mulliganByCard[r.name]
+                const mullDelta = mull ? mull.keptPct - mull.sentPct : null
+                return (
+                  <tr key={r.name} className={`border-b border-gray-100 ${r.lowSample ? 'opacity-40' : ''}`}>
+                    <td className="py-1.5 pr-3 text-gray-800 truncate max-w-[280px]">{r.name}</td>
+                    <td className={`py-1.5 px-3 text-right font-semibold ${r.war > 0 ? 'text-emerald-600' : r.war < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                      {r.war > 0 ? '+' : ''}{r.war.toFixed(1)}
+                    </td>
+                    <td className="py-1.5 px-3 text-right text-gray-600">{Math.round(r.winRateWith * 100)}%</td>
+                    <td className="py-1.5 px-3 text-right text-gray-600">{Math.round(r.winRateWithout * 100)}%</td>
+                    <td className="py-1.5 px-3 text-right text-gray-400">{r.gamesWith}</td>
+                    <td
+                      className="py-1.5 px-3 text-right text-gray-400"
+                      title={`${r.gamesNotInDeck} game${r.gamesNotInDeck !== 1 ? 's' : ''} confirmed not in deck · ${r.gamesUnknown} game${r.gamesUnknown !== 1 ? 's' : ''} with no recorded decklist — both excluded`}
+                    >
+                      {r.gamesWithout}
+                    </td>
+                    <td
+                      className={`py-1.5 pl-3 text-right font-semibold ${mullDelta == null ? 'text-gray-300' : mullDelta > 0 ? 'text-emerald-600' : mullDelta < 0 ? 'text-red-500' : 'text-gray-400'}`}
+                      title={mull ? `Kept ${mull.keptPct}% (${mull.keptTotal}) · Sent ${mull.sentPct}% (${mull.sentTotal})` : 'Not enough mulligan data'}
+                    >
+                      {mullDelta == null ? '—' : `${mullDelta > 0 ? '+' : ''}${mullDelta}`}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -1709,130 +1749,6 @@ function MulliganTable({ rows, emptyText }) {
           </div>
         )
       })}
-    </div>
-  )
-}
-
-function CardWinRateTable({ games }) {
-  const [minGames, setMinGames] = useState(2)
-  const cards = aggregateCardWinRates(games)
-  const filtered = cards
-    .filter(c => c.wins + c.losses >= minGames)
-    .sort((a, b) => {
-      const pctA = a.wins / (a.wins + a.losses)
-      const pctB = b.wins / (b.wins + b.losses)
-      return pctB - pctA || (b.wins + b.losses) - (a.wins + a.losses)
-    })
-
-  return (
-    <div className="mt-6 pt-5 border-t border-gray-100">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Card Win Rate</h3>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-gray-400">Min appearances:</span>
-          {[2, 3, 5].map(n => (
-            <button
-              key={n}
-              onClick={() => setMinGames(n)}
-              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
-                minGames === n ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-500'
-              }`}
-            >{n}+</button>
-          ))}
-        </div>
-      </div>
-      {filtered.length === 0 ? (
-        <p className="text-sm text-gray-400">Not enough data — import more gamelogs.</p>
-      ) : (
-        <div className="text-sm">
-          <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 2.5rem 2.5rem 2.5rem 5rem' }}>
-            <span>Card</span>
-            <span className="text-center">W</span>
-            <span className="text-center">L</span>
-            <span className="text-right">Win%</span>
-            <span></span>
-          </div>
-          {filtered.map(c => {
-            const total = c.wins + c.losses
-            const pct = Math.round((c.wins / total) * 100)
-            return (
-              <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 2.5rem 2.5rem 2.5rem 5rem' }}>
-                <span className="text-gray-800 truncate">{c.fullName}</span>
-                <span className="text-center font-semibold text-emerald-600">{c.wins}</span>
-                <span className="text-center font-semibold text-red-400">{c.losses}</span>
-                <span className={`text-right font-bold text-xs ${pct >= 70 ? 'text-emerald-600' : pct >= 50 ? 'text-gray-700' : 'text-red-500'}`}>{pct}%</span>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${pct >= 70 ? 'bg-emerald-400' : pct >= 50 ? 'bg-gray-400' : 'bg-red-400'}`} style={{ width: `${pct}%` }} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function MulliganWinRateTable({ games }) {
-  const [minGames, setMinGames] = useState(2)
-  const rows = aggregateMulliganWinRates(games)
-    .map(c => {
-      const keptTotal = c.keptWins + c.keptLosses
-      const sentTotal = c.sentWins + c.sentLosses
-      return {
-        ...c,
-        keptTotal,
-        sentTotal,
-        keptPct: keptTotal ? Math.round((c.keptWins / keptTotal) * 100) : null,
-        sentPct: sentTotal ? Math.round((c.sentWins / sentTotal) * 100) : null,
-      }
-    })
-    .filter(c => c.keptTotal >= minGames && c.sentTotal >= minGames)
-    .sort((a, b) => (b.keptPct - b.sentPct) - (a.keptPct - a.sentPct))
-
-  return (
-    <div className="mt-6 pt-5 border-t border-gray-100">
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Kept vs Mulliganed Win Rate</h3>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-gray-400">Min each side:</span>
-          {[2, 3, 5].map(n => (
-            <button
-              key={n}
-              onClick={() => setMinGames(n)}
-              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
-                minGames === n ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-500'
-              }`}
-            >{n}+</button>
-          ))}
-        </div>
-      </div>
-      <p className="text-[10px] text-gray-400 mb-3">Win% when the card was kept in your opening hand vs. when it was sent to the bottom during mulligan</p>
-      {rows.length === 0 ? (
-        <p className="text-sm text-gray-400">Not enough data — need games where a card was both kept and mulliganed at least {minGames}× each.</p>
-      ) : (
-        <div className="text-sm">
-          <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 4.5rem 4.5rem 4rem' }}>
-            <span>Card</span>
-            <span className="text-center">Kept W%</span>
-            <span className="text-center">Sent W%</span>
-            <span className="text-right">Δ</span>
-          </div>
-          {rows.map(c => {
-            const delta = c.keptPct - c.sentPct
-            return (
-              <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 4.5rem 4.5rem 4rem' }}>
-                <span className="text-gray-800 truncate">{c.fullName}</span>
-                <span className="text-center font-semibold text-gray-700">{c.keptPct}% <span className="text-[10px] text-gray-400">({c.keptTotal})</span></span>
-                <span className="text-center font-semibold text-gray-700">{c.sentPct}% <span className="text-[10px] text-gray-400">({c.sentTotal})</span></span>
-                <span className={`text-right font-bold text-xs ${delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                  {delta > 0 ? '+' : ''}{delta}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }
@@ -1968,8 +1884,6 @@ function DeckStats({ filteredGames, subtitle }) {
           <MulliganTable rows={topSentBack} emptyText="No mulligan data." />
         </div>
       </div>
-      {filteredGames.length > 1 && <CardWinRateTable games={filteredGames} />}
-      {filteredGames.length > 1 && <MulliganWinRateTable games={filteredGames} />}
       {filteredGames.length > 1 && (
         <div className="mt-6 pt-5 border-t border-gray-100">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Card Effects</h3>

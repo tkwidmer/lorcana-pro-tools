@@ -64,8 +64,8 @@ const SECTIONS = [
         description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
       },
       {
-        path: '/team-analytics',
-        name: 'Team Analytics',
+        path: '/analytics',
+        name: 'Analytics',
         description: 'Import your games (or shared team exports, or raw .logs.gz gamelogs) for full draw sequences, mulligan decisions, leak detection, card win rates, wins-above-replacement, and team-wide matchup/metagame trends.',
       },
       {

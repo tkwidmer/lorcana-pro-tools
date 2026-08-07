@@ -894,13 +894,13 @@ export function PracticePlanPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-1">Skills to drill</h2>
           <p className="text-xs text-gray-500 mb-4">
             Recurring leaks detected in your saved gamelogs on this deck. The matchup table tells you <em>where</em> to practice — this tells you <em>what</em> to fix.{' '}
-            <Link to="/team-analytics" className="text-blue-600 hover:underline">Import more games</Link> for sharper signal.
+            <Link to="/analytics" className="text-blue-600 hover:underline">Import more games</Link> for sharper signal.
           </p>
 
           {!overallSkills || overallSkills.analyzed === 0 ? (
             <p className="text-sm text-gray-400">
               No gamelogs imported for {yourColors.join('/')} yet. Import games in the{' '}
-              <Link to="/team-analytics" className="text-blue-600 hover:underline">Team Analytics</Link> to unlock skill drills.
+              <Link to="/analytics" className="text-blue-600 hover:underline">Analytics</Link> to unlock skill drills.
             </p>
           ) : (
             <>

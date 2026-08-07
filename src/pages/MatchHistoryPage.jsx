@@ -143,7 +143,7 @@ function ImportGamelogButton({ game }) {
       })
       await saveGamelog(id, parsed, logs)
       setStatus('done')
-      navigate('/gamelog-analyzer')
+      navigate('/team-analytics')
     } catch {
       setStatus('error')
       setTimeout(() => setStatus(null), 3000)
@@ -155,7 +155,7 @@ function ImportGamelogButton({ game }) {
       onClick={handleImport}
       disabled={status === 'loading'}
       className="text-xs text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-40 whitespace-nowrap"
-      title="Import gamelog into Gamelog Analyzer"
+      title="Import gamelog into Team Analytics"
     >
       {status === 'loading' ? 'Importing…' : status === 'error' ? 'Failed' : '↗ Gamelog'}
     </button>
@@ -609,7 +609,7 @@ export function MatchHistoryPage() {
     }
     setSelected(new Set())
     if (errors === 0) {
-      navigate('/gamelog-analyzer')
+      navigate('/team-analytics')
     } else {
       setTimeout(() => setBulkOp(null), 4000)
     }

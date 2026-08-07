@@ -20,7 +20,6 @@ import { DeckComparisonPage } from './pages/DeckComparisonPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { MatchHistoryPage } from './pages/MatchHistoryPage'
 import { GamelogViewerPage } from './pages/GamelogViewerPage'
-import { GamelogAnalyzerPage } from './pages/GamelogAnalyzerPage'
 import { TeamAnalyticsPage } from './pages/TeamAnalyticsPage'
 import { WinrateMatrixPage } from './pages/WinrateMatrixPage'
 import { PracticePlanPage } from './pages/PracticePlanPage'
@@ -57,7 +56,7 @@ function RoutedContent() {
         <Route path="/rules/:doc/:chapterSlug" element={<RulesDocumentPage />} />
         <Route path="/rules/:doc" element={<RulesDocumentPage />} />
         <Route path="/deck-insights" element={<SupporterRoute><DeckInsightsPage /></SupporterRoute>} />
-        <Route path="/replay-analyzer" element={<Navigate to="/gamelog-analyzer" replace />} />
+        <Route path="/replay-analyzer" element={<Navigate to="/team-analytics" replace />} />
         <Route path="/game-scraper" element={<SupporterRoute><GameScraperPage /></SupporterRoute>} />
         <Route path="/library" element={<SupporterRoute><LibraryPage /></SupporterRoute>} />
         <Route path="/scouting/game/:uuid" element={<SupporterRoute><ScoutedGamePage /></SupporterRoute>} />
@@ -66,7 +65,7 @@ function RoutedContent() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/match-history" element={<SupporterRoute><MatchHistoryPage /></SupporterRoute>} />
         <Route path="/gamelog" element={<GamelogViewerPage />} />
-        <Route path="/gamelog-analyzer" element={<SupporterRoute><GamelogAnalyzerPage /></SupporterRoute>} />
+        <Route path="/gamelog-analyzer" element={<Navigate to="/team-analytics" replace />} />
         <Route path="/team-analytics" element={<SupporterRoute><TeamAnalyticsPage /></SupporterRoute>} />
         <Route path="/winrate-matrix" element={<WinrateMatrixPage />} />
         <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />

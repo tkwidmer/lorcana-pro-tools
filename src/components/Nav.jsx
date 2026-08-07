@@ -105,7 +105,6 @@ export function Nav() {
                 : pathname === '/match-history' ? 'Match History'
                 : pathname === '/deck-comparison' ? 'Deck Comparison'
                 : pathname === '/gamelog' ? 'Gamelog'
-                : pathname === '/gamelog-analyzer' ? 'Gamelog Analyzer'
                 : pathname === '/team-analytics' ? 'Team Analytics'
                 : pathname === '/practice-plan' ? 'Practice Plan'
                 : pathname === '/leaderboard' ? 'Leaderboard'

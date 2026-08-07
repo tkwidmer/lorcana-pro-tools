@@ -5,7 +5,6 @@
 export const SUPPORTER_PATHS = new Set([
   '/deck-insights',
   '/match-history',
-  '/gamelog-analyzer',
   '/team-analytics',
   '/practice-plan',
   '/tournament-lookup',

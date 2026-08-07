@@ -79,8 +79,7 @@ Defined in `src/App.jsx`:
 | `/settings` | `SettingsPage.jsx` | Auth management and preferences |
 | `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
 | `/gamelog` | `GamelogViewerPage.jsx` | Load and display JSON gamelog files |
-| `/gamelog-analyzer` | `GamelogAnalyzerPage.jsx` | Gamelog draw sequence, hand info, and mulligan analysis |
-| `/team-analytics` | `TeamAnalyticsPage.jsx` | Team analytics — combine shared game exports (imported gamelogs), metagame breakdown, card frequency heatmaps |
+| `/team-analytics` | `TeamAnalyticsPage.jsx` | Merged gamelog + team analytics — import your own games (.zip/.gz) or shared team exports; per-game drilldown (draw sequence, mulligans, leaks, challenge log), personal card/win-rate stats, and team-wide matchup matrix, metagame breakdown, and MMR/win-rate trends |
 | `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
 | `/leaderboard` | `LeaderboardPage.jsx` | duels.ink top 50 players by queue, MMR distribution |
@@ -90,12 +89,13 @@ Defined in `src/App.jsx`:
 
 **Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
 
-**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/gamelog-analyzer`, `/team-analytics`, `/practice-plan`, `/tournament-lookup`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
+**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/team-analytics`, `/practice-plan`, `/tournament-lookup`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
 
 All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname`) so a render-time throw in one tool shows a fallback instead of white-screening the SPA; `Nav` sits outside the boundary and stays usable.
 
 Legacy redirects:
-- `/replay-analyzer` → `/gamelog-analyzer`
+- `/replay-analyzer` → `/team-analytics`
+- `/gamelog-analyzer` → `/team-analytics` (the two pages were merged into one — see below)
 - `/game-library` → `/team-analytics`
 - `/shared` → `/library`
 - `/legality-checker` → `/deck-insights`
@@ -114,7 +114,7 @@ In `src/components/`:
 | `SearchBar.jsx` | Fuzzy card search dropdown with quantity selector (×1–×4); used by proxy generator |
 | `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts |
 
-Ink color images are rendered inline in each page — there is no shared `InkIcons` component. `MatchHistoryPage` defines a local `InkIcons` function; `GamelogAnalyzerPage` defines a local `InkImg` function. Both render `<img src={/ink/${inkName}.png} />`.
+Ink color images are rendered inline in each page — there is no shared `InkIcons` component. `MatchHistoryPage` defines a local `InkIcons` function; `TeamAnalyticsPage` defines a local `InkImg` function. Both render `<img src={/ink/${inkName}.png} />`.
 
 ### Hooks
 
@@ -146,7 +146,7 @@ In `src/lib/`:
 | `gameSnapshot.js` | Export/import game state as JSON files for sharing |
 | `playerProfiles.js` | Build opponent deck profiles and win rates from saved game history |
 | `handInference.js` | Hypergeometric P(≥1 in hand) calculator — powers `HandPredictor` |
-| `leakDetection.js` | Detect when hand information is leaked (quests, zones); used by `PracticePlanPage` and `GamelogAnalyzerPage` |
+| `leakDetection.js` | Detect when hand information is leaked (quests, zones); used by `PracticePlanPage` and `TeamAnalyticsPage` |
 | `tournamentShareImage.js` | Renders a shareable summary image (canvas) for tournament/practice results |
 | `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
 | `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
@@ -196,7 +196,7 @@ The Discord bot (message command "Decode Deck QR" + `/tournament`, `/favorite`, 
 | IndexedDB `lorcana_pro_tools` v2 | `games` store (key: `uuid`) | Scraped game snapshots from `GameScraperPage` |
 | IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
 | IndexedDB `lorcana_pro_tools` v3 | `coconutDecks` store (key: `id`) | Saved [Format Coconut] decks from `CoconutDeckBuilderPage` |
-| IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `GamelogAnalyzerPage` |
+| IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `TeamAnalyticsPage` |
 | localStorage `duels_api_tokens` | — | Array of duels.ink Bearer tokens (multi-account); `duels_api_active_token_id` selects the active one. Legacy single-token `duels_api_token` is auto-migrated on first access (see `duelsApi.js`) |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
 | localStorage (various) | — | Form state for `DrawOddsPage`, filter state, lore tracker (`lorcana_lore_tracker`), etc. |
@@ -219,7 +219,7 @@ This is the most complex data flow in the app:
 1. `fetchGamelogBuffer(gameId)` in `duelsApi.js` hits `/api/duels-gamelog`, which fetches a gzip binary from `https://duels.ink/g/{id}`
 2. `decompressGzip(arrayBuffer)` in `parseGamelog.js` decompresses via native `DecompressionStream('gzip')`
 3. `parseGamelog(id, logs, meta)` processes an array of log entries with `{type, player, turnNumber, data, visibility}` shape into a structured object with per-player draw sequences, challenges, lore events, and card effects
-4. The result is saved to IndexedDB via `gamelogHistory.js` and displayed in `GamelogAnalyzerPage` or `GameView`
+4. The result is saved to IndexedDB via `gamelogHistory.js` and displayed in `TeamAnalyticsPage` or `GameView`
 
 Key parsing details in `parseGamelog.js`:
 - `ON_PLAY_DRAWS` map tracks cards that draw on play (e.g. Junior Woodchuck Guidebook → 2 draws); uses `pendingDrawSource`/`pendingDrawCount` to attribute subsequent `CARD_DRAWN` events to the source card

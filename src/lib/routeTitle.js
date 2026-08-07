@@ -21,7 +21,6 @@ const TITLES = {
   '/settings': 'Settings',
   '/match-history': 'Match History',
   '/gamelog': 'Gamelog Viewer',
-  '/gamelog-analyzer': 'Gamelog Analyzer',
   '/team-analytics': 'Team Analytics',
   '/winrate-matrix': 'Winrate Matrix',
   '/practice-plan': 'Practice Plan',

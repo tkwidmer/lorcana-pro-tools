@@ -183,9 +183,11 @@ export function HomePage() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-10">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">
-          InkbornForge
-        </h1>
+        <img
+          src="/inkborn_forge_substack_header.png"
+          alt="InkbornForge — Hone Your Approach, Sharpen Your Play"
+          className="w-full h-auto rounded-lg mb-4"
+        />
         <p className="text-gray-500">
           A growing suite of tools for Disney Lorcana players.
         </p>

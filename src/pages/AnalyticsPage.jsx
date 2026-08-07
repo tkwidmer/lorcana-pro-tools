@@ -1542,7 +1542,7 @@ function CardImpactView({ games, deckSelected }) {
         </div>
       )}
       <div className="text-xs text-gray-400 mb-4">
-        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. Cards with fewer than 5 games on either side are low-confidence and shown faded. The Mulligan Δ column compares win rate when a card was kept in your opening hand vs. sent back during mulligan (shown only with 2+ games on each side).
+        For each card, wins in games it was drawn/played minus expected wins at the deck's baseline win rate in games without it — a rough "wins above replacement." Based on {totalGames} of your games with a recorded winner. A miss only counts toward "Games w/o" when that game's recorded decklist confirms the card was actually in the 60 — misses from games where the decklist shows the card had been cut, or where no decklist was recorded, are excluded so deck changes over time don't get held against a card (hover a "Games w/o" cell for the breakdown). Cards with fewer than 5 games on either side are low-confidence and shown faded. The Mulligan Δ column compares win rate when a card was kept in your opening hand vs. sent back during mulligan (shown only with 2+ games on each side).
       </div>
       {scored.length === 0 ? (
         <div className="text-sm text-gray-500">Not enough data yet — play or import more games with this deck.</div>
@@ -1573,7 +1573,12 @@ function CardImpactView({ games, deckSelected }) {
                     <td className="py-1.5 px-3 text-right text-gray-600">{Math.round(r.winRateWith * 100)}%</td>
                     <td className="py-1.5 px-3 text-right text-gray-600">{Math.round(r.winRateWithout * 100)}%</td>
                     <td className="py-1.5 px-3 text-right text-gray-400">{r.gamesWith}</td>
-                    <td className="py-1.5 px-3 text-right text-gray-400">{r.gamesWithout}</td>
+                    <td
+                      className="py-1.5 px-3 text-right text-gray-400"
+                      title={`${r.gamesNotInDeck} game${r.gamesNotInDeck !== 1 ? 's' : ''} confirmed not in deck · ${r.gamesUnknown} game${r.gamesUnknown !== 1 ? 's' : ''} with no recorded decklist — both excluded`}
+                    >
+                      {r.gamesWithout}
+                    </td>
                     <td
                       className={`py-1.5 pl-3 text-right font-semibold ${mullDelta == null ? 'text-gray-300' : mullDelta > 0 ? 'text-emerald-600' : mullDelta < 0 ? 'text-red-500' : 'text-gray-400'}`}
                       title={mull ? `Kept ${mull.keptPct}% (${mull.keptTotal}) · Sent ${mull.sentPct}% (${mull.sentTotal})` : 'Not enough mulligan data'}

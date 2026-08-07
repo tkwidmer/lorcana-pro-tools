@@ -86,8 +86,8 @@ export function setTokenUserId(id, userId) {
 }
 
 export async function testToken(token) {
-  const params = new URLSearchParams({ format: 'json', limit: '1' })
-  const res = await fetch(`/api/duels-match-history?${params}`, {
+  const params = new URLSearchParams({ endpoint: 'match-history', format: 'json', limit: '1' })
+  const res = await fetch(`/api/duels?${params}`, {
     headers: { Authorization: `Bearer ${token.trim()}` },
   })
   if (res.status === 401) throw new Error('Invalid or expired API token')
@@ -99,13 +99,13 @@ export async function fetchMatchHistory({ cursor, limit = 100, from, to, source 
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
-  const params = new URLSearchParams({ format: 'json', limit: String(limit) })
+  const params = new URLSearchParams({ endpoint: 'match-history', format: 'json', limit: String(limit) })
   if (cursor) params.set('cursor', cursor)
   if (from) params.set('from', from)
   if (to) params.set('to', to)
   if (source) params.set('source', source)
 
-  const res = await fetch(`/api/duels-match-history?${params}`, {
+  const res = await fetch(`/api/duels?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
@@ -119,7 +119,7 @@ export async function fetchGamelogBuffer(gameId) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
-  const res = await fetch(`/api/duels-gamelog?id=${encodeURIComponent(gameId)}`, {
+  const res = await fetch(`/api/duels?endpoint=gamelog&id=${encodeURIComponent(gameId)}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
@@ -135,7 +135,7 @@ export async function fetchGamelogManifest(ids) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
-  const res = await fetch('/api/duels-gamelog-bulk', {
+  const res = await fetch('/api/duels?endpoint=gamelog-bulk', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -154,7 +154,7 @@ export async function fetchReplayBuffer(replayId) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
-  const res = await fetch(`/api/duels-replay?id=${encodeURIComponent(replayId)}`, {
+  const res = await fetch(`/api/duels?endpoint=replay&id=${encodeURIComponent(replayId)}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
@@ -168,7 +168,7 @@ export async function fetchDeck(id) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
-  const res = await fetch(`/api/duels-deck?id=${encodeURIComponent(id)}`, {
+  const res = await fetch(`/api/duels?endpoint=deck&id=${encodeURIComponent(id)}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
@@ -183,7 +183,7 @@ export async function fetchDecks() {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
-  const res = await fetch('/api/duels-deck', {
+  const res = await fetch('/api/duels?endpoint=deck', {
     headers: { Authorization: `Bearer ${token}` },
   })
 
@@ -198,10 +198,10 @@ export async function fetchPersonalStats({ deckId, source }) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
-  const params = new URLSearchParams({ deckId })
+  const params = new URLSearchParams({ endpoint: 'deck', id: deckId, personalStats: '1' })
   if (source) params.set('source', source)
 
-  const res = await fetch(`/api/duels-personal-stats?${params}`, {
+  const res = await fetch(`/api/duels?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
@@ -215,12 +215,12 @@ export async function fetchStats({ queue, period, ranks }) {
   if (!queue) throw new Error('Queue is required')
   if (!period) throw new Error('Period is required')
 
-  const params = new URLSearchParams({ queue, period })
+  const params = new URLSearchParams({ endpoint: 'stats', queue, period })
   if (ranks && ranks.length > 0) {
     params.set('ranks', ranks.join(','))
   }
 
-  const res = await fetch(`/api/duels-stats?${params}`)
+  const res = await fetch(`/api/duels?${params}`)
 
   if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status}`)
 

@@ -153,7 +153,7 @@ In `src/lib/`:
 | `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
 | `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
 | `duelsApi.js` | duels.ink API client — match history, gamelog, replay fetches |
-| `leaderboardApi.js` | Fetches duels.ink ranked leaderboards via `/api/duels-leaderboard` |
+| `leaderboardApi.js` | Fetches duels.ink ranked leaderboards via `/api/duels?endpoint=leaderboard` |
 | `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
 | `gameExport.js` | Serialize game records for sharing (used by `AnalyticsPage`) |
 | `gameImport.js` | Deserialize imported game records |
@@ -170,14 +170,7 @@ Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies wit
 
 | Endpoint | Upstream | Auth | Notes |
 |---|---|---|---|
-| `/api/duels-match-history` | duels.ink `/api/me/match-history` | Bearer token | |
-| `/api/duels-stats` | duels.ink stats | Bearer token | |
-| `/api/duels-leaderboard` | duels.ink leaderboard | Public | |
-| `/api/duels-replay` | duels.ink replay | Bearer token | |
-| `/api/duels-deck` | duels.ink deck | Bearer token | |
-| `/api/duels-personal-stats` | duels.ink `/api/account/personal-stats` | Bearer token | Undocumented endpoint (not in duels.ink's `/api-docs.md`); per-deck stats including exact card list + timeframe per deck version, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game |
-| `/api/duels-gamelog` | `https://duels.ink/g/{id}` | Bearer token | Returns gzip binary |
-| `/api/duels-gamelog-bulk` | Multiple gamelog fetches | Bearer token | Batch endpoint |
+| `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`, `leaderboard`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `gamelog-bulk`, `replay`, `deck`, `stats`, `leaderboard`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. |
 | `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`; handles pagination |
 | `/api/proxy` | duels.ink spectate | Cookie-based | Tries 3 endpoints; used by bookmarklet/direct URL approach |
 | `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's commands (Decode Deck QR, `/tournament`, `/favorite`, `/unfavorite`, `/favorites`) directly. See `discord-bot/README.md`. |
@@ -218,7 +211,7 @@ The Discord bot (message command "Decode Deck QR" + `/tournament`, `/favorite`, 
 
 This is the most complex data flow in the app:
 
-1. `fetchGamelogBuffer(gameId)` in `duelsApi.js` hits `/api/duels-gamelog`, which fetches a gzip binary from `https://duels.ink/g/{id}`
+1. `fetchGamelogBuffer(gameId)` in `duelsApi.js` hits `/api/duels?endpoint=gamelog`, which fetches a gzip binary from `https://duels.ink/g/{id}`
 2. `decompressGzip(arrayBuffer)` in `parseGamelog.js` decompresses via native `DecompressionStream('gzip')`
 3. `parseGamelog(id, logs, meta)` processes an array of log entries with `{type, player, turnNumber, data, visibility}` shape into a structured object with per-player draw sequences, challenges, lore events, and card effects
 4. The result is saved to IndexedDB via `gamelogHistory.js` and displayed in `AnalyticsPage` or `GameView`

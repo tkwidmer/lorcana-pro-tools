@@ -59,19 +59,14 @@ const SECTIONS = [
         description: 'Connect your duels.ink account to import your complete match history — results, deck colors, lore scores, turns, and MMR changes for every ranked game.',
       },
       {
-        path: '/gamelog-analyzer',
-        name: 'Gamelog Analyzer',
-        description: 'Import complete server-side game logs to see both players\' full draw sequences, opening hands, mulligan decisions, and every card interaction — richer than replays.',
-      },
-      {
         path: '/winrate-matrix',
         name: 'Winrate Matrix',
         description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
       },
       {
-        path: '/team-analytics',
-        name: 'Team Analytics',
-        description: 'Import shared game exports to build team-wide analytics — opponent metagame breakdown, card frequency by archetype, matchup matrix, and win rate trends.',
+        path: '/analytics',
+        name: 'Analytics',
+        description: 'Import your games (or shared team exports, or raw .logs.gz gamelogs) for full draw sequences, mulligan decisions, leak detection, card win rates, wins-above-replacement, and team-wide matchup/metagame trends.',
       },
       {
         path: '/practice-plan',

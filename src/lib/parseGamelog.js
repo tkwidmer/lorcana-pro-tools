@@ -58,6 +58,10 @@ export function parseGamelog(id, logs, meta = {}) {
   const lastPlayedByPlayer = { 1: null, 2: null }
   let pendingDrawSource = null
   let pendingDrawCount = 0
+  // Source of the most recent banish-type / damage-counter ABILITY_TRIGGERED, used to attribute
+  // the CARD_DESTROYED / DAMAGE_COUNTERS_PUT events that immediately follow it (see below).
+  let pendingRemovalSource = null
+  let pendingDamageSource = null
 
   // Track unique instanceIds from CARD_DRAWN per player for opponent decklist inference
   const instanceCards = { 1: new Map(), 2: new Map() }
@@ -162,11 +166,42 @@ export function parseGamelog(id, logs, meta = {}) {
       if (src) ensureCard(causedBy, src.name, src.id).effectRemovals++
     }
 
-    // When a card is destroyed by an ability effect (abilitySourceCardId present and fromZone === 'field'),
-    // attribute the removal to the source card owned by the other player.
-    if (type === 'CARD_DESTROYED' && d.abilitySourceCardId && d.abilitySourceCardName && d.fromZone === 'field') {
+    // When a card is destroyed by an ability effect and it left the field/board, attribute the
+    // removal to the source card owned by the other player. A single multi-target banish (e.g.
+    // Prince Phillip - Vanquisher of Foes banishing every damaged character via "SWIFT AND SURE")
+    // fires one CARD_DESTROYED per character destroyed, but only the first of the batch reliably
+    // carries abilitySourceCardId/Name (and it can even name an unrelated card, like whichever
+    // character sang the spell that enabled the play) — so prefer the ability that most recently
+    // triggered a banish-type effect (pendingRemovalSource) over this event's own (unreliable) tag.
+    if (type === 'CARD_DESTROYED' && (d.fromZone === 'field' || d.fromZone === 'board')) {
       const causedBy = p === 1 ? 2 : 1
-      ensureCard(causedBy, d.abilitySourceCardName, d.abilitySourceCardId).effectRemovals++
+      const src = pendingRemovalSource?.player === causedBy
+        ? pendingRemovalSource
+        : (d.abilitySourceCardId || d.abilitySourceCardName) ? { name: d.abilitySourceCardName, id: d.abilitySourceCardId } : null
+      if (src) ensureCard(causedBy, src.name, src.id).effectRemovals++
+    } else if (type !== 'CARD_DESTROYED') {
+      pendingRemovalSource = null
+    }
+
+    // When a card is bounced from the field to the deck by an opponent's effect (e.g. Under the
+    // Sea sending low-strength characters to the bottom of the deck), that's a removal too —
+    // attribute it the same way as the inkwell-bounce case above.
+    if ((type === 'CARD_PUT_INTO_DECK' || type === 'CARD_RETURNED_TO_DECK') && (d.fromZone === 'field' || d.fromZone === 'board')) {
+      const causedBy = p === 1 ? 2 : 1
+      const src = lastPlayedByPlayer[causedBy]
+      if (src) ensureCard(causedBy, src.name, src.id).effectRemovals++
+    }
+
+    // Damage counters placed by an ability (e.g. Malicious, Mean and Scary hitting each opposing
+    // character) arrive as separate DAMAGE_COUNTERS_PUT events right after the triggering
+    // ABILITY_TRIGGERED — one per character hit. Attribute each to the source ability.
+    if (type === 'DAMAGE_COUNTERS_PUT' && pendingDamageSource) {
+      const causedBy = p === 1 ? 2 : 1
+      if (pendingDamageSource.player === causedBy) {
+        ensureCard(causedBy, pendingDamageSource.name, pendingDamageSource.id).effectRemovals++
+      }
+    } else if (type !== 'DAMAGE_COUNTERS_PUT') {
+      pendingDamageSource = null
     }
 
     // CARD_REVEALED with revealDestination === 'hand' means an on-play ability fetched a card
@@ -213,7 +248,10 @@ export function parseGamelog(id, logs, meta = {}) {
       const c = ensureCard(p, d.abilitySourceCardName, d.abilitySourceCardId)
       for (const ek of (d.effectDescriptionKeys ?? [])) {
         const k = ek.key ?? ''
-        const count = ek.params?.count ?? 1
+        const kLower = k.toLowerCase()
+        // Multi-target effects (e.g. "banish each damaged character", "each opposing character")
+        // may report their target count in different param shapes depending on the effect.
+        const count = ek.params?.count ?? ek.params?.targetCardRefs?.length ?? ek.params?.targets?.length ?? 1
         if (k === 'drawsACard' || k === 'eachPlayerDrawsToHandSize' || k === 'youMayDraw' || k === 'drawACard')
           c.effectDraws++
         else if (k === 'drawsCards' || k === 'youMayDrawCards' || k === 'drawCards')
@@ -224,12 +262,25 @@ export function parseGamelog(id, logs, meta = {}) {
           c.oppForcedDiscards += count
         else if (k === 'grantsAnAdditionalInk' || k === 'additionalInk')
           c.extraInks++
-        else if (k === 'movesDamageDetailedBanished' || k === 'banishesTarget' || k === 'banishTarget' || k === 'banishesCharacter')
-          c.effectRemovals++
+        // Banish-type triggers (e.g. Prince Phillip - Vanquisher of Foes's "SWIFT AND SURE" /
+        // banishesCard) fire once per ability regardless of how many characters actually get
+        // banished — the real per-target count shows up as separate CARD_DESTROYED events
+        // immediately after. Remember the source here so those events can be attributed correctly.
+        else if (kLower.includes('banish'))
+          pendingRemovalSource = { name: d.abilitySourceCardName, id: d.abilitySourceCardId, player: p }
+        // Damage-counter triggers (e.g. Malicious, Mean and Scary) likewise fire once per ability;
+        // the actual per-character hits arrive as separate DAMAGE_COUNTERS_PUT events.
+        else if (kLower.includes('damagecounter'))
+          pendingDamageSource = { name: d.abilitySourceCardName, id: d.abilitySourceCardId, player: p }
+        // Bouncing characters to the bottom of the deck (e.g. Under the Sea) is a removal for
+        // impact-scoring purposes — counted via the CARD_RETURNED_TO_DECK path below, which
+        // reliably fires once per character actually moved.
         else if (k === 'exertsCharacter' || k === 'exertTarget' || k === 'exertsTarget')
           c.exerts++
         else if (k === 'returnedFromDiscard' || k === 'returnFromDiscard')
           c.cardsRecovered += (d.returnedCardRefs?.length ?? count)
+        else if (k === 'playedForFree')
+          c.cardsRecovered++
         else if (k === 'cannotPlayTypes')
           c.oppRestrictions++
       }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fetchStats } from '../lib/duelsApi'
 import { InkIcons as ColorPairIcons } from '../components/InkIcons'
+import { winrateCellColor as getWinrateColor } from '../lib/statColors'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -19,22 +20,6 @@ const RANKS = [
   { id: 'Uncommon', label: 'Uncommon' },
   { id: 'Common', label: 'Common' },
 ]
-
-function getWinrateColor(winRate, isMirror = false) {
-  if (isMirror) {
-    if (winRate >= 60) return 'bg-blue-300 border border-blue-500'
-    if (winRate >= 55) return 'bg-blue-200 border border-blue-400'
-    if (winRate >= 51) return 'bg-blue-100 border border-blue-300'
-    return 'bg-gray-50 border border-gray-200'
-  }
-  if (winRate >= 60) return 'bg-green-300 border border-green-500'
-  if (winRate >= 55) return 'bg-green-200 border border-green-400'
-  if (winRate >= 51) return 'bg-green-100 border border-green-300'
-  if (winRate >= 49) return 'bg-gray-50 border border-gray-200'
-  if (winRate >= 45) return 'bg-red-100 border border-red-300'
-  if (winRate >= 40) return 'bg-red-200 border border-red-400'
-  return 'bg-red-300 border border-red-500'
-}
 
 export function WinrateMatrixPage() {
   const [selectedQueue, setSelectedQueue] = useState('infinity-bo1')

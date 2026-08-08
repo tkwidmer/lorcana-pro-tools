@@ -6,6 +6,7 @@ import { getAllGamelogs } from '../lib/gamelogHistory'
 import { parseGamelog } from '../lib/parseGamelog'
 import { summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
 import { InkIcons as ColorPairIcons } from '../components/InkIcons'
+import { winrateTextColor as getWinrateColor, deltaColor } from '../lib/statColors'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -119,21 +120,6 @@ function runMonteCarlo({ rows, rounds, format, sims }) {
   }
 }
 
-function getWinrateColor(wr) {
-  if (wr == null || Number.isNaN(wr)) return 'text-gray-400'
-  if (wr >= 60) return 'text-green-700 font-semibold'
-  if (wr >= 52) return 'text-green-600'
-  if (wr >= 48) return 'text-gray-700'
-  if (wr >= 40) return 'text-red-600'
-  return 'text-red-700 font-semibold'
-}
-
-function deltaColor(delta) {
-  if (delta == null) return 'text-gray-400'
-  if (delta >= 5) return 'text-green-700'
-  if (delta <= -5) return 'text-red-700'
-  return 'text-gray-500'
-}
 
 const DATE_RANGES = [
   { id: 'all', label: 'All time' },

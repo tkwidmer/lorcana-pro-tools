@@ -1,19 +1,5 @@
 import { useState, useMemo } from 'react'
-
-function parseDeckList(text) {
-  const cardMap = new Map()
-  for (const raw of text.split('\n')) {
-    const line = raw.trim()
-    if (!line) continue
-    const m = line.match(/^(\d+)x?\s+(.+)$/i)
-    if (!m) continue
-    const count = parseInt(m[1])
-    const name = m[2].trim()
-    if (!name || count < 1) continue
-    cardMap.set(name, (cardMap.get(name) || 0) + count)
-  }
-  return cardMap
-}
+import { parseDeckListToMap } from '../lib/parseDeckList'
 
 function totalCards(cardMap) {
   let total = 0
@@ -84,8 +70,8 @@ export function DeckComparisonPage() {
   const [paperDeck, setPaperDeck] = useState('')
   const [newList, setNewList] = useState('')
 
-  const paperMap = useMemo(() => parseDeckList(paperDeck), [paperDeck])
-  const newMap = useMemo(() => parseDeckList(newList), [newList])
+  const paperMap = useMemo(() => parseDeckListToMap(paperDeck), [paperDeck])
+  const newMap = useMemo(() => parseDeckListToMap(newList), [newList])
 
   const paperTotal = useMemo(() => totalCards(paperMap), [paperMap])
   const newTotal = useMemo(() => totalCards(newMap), [newMap])

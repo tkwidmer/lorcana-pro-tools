@@ -7,7 +7,8 @@ import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { fetchDecks, fetchPersonalStats, getToken, getTokens } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
 import { InkIcon as InkImg } from '../components/InkIcons'
-import { getMyPlayerNum, enrichGame, deckFingerprint } from '../lib/analyticsAggregation'
+import { getMyPlayerNum, enrichGame } from '../lib/analyticsAggregation'
+import { deckFingerprint } from '../lib/deckFingerprint'
 import { DecklistDisplay, GamesList } from '../components/analytics/GamesList'
 import {
   MatchupMatrixView,

@@ -159,18 +159,3 @@ export function aggregateMulliganWinRates(games) {
   return Object.values(map)
 }
 
-export function deckFingerprint(decklist) {
-  if (!decklist) return null
-  const cards = Array.isArray(decklist) ? decklist : Object.values(decklist)
-  const key = cards
-    .map(c => typeof c === 'string' ? c : `${c?.cardId ?? c?.name ?? c?.id ?? ''}x${c?.count ?? 1}`)
-    .filter(s => s && s !== 'x1')
-    .sort()
-    .join('|')
-  if (!key) return null
-  let h = 5381
-  for (let i = 0; i < key.length; i++) {
-    h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0
-  }
-  return String(Math.abs(h))
-}

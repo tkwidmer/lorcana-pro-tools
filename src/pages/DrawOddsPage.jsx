@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useCards } from '../hooks/useCards'
 import { oddsColor, brickGrade, brickGradeColor, brickRiskColor, brickBarColor } from '../lib/statColors'
+import { parseDeckList } from '../lib/parseDeckList'
 
 // --- Legality constants ---
 const ROTATION_DATE = new Date('2026-07-01')
@@ -698,25 +699,6 @@ function buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianCost, de
   const pAtLeast1 = drawOddsAtLeast(deckSize, keepCopies, 7, 1)
   const pAtLeast2 = drawOddsAtLeast(deckSize, keepCopies, 7, 2)
   return { keep, flexible, toss, keepThreshold, tossThreshold, keepCopies, pAtLeast1, pAtLeast2 }
-}
-
-// --- Deck list parsing ---
-
-function parseDeckList(text) {
-  const cardMap = new Map()
-  for (const raw of text.split('\n')) {
-    const line = raw.trim()
-    if (!line) continue
-    const m = line.match(/^(\d+)x?\s+(.+)$/i)
-    if (!m) continue
-    const count = parseInt(m[1])
-    const name = m[2].trim()
-    if (!name || count < 1) continue
-    cardMap.set(name, (cardMap.get(name) || 0) + count)
-  }
-  return Array.from(cardMap.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 }
 
 // --- Formatting ---

@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useCards } from '../hooks/useCards'
+import { oddsColor, brickGrade, brickGradeColor, brickRiskColor, brickBarColor } from '../lib/statColors'
 
 // --- Legality constants ---
 const ROTATION_DATE = new Date('2026-07-01')
@@ -723,43 +724,6 @@ function parseDeckList(text) {
 function pct(p) {
   if (p >= 0.995) return '99%+'
   return (p * 100).toFixed(1) + '%'
-}
-
-function oddsColor(p) {
-  if (p >= 0.75) return 'text-green-700'
-  if (p >= 0.50) return 'text-yellow-700'
-  if (p >= 0.25) return 'text-orange-600'
-  return 'text-red-600'
-}
-
-function brickGrade(maxRisk) {
-  if (maxRisk < 0.03) return 'A'
-  if (maxRisk < 0.07) return 'B'
-  if (maxRisk < 0.14) return 'C'
-  if (maxRisk < 0.25) return 'D'
-  return 'F'
-}
-
-function brickGradeColor(grade) {
-  if (grade === 'A') return 'text-green-600'
-  if (grade === 'B') return 'text-emerald-600'
-  if (grade === 'C') return 'text-yellow-600'
-  if (grade === 'D') return 'text-orange-500'
-  return 'text-red-600'
-}
-
-function brickRiskColor(p) {
-  if (p < 0.03) return 'text-green-600'
-  if (p < 0.07) return 'text-yellow-600'
-  if (p < 0.14) return 'text-orange-500'
-  return 'text-red-600'
-}
-
-function brickBarColor(p) {
-  if (p < 0.03) return 'bg-green-400'
-  if (p < 0.07) return 'bg-yellow-400'
-  if (p < 0.14) return 'bg-orange-400'
-  return 'bg-red-500'
 }
 
 // --- Legality helpers ---

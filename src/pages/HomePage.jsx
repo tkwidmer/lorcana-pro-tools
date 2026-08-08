@@ -59,11 +59,6 @@ const SECTIONS = [
         description: 'Connect your duels.ink account to import your complete match history — results, deck colors, lore scores, turns, and MMR changes for every ranked game.',
       },
       {
-        path: '/winrate-matrix',
-        name: 'Winrate Matrix',
-        description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
-      },
-      {
         path: '/analytics',
         name: 'Analytics',
         description: 'Import your games (or shared team exports, or raw .logs.gz gamelogs) for full draw sequences, mulligan decisions, leak detection, card win rates, wins-above-replacement, and team-wide matchup/metagame trends.',
@@ -72,6 +67,16 @@ const SECTIONS = [
         path: '/practice-plan',
         name: 'Practice Plan',
         description: 'Pre-event prep: pick your deck and the expected meta, then see which matchups to focus on based on your personal win rates vs the public matrix.',
+      },
+    ],
+  },
+  {
+    title: 'Metagame',
+    tools: [
+      {
+        path: '/winrate-matrix',
+        name: 'Winrate Matrix',
+        description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
       },
       {
         path: '/leaderboard',

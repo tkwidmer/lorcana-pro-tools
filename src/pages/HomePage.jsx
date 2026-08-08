@@ -118,6 +118,11 @@ const SECTIONS = [
         name: 'Scouting Library',
         description: 'Review saved games, stats dashboards, and player profiles with inferred decklists. Import shared game snapshots to view or save them.',
       },
+      {
+        path: '/opponent-directory',
+        name: 'Opponent Directory',
+        description: 'Look up any opponent from your imported games, filter by their ink colors, and see every card we\'ve seen them play, ink, or discard.',
+      },
     ],
   },
   ...(DISCORD_INVITE_URL

@@ -60,6 +60,7 @@ function enrichGame(gamelog, myName) {
       cardsRecovered: card.cardsRecovered ?? 0,
       sings: card.sings ?? 0,
       oppRestrictions: card.oppRestrictions ?? 0,
+      statModifiers: card.statModifiers ?? 0,
     }
   }
 
@@ -102,7 +103,7 @@ function aggregateMyCards(games) {
         map[key] = {
           fullName: key, name: key,
           playedCount: 0, inkedCount: 0, loreGained: 0,
-          effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0, sings: 0, oppRestrictions: 0,
+          effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0, sings: 0, oppRestrictions: 0, statModifiers: 0,
         }
       }
       const m = map[key]
@@ -117,6 +118,7 @@ function aggregateMyCards(games) {
       m.cardsRecovered += card.cardsRecovered ?? 0
       m.sings += card.sings ?? 0
       m.oppRestrictions += card.oppRestrictions ?? 0
+      m.statModifiers += card.statModifiers ?? 0
     }
   }
   return Object.values(map)
@@ -1783,9 +1785,9 @@ function MulliganTable({ rows, emptyText }) {
 function DrawEffectsTable({ games }) {
   const cards = aggregateMyCards(games)
   const rows = cards
-    .filter(c => (c.effectDraws + c.oppForcedDiscards + c.extraInks + c.effectRemovals + c.exerts + c.cardsRecovered) > 0)
+    .filter(c => (c.effectDraws + c.oppForcedDiscards + c.extraInks + c.effectRemovals + c.exerts + c.cardsRecovered + c.statModifiers) > 0)
     .sort((a, b) => {
-      const score = c => c.effectDraws * 2 + c.oppForcedDiscards * 1.5 + c.extraInks + c.effectRemovals * 2 + c.exerts * 1.5 + c.cardsRecovered * 1.5
+      const score = c => c.effectDraws * 2 + c.oppForcedDiscards * 1.5 + c.extraInks + c.effectRemovals * 2 + c.exerts * 1.5 + c.cardsRecovered * 1.5 + c.statModifiers
       return score(b) - score(a)
     })
     .slice(0, 10)
@@ -1794,7 +1796,7 @@ function DrawEffectsTable({ games }) {
 
   return (
     <div className="text-sm">
-      <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem' }}>
+      <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem 3rem' }}>
         <span>Card</span>
         <span className="text-center text-blue-500">Draw</span>
         <span className="text-center text-purple-500">Discard</span>
@@ -1802,9 +1804,10 @@ function DrawEffectsTable({ games }) {
         <span className="text-center text-red-500">Remove</span>
         <span className="text-center text-orange-500">Exert</span>
         <span className="text-center text-teal-500">Recover</span>
+        <span className="text-center text-pink-500">±Stat</span>
       </div>
       {rows.map(c => (
-        <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem' }}>
+        <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem 3rem' }}>
           <span className="text-gray-700 truncate">{c.fullName}</span>
           <span className="text-center font-semibold text-blue-500">{c.effectDraws || '—'}</span>
           <span className="text-center font-semibold text-purple-500">{c.oppForcedDiscards || '—'}</span>
@@ -1812,9 +1815,10 @@ function DrawEffectsTable({ games }) {
           <span className="text-center font-semibold text-red-500">{c.effectRemovals || '—'}</span>
           <span className="text-center font-semibold text-orange-500">{c.exerts || '—'}</span>
           <span className="text-center font-semibold text-teal-500">{c.cardsRecovered || '—'}</span>
+          <span className="text-center font-semibold text-pink-500">{c.statModifiers || '—'}</span>
         </div>
       ))}
-      <p className="text-[10px] text-gray-400 mt-1.5">Draw = effect draws · Discard = forced opp discards · +Ink = extra ink · Remove = banished/inkwelled · Exert = opp exerted · Recover = from discard</p>
+      <p className="text-[10px] text-gray-400 mt-1.5">Draw = effect draws · Discard = forced opp discards · +Ink = extra ink · Remove = banished/inkwelled · Exert = opp exerted · Recover = from discard · ±Stat = stat buffs/debuffs</p>
     </div>
   )
 }
@@ -1841,6 +1845,7 @@ function ImpactTable({ games, order }) {
         c.effectRemovals * 2 +
         c.exerts * 1.5 +
         c.cardsRecovered * 1.5 +
+        c.statModifiers +
         c.sings * 1.5 +
         c.oppRestrictions * 2 +
         ch.kills * 2 +
@@ -1864,6 +1869,9 @@ function ImpactTable({ games, order }) {
         if (c.oppForcedDiscards > 0) tags.push(`${c.oppForcedDiscards} discard`)
         if (c.extraInks > 0) tags.push(`${c.extraInks} +ink`)
         if (c.effectRemovals > 0) tags.push(`${c.effectRemovals} remove`)
+        if (c.exerts > 0) tags.push(`${c.exerts} exert`)
+        if (c.cardsRecovered > 0) tags.push(`${c.cardsRecovered} recover`)
+        if (c.statModifiers > 0) tags.push(`${c.statModifiers} stat mod`)
         if (c.ch.kills > 0) tags.push(`${c.ch.kills} kills`)
         if (c.sings > 0) tags.push(`${c.sings} sings`)
         if (c.oppRestrictions > 0) tags.push(`${c.oppRestrictions} lock`)

@@ -49,7 +49,7 @@ export function parseGamelog(id, logs, meta = {}) {
         drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0,
         loreGained: 0, shiftPlays: 0,
         effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
-        sings: 0, oppRestrictions: 0,
+        sings: 0, oppRestrictions: 0, statModifiers: 0,
       }
     }
     return pData.cards[name]
@@ -204,6 +204,14 @@ export function parseGamelog(id, logs, meta = {}) {
       pendingDamageSource = null
     }
 
+    // DAMAGE_DEALT (e.g. Elinor - Renowned Diplomat's "dealsDamage") carries its own
+    // abilitySourceCardId/Name directly, unlike DAMAGE_COUNTERS_PUT — attribute straight from
+    // the event, same treatment as damage counters for impact-scoring purposes.
+    if (type === 'DAMAGE_DEALT' && d.abilitySourceCardId && d.abilitySourceCardName) {
+      const causedBy = p === 1 ? 2 : 1
+      ensureCard(causedBy, d.abilitySourceCardName, d.abilitySourceCardId).effectRemovals++
+    }
+
     // CARD_REVEALED with revealDestination === 'hand' means an on-play ability fetched a card
     // from the deck to hand (e.g. Ariel - Spectacular Singer's MUSICAL DEBUT). Attribute as
     // effectDraws to the card that was most recently played by this player.
@@ -279,10 +287,15 @@ export function parseGamelog(id, logs, meta = {}) {
           c.exerts++
         else if (k === 'returnedFromDiscard' || k === 'returnFromDiscard')
           c.cardsRecovered += (d.returnedCardRefs?.length ?? count)
-        else if (k === 'playedForFree')
+        else if (k === 'playedForFree' || k === 'playsFromDiscard')
           c.cardsRecovered++
         else if (k === 'cannotPlayTypes')
           c.oppRestrictions++
+        // Stat-modifier effects (e.g. Della's Moon Lullaby's -2 strength to a target) — buffs
+        // and debuffs alike, matched by substring since the key varies by target shape
+        // (single target, all characters, your/opposing characters).
+        else if (kLower.includes('givesstatmodifier'))
+          c.statModifiers++
       }
     }
   }

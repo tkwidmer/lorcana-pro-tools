@@ -6,7 +6,6 @@ import {
   aggregateMyCards,
   aggregateMulliganSentBack,
   aggregateMulliganWinRates,
-  deckFingerprint,
 } from '../analyticsAggregation'
 
 describe('replayViewerUrl', () => {
@@ -128,21 +127,3 @@ describe('aggregateMulliganWinRates', () => {
   })
 })
 
-describe('deckFingerprint', () => {
-  it('returns null for empty/falsy input', () => {
-    expect(deckFingerprint(null)).toBeNull()
-    expect(deckFingerprint([])).toBeNull()
-  })
-
-  it('is stable regardless of card order', () => {
-    const a = [{ cardId: '1', count: 4 }, { cardId: '2', count: 2 }]
-    const b = [{ cardId: '2', count: 2 }, { cardId: '1', count: 4 }]
-    expect(deckFingerprint(a)).toBe(deckFingerprint(b))
-  })
-
-  it('differs when card counts differ', () => {
-    const a = [{ cardId: '1', count: 4 }]
-    const b = [{ cardId: '1', count: 3 }]
-    expect(deckFingerprint(a)).not.toBe(deckFingerprint(b))
-  })
-})

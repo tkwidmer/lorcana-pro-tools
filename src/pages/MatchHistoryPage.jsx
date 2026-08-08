@@ -5,6 +5,7 @@ import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { useCards } from '../hooks/useCards'
 import { InkIcons as SharedInkIcons } from '../components/InkIcons'
+import { deckFingerprint, isDeckModified } from '../lib/deckFingerprint'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
 const DECK_DETAILS_KEY = 'lorcana_deck_details'
@@ -35,33 +36,6 @@ function DeckCardList({ cardIds, cardIdToName }) {
       ))}
     </div>
   )
-}
-
-function isDeckModified(latestDecklist, apiCardIds) {
-  if (!latestDecklist?.length || !apiCardIds?.length) return false
-  const gameCounts = {}
-  for (const { cardId, count } of latestDecklist) gameCounts[cardId] = (gameCounts[cardId] ?? 0) + (count ?? 1)
-  const apiCounts = {}
-  for (const id of apiCardIds) apiCounts[id] = (apiCounts[id] ?? 0) + 1
-  const toSig = obj => Object.entries(obj).sort().map(([k, v]) => `${k}:${v}`).join('|')
-  return toSig(gameCounts) !== toSig(apiCounts)
-}
-
-function deckFingerprint(decklist) {
-  if (!decklist) return null
-  const cards = Array.isArray(decklist) ? decklist : Object.values(decklist)
-  // Each entry is { cardId, count } — include count so a different card quantity = different deck
-  const key = cards
-    .map(c => typeof c === 'string' ? c : `${c?.cardId ?? c?.name ?? c?.id ?? ''}x${c?.count ?? 1}`)
-    .filter(s => s && s !== 'x1')
-    .sort()
-    .join('|')
-  if (!key) return null
-  let h = 5381
-  for (let i = 0; i < key.length; i++) {
-    h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0
-  }
-  return String(Math.abs(h))
 }
 
 function formatDate(isoString) {

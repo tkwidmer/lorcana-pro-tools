@@ -7,6 +7,8 @@ import { getAllGames, deleteGame, clearAllGames, summarizeGame, saveGame as save
 import { resolveColors } from '../lib/inkColors'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { GameView } from '../components/GameView'
+import { InkIcons } from '../components/InkIcons'
+import { StatCard } from '../components/StatCard'
 
 // --- Ignored players (stored in localStorage) ---
 
@@ -23,15 +25,14 @@ function unignorePlayer(name) { setIgnored(getIgnored().filter(n => n !== name))
 
 // --- Shared helpers ---
 
-function InkBadge({ colors, size = 4 }) {
-  const resolved = resolveColors(colors)
-  if (!resolved.length) return <span className="text-xs text-gray-400">—</span>
+function InkBadge({ colors }) {
   return (
-    <div className="flex gap-0.5">
-      {resolved.map(c => (
-        <img key={c} src={`/ink/${c}.png`} alt={c} className={`w-${size} h-${size}`} title={c} />
-      ))}
-    </div>
+    <InkIcons
+      colors={colors}
+      size="w-4 h-4"
+      className="gap-0.5"
+      emptyFallback={<span className="text-xs text-gray-400">—</span>}
+    />
   )
 }
 
@@ -152,10 +153,10 @@ function StatsDashboard({ stats }) {
         Stats across {stats.totalGames} game{stats.totalGames !== 1 ? 's' : ''}
       </h2>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <Stat label="Total" value={stats.totalGames} />
-        <Stat label="Completed" value={stats.completedGames} />
-        <Stat label="Avg Turns" value={stats.avgTurns ? stats.avgTurns.toFixed(1) : '—'} />
-        <Stat label="Unique Cards" value={stats.mostPlayedCards.length} />
+        <StatCard size="lg" label="Total" value={stats.totalGames} />
+        <StatCard size="lg" label="Completed" value={stats.completedGames} />
+        <StatCard size="lg" label="Avg Turns" value={stats.avgTurns ? stats.avgTurns.toFixed(1) : '—'} />
+        <StatCard size="lg" label="Unique Cards" value={stats.mostPlayedCards.length} />
       </div>
 
       {stats.inkColorStats.length > 0 && (
@@ -213,14 +214,6 @@ function StatsDashboard({ stats }) {
   )
 }
 
-function Stat({ label, value }) {
-  return (
-    <div className="bg-gray-50 rounded-lg p-3">
-      <div className="text-xs text-gray-500 uppercase tracking-wide">{label}</div>
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-    </div>
-  )
-}
 
 function HistoryTab({ records, onDelete, onClearAll }) {
   const summaries = records.map(summarizeGame)

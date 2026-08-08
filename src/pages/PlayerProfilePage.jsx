@@ -2,18 +2,11 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getAllGames } from '../lib/scoutedGames'
 import { buildPlayerProfile } from '../lib/playerProfiles'
-import { resolveColors } from '../lib/inkColors'
+import { InkIcons } from '../components/InkIcons'
+import { StatCard } from '../components/StatCard'
 
 function InkRow({ colors, size = 'w-5 h-5' }) {
-  const resolved = resolveColors(colors)
-  if (!resolved.length) return null
-  return (
-    <div className="flex gap-1">
-      {resolved.map(c => (
-        <img key={c} src={`/ink/${c}.png`} alt={c} className={size} title={c} />
-      ))}
-    </div>
-  )
+  return <InkIcons colors={colors} size={size} sort className="gap-1" />
 }
 
 function pct(n) { return n == null ? '—' : `${Math.round(n * 100)}%` }
@@ -51,14 +44,14 @@ function DeckCard({ deck }) {
       {open && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            <Metric label="Quests/turn" value={num(deck.questsPerTurn, 2)} />
-            <Metric label="Challenges/turn" value={num(deck.challengesPerTurn, 2)} />
-            <Metric label="Ink rate" value={pct(deck.inkRate)} hint="inks per turn taken" />
-            <Metric label="Avg final lore" value={num(deck.avgFinalLore, 1)} />
-            <Metric label="Avg game length" value={num(deck.avgTurns, 1) + ' turns'} />
-            <Metric label="Went first" value={wentFirstRate != null ? pct(wentFirstRate) : '—'} />
-            <Metric label="Slots accounted for" value={`${deck.totalSlots} / 60`} hint={`${deck.uniqueCards} unique cards seen`} />
-            <Metric label="Confidence" value={
+            <StatCard label="Quests/turn" value={num(deck.questsPerTurn, 2)} />
+            <StatCard label="Challenges/turn" value={num(deck.challengesPerTurn, 2)} />
+            <StatCard label="Ink rate" value={pct(deck.inkRate)} hint="inks per turn taken" />
+            <StatCard label="Avg final lore" value={num(deck.avgFinalLore, 1)} />
+            <StatCard label="Avg game length" value={num(deck.avgTurns, 1) + ' turns'} />
+            <StatCard label="Went first" value={wentFirstRate != null ? pct(wentFirstRate) : '—'} />
+            <StatCard label="Slots accounted for" value={`${deck.totalSlots} / 60`} hint={`${deck.uniqueCards} unique cards seen`} />
+            <StatCard label="Confidence" value={
               deck.totalSlots >= 50 ? 'High' :
               deck.totalSlots >= 30 ? 'Medium' : 'Low'
             } />
@@ -117,16 +110,6 @@ function DeckCard({ deck }) {
           </div>
         </>
       )}
-    </div>
-  )
-}
-
-function Metric({ label, value, hint }) {
-  return (
-    <div className="bg-gray-50 rounded p-2">
-      <div className="text-xs text-gray-500 uppercase tracking-wide">{label}</div>
-      <div className="text-lg font-bold text-gray-900">{value}</div>
-      {hint && <div className="text-xs text-gray-400">{hint}</div>}
     </div>
   )
 }

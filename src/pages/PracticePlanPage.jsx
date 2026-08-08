@@ -5,6 +5,7 @@ import { resolveColors } from '../lib/inkColors'
 import { getAllGamelogs } from '../lib/gamelogHistory'
 import { parseGamelog } from '../lib/parseGamelog'
 import { summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
+import { InkIcons as ColorPairIcons } from '../components/InkIcons'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -12,25 +13,6 @@ const QUEUES = [
   { id: 'core-bo1', name: 'Core BO1' },
   { id: 'core-bo3', name: 'Core BO3' },
 ]
-
-function InkIcon({ color, size = 20 }) {
-  return (
-    <img
-      src={`/ink/${color}.png`}
-      alt={color}
-      className="inline-block flex-shrink-0"
-      style={{ width: `${size}px`, height: `${size}px`, minWidth: `${size}px` }}
-    />
-  )
-}
-
-function ColorPairIcons({ colors, size = 20 }) {
-  return (
-    <div className="inline-flex gap-1 align-middle flex-shrink-0">
-      {colors.map(c => <InkIcon key={c} color={c} size={size} />)}
-    </div>
-  )
-}
 
 function colorsKey(colors) {
   return [...colors].sort().join('+')

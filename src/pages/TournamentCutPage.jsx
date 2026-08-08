@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { StatCard } from '../components/StatCard'
 
 // Multinomial coefficient: n! / (a! * b! * c!)
 // Computed as C(n, a) * C(n-a, b) to avoid large intermediate factorials.
@@ -96,12 +97,7 @@ function Stepper({ label, value, onChange, disabled }) {
 }
 
 function StatItem({ label, value, muted }) {
-  return (
-    <div className="text-center">
-      <div className={`text-xl font-bold ${muted ? 'text-gray-400' : 'text-gray-900'}`}>{value}</div>
-      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
-    </div>
-  )
+  return <StatCard size="centered" label={label} value={value} muted={muted} />
 }
 
 const VERDICT_STYLES = {

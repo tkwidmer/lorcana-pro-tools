@@ -10,6 +10,7 @@ export const SUPPORTER_PATHS = new Set([
   '/tournament-lookup',
   '/library',
   '/game-scraper',
+  '/opponent-directory',
 ])
 
 export function isSupporterPath(path) {

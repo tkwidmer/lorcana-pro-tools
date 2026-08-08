@@ -16,6 +16,7 @@ import { GameScraperPage } from './pages/GameScraperPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { ScoutedGamePage } from './pages/ScoutedGamePage'
 import { PlayerProfilePage } from './pages/PlayerProfilePage'
+import { OpponentDirectoryPage } from './pages/OpponentDirectoryPage'
 import { DeckComparisonPage } from './pages/DeckComparisonPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { MatchHistoryPage } from './pages/MatchHistoryPage'
@@ -67,6 +68,7 @@ function RoutedContent() {
         <Route path="/library" element={<SupporterRoute><LibraryPage /></SupporterRoute>} />
         <Route path="/scouting/game/:uuid" element={<SupporterRoute><ScoutedGamePage /></SupporterRoute>} />
         <Route path="/players/:name" element={<SupporterRoute><PlayerProfilePage /></SupporterRoute>} />
+        <Route path="/opponent-directory" element={<SupporterRoute><OpponentDirectoryPage /></SupporterRoute>} />
         <Route path="/deck-comparison" element={<DeckComparisonPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/match-history" element={<SupporterRoute><MatchHistoryPage /></SupporterRoute>} />

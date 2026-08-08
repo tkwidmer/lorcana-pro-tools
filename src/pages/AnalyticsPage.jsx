@@ -11,6 +11,7 @@ import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { detectLeaks, summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
 import { fetchDecks, fetchPersonalStats, getToken, getTokens } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
+import { InkIcon as InkImg } from '../components/InkIcons'
 
 const MY_NAME_KEY = 'lorcana_my_name'
 const REPLAY_ID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
@@ -2060,14 +2061,6 @@ function ChallengeStats({ filteredGames, subtitle }) {
       </div>
     </Section>
   )
-}
-
-function InkImg({ color, size = 'w-4 h-4' }) {
-  if (!color) return null
-  const name = color.toLowerCase()
-  const VALID = ['amber', 'amethyst', 'emerald', 'ruby', 'sapphire', 'steel']
-  if (!VALID.includes(name)) return null
-  return <img src={`/ink/${name}.png`} alt={name} title={name} className={`${size} flex-shrink-0`} />
 }
 
 // --- Leak / mistake detection ---

@@ -4,6 +4,7 @@ import { getToken, getTokens, getActiveTokenId, setTokenUserId, fetchMatchHistor
 import { saveGamelog } from '../lib/gamelogHistory'
 import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { useCards } from '../hooks/useCards'
+import { InkIcons as SharedInkIcons } from '../components/InkIcons'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
 const DECK_DETAILS_KEY = 'lorcana_deck_details'
@@ -91,14 +92,12 @@ function MmrDelta({ delta }) {
 }
 
 function InkIcons({ colors }) {
-  if (!colors) return <span className="text-gray-400">—</span>
-  const names = colors.split('/').map(c => c.trim().toLowerCase()).filter(Boolean)
   return (
-    <span className="flex items-center gap-1">
-      {names.map(name => (
-        <img key={name} src={`/ink/${name}.png`} alt={name} title={name} className="w-5 h-5" />
-      ))}
-    </span>
+    <SharedInkIcons
+      colors={colors}
+      size="w-5 h-5"
+      emptyFallback={<span className="text-gray-400">—</span>}
+    />
   )
 }
 

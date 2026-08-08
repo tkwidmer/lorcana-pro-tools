@@ -2,13 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getAllGamelogs } from '../lib/gamelogHistory'
 import { VALID_INKS } from '../lib/inkColors'
 import { buildDirectory } from '../lib/opponentDirectory'
-
-function InkImg({ color, size = 'w-4 h-4' }) {
-  if (!color) return null
-  const name = color.toLowerCase()
-  if (!VALID_INKS.includes(name)) return null
-  return <img src={`/ink/${name}.png`} alt={name} title={name} className={`${size} flex-shrink-0`} />
-}
+import { InkIcon as InkImg } from '../components/InkIcons'
 
 function WinRate({ wins, losses, winRate }) {
   const color = winRate >= 55 ? 'text-green-600' : winRate <= 45 ? 'text-red-500' : 'text-gray-500'

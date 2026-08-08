@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchStats } from '../lib/duelsApi'
+import { InkIcons as ColorPairIcons } from '../components/InkIcons'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -33,27 +34,6 @@ function getWinrateColor(winRate, isMirror = false) {
   if (winRate >= 45) return 'bg-red-100 border border-red-300'
   if (winRate >= 40) return 'bg-red-200 border border-red-400'
   return 'bg-red-300 border border-red-500'
-}
-
-function InkIcon({ color, size = 32 }) {
-  return (
-    <img
-      src={`/ink/${color}.png`}
-      alt={color}
-      className="inline-block"
-      style={{ width: `${size}px`, height: `${size}px` }}
-    />
-  )
-}
-
-function ColorPairIcons({ colors, size = 24 }) {
-  return (
-    <div className="inline-flex gap-1">
-      {colors.map(c => (
-        <InkIcon key={c} color={c} size={size} />
-      ))}
-    </div>
-  )
 }
 
 export function WinrateMatrixPage() {

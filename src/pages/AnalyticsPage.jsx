@@ -1864,6 +1864,8 @@ function ImpactTable({ games, order }) {
         if (c.oppForcedDiscards > 0) tags.push(`${c.oppForcedDiscards} discard`)
         if (c.extraInks > 0) tags.push(`${c.extraInks} +ink`)
         if (c.effectRemovals > 0) tags.push(`${c.effectRemovals} remove`)
+        if (c.exerts > 0) tags.push(`${c.exerts} exert`)
+        if (c.cardsRecovered > 0) tags.push(`${c.cardsRecovered} recover`)
         if (c.ch.kills > 0) tags.push(`${c.ch.kills} kills`)
         if (c.sings > 0) tags.push(`${c.sings} sings`)
         if (c.oppRestrictions > 0) tags.push(`${c.oppRestrictions} lock`)

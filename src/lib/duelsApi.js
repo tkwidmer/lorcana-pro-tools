@@ -1,88 +1,234 @@
-const OLD_TOKEN_KEY = 'duels_api_token'
-const TOKENS_KEY = 'duels_api_tokens'
-const ACTIVE_ID_KEY = 'duels_api_active_token_id'
+import { supabase } from './supabaseClient'
 
-function getRawTokens() {
+// duels.ink API tokens are stored server-side in Supabase (api/duels-tokens.ts
+// + supabase/migrations/004_duels_api_tokens.sql, 005_duels_api_tokens_crypto_functions.sql),
+// encrypted at rest. Every duels.ink-dependent feature already requires being
+// logged in (SupporterRoute), so this module keeps an in-memory cache backed
+// by that API rather than localStorage — initTokenSync(userId) must be called
+// (from AuthProvider) whenever the auth user changes, and one-time migrates
+// any pre-existing localStorage tokens up on first sync, then clears them.
+
+const LEGACY_OLD_TOKEN_KEY = 'duels_api_token'
+const LEGACY_TOKENS_KEY = 'duels_api_tokens'
+const LEGACY_ACTIVE_ID_KEY = 'duels_api_active_token_id'
+
+let cachedTokens = [] // [{ id, label, token, username, userId, isActive }]
+let currentUserId = null
+let readyPromise = Promise.resolve()
+
+function readLegacyLocalTokens() {
   try {
-    return JSON.parse(localStorage.getItem(TOKENS_KEY) ?? '[]')
+    const old = localStorage.getItem(LEGACY_OLD_TOKEN_KEY)
+    let tokens = JSON.parse(localStorage.getItem(LEGACY_TOKENS_KEY) ?? '[]')
+    if (old && tokens.length === 0) {
+      tokens = [{ id: String(Date.now()), label: 'My Account', token: old.trim() }]
+    }
+    const activeId = localStorage.getItem(LEGACY_ACTIVE_ID_KEY) ?? null
+    return { tokens, activeId }
   } catch {
-    return []
+    return { tokens: [], activeId: null }
   }
 }
 
-// Migrate single-token storage to multi-token on first access
-function migrate() {
-  const old = localStorage.getItem(OLD_TOKEN_KEY)
-  if (!old) return
-  if (getRawTokens().length === 0) {
-    const id = String(Date.now())
-    localStorage.setItem(TOKENS_KEY, JSON.stringify([{ id, label: 'My Account', token: old.trim() }]))
-    localStorage.setItem(ACTIVE_ID_KEY, id)
+function clearLegacyLocalTokens() {
+  localStorage.removeItem(LEGACY_OLD_TOKEN_KEY)
+  localStorage.removeItem(LEGACY_TOKENS_KEY)
+  localStorage.removeItem(LEGACY_ACTIVE_ID_KEY)
+}
+
+function normalizeRemote(rows) {
+  return (rows ?? []).map(r => ({
+    id: r.id,
+    label: r.label ?? 'Account',
+    token: r.token,
+    username: r.username ?? '',
+    userId: r.duels_user_id ?? undefined,
+    isActive: r.is_active,
+  }))
+}
+
+async function authHeaders() {
+  const { data } = await supabase.auth.getSession()
+  const accessToken = data.session?.access_token
+  if (!accessToken) throw new Error('Not signed in')
+  return { Authorization: `Bearer ${accessToken}` }
+}
+
+async function apiFetch(query, opts = {}) {
+  const headers = { ...(await authHeaders()), ...(opts.headers ?? {}) }
+  const res = await fetch(`/api/duels-tokens${query}`, { ...opts, headers })
+  if (!res.ok) throw new Error(`Token sync failed (${res.status})`)
+  return res.json()
+}
+
+async function migrateLegacyTokens() {
+  const { tokens: legacy, activeId } = readLegacyLocalTokens()
+  if (legacy.length === 0) {
+    clearLegacyLocalTokens()
+    return
   }
-  localStorage.removeItem(OLD_TOKEN_KEY)
+  for (const t of legacy) {
+    await apiFetch('', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: t.id, label: t.label, token: t.token, username: t.username, duelsUserId: t.userId }),
+    })
+  }
+  if (activeId && legacy.some(t => t.id === activeId)) {
+    await apiFetch(`?id=${encodeURIComponent(activeId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: true }),
+    })
+  }
+  clearLegacyLocalTokens()
+}
+
+// Call whenever the authenticated user changes (from AuthProvider). Loads
+// this user's tokens from Supabase into the in-memory cache, migrating any
+// pre-existing localStorage tokens up (once) if the account has none yet.
+export function initTokenSync(userId) {
+  currentUserId = userId
+
+  readyPromise = (async () => {
+    if (!userId) {
+      cachedTokens = []
+      return
+    }
+    try {
+      let { tokens: remote } = await apiFetch('', { method: 'GET' })
+      if (!remote || remote.length === 0) {
+        await migrateLegacyTokens()
+        ;({ tokens: remote } = await apiFetch('', { method: 'GET' }))
+      } else {
+        clearLegacyLocalTokens()
+      }
+      cachedTokens = normalizeRemote(remote)
+    } catch (err) {
+      console.error('Failed to load duels.ink tokens:', err)
+      cachedTokens = []
+    }
+  })()
+
+  return readyPromise
+}
+
+// Resolves once the current initTokenSync() call has finished loading.
+export function waitForTokenSync() {
+  return readyPromise
 }
 
 export function getTokens() {
-  migrate()
-  return getRawTokens()
+  return cachedTokens
 }
 
 export function getActiveTokenId() {
-  return localStorage.getItem(ACTIVE_ID_KEY) ?? null
+  return cachedTokens.find(t => t.isActive)?.id ?? null
 }
 
 export function getToken() {
-  const tokens = getTokens()
-  if (tokens.length === 0) return ''
-  const activeId = getActiveTokenId()
-  const active = tokens.find(t => t.id === activeId) ?? tokens[0]
+  if (cachedTokens.length === 0) return ''
+  const active = cachedTokens.find(t => t.isActive) ?? cachedTokens[0]
   return active?.token ?? ''
 }
 
-export function addToken(label, token) {
-  migrate()
-  const tokens = getRawTokens()
+export async function addToken(label, token) {
+  if (!currentUserId) throw new Error('Not signed in')
   const id = String(Date.now())
-  tokens.push({ id, label: label.trim() || 'Account', token: token.trim() })
-  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
-  // Auto-activate if this is the first token
-  if (tokens.length === 1) localStorage.setItem(ACTIVE_ID_KEY, id)
+  const trimmedLabel = label.trim() || 'Account'
+  const trimmedToken = token.trim()
+  const isFirst = cachedTokens.length === 0
+  const prev = cachedTokens
+  cachedTokens = [...prev, { id, label: trimmedLabel, token: trimmedToken, username: '', isActive: isFirst }]
+  try {
+    await apiFetch('', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, label: trimmedLabel, token: trimmedToken }),
+    })
+  } catch (err) {
+    cachedTokens = prev
+    throw err
+  }
   return id
 }
 
-export function removeToken(id) {
-  const tokens = getRawTokens().filter(t => t.id !== id)
-  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
-  if (getActiveTokenId() === id) {
-    if (tokens.length > 0) localStorage.setItem(ACTIVE_ID_KEY, tokens[0].id)
-    else localStorage.removeItem(ACTIVE_ID_KEY)
+export async function removeToken(id) {
+  const prev = cachedTokens
+  const wasActive = prev.find(t => t.id === id)?.isActive
+  let next = prev.filter(t => t.id !== id)
+  if (wasActive && next.length > 0) next = next.map((t, i) => ({ ...t, isActive: i === 0 }))
+  cachedTokens = next
+  try {
+    await apiFetch(`?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+  } catch (err) {
+    cachedTokens = prev
+    throw err
   }
 }
 
-export function setActiveToken(id) {
-  localStorage.setItem(ACTIVE_ID_KEY, id)
+export async function setActiveToken(id) {
+  const prev = cachedTokens
+  cachedTokens = prev.map(t => ({ ...t, isActive: t.id === id }))
+  try {
+    await apiFetch(`?id=${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: true }),
+    })
+  } catch (err) {
+    cachedTokens = prev
+    throw err
+  }
 }
 
-export function updateTokenLabel(id, label) {
-  const tokens = getRawTokens().map(t =>
-    t.id === id ? { ...t, label: label.trim() || 'Account' } : t
-  )
-  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
+export async function updateTokenLabel(id, label) {
+  const prev = cachedTokens
+  const trimmed = label.trim() || 'Account'
+  cachedTokens = prev.map(t => (t.id === id ? { ...t, label: trimmed } : t))
+  try {
+    await apiFetch(`?id=${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: trimmed }),
+    })
+  } catch (err) {
+    cachedTokens = prev
+    throw err
+  }
 }
 
-export function updateTokenUsername(id, username) {
-  const tokens = getRawTokens().map(t =>
-    t.id === id ? { ...t, username: username.trim() } : t
-  )
-  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
+export async function updateTokenUsername(id, username) {
+  const prev = cachedTokens
+  const trimmed = username.trim()
+  cachedTokens = prev.map(t => (t.id === id ? { ...t, username: trimmed } : t))
+  try {
+    await apiFetch(`?id=${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: trimmed }),
+    })
+  } catch (err) {
+    cachedTokens = prev
+    throw err
+  }
 }
 
-export function setTokenUserId(id, userId) {
-  const tokens = getRawTokens()
-  const token = tokens.find(t => t.id === id)
+export async function setTokenUserId(id, userId) {
+  const prev = cachedTokens
+  const token = prev.find(t => t.id === id)
   if (!token || token.userId === userId) return
-  const updated = tokens.map(t => t.id === id ? { ...t, userId } : t)
-  localStorage.setItem(TOKENS_KEY, JSON.stringify(updated))
+  cachedTokens = prev.map(t => (t.id === id ? { ...t, userId } : t))
+  try {
+    await apiFetch(`?id=${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duelsUserId: userId }),
+    })
+  } catch {
+    cachedTokens = prev
+    // Best-effort — losing an attempted userId attribution isn't worth surfacing an error.
+  }
 }
 
 export async function testToken(token) {

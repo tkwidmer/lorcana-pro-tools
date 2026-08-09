@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { initTokenSync } from '../lib/duelsApi'
 import { AuthContext } from './authContext'
 
 // Single source of truth for auth + supporter state. Runs the Supabase session
@@ -51,6 +52,12 @@ export function AuthProvider({ children }) {
       subscription?.unsubscribe()
     }
   }, [])
+
+  // Sync duels.ink API tokens (Supabase-backed) whenever the user changes.
+  useEffect(() => {
+    if (authLoading) return
+    initTokenSync(user?.id ?? null)
+  }, [user, authLoading])
 
   // Ensure a profile row exists and load the supporter tier (once per user).
   useEffect(() => {

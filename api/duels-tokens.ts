@@ -39,7 +39,12 @@ function param(req: VercelRequest, name: string): string | undefined {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const userId = await requireUser(req, res)
+  let userId: string | null
+  try {
+    userId = await requireUser(req, res)
+  } catch {
+    return res.status(500).json({ error: 'Token sync is temporarily unavailable' })
+  }
   if (!userId) return
 
   const supabase = getSupabaseServiceClient()

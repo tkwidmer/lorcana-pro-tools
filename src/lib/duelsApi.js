@@ -61,53 +61,89 @@ async function apiFetch(query, opts = {}) {
   return res.json()
 }
 
-async function migrateLegacyTokens() {
+// Pushes any local-only tokens (matched against `existingRemote` by token
+// *value*, not id — ids are per-browser generated and never match across
+// devices/sessions) up to Supabase. Must not assume "remote already has
+// some tokens" means "nothing local is left to migrate" — the remote set
+// could easily be non-empty from another device/session while this browser
+// still has its own not-yet-synced tokens. Only clears localStorage once
+// every local token is confirmed present remotely (by value).
+async function migrateLegacyTokens(existingRemote) {
   const { tokens: legacy, activeId } = readLegacyLocalTokens()
   if (legacy.length === 0) {
     clearLegacyLocalTokens()
-    return
+    return false
   }
-  for (const t of legacy) {
+
+  const existingValues = new Set((existingRemote ?? []).map(t => t.token))
+  const toPush = legacy.filter(t => !existingValues.has(t.token))
+
+  if (toPush.length === 0) {
+    clearLegacyLocalTokens()
+    return false
+  }
+
+  for (const t of toPush) {
     await apiFetch('', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: t.id, label: t.label, token: t.token, username: t.username, duelsUserId: t.userId }),
     })
   }
-  if (activeId && legacy.some(t => t.id === activeId)) {
-    await apiFetch(`?id=${encodeURIComponent(activeId)}`, {
+
+  // Only claim the active slot from local state if nothing is already
+  // active remotely — a real remote session's choice should win.
+  const hasRemoteActive = (existingRemote ?? []).some(t => t.is_active)
+  if (!hasRemoteActive) {
+    const activeLocal = toPush.find(t => t.id === activeId) ?? toPush[0]
+    await apiFetch(`?id=${encodeURIComponent(activeLocal.id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isActive: true }),
     })
   }
+
   clearLegacyLocalTokens()
+  return true
+}
+
+const listeners = new Set()
+function notify() {
+  for (const fn of listeners) fn()
+}
+
+// Subscribe to be notified whenever the in-memory token cache changes
+// (initial sync completing, or any mutator succeeding). Returns an
+// unsubscribe function. Needed because initTokenSync() runs asynchronously
+// and may finish well after a component that already called
+// waitForTokenSync() once at mount has moved on.
+export function subscribeTokens(callback) {
+  listeners.add(callback)
+  return () => listeners.delete(callback)
 }
 
 // Call whenever the authenticated user changes (from AuthProvider). Loads
 // this user's tokens from Supabase into the in-memory cache, migrating any
-// pre-existing localStorage tokens up (once) if the account has none yet.
+// pre-existing localStorage tokens up.
 export function initTokenSync(userId) {
   currentUserId = userId
 
   readyPromise = (async () => {
     if (!userId) {
       cachedTokens = []
+      notify()
       return
     }
     try {
-      let { tokens: remote } = await apiFetch('', { method: 'GET' })
-      if (!remote || remote.length === 0) {
-        await migrateLegacyTokens()
-        ;({ tokens: remote } = await apiFetch('', { method: 'GET' }))
-      } else {
-        clearLegacyLocalTokens()
-      }
-      cachedTokens = normalizeRemote(remote)
+      const { tokens: remote } = await apiFetch('', { method: 'GET' })
+      const migrated = await migrateLegacyTokens(remote)
+      const finalTokens = migrated ? (await apiFetch('', { method: 'GET' })).tokens : remote
+      cachedTokens = normalizeRemote(finalTokens)
     } catch (err) {
       console.error('Failed to load duels.ink tokens:', err)
       cachedTokens = []
     }
+    notify()
   })()
 
   return readyPromise
@@ -150,6 +186,7 @@ export async function addToken(label, token) {
     cachedTokens = prev
     throw err
   }
+  notify()
   return id
 }
 
@@ -165,6 +202,7 @@ export async function removeToken(id) {
     cachedTokens = prev
     throw err
   }
+  notify()
 }
 
 export async function setActiveToken(id) {
@@ -180,6 +218,7 @@ export async function setActiveToken(id) {
     cachedTokens = prev
     throw err
   }
+  notify()
 }
 
 export async function updateTokenLabel(id, label) {
@@ -196,6 +235,7 @@ export async function updateTokenLabel(id, label) {
     cachedTokens = prev
     throw err
   }
+  notify()
 }
 
 export async function updateTokenUsername(id, username) {
@@ -212,6 +252,7 @@ export async function updateTokenUsername(id, username) {
     cachedTokens = prev
     throw err
   }
+  notify()
 }
 
 export async function setTokenUserId(id, userId) {
@@ -229,6 +270,7 @@ export async function setTokenUserId(id, userId) {
     cachedTokens = prev
     // Best-effort — losing an attempted userId attribution isn't worth surfacing an error.
   }
+  notify()
 }
 
 export async function testToken(token) {

@@ -46,8 +46,9 @@ Optional: `VITE_DISCORD_CLIENT_ID` — the Application ID of the Discord bot (no
 Server-side only (set in Vercel, not `.env`):
 - `DISCORD_PUBLIC_KEY` — used by `/api/discord-interactions` to verify Discord's request signature.
 - `DISCORD_BOT_TOKEN` — used by `/api/discord-tournament-tick` to post proactive channel messages via the Discord Bot API (different from `DISCORD_PUBLIC_KEY`; this one's a real secret).
-- `SUPABASE_SERVICE_ROLE_KEY` — used by `api/_lib/discordSupabase.ts` for server-side access to the `discord_favorite_players` table, bypassing RLS.
+- `SUPABASE_SERVICE_ROLE_KEY` — used by `api/_lib/discordSupabase.ts` for server-side access to the `discord_favorite_players` and `duels_api_tokens` tables, bypassing RLS.
 - `CRON_SECRET` — shared secret checked by `/api/discord-tournament-tick`; must match the same-named secret in the GitHub repo (Settings → Secrets and variables → Actions) used by `.github/workflows/tournament-tracker-tick.yml`.
+- `DUELS_TOKEN_ENCRYPTION_KEY` — symmetric passphrase used by `/api/duels-tokens` to encrypt/decrypt saved duels.ink API tokens at rest (via Postgres `pgcrypto`, see `supabase/migrations/005_duels_api_tokens_crypto_functions.sql`). Never exposed to the client.
 
 See `discord-bot/README.md` for full setup.
 
@@ -192,16 +193,16 @@ The Discord bot (message command "Decode Deck QR" + `/tournament`, `/favorite`, 
 | IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
 | IndexedDB `lorcana_pro_tools` v3 | `coconutDecks` store (key: `id`) | Saved [Format Coconut] decks from `CoconutDeckBuilderPage` |
 | IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `AnalyticsPage` |
-| localStorage `duels_api_tokens` | — | Array of duels.ink Bearer tokens (multi-account); `duels_api_active_token_id` selects the active one. Legacy single-token `duels_api_token` is auto-migrated on first access (see `duelsApi.js`) |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
 | localStorage (various) | — | Form state for `DrawOddsPage`, filter state, lore tracker (`lorcana_lore_tracker`), etc. |
 | `chrome.storage.local` | `lorcana_active_games` | Active game states captured by the Chrome extension (2-hour TTL) |
 | Supabase `auth` | session | Google OAuth user session |
 | Supabase `profiles` table | row per user | Supporter tier metadata only (see Access Control); no game data stored server-side |
+| Supabase `duels_api_tokens` table | row per token | Logged-in users' duels.ink API tokens, encrypted at rest (pgcrypto) — replaces the old browser-only `localStorage` tokens so they carry over across devices. Managed via `/api/duels-tokens`; see `src/lib/duelsApi.js` |
 
 ### External APIs
 
-**duels.ink** — Authenticated via Bearer token. Tokens are stored in localStorage (`duels_api_tokens`, with `duels_api_active_token_id` choosing the active account) and managed on the Settings page. The active token is passed through the Vercel proxy routes. No server-side validation.
+**duels.ink** — Authenticated via Bearer token. Tokens are stored in the Supabase `duels_api_tokens` table (encrypted at rest), one row per account, with an `is_active` flag choosing the active one; managed on the Settings page via `/api/duels-tokens` (see `src/lib/duelsApi.js`). The active token is passed through the Vercel proxy routes. No server-side validation of the duels.ink API itself.
 
 **LorcanaJSON** — Card data from `https://lorcanajson.org/files/current/en/allCards.json`. Cached in IndexedDB after first load. In dev, `vite.config.js` proxies `/api/cards`; in production, `vercel.json` rewrites it.
 

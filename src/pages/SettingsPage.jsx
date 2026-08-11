@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   getTokens,
   getActiveTokenId,
@@ -8,59 +8,86 @@ import {
   updateTokenLabel,
   updateTokenUsername,
   testToken,
+  waitForTokenSync,
 } from '../lib/duelsApi'
 
 function useTokenStore() {
   const [tokens, setTokens] = useState(() => getTokens())
   const [activeId, setActiveId] = useState(() => getActiveTokenId())
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    waitForTokenSync().then(() => {
+      if (cancelled) return
+      setTokens(getTokens())
+      setActiveId(getActiveTokenId())
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [])
 
   function refresh() {
     setTokens(getTokens())
     setActiveId(getActiveTokenId())
   }
 
-  return { tokens, activeId, refresh }
+  return { tokens, activeId, loading, refresh }
 }
 
 export function SettingsPage() {
-  const { tokens, activeId, refresh } = useTokenStore()
+  const { tokens, activeId, loading, refresh } = useTokenStore()
 
   // Per-token UI state
   const [showToken, setShowToken] = useState({}) // id → bool
   const [editLabel, setEditLabel] = useState({}) // id → string | undefined
   const [editUsername, setEditUsername] = useState({}) // id → string | undefined
   const [testStatus, setTestStatus] = useState({}) // id → null|'loading'|'ok'|{error}
+  const [rowError, setRowError] = useState({}) // id → string | undefined
 
   // Add-token form
   const [newLabel, setNewLabel] = useState('')
   const [newTokenValue, setNewTokenValue] = useState('')
   const [showNew, setShowNew] = useState(false)
-  const [addStatus, setAddStatus] = useState(null) // null | 'added'
+  const [addStatus, setAddStatus] = useState(null) // null | 'added' | { error }
 
   function toggleShow(id) {
     setShowToken(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  function handleActivate(id) {
-    setActiveToken(id)
-    refresh()
+  async function handleActivate(id) {
+    try {
+      await setActiveToken(id)
+      refresh()
+    } catch (err) {
+      setRowError(prev => ({ ...prev, [id]: err.message }))
+    }
   }
 
-  function handleRemove(id) {
-    removeToken(id)
-    refresh()
-    setTestStatus(prev => { const n = { ...prev }; delete n[id]; return n })
-    setShowToken(prev => { const n = { ...prev }; delete n[id]; return n })
-    setEditLabel(prev => { const n = { ...prev }; delete n[id]; return n })
-    setEditUsername(prev => { const n = { ...prev }; delete n[id]; return n })
+  async function handleRemove(id) {
+    try {
+      await removeToken(id)
+      refresh()
+      setTestStatus(prev => { const n = { ...prev }; delete n[id]; return n })
+      setShowToken(prev => { const n = { ...prev }; delete n[id]; return n })
+      setEditLabel(prev => { const n = { ...prev }; delete n[id]; return n })
+      setEditUsername(prev => { const n = { ...prev }; delete n[id]; return n })
+      setRowError(prev => { const n = { ...prev }; delete n[id]; return n })
+    } catch (err) {
+      setRowError(prev => ({ ...prev, [id]: err.message }))
+    }
   }
 
-  function handleLabelBlur(id) {
+  async function handleLabelBlur(id) {
     const label = editLabel[id]
     if (label !== undefined) {
-      updateTokenLabel(id, label)
+      try {
+        await updateTokenLabel(id, label)
+        refresh()
+      } catch (err) {
+        setRowError(prev => ({ ...prev, [id]: err.message }))
+      }
       setEditLabel(prev => { const n = { ...prev }; delete n[id]; return n })
-      refresh()
     }
   }
 
@@ -71,12 +98,16 @@ export function SettingsPage() {
     }
   }
 
-  function handleUsernameBlur(id) {
+  async function handleUsernameBlur(id) {
     const username = editUsername[id]
     if (username !== undefined) {
-      updateTokenUsername(id, username)
+      try {
+        await updateTokenUsername(id, username)
+        refresh()
+      } catch (err) {
+        setRowError(prev => ({ ...prev, [id]: err.message }))
+      }
       setEditUsername(prev => { const n = { ...prev }; delete n[id]; return n })
-      refresh()
     }
   }
 
@@ -97,15 +128,19 @@ export function SettingsPage() {
     }
   }
 
-  function handleAdd() {
+  async function handleAdd() {
     if (!newTokenValue.trim()) return
-    addToken(newLabel, newTokenValue)
-    setNewLabel('')
-    setNewTokenValue('')
-    setShowNew(false)
-    setAddStatus('added')
-    setTimeout(() => setAddStatus(null), 2000)
-    refresh()
+    try {
+      await addToken(newLabel, newTokenValue)
+      setNewLabel('')
+      setNewTokenValue('')
+      setShowNew(false)
+      setAddStatus('added')
+      setTimeout(() => setAddStatus(null), 2000)
+      refresh()
+    } catch (err) {
+      setAddStatus({ error: err.message })
+    }
   }
 
   return (
@@ -127,10 +162,14 @@ export function SettingsPage() {
           >
             duels.ink/settings
           </a>
-          . The <span className="font-medium text-gray-700">active</span> token is used when loading match history. Tokens are stored only in your browser.
+          . The <span className="font-medium text-gray-700">active</span> token is used when loading match history. Tokens are saved to your account, encrypted, and available on any device you sign into.
         </p>
 
-        {tokens.length > 0 && (
+        {loading && (
+          <p className="text-sm text-gray-400 mb-5">Loading your tokens…</p>
+        )}
+
+        {!loading && tokens.length > 0 && (
           <div className="mb-6 space-y-3">
             {tokens.map(t => {
               const isActive = t.id === activeId || (activeId === null && tokens[0].id === t.id)
@@ -138,6 +177,7 @@ export function SettingsPage() {
               const usernameValue = editUsername[t.id] !== undefined ? editUsername[t.id] : (t.username ?? '')
               const status = testStatus[t.id]
               const visible = showToken[t.id] ?? false
+              const error = rowError[t.id]
 
               return (
                 <div
@@ -243,6 +283,10 @@ export function SettingsPage() {
                       </span>
                     )}
                   </div>
+
+                  {error && (
+                    <p className="text-xs text-red-600 mt-2">Failed to save: {error}</p>
+                  )}
                 </div>
               )
             })}
@@ -289,6 +333,9 @@ export function SettingsPage() {
             </button>
             {addStatus === 'added' && (
               <span className="text-sm text-green-600 font-medium">Added</span>
+            )}
+            {addStatus && addStatus !== 'added' && (
+              <span className="text-sm text-red-600 font-medium">Failed to save: {addStatus.error}</span>
             )}
           </div>
         </div>

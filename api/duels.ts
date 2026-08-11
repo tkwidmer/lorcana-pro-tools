@@ -87,23 +87,25 @@ async function handleGamelog(req: VercelRequest, res: VercelResponse) {
   const auth = requireBearer(req, res)
   if (!auth) return
   const id = param(req, 'id')
-  if (!id) return res.status(400).json({ error: 'Missing game id' })
+  if (!id) { res.status(400).json({ error: 'Missing game id' }); return }
   await proxyBinary(res, `https://duels.ink/g/${id}`, auth, 'gamelog')
 }
 
 async function handleGamelogBulk(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return }
   const auth = requireBearer(req, res)
   if (!auth) return
 
   const MAX_IDS = 500
   const { ids } = req.body ?? {}
   if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ error: 'ids must be a non-empty array' })
+    res.status(400).json({ error: 'ids must be a non-empty array' })
+    return
   }
-  if (ids.length > MAX_IDS) return res.status(400).json({ error: `Too many ids (max ${MAX_IDS})` })
+  if (ids.length > MAX_IDS) { res.status(400).json({ error: `Too many ids (max ${MAX_IDS})` }); return }
   if (!ids.every((id: unknown) => typeof id === 'string')) {
-    return res.status(400).json({ error: 'ids must all be strings' })
+    res.status(400).json({ error: 'ids must all be strings' })
+    return
   }
 
   try {
@@ -113,7 +115,8 @@ async function handleGamelogBulk(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({ ids }),
     })
     if (!upstreamRes.ok) {
-      return res.status(upstreamRes.status).json({ error: `duels.ink returned ${upstreamRes.status}` })
+      res.status(upstreamRes.status).json({ error: `duels.ink returned ${upstreamRes.status}` })
+      return
     }
     res.status(200).json(await upstreamRes.json())
   } catch (e) {
@@ -125,7 +128,7 @@ async function handleReplay(req: VercelRequest, res: VercelResponse) {
   const auth = requireBearer(req, res)
   if (!auth) return
   const id = param(req, 'id')
-  if (!id) return res.status(400).json({ error: 'Missing replay id' })
+  if (!id) { res.status(400).json({ error: 'Missing replay id' }); return }
   await proxyBinary(res, `https://duels.ink/r/${id}`, auth, 'replay')
 }
 
@@ -138,7 +141,7 @@ async function handleDeck(req: VercelRequest, res: VercelResponse) {
 
   let url: string
   if (personalStats) {
-    if (!deckId) return res.status(400).json({ error: 'Missing id (deckId) parameter' })
+    if (!deckId) { res.status(400).json({ error: 'Missing id (deckId) parameter' }); return }
     const params = new URLSearchParams({ deckId })
     const source = param(req, 'source')
     if (source) params.set('source', source)
@@ -155,8 +158,8 @@ async function handleDeck(req: VercelRequest, res: VercelResponse) {
 async function handleStats(req: VercelRequest, res: VercelResponse) {
   const queue = param(req, 'queue')
   const period = param(req, 'period')
-  if (!queue) return res.status(400).json({ error: 'Missing queue parameter' })
-  if (!period) return res.status(400).json({ error: 'Missing period parameter' })
+  if (!queue) { res.status(400).json({ error: 'Missing queue parameter' }); return }
+  if (!period) { res.status(400).json({ error: 'Missing period parameter' }); return }
 
   let url = `https://duels.ink/api/stats/meta?queue=${encodeURIComponent(queue)}&period=${encodeURIComponent(period)}&season=current`
   const ranks = param(req, 'ranks')
@@ -165,7 +168,8 @@ async function handleStats(req: VercelRequest, res: VercelResponse) {
   try {
     const upstreamRes = await fetch(url)
     if (!upstreamRes.ok) {
-      return res.status(upstreamRes.status).json({ error: `duels.ink returned ${upstreamRes.status}` })
+      res.status(upstreamRes.status).json({ error: `duels.ink returned ${upstreamRes.status}` })
+      return
     }
     res.status(200).setHeader('Cache-Control', 'public, max-age=3600').json(await upstreamRes.json())
   } catch (e) {

@@ -9,6 +9,7 @@ import {
   updateTokenUsername,
   testToken,
   waitForTokenSync,
+  subscribeTokens,
 } from '../lib/duelsApi'
 
 function useTokenStore() {
@@ -18,13 +19,20 @@ function useTokenStore() {
 
   useEffect(() => {
     let cancelled = false
-    waitForTokenSync().then(() => {
+    function sync() {
       if (cancelled) return
       setTokens(getTokens())
       setActiveId(getActiveTokenId())
       setLoading(false)
-    })
-    return () => { cancelled = true }
+    }
+    // Covers the sync already having finished (or being in flight) by the
+    // time this mounts, AND any real sync that only completes afterward —
+    // e.g. on a hard refresh, AuthProvider's initTokenSync() kicks off
+    // asynchronously after its own auth check resolves, which can finish
+    // well after this component's initial mount.
+    waitForTokenSync().then(sync)
+    const unsubscribe = subscribeTokens(sync)
+    return () => { cancelled = true; unsubscribe() }
   }, [])
 
   function refresh() {

@@ -42,7 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let userId: string | null
   try {
     userId = await requireUser(req, res)
-  } catch {
+  } catch (err) {
+    console.error('duels-tokens auth check failed:', err instanceof Error ? err.message : err)
     return res.status(500).json({ error: 'Token sync is temporarily unavailable' })
   }
   if (!userId) return
@@ -146,9 +147,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.setHeader('Allow', 'GET, POST, PATCH, DELETE')
     return res.status(405).json({ error: 'Method not allowed' })
-  } catch {
-    // Never include the underlying error detail — it could echo a token value
-    // or leak row existence.
+  } catch (err) {
+    // Log server-side only for diagnosis — never include the underlying
+    // error detail in the response, since it could leak row existence.
+    console.error('duels-tokens request failed:', err instanceof Error ? err.message : err)
     return res.status(500).json({ error: 'Failed to sync tokens' })
   }
 }

@@ -27,6 +27,10 @@ async function requireUser(req: VercelRequest, res: VercelResponse): Promise<str
   const supabase = getSupabaseServiceClient()
   const { data, error } = await supabase.auth.getUser(jwt)
   if (error || !data.user) {
+    // Log server-side only — never the jwt itself — so a bad
+    // SUPABASE_SERVICE_ROLE_KEY (wrong project, malformed value, etc.) is
+    // distinguishable from a genuinely expired/invalid user session.
+    console.error('duels-tokens getUser rejected token:', error?.message ?? 'no user returned')
     res.status(401).json({ error: 'Invalid session' })
     return null
   }

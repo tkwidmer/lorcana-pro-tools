@@ -43,12 +43,18 @@ Vercel also accepts `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 Optional: `VITE_DISCORD_CLIENT_ID` — the Application ID of the Discord bot (not a secret). When set, `HomePage` shows an "Add to Discord" card under a Community section linking to the bot's OAuth invite URL; when unset, that card is omitted.
 
+Optional: `VITE_PATREON_CLIENT_ID` — the Patreon OAuth client ID (not a secret). When set, `SettingsPage` shows a "Connect Patreon" card; when unset, `connectPatreon()` throws and the card's connect button surfaces an error instead of redirecting.
+
 Server-side only (set in Vercel, not `.env`):
 - `DISCORD_PUBLIC_KEY` — used by `/api/discord-interactions` to verify Discord's request signature.
 - `DISCORD_BOT_TOKEN` — used by `/api/discord-tournament-tick` to post proactive channel messages via the Discord Bot API (different from `DISCORD_PUBLIC_KEY`; this one's a real secret).
-- `SUPABASE_SERVICE_ROLE_KEY` — used by `api/_lib/discordSupabase.ts` for server-side access to the `discord_favorite_players` and `duels_api_tokens` tables, bypassing RLS.
-- `CRON_SECRET` — shared secret checked by `/api/discord-tournament-tick`; must match the same-named secret in the GitHub repo (Settings → Secrets and variables → Actions) used by `.github/workflows/tournament-tracker-tick.yml`.
+- `SUPABASE_SERVICE_ROLE_KEY` — used by `api/_lib/discordSupabase.ts` for server-side access to the `discord_favorite_players`, `duels_api_tokens`, and `patreon_links` tables, bypassing RLS.
+- `CRON_SECRET` — shared secret checked by `/api/discord-tournament-tick` and `/api/patreon-reconcile-tick`; must match the same-named secret in the GitHub repo (Settings → Secrets and variables → Actions) used by `.github/workflows/tournament-tracker-tick.yml` and `.github/workflows/patreon-reconcile-tick.yml`.
 - `DUELS_TOKEN_ENCRYPTION_KEY` — symmetric passphrase used by `/api/duels-tokens` to encrypt/decrypt saved duels.ink API tokens at rest (via Postgres `pgcrypto`, see `supabase/migrations/005_duels_api_tokens_crypto_functions.sql`). Never exposed to the client.
+- `PATREON_CLIENT_ID` / `PATREON_CLIENT_SECRET` — Patreon OAuth app credentials, used by `/api/patreon-callback` and `/api/patreon-reconcile-tick` to exchange/refresh tokens. The client ID is not secret (also exposed client-side as `VITE_PATREON_CLIENT_ID`); the client secret is a real secret.
+- `PATREON_WEBHOOK_SECRET` — per-webhook HMAC-MD5 secret used by `/api/patreon-webhook` to verify `X-Patreon-Signature`, generated when registering the webhook in the Patreon creator dashboard.
+- `PATREON_CAMPAIGN_ID` — this app's Patreon campaign ID, used to filter a patron's memberships (across possibly multiple campaigns they back) down to the one that matters here.
+- `PATREON_TOKEN_ENCRYPTION_KEY` — symmetric passphrase used by `api/_lib/patreonSupabase.ts` to encrypt/decrypt saved Patreon OAuth tokens at rest (via `pgcrypto`, see `supabase/migrations/007_patreon_links_crypto_functions.sql`). Never exposed to the client.
 
 See `discord-bot/README.md` for full setup.
 
@@ -164,6 +170,7 @@ In `src/lib/`:
 
 - Supabase `profiles` table (`supabase/migrations/001_profiles.sql`, `002_admin.sql`) holds `supporter_tier` (`supporter` | `admin`), `supporter_source`, `supporter_since`. RLS lets users read their own row; only admins (via the `is_admin()` security-definer function, with `tkwidmer@gmail.com` as a JWT-email bootstrap fallback) may update tiers. A trigger auto-creates a profile row on signup.
 - `useSupporter` reads the tier; `SupporterRoute` gates the routes in `SUPPORTER_PATHS`; `AdminPage` is the UI for granting/revoking access. Gating is client-side UX only — the `/api/*` proxies do **not** check supporter status.
+- `supporter_source = 'patreon'` rows are granted/revoked automatically by the Patreon integration (see below) rather than through `AdminPage`; manual/admin grants (`supporter_source = 'manual'`) are never overwritten by that automation.
 
 ### API Routes
 
@@ -185,6 +192,19 @@ The Discord bot (message command "Decode Deck QR" + `/tournament`, `/favorite`, 
 
 `/favorite url:<event> player:<name>` tracks a player in the channel it's run from; a scheduled tick (`api/discord-tournament-tick.ts`, triggered by GitHub Actions every 30 minutes — Vercel Hobby's Cron Jobs only run once/day, so that couldn't drive this) checks all active favorites, groups them by event to minimize API calls, and posts an update embed only when a tracked player's rank/record actually changed since the last check. Favorites are stored in the `discord_favorite_players` Supabase table (`supabase/migrations/003_discord_favorite_players.sql`) — RLS is enabled with zero policies, since this table is only ever touched server-side via `api/_lib/discordSupabase.ts` (a service-role client, bypassing RLS entirely; separate from the anon-key client the main web app uses). `/unfavorite` deactivates a tracked row; `/favorites` lists current ones in the channel. A favorite auto-deactivates once its event's current round can no longer be resolved (tournament finished).
 
+### Patreon Integration (`api/patreon-*.ts`)
+
+Backers connect their Patreon account via OAuth from a "Connect Patreon" card on `SettingsPage.jsx`; an active pledge (any amount, any tier — this app doesn't distinguish pledge levels) grants `profiles.supporter_tier = 'supporter'` with `supporter_source = 'patreon'`. The Patreon user ID ↔ Supabase user_id link (plus pledge status and encrypted OAuth tokens) lives in the `patreon_links` table (`supabase/migrations/006_patreon_links.sql`, `007_patreon_links_crypto_functions.sql`) — RLS enabled with zero policies, same service-role-only pattern as `discord_favorite_players` and `duels_api_tokens`.
+
+Three surfaces keep `supporter_tier` in sync with Patreon, all funneling through `applyPledgeStateToProfile()` in `api/_lib/patreonSupabase.ts` (the single grant/revoke chokepoint):
+- `api/patreon-callback.ts` — the OAuth redirect target. `state` carries the initiating user's Supabase access token (verified server-side via `auth.getUser()`, the same pattern `api/duels-tokens.ts` uses for its Bearer auth) since this is a plain browser redirect with no other way to identify the logged-in user.
+- `api/patreon-webhook.ts` — Patreon's webhook for `members:pledge:create/update/delete`, verified via raw-body HMAC-MD5 (`X-Patreon-Signature`) before parsing, mirroring `discord-interactions.ts`'s raw-body-first Ed25519 verification.
+- `api/patreon-reconcile-tick.ts` — a `CRON_SECRET`-gated daily safety net (`.github/workflows/patreon-reconcile-tick.yml`, same shape as the Discord tournament tick) that re-polls Patreon's identity endpoint for any link that's gone stale, in case a webhook was missed.
+
+`api/patreon-status.ts` is a small authenticated GET/DELETE endpoint so `SettingsPage` can read connection status and disconnect without needing RLS access to `patreon_links`.
+
+**Invariant:** revocation (`applyPledgeStateToProfile(userId, false)`) only ever updates rows where `supporter_source = 'patreon'` — a manually- or admin-granted supporter (via `AdminPage.jsx`) is never touched by a patron cancelling or declining a charge.
+
 ### Storage
 
 | Layer | DB / Key | Contents |
@@ -199,6 +219,7 @@ The Discord bot (message command "Decode Deck QR" + `/tournament`, `/favorite`, 
 | Supabase `auth` | session | Google OAuth user session |
 | Supabase `profiles` table | row per user | Supporter tier metadata only (see Access Control); no game data stored server-side |
 | Supabase `duels_api_tokens` table | row per token | Logged-in users' duels.ink API tokens, encrypted at rest (pgcrypto) — replaces the old browser-only `localStorage` tokens so they carry over across devices. Managed via `/api/duels-tokens`; see `src/lib/duelsApi.js` |
+| Supabase `patreon_links` table | row per user | Patreon user ID ↔ Supabase user_id, pledge status, OAuth tokens encrypted at rest (pgcrypto). Managed via `api/patreon-callback.ts`, `api/patreon-webhook.ts`, `api/patreon-status.ts`, `api/patreon-reconcile-tick.ts` |
 
 ### External APIs
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Nav } from './components/Nav'
+import { Footer } from './components/Footer'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { routeTitle, routeDescription } from './lib/routeTitle'
 import { HomePage } from './pages/HomePage'
@@ -94,8 +95,13 @@ function RoutedContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Nav />
-      <RoutedContent />
+      <div className="min-h-screen flex flex-col">
+        <Nav />
+        <div className="flex-1">
+          <RoutedContent />
+        </div>
+        <Footer />
+      </div>
     </BrowserRouter>
   )
 }

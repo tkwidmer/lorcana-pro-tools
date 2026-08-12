@@ -210,11 +210,14 @@ export function HomePage() {
         rel="noopener noreferrer"
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10 px-6 py-5 border border-gray-200 rounded-lg hover:border-gray-900 transition-colors group"
       >
-        <div>
-          <p className="text-sm font-bold text-gray-900">Join us on Substack</p>
-          <p className="text-sm text-gray-500 mt-1">
-            Strategy articles, tool updates, and Lorcana news — straight to your inbox.
-          </p>
+        <div className="flex items-center gap-3">
+          <img src="/substack-icon.svg" alt="" className="h-6 w-6 shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-gray-900">Join us on Substack</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Strategy articles, tool updates, and Lorcana news — straight to your inbox.
+            </p>
+          </div>
         </div>
         <span className="shrink-0 text-sm font-medium text-gray-900 group-hover:underline">
           Subscribe →

@@ -1,0 +1,16 @@
+name: Patreon Reconcile Tick
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Patreon reconciliation tick
+        run: |
+          curl --fail-with-body -sS -X POST \
+            "https://lorcana-pro-tools.vercel.app/api/patreon-reconcile-tick" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

@@ -11,6 +11,63 @@ import {
   waitForTokenSync,
   subscribeTokens,
 } from '../lib/duelsApi'
+import { supabase } from '../lib/supabaseClient'
+
+async function patreonFetch(method) {
+  const { data } = await supabase.auth.getSession()
+  const accessToken = data.session?.access_token
+  if (!accessToken) throw new Error('Not signed in')
+  const res = await fetch('/api/patreon-status', {
+    method,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) throw new Error(`Patreon status request failed (${res.status})`)
+  return res.json()
+}
+
+function usePatreonStatus() {
+  const [status, setStatus] = useState(null) // null while loading, else { connected, patronStatus?, lastSyncedAt? }
+  const [error, setError] = useState(null)
+
+  async function refresh() {
+    try {
+      const result = await patreonFetch('GET')
+      setStatus(result)
+      setError(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    patreonFetch('GET')
+      .then(result => { if (!cancelled) { setStatus(result); setError(null) } })
+      .catch(err => { if (!cancelled) setError(err.message) })
+    return () => { cancelled = true }
+  }, [])
+
+  return { status, error, refresh }
+}
+
+async function connectPatreon() {
+  const { data } = await supabase.auth.getSession()
+  const accessToken = data.session?.access_token
+  if (!accessToken) throw new Error('Not signed in')
+
+  const clientId = import.meta.env.VITE_PATREON_CLIENT_ID
+  if (!clientId) throw new Error('Patreon integration is not configured yet')
+
+  const redirectUri = `${window.location.origin}/api/patreon-callback`
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: 'identity identity.memberships',
+    state: accessToken,
+  })
+  window.location.href = `https://www.patreon.com/oauth2/authorize?${params.toString()}`
+}
 
 function useTokenStore() {
   const [tokens, setTokens] = useState(() => getTokens())
@@ -45,6 +102,44 @@ function useTokenStore() {
 
 export function SettingsPage() {
   const { tokens, activeId, loading, refresh } = useTokenStore()
+  const { status: patreonStatus, refresh: refreshPatreon } = usePatreonStatus()
+  const [patreonBanner, setPatreonBanner] = useState(null) // null | 'connected' | 'error'
+  const [patreonBusy, setPatreonBusy] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const result = params.get('patreon')
+    if (result === 'connected' || result === 'error') {
+      setPatreonBanner(result)
+      params.delete('patreon')
+      const newSearch = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''))
+      if (result === 'connected') refreshPatreon()
+    }
+    // Only meant to run once, reading the query param set by the OAuth
+    // redirect on mount — not meant to re-run if refreshPatreon changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleConnectPatreon() {
+    setPatreonBusy(true)
+    try {
+      await connectPatreon()
+    } catch {
+      setPatreonBanner('error')
+      setPatreonBusy(false)
+    }
+  }
+
+  async function handleDisconnectPatreon() {
+    setPatreonBusy(true)
+    try {
+      await patreonFetch('DELETE')
+      await refreshPatreon()
+    } finally {
+      setPatreonBusy(false)
+    }
+  }
 
   // Per-token UI state
   const [showToken, setShowToken] = useState({}) // id → bool
@@ -156,6 +251,56 @@ export function SettingsPage() {
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Settings</h1>
         <p className="text-gray-500 text-sm">Configure integrations and API tokens.</p>
+      </div>
+
+      <div className="border border-gray-200 rounded-lg p-6 max-w-2xl mb-6">
+        <h2 className="text-base font-bold text-gray-900 mb-1">Patreon</h2>
+        <p className="text-sm text-gray-500 mb-5">
+          Connect your Patreon account — an active pledge automatically grants Supporter access.
+        </p>
+
+        {patreonBanner === 'connected' && (
+          <p className="text-sm text-green-600 font-medium mb-4">✓ Patreon connected.</p>
+        )}
+        {patreonBanner === 'error' && (
+          <p className="text-sm text-red-600 font-medium mb-4">Something went wrong connecting Patreon. Please try again.</p>
+        )}
+
+        {patreonStatus === null && (
+          <p className="text-sm text-gray-400">Loading Patreon status…</p>
+        )}
+
+        {patreonStatus?.connected === false && (
+          <button
+            type="button"
+            onClick={handleConnectPatreon}
+            disabled={patreonBusy}
+            className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {patreonBusy ? 'Connecting…' : 'Connect Patreon'}
+          </button>
+        )}
+
+        {patreonStatus?.connected === true && (
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Connected</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Status: {patreonStatus.patronStatus ?? 'unknown'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDisconnectPatreon}
+                disabled={patreonBusy}
+                className="border border-gray-300 text-xs font-medium px-3 py-1.5 text-gray-500 hover:border-red-400 hover:text-red-600 transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {patreonBusy ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border border-gray-200 rounded-lg p-6 max-w-2xl">

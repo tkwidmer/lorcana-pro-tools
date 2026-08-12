@@ -53,6 +53,22 @@ describe('parseGamelog - basic structure', () => {
     expect(result.victoryReason).toBe('concession')
     expect(result.concededBy).toBe(1)
   })
+
+  it('marks disconnected when PLAYER_DISCONNECTED fires', () => {
+    const logs = [
+      entry('PLAYER_DISCONNECTED', 1, 2, { closeCode: 1006, cleanClose: false }),
+      entry('GAME_END', null, 2, { winner: 2, victoryReason: 'timeout' }),
+    ]
+    const result = parseGamelog('x', logs, {})
+    expect(result.disconnected).toBe(true)
+    expect(result.victoryReason).toBe('timeout')
+  })
+
+  it('leaves disconnected false when no PLAYER_DISCONNECTED event occurs', () => {
+    const logs = [entry('GAME_END', null, 5, { winner: 1, victoryReason: 'timeout' })]
+    const result = parseGamelog('x', logs, {})
+    expect(result.disconnected).toBe(false)
+  })
 })
 
 describe('parseGamelog - card tracking', () => {

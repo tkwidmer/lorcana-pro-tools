@@ -65,6 +65,7 @@ export function enrichGame(gamelog, myName) {
     won,
     wentFirst: iWentFirst,
     victoryReason: gamelog.victoryReason ?? null,
+    disconnected: gamelog.disconnected ?? false,
     loreEvents: gamelog.loreEvents ?? [],
     myCards,
     challenges,

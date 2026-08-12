@@ -36,6 +36,7 @@ export function parseGamelog(id, logs, meta = {}) {
   let p1Name = 'Player 1', p2Name = 'Player 2'
   let winner = null, turnCount = 0
   let victoryReason = null, concededBy = null
+  let disconnected = false
   let wentFirstFromLog = null
   const loreByPlayer = { 1: 0, 2: 0 }
   const loreEvents = []
@@ -92,6 +93,10 @@ export function parseGamelog(id, logs, meta = {}) {
     if (type === 'GAME_END') {
       winner = d.winner ?? winner
       if (!victoryReason) victoryReason = d.victoryReason ?? null
+    }
+
+    if (type === 'PLAYER_DISCONNECTED') {
+      disconnected = true
     }
 
     if (!p) continue
@@ -385,6 +390,7 @@ export function parseGamelog(id, logs, meta = {}) {
     eventCount: logs.length,
     victoryReason,
     concededBy,
+    disconnected,
     wentFirst,
     p1FinalLore: loreByPlayer[1] > 0 ? loreByPlayer[1] : null,
     p2FinalLore: loreByPlayer[2] > 0 ? loreByPlayer[2] : null,

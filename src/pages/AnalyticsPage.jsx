@@ -253,9 +253,12 @@ export function AnalyticsPage() {
   ]
   const dateCutoff = filterDate ? Date.now() - (DATE_PRESETS.find(p => p.key === filterDate)?.days ?? 0) * 86400000 : null
   const dateFilteredGamesRaw = dateCutoff ? games.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : games
-  const afkCount = dateFilteredGamesRaw.filter(g => g.victoryReason === 'afk').length
+  // "afk" is a direct disconnect claim; "timeout" only counts here when a PLAYER_DISCONNECTED
+  // event fired first — an ordinary timer-expiry timeout (no disconnect) is a real loss.
+  const isAfkGame = (g) => g.victoryReason === 'afk' || (g.victoryReason === 'timeout' && g.disconnected)
+  const afkCount = dateFilteredGamesRaw.filter(isAfkGame).length
   const dateFilteredGames = excludeAfk
-    ? dateFilteredGamesRaw.filter(g => g.victoryReason !== 'afk')
+    ? dateFilteredGamesRaw.filter(g => !isAfkGame(g))
     : dateFilteredGamesRaw
 
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
@@ -466,7 +469,7 @@ export function AnalyticsPage() {
               onChange={e => setExcludeAfk(e.target.checked)}
               className="rounded border-gray-300"
             />
-            Exclude AFK-decided games ({afkCount})
+            Exclude AFK/disconnect-decided games ({afkCount})
           </label>
         </div>
       )}

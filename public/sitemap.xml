@@ -41,6 +41,10 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://lorcana-pro-tools.vercel.app/gamelog</loc>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://lorcana-pro-tools.vercel.app/sitemap</loc>
     <priority>0.3</priority>
   </url>

@@ -1,4 +1,17 @@
 User-agent: *
 Allow: /
+Disallow: /deck-insights
+Disallow: /match-history
+Disallow: /analytics
+Disallow: /practice-plan
+Disallow: /tournament-lookup
+Disallow: /library
+Disallow: /game-scraper
+Disallow: /opponent-directory
+Disallow: /players/
+Disallow: /scouting/game/
+Disallow: /admin
+Disallow: /settings
+Disallow: /auth/callback
 
 Sitemap: https://lorcana-pro-tools.vercel.app/sitemap.xml

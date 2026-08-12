@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node build-extension.js",
+    "build": "vite build && node build-extension.js && node prerender.js",
     "build:ext": "node build-extension.js",
     "prerender": "node prerender.js",
+    "postinstall": "playwright install chromium || true",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

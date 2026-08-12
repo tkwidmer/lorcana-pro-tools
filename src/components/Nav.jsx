@@ -92,7 +92,8 @@ export function Nav() {
           <>
             <span className="text-gray-300">/</span>
             <span className="text-sm text-gray-500">
-              {pathname === '/proxy' ? 'Proxy Generator'
+              {pathname === '/sitemap' ? 'Sitemap'
+                : pathname === '/proxy' ? 'Proxy Generator'
                 : pathname === '/cut-calculator' ? 'Cut Calculator'
                 : pathname === '/limited-guide' ? 'Limited Guide'
                 : pathname.startsWith('/rules') ? 'Rules'

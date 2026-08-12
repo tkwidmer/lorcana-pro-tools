@@ -9,6 +9,7 @@ const HOME_TITLE = `${SITE} — Competitive tools for Disney Lorcana`
 // Exact-path titles (the page name shown before "· InkbornForge").
 const TITLES = {
   '/login': 'Sign in',
+  '/sitemap': 'Sitemap',
   '/proxy': 'Proxy Generator',
   '/coconut-deck-builder': 'Coconut Deck Builder',
   '/cut-calculator': 'Cut Calculator',
@@ -56,6 +57,7 @@ const HOME_DESCRIPTION =
 // Descriptions for the public (non-supporter-gated) routes worth indexing.
 // Other routes fall back to HOME_DESCRIPTION.
 const DESCRIPTIONS = {
+  '/sitemap': 'Every page on InkbornForge, in one place.',
   '/proxy': 'Search Disney Lorcana cards and build printable black & white proxy sheets, 9 cards per page.',
   '/coconut-deck-builder': 'Build a singleton [Format Coconut] deck around one of the 18 beta Coconut cards, with ink and copy-count rules enforced automatically.',
   '/cut-calculator': 'Calculate your odds of making the top cut at a Disney Lorcana Swiss tournament using binomial and trinomial win/loss/draw models.',

@@ -8,6 +8,7 @@
       "mcp__github__pull_request_read",
       "mcp__github__subscribe_pr_activity",
       "mcp__github__unsubscribe_pr_activity",
+      "mcp__github__create_pull_request",
       "Bash(npm test)",
       "Bash(npm test *)",
       "Bash(npm run lint)",

@@ -57,10 +57,20 @@ async function main() {
   try {
     await waitForServer(`http://localhost:${PORT}/`)
 
-    const browser = await chromium.launch({
-      ...(process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {}),
-      args: ['--no-sandbox'],
-    })
+    let browser
+    try {
+      browser = await chromium.launch({
+        ...(process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {}),
+        args: ['--no-sandbox'],
+      })
+    } catch (err) {
+      // Prerendering is a progressive enhancement on top of the SPA build, not
+      // a hard requirement — if Chromium isn't available in this environment
+      // (e.g. a fresh CI/Vercel build image without the browser installed),
+      // skip it rather than failing the whole `npm run build`.
+      console.warn(`Skipping prerender: could not launch Chromium (${err.message})`)
+      return
+    }
     const page = await browser.newPage()
 
     for (const route of ROUTES) {

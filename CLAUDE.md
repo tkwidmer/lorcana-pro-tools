@@ -19,6 +19,15 @@ Unit tests live in `src/lib/__tests__/` (Vitest) and cover the pure-logic libs:
 `tournamentApi`. CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
 UI and integration behavior is still validated manually.
 
+## Screenshots & Manual Verification
+
+When asked to screenshot or visually verify a change, run it against the local
+Vite dev server (`npm run dev`) first — not the Vercel preview deployment.
+Preview deployments are commonly behind Vercel's SSO/deployment-protection
+gate, which blocks headless/unauthenticated access (e.g. Playwright), so
+attempting the preview first just wastes a round trip. Only fall back to the
+preview URL if local verification isn't possible for some reason.
+
 ## Pull Requests
 
 When creating a pull request:

@@ -65,25 +65,44 @@ export function HomePage() {
           A growing suite of tools for Disney Lorcana players.
         </p>
       </div>
-      <a
-        href={SUBSTACK_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10 px-6 py-5 border border-gray-200 rounded-lg hover:border-gray-900 transition-colors group"
-      >
-        <div className="flex items-center gap-3">
-          <img src="/substack-icon.svg" alt="" className="h-6 w-6 shrink-0" />
-          <div>
-            <p className="text-sm font-bold text-gray-900">Join us on Substack</p>
-            <p className="text-sm text-gray-500 mt-1">
-              Strategy articles, tool updates, and Lorcana news — straight to your inbox.
-            </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-10">
+        <Link
+          to="/settings"
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-5 border border-gray-200 rounded-lg hover:border-gray-900 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <img src="/patreon-icon.svg" alt="" className="h-6 w-6 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-gray-900">Become a Patreon supporter</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Unlock deck insights, game scouting, analytics, and more supporter-only tools.
+              </p>
+            </div>
           </div>
-        </div>
-        <span className="shrink-0 text-sm font-medium text-gray-900 group-hover:underline">
-          Subscribe →
-        </span>
-      </a>
+          <span className="shrink-0 text-sm font-medium text-gray-900 group-hover:underline">
+            Support us →
+          </span>
+        </Link>
+        <a
+          href={SUBSTACK_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-5 border border-gray-200 rounded-lg hover:border-gray-900 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <img src="/substack-icon.svg" alt="" className="h-6 w-6 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-gray-900">Join us on Substack</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Strategy articles, tool updates, and Lorcana news — straight to your inbox.
+              </p>
+            </div>
+          </div>
+          <span className="shrink-0 text-sm font-medium text-gray-900 group-hover:underline">
+            Subscribe →
+          </span>
+        </a>
+      </div>
       <div className="space-y-10">
         {SECTIONS.map(section => (
           <div key={section.title}>

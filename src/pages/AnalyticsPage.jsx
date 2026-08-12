@@ -55,6 +55,7 @@ export function AnalyticsPage() {
   const [filterMyColors, setFilterMyColors] = useState(null)
   const [filterOppColors, setFilterOppColors] = useState(null)
   const [filterDate, setFilterDate] = useState(null)
+  const [excludeAfk, setExcludeAfk] = useState(false)
   const [apiDeckNames, setApiDeckNames] = useState({})
   const [insightsLoading, setInsightsLoading] = useState(null)
   const [expandedDeckKey, setExpandedDeckKey] = useState(null)
@@ -251,7 +252,11 @@ export function AnalyticsPage() {
     { key: 'month', label: 'Last month', days: 30 },
   ]
   const dateCutoff = filterDate ? Date.now() - (DATE_PRESETS.find(p => p.key === filterDate)?.days ?? 0) * 86400000 : null
-  const dateFilteredGames = dateCutoff ? games.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : games
+  const dateFilteredGamesRaw = dateCutoff ? games.filter(g => (g.playedAt ?? g.savedAt) >= dateCutoff) : games
+  const afkCount = dateFilteredGamesRaw.filter(g => g.victoryReason === 'afk').length
+  const dateFilteredGames = excludeAfk
+    ? dateFilteredGamesRaw.filter(g => g.victoryReason !== 'afk')
+    : dateFilteredGamesRaw
 
   const colorKey = (arr) => arr?.length ? arr.slice().sort().join('/') : null
 
@@ -447,6 +452,22 @@ export function AnalyticsPage() {
               className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterDate === p.key ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
             >{p.label}</button>
           ))}
+        </div>
+      )}
+
+      {/* AFK filter */}
+      {afkCount > 0 && (
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">AFK</span>
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={excludeAfk}
+              onChange={e => setExcludeAfk(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            Exclude AFK-decided games ({afkCount})
+          </label>
         </div>
       )}
 

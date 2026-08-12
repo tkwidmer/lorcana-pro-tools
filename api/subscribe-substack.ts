@@ -12,7 +12,7 @@ export const config = {
   maxDuration: 10,
 }
 
-const SUBSTACK_PUBLICATION_URL = 'https://inkforge.substack.com'
+const SUBSTACK_PUBLICATION_URL = 'https://inkbornforge.substack.com'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

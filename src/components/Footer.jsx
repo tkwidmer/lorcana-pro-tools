@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 
-const SUBSTACK_URL = 'https://inkforge.substack.com'
+const SUBSTACK_URL = 'https://inkbornforge.substack.com'
 
 // Site-wide footer — mirrors Nav's border/spacing/link conventions. Hidden on
 // /lore-tracker for the same reason Nav is (a mobile print/embed view).

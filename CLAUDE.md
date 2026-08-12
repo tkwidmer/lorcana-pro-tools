@@ -167,7 +167,7 @@ In `src/lib/`:
 
 ### Substack Signup Sync
 
-A deliberate, narrow exception to the "no game data server-side" ethos above — this is marketing email, not game data. `AuthProvider.jsx` fires once per browser session per signed-in user: it grabs the current Supabase access token and calls `POST /api/subscribe-substack`. That route verifies the token via Supabase (`auth.getUser`), takes the email from the *verified* session only (never a client-supplied value), and forwards it to `https://inkforge.substack.com/api/v1/free` — the same undocumented endpoint Substack's own embed signup form posts to, since Substack has no official public API. Best-effort and fire-and-forget: failures are logged server-side and never surface to the user or block sign-in.
+A deliberate, narrow exception to the "no game data server-side" ethos above — this is marketing email, not game data. `AuthProvider.jsx` fires once per browser session per signed-in user: it grabs the current Supabase access token and calls `POST /api/subscribe-substack`. That route verifies the token via Supabase (`auth.getUser`), takes the email from the *verified* session only (never a client-supplied value), and forwards it to `https://inkbornforge.substack.com/api/v1/free` — the same undocumented endpoint Substack's own embed signup form posts to, since Substack has no official public API. Best-effort and fire-and-forget: failures are logged server-side and never surface to the user or block sign-in.
 
 ### API Routes
 

@@ -12,6 +12,8 @@ export const config = {
   maxDuration: 10,
 }
 
+const SUBSTACK_PUBLICATION_URL = 'https://inkforge.substack.com'
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -23,12 +25,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Missing Bearer token' })
   }
   const jwt = auth.slice('Bearer '.length)
-
-  const publicationUrl = process.env.SUBSTACK_PUBLICATION_URL
-  if (!publicationUrl) {
-    console.error('subscribe-substack: SUBSTACK_PUBLICATION_URL is not set')
-    return res.status(500).json({ error: 'Substack sync is not configured' })
-  }
 
   let email: string | undefined
   try {
@@ -45,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const response = await fetch(`${publicationUrl}/api/v1/free`, {
+    const response = await fetch(`${SUBSTACK_PUBLICATION_URL}/api/v1/free`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ email }),

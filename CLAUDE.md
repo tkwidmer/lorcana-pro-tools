@@ -49,7 +49,6 @@ Server-side only (set in Vercel, not `.env`):
 - `SUPABASE_SERVICE_ROLE_KEY` — used by `api/_lib/discordSupabase.ts` for server-side access to the `discord_favorite_players` and `duels_api_tokens` tables, bypassing RLS.
 - `CRON_SECRET` — shared secret checked by `/api/discord-tournament-tick`; must match the same-named secret in the GitHub repo (Settings → Secrets and variables → Actions) used by `.github/workflows/tournament-tracker-tick.yml`.
 - `DUELS_TOKEN_ENCRYPTION_KEY` — symmetric passphrase used by `/api/duels-tokens` to encrypt/decrypt saved duels.ink API tokens at rest (via Postgres `pgcrypto`, see `supabase/migrations/005_duels_api_tokens_crypto_functions.sql`). Never exposed to the client.
-- `SUBSTACK_PUBLICATION_URL` — e.g. `https://inkforge.substack.com`. Base URL used by `/api/subscribe-substack` to add signed-in users to the Substack mailing list.
 
 See `discord-bot/README.md` for full setup.
 

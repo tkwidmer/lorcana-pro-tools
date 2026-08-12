@@ -9,6 +9,8 @@ const DISCORD_INVITE_URL = DISCORD_CLIENT_ID
   ? `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&scope=bot+applications.commands&permissions=${DISCORD_BOT_PERMISSIONS}`
   : null
 
+const SUBSTACK_URL = 'https://inkforge.substack.com'
+
 const SECTIONS = [
   {
     title: 'Resources',
@@ -202,6 +204,22 @@ export function HomePage() {
           A growing suite of tools for Disney Lorcana players.
         </p>
       </div>
+      <a
+        href={SUBSTACK_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10 px-6 py-5 border border-gray-200 rounded-lg hover:border-gray-900 transition-colors group"
+      >
+        <div>
+          <p className="text-sm font-bold text-gray-900">Join us on Substack</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Strategy articles, tool updates, and Lorcana news — straight to your inbox.
+          </p>
+        </div>
+        <span className="shrink-0 text-sm font-medium text-gray-900 group-hover:underline">
+          Subscribe →
+        </span>
+      </a>
       <div className="space-y-10">
         {SECTIONS.map(section => (
           <div key={section.title}>

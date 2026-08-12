@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { isSupporterPath } from '../lib/access'
 import { SECTIONS } from '../lib/siteSections'
 
-const SUBSTACK_URL = 'https://inkforge.substack.com'
+const SUBSTACK_URL = 'https://inkbornforge.substack.com'
 
 function ToolCard({ tool }) {
   if (tool.href) {

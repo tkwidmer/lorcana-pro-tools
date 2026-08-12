@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { initTokenSync } from '../lib/duelsApi'
 import { AuthContext } from './authContext'
@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true)
   const [tier, setTier] = useState(null)
   const [supporterLoading, setSupporterLoading] = useState(true)
+  const substackSyncedUserId = useRef(null)
 
   // Auth session + subscription (once).
   useEffect(() => {
@@ -57,6 +58,26 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (authLoading) return
     initTokenSync(user?.id ?? null)
+  }, [user, authLoading])
+
+  // Best-effort: add the signed-in user's email to the site's Substack
+  // mailing list (see api/subscribe-substack.ts). Fires once per session
+  // per user — never blocks rendering or auth state on the result.
+  useEffect(() => {
+    if (authLoading || !user || substackSyncedUserId.current === user.id) return
+    substackSyncedUserId.current = user.id
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        const accessToken = data.session?.access_token
+        if (!accessToken) return
+        return fetch('/api/subscribe-substack', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+      })
+      .catch(() => {})
   }, [user, authLoading])
 
   // Ensure a profile row exists and load the supporter tier (once per user).

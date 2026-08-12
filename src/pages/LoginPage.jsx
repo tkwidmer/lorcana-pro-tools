@@ -60,7 +60,8 @@ export function LoginPage() {
           </button>
 
           <p className="mt-8 text-center text-xs text-gray-600">
-            By signing in, you agree to our Terms of Service
+            By signing in, you agree to our Terms of Service. Signing in adds you
+            to our newsletter — unsubscribe anytime.
           </p>
         </div>
       </div>

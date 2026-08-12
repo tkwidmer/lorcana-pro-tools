@@ -5,6 +5,7 @@ import { Footer } from './components/Footer'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { routeTitle, routeDescription } from './lib/routeTitle'
 import { HomePage } from './pages/HomePage'
+import { SitemapPage } from './pages/SitemapPage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { CoconutDeckBuilderPage } from './pages/CoconutDeckBuilderPage'
 import { TournamentCutPage } from './pages/TournamentCutPage'
@@ -53,6 +54,7 @@ function RoutedContent() {
     <ErrorBoundary resetKey={location.pathname}>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/sitemap" element={<SitemapPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/proxy" element={<ProxyGeneratorPage />} />

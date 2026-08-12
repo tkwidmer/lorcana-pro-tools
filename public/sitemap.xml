@@ -40,4 +40,8 @@
     <loc>https://lorcana-pro-tools.vercel.app/lore-tracker</loc>
     <priority>0.6</priority>
   </url>
+  <url>
+    <loc>https://lorcana-pro-tools.vercel.app/sitemap</loc>
+    <priority>0.3</priority>
+  </url>
 </urlset>

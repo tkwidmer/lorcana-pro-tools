@@ -1,6 +1,12 @@
 {
   "rewrites": [
     { "source": "/api/cards", "destination": "https://lorcanajson.org/files/current/en/allCards.json" },
+
+    { "source": "/api/patreon-callback", "destination": "/api/patreon/callback" },
+    { "source": "/api/patreon-webhook", "destination": "/api/patreon/webhook" },
+    { "source": "/api/patreon-status", "destination": "/api/patreon/status" },
+    { "source": "/api/patreon-reconcile-tick", "destination": "/api/patreon/reconcile" },
+
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

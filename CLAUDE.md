@@ -189,11 +189,14 @@ A deliberate, narrow exception to the "no game data server-side" ethos above —
 
 Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies with error handling and caching headers. No server-side auth on those — tokens are forwarded from the client.
 
+**Function budget — read before adding a route.** Vercel's Hobby plan caps a deployment at **12 serverless functions**, counted as files in `api/` (`api/_lib/` is excluded). The count is currently **11**. Going over fails the deploy, so the established fix is to consolidate related endpoints into one function dispatched by a query param — see `/api/duels` (`?endpoint=`).
+
+⚠️ **Use flat `api/<name>.ts` files only.** A nested dynamic route (`api/patreon/[action].ts`) was tried and **silently did not deploy** — the build went green, but every request to it fell through to the `/(.*)` → `/index.html` catch-all in `vercel.json` and returned the SPA shell instead of the function. That took the Patreon integration down in production (PR #175, reverted in #176). A green Vercel build is **not** evidence that a function exists; verify a new route by curling it after deploy and confirming a JSON/expected response rather than `text/html`.
+
 | Endpoint | Upstream | Auth | Notes |
 |---|---|---|---|
 | `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`, `leaderboard`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `gamelog-bulk`, `replay`, `deck`, `stats`, `leaderboard`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. |
 | `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`; handles pagination |
-| `/api/proxy` | duels.ink spectate | Cookie-based | Tries 3 endpoints; used by bookmarklet/direct URL approach |
 | `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's commands (Decode Deck QR, `/tournament`, `/favorite`, `/unfavorite`, `/favorites`) directly. See `discord-bot/README.md`. |
 | `/api/subscribe-substack` | Substack's undocumented `/api/v1/free` embed-form endpoint | Bearer Supabase access token | Called by `AuthProvider.jsx` once per session on sign-in. See "Substack Signup Sync" above. |
 | `/api/discord-tournament-tick` | None (internal) | Shared secret (`CRON_SECRET`) | Called every 30 min by `.github/workflows/tournament-tracker-tick.yml`; posts an update to Discord for any favorited player whose rank/record changed, and auto-deactivates favorites once an event ends. |

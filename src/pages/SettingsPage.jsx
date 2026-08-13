@@ -279,23 +279,19 @@ export function SettingsPage() {
               type="button"
               onClick={handleConnectPatreon}
               disabled={patreonBusy}
-              className="inline-flex items-center gap-2 border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+              className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <img src="/patreon-icon.svg" alt="" className="h-4 w-4 shrink-0" />
               {patreonBusy ? 'Connecting…' : 'Connect Patreon'}
             </button>
           )}
 
           {patreonStatus?.connected === true && (
             <div className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2.5">
-                <img src="/patreon-icon.svg" alt="Patreon" className="h-5 w-5 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900">Connected</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Status: {patreonStatus.patronStatus ?? 'unknown'}
-                  </p>
-                </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900">Connected</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Status: {patreonStatus.patronStatus ?? 'unknown'}
+                </p>
               </div>
               <button
                 type="button"

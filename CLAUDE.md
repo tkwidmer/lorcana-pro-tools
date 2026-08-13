@@ -193,7 +193,7 @@ Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies wit
 |---|---|---|---|
 | `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`, `leaderboard`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `gamelog-bulk`, `replay`, `deck`, `stats`, `leaderboard`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. |
 | `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`; handles pagination |
-| `/api/proxy` | duels.ink spectate | Cookie-based | Tries 3 endpoints; used by bookmarklet/direct URL approach |
+| `/api/patreon-*` | Patreon API | Per-action (see below) | Single consolidated function `api/patreon/[action].ts`, dispatched by the `[action]` path segment — `callback`, `webhook`, `status`, `reconcile`. Folded into one function for the same 12-function reason as `/api/duels`. The legacy `/api/patreon-callback`, `-webhook`, `-status`, `-reconcile-tick` URLs are preserved by `vercel.json` rewrites, since they're registered in the Patreon dashboard and a GitHub Actions workflow. See "Patreon Integration" below. |
 | `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's commands (Decode Deck QR, `/tournament`, `/favorite`, `/unfavorite`, `/favorites`) directly. See `discord-bot/README.md`. |
 | `/api/subscribe-substack` | Substack's undocumented `/api/v1/free` embed-form endpoint | Bearer Supabase access token | Called by `AuthProvider.jsx` once per session on sign-in. See "Substack Signup Sync" above. |
 | `/api/discord-tournament-tick` | None (internal) | Shared secret (`CRON_SECRET`) | Called every 30 min by `.github/workflows/tournament-tracker-tick.yml`; posts an update to Discord for any favorited player whose rank/record changed, and auto-deactivates favorites once an event ends. |
@@ -206,16 +206,22 @@ The Discord bot (message command "Decode Deck QR" + `/tournament`, `/favorite`, 
 
 `/favorite url:<event> player:<name>` tracks a player in the channel it's run from; a scheduled tick (`api/discord-tournament-tick.ts`, triggered by GitHub Actions every 30 minutes — Vercel Hobby's Cron Jobs only run once/day, so that couldn't drive this) checks all active favorites, groups them by event to minimize API calls, and posts an update embed only when a tracked player's rank/record actually changed since the last check. Favorites are stored in the `discord_favorite_players` Supabase table (`supabase/migrations/003_discord_favorite_players.sql`) — RLS is enabled with zero policies, since this table is only ever touched server-side via `api/_lib/discordSupabase.ts` (a service-role client, bypassing RLS entirely; separate from the anon-key client the main web app uses). `/unfavorite` deactivates a tracked row; `/favorites` lists current ones in the channel. A favorite auto-deactivates once its event's current round can no longer be resolved (tournament finished).
 
-### Patreon Integration (`api/patreon-*.ts`)
+### Patreon Integration (`api/patreon/[action].ts`)
 
 Backers connect their Patreon account via OAuth from a "Connect Patreon" card on `SettingsPage.jsx`; an active pledge (any amount, any tier — this app doesn't distinguish pledge levels) grants `profiles.supporter_tier = 'supporter'` with `supporter_source = 'patreon'`. The Patreon user ID ↔ Supabase user_id link (plus pledge status and encrypted OAuth tokens) lives in the `patreon_links` table (`supabase/migrations/006_patreon_links.sql`, `007_patreon_links_crypto_functions.sql`) — RLS enabled with zero policies, same service-role-only pattern as `discord_favorite_players` and `duels_api_tokens`.
 
-Three surfaces keep `supporter_tier` in sync with Patreon, all funneling through `applyPledgeStateToProfile()` in `api/_lib/patreonSupabase.ts` (the single grant/revoke chokepoint):
-- `api/patreon-callback.ts` — the OAuth redirect target. `state` carries the initiating user's Supabase access token (verified server-side via `auth.getUser()`, the same pattern `api/duels-tokens.ts` uses for its Bearer auth) since this is a plain browser redirect with no other way to identify the logged-in user.
-- `api/patreon-webhook.ts` — Patreon's webhook for `members:pledge:create/update/delete`, verified via raw-body HMAC-MD5 (`X-Patreon-Signature`) before parsing, mirroring `discord-interactions.ts`'s raw-body-first Ed25519 verification.
-- `api/patreon-reconcile-tick.ts` — a `CRON_SECRET`-gated daily safety net (`.github/workflows/patreon-reconcile-tick.yml`, same shape as the Discord tournament tick) that re-polls Patreon's identity endpoint for any link that's gone stale, in case a webhook was missed.
+All four surfaces live in one serverless function, `api/patreon/[action].ts`, dispatched by the `[action]` path segment. Path-segment dispatch rather than `/api/duels`-style `?endpoint=` because the OAuth callback carries `code`/`state` in the query string, and Vercel doesn't document whether a rewrite merges the source query into a destination that already has one — a path-only rewrite avoids the question entirely.
 
-`api/patreon-status.ts` is a small authenticated GET/DELETE endpoint so `SettingsPage` can read connection status and disconnect without needing RLS access to `patreon_links`.
+The function declares `api: { bodyParser: false }` (required by the webhook's raw-body HMAC) and `maxDuration: 60`. Disabling the body parser is safe for the other three because **none of them read `req.body`** — callback is a GET redirect reading `req.query`, status is GET/DELETE, and reconcile reads only the `Authorization` header.
+
+Three surfaces keep `supporter_tier` in sync with Patreon, all funneling through `applyPledgeStateToProfile()` in `api/_lib/patreonSupabase.ts` (the single grant/revoke chokepoint):
+- **`callback`** — the OAuth redirect target. `state` carries the initiating user's Supabase access token (verified server-side via `auth.getUser()`, the same pattern `api/duels-tokens.ts` uses for its Bearer auth) since this is a plain browser redirect with no other way to identify the logged-in user. Always responds with a 302 to `/settings?patreon=connected|error`, never JSON.
+- **`webhook`** — Patreon's webhook for `members:pledge:create/update/delete`, verified via raw-body HMAC-MD5 (`X-Patreon-Signature`) before parsing, mirroring `discord-interactions.ts`'s raw-body-first Ed25519 verification. Deliberately returns 200 even on internal error, so Patreon doesn't disable the webhook; the reconcile tick is the backstop.
+- **`reconcile`** — a `CRON_SECRET`-gated daily safety net (`.github/workflows/patreon-reconcile-tick.yml`, same shape as the Discord tournament tick) that re-polls Patreon's identity endpoint for any link that's gone stale, in case a webhook was missed.
+
+**`status`** is a small authenticated GET/DELETE endpoint so `SettingsPage` can read connection status and disconnect without needing RLS access to `patreon_links`.
+
+**URL compatibility:** clients still call the original `/api/patreon-callback`, `-webhook`, `-status`, `-reconcile-tick` paths — `vercel.json` rewrites them onto the new function. Those URLs are registered in the Patreon creator dashboard (redirect URI + webhook) and in a GitHub Actions workflow, so they must not change without updating those first. `redirectUri()` in the function deliberately keeps returning `/api/patreon-callback` for the same reason.
 
 **Invariant:** revocation (`applyPledgeStateToProfile(userId, false)`) only ever updates rows where `supporter_source = 'patreon'` — a manually- or admin-granted supporter (via `AdminPage.jsx`) is never touched by a patron cancelling or declining a charge.
 
@@ -233,7 +239,7 @@ Three surfaces keep `supporter_tier` in sync with Patreon, all funneling through
 | Supabase `auth` | session | Google OAuth user session |
 | Supabase `profiles` table | row per user | Supporter tier metadata only (see Access Control); no game data stored server-side |
 | Supabase `duels_api_tokens` table | row per token | Logged-in users' duels.ink API tokens, encrypted at rest (pgcrypto) — replaces the old browser-only `localStorage` tokens so they carry over across devices. Managed via `/api/duels-tokens`; see `src/lib/duelsApi.js` |
-| Supabase `patreon_links` table | row per user | Patreon user ID ↔ Supabase user_id, pledge status, OAuth tokens encrypted at rest (pgcrypto). Managed via `api/patreon-callback.ts`, `api/patreon-webhook.ts`, `api/patreon-status.ts`, `api/patreon-reconcile-tick.ts` |
+| Supabase `patreon_links` table | row per user | Patreon user ID ↔ Supabase user_id, pledge status, OAuth tokens encrypted at rest (pgcrypto). Managed via `api/patreon/[action].ts` |
 
 ### External APIs
 

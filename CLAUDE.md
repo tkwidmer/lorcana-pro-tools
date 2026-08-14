@@ -73,6 +73,8 @@ See `discord-bot/README.md` for full setup.
 
 Pages are in `src/pages/`. Each page is self-contained. Shared logic lives in `src/lib/`.
 
+Page content is full-width: outer page wrappers use `w-full px-6 py-8` (no `max-w-*`/`mx-auto`), matching `Nav`/`Footer`. New pages should follow this pattern rather than constraining width — narrow `max-w-* mx-auto` is still fine for small, deliberately-centered content (an error/gate message, a short list) but not for a page's primary content wrapper.
+
 ### Pages & Routes
 
 Defined in `src/App.jsx`:

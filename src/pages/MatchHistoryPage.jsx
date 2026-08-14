@@ -673,7 +673,7 @@ export function MatchHistoryPage() {
   const someSelected = selectedGames.length > 0 && !allSelected
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="w-full px-6 py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">Match History</h1>
         <div className="flex items-center gap-2 flex-wrap">

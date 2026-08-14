@@ -202,7 +202,7 @@ function DocumentVersionView({ doc, docSlug, versionId, versions, chapterSlug, s
 
   if (!version) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="w-full px-6 py-8">
         <p className="text-gray-400 text-sm">Loading…</p>
       </div>
     )
@@ -226,7 +226,7 @@ function DocumentVersionView({ doc, docSlug, versionId, versions, chapterSlug, s
   const showInline = searchParams.get('inline') === '1'
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <div className="mb-6">
         <Link to="/rules" className="text-sm text-gray-500 hover:text-gray-900">← Rules</Link>
         <div className="flex items-start justify-between gap-4 mt-2 flex-wrap">
@@ -298,7 +298,7 @@ export function RulesDocumentPage() {
 
   if (!doc || !versionMeta) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="w-full px-6 py-8">
         <p className="text-gray-500">Document not found.</p>
         <Link to="/rules" className="text-sm font-medium text-gray-900">← Back to Rules</Link>
       </div>

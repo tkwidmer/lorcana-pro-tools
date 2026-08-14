@@ -211,7 +211,7 @@ export function GamelogViewerPage() {
 
   if (!getToken()) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-12 text-sm text-gray-600">
+      <div className="w-full px-6 py-12 text-sm text-gray-600">
         Add your duels.ink API token in <Link to="/settings" className="underline">Settings</Link> first.
       </div>
     )
@@ -219,12 +219,12 @@ export function GamelogViewerPage() {
 
   if (!gameId) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-12 text-sm text-gray-600">No game ID specified.</div>
+      <div className="w-full px-6 py-12 text-sm text-gray-600">No game ID specified.</div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="w-full px-6 py-12">
       <div className="mb-8">
         <Link to="/match-history" className="text-sm text-gray-400 hover:text-gray-700 transition-colors">← Match History</Link>
         <h1 className="text-2xl font-bold text-gray-900 mt-2">Gamelog</h1>

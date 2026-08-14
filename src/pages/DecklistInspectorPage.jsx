@@ -54,9 +54,15 @@ function textColorFor(colors) {
 function CostBadge({ cost, inkable }) {
   const src = inkable ? '/ink-cost/inkable.png' : '/ink-cost/uninkable.png'
   return (
-    <span className="relative flex-shrink-0 w-7 h-7 flex items-center justify-center">
+    <span className="relative flex-shrink-0 w-6 h-6 flex items-center justify-center">
       <img src={src} alt="" className="absolute inset-0 w-full h-full object-contain" />
-      <span className="relative w-4 h-4 rounded-full bg-black/45 flex items-center justify-center leading-none font-bold text-[10px] text-white">
+      {/* Literal white-on-black, independent of the dark-mode `white` token remap
+          (which repurposes `text-white`/`bg-white` as a dark surface color) — this
+          badge always needs true white text on a true black disc. */}
+      <span
+        className="relative w-3.5 h-3.5 rounded-full flex items-center justify-center leading-none font-bold text-[9px]"
+        style={{ background: 'rgba(0,0,0,0.6)', color: '#ffffff' }}
+      >
         {cost}
       </span>
     </span>
@@ -71,7 +77,7 @@ function CardBar({ entry, selected, onToggle }) {
 
   let stats = null
   if (card.type === 'Character') {
-    stats = `${card.strength ?? '–'} / ${card.willpower ?? '–'}${card.lore ? ` · ${'◆'.repeat(card.lore)}` : ''}`
+    stats = `${card.strength ?? '–'}/${card.willpower ?? '–'}${card.lore ? ` · ${'◆'.repeat(card.lore)}` : ''}`
   } else if (card.type === 'Location') {
     stats = `W:${card.willpower ?? '–'}${card.lore ? ` · ${'◆'.repeat(card.lore)}` : ''}`
   }
@@ -81,15 +87,15 @@ function CardBar({ entry, selected, onToggle }) {
       type="button"
       onClick={() => onToggle(entry)}
       style={{ ...inkFill(colors), color: textColor }}
-      className={`w-full text-left rounded-md px-2.5 py-1.5 flex items-center gap-2 transition-shadow ${
+      className={`w-full text-left rounded-md px-2 py-1 flex items-center gap-2 transition-shadow ${
         selected ? 'ring-2 ring-offset-1 ring-gray-900' : 'hover:opacity-90'
       }`}
     >
       <CostBadge cost={card.cost} inkable={card.inkwell} />
-      <span className="flex-1 min-w-0">
-        <span className="block text-xs font-semibold truncate">{name}</span>
+      <span className="flex-1 min-w-0 text-xs font-semibold truncate">
+        {name}
         {isCharacterOrLocation && stats && (
-          <span className="block text-[10px] opacity-90 truncate">{stats}</span>
+          <span className="font-normal opacity-80"> · {stats}</span>
         )}
       </span>
       <span className="flex-shrink-0 text-xs font-bold tabular-nums">×{count}</span>

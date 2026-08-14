@@ -12,6 +12,7 @@ import {
   subscribeTokens,
 } from '../lib/duelsApi'
 import { supabase } from '../lib/supabaseClient'
+import { useTheme } from '../hooks/useTheme'
 
 async function patreonFetch(method) {
   const { data } = await supabase.auth.getSession()
@@ -67,6 +68,53 @@ async function connectPatreon() {
     state: accessToken,
   })
   window.location.href = `https://www.patreon.com/oauth2/authorize?${params.toString()}`
+}
+
+const THEME_CHOICES = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+]
+
+function AppearanceCard() {
+  const { theme, resolvedTheme, setTheme } = useTheme()
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-6 max-w-2xl mb-6">
+      <h2 className="text-base font-bold text-gray-900 mb-1">Appearance</h2>
+      <p className="text-sm text-gray-500 mb-5">
+        Choose a color theme. It applies to every page and is remembered on this device.
+      </p>
+
+      <div role="radiogroup" aria-label="Color theme" className="flex flex-wrap gap-2">
+        {THEME_CHOICES.map(choice => {
+          const isSelected = theme === choice.value
+          return (
+            <button
+              key={choice.value}
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              onClick={() => setTheme(choice.value)}
+              className={`text-sm font-medium px-4 py-2 rounded border transition-colors ${
+                isSelected
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-gray-300 text-gray-700 hover:border-gray-900'
+              }`}
+            >
+              {choice.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {theme === 'system' && (
+        <p className="text-xs text-gray-400 mt-3">
+          Following your device setting — currently {resolvedTheme}.
+        </p>
+      )}
+    </div>
+  )
 }
 
 function useTokenStore() {
@@ -250,8 +298,10 @@ export function SettingsPage() {
     <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-500 text-sm">Configure integrations and API tokens.</p>
+        <p className="text-gray-500 text-sm">Configure appearance, integrations, and API tokens.</p>
       </div>
+
+      <AppearanceCard />
 
       <div className="border border-gray-200 rounded-lg p-6 max-w-2xl mb-6">
         <h2 className="text-base font-bold text-gray-900 mb-1">Patreon</h2>

@@ -224,7 +224,7 @@ function CustomCardForm({ onAdd }) {
             key={qty}
             onClick={() => handleAdd(qty)}
             disabled={!form.name.trim()}
-            className="w-9 h-8 text-sm font-medium border border-gray-300 rounded hover:bg-black hover:text-white hover:border-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-9 h-8 text-sm font-medium border border-gray-300 rounded hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             ×{qty}
           </button>
@@ -301,7 +301,7 @@ export function ProxyGeneratorPage() {
                 </button>
                 <button
                   onClick={() => window.print()}
-                  className="bg-black text-white text-sm px-4 py-2 rounded hover:bg-gray-800 whitespace-nowrap"
+                  className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-800 whitespace-nowrap"
                 >
                   Print
                 </button>

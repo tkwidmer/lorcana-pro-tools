@@ -65,7 +65,7 @@ export function SearchBar({ cards, onAdd, disabled }) {
                   <button
                     key={qty}
                     onMouseDown={() => handleAdd(card, qty)}
-                    className="w-7 h-7 text-xs font-medium border border-gray-300 rounded hover:bg-black hover:text-white hover:border-black transition-colors"
+                    className="w-7 h-7 text-xs font-medium border border-gray-300 rounded hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-colors"
                   >
                     ×{qty}
                   </button>

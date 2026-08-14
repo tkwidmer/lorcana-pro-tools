@@ -6,8 +6,31 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#111827" />
+
+    <!--
+      Apply the stored theme before first paint, so a dark-mode user doesn't
+      see a flash of the light palette while the JS bundle boots. Mirrors
+      src/lib/theme.js (same storage key, same 'system' fallback) — keep the
+      two in sync. Always toggles rather than only adding, so the class baked
+      into the prerendered HTML (see prerender.js) can't win over the user's
+      actual preference.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('lorcana_theme')
+          var isDark =
+            stored === 'dark' ||
+            (stored !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', isDark)
+        } catch (e) {
+          /* storage blocked — fall through to the light default */
+        }
+      })()
+    </script>
 
     <!-- Primary meta tags -->
     <title>InkbornForge — Competitive tools for Disney Lorcana</title>

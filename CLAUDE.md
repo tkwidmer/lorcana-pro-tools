@@ -92,7 +92,7 @@ Defined in `src/App.jsx`:
 | `/scouting/game/:uuid` | `ScoutedGamePage.jsx` | Full game state replay with action log (single scraped snapshot) |
 | `/players/:name` | `PlayerProfilePage.jsx` | Per-opponent stats — win rates, deck archetypes, matchup data |
 | `/deck-comparison` | `DeckComparisonPage.jsx` | Paste two decklists to highlight differences |
-| `/settings` | `SettingsPage.jsx` | Auth management and preferences |
+| `/settings` | `SettingsPage.jsx` | Auth management and preferences — including the Appearance (dark mode) toggle |
 | `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
 | `/gamelog` | `GamelogViewerPage.jsx` | Load and display JSON gamelog files |
 | `/analytics` | `AnalyticsPage.jsx` | Merged gamelog + team analytics — import your own games (.zip/.gz) or shared team exports; per-game drilldown (draw sequence, mulligans, leaks, challenge log), personal card/win-rate stats, and team-wide matchup matrix, metagame breakdown, and MMR/win-rate trends |
@@ -142,6 +142,7 @@ In `src/hooks/`:
 | `useAuth.js` | `{ user, isLoading, error }` | Supabase session — checks on mount, subscribes to auth state changes, and ensures a `profiles` row exists for the user |
 | `useSupporter.js` | `{ user, isAdmin, isSupporter, tier, isLoading }` | Reads the user's `supporter_tier` from the `profiles` table; `isSupporter` is true for both `supporter` and `admin` |
 | `useCards.js` | `{ cards, loading, error }` | Fetches card data from `/api/cards`, falls back to IndexedDB cache via `cardsCache.js` |
+| `useTheme.js` | `{ theme, resolvedTheme, setTheme }` | Reads the dark-mode preference from `ThemeProvider` — `theme` is the stored choice (`light`/`dark`/`system`), `resolvedTheme` is what's applied |
 
 ### Shared Libraries
 
@@ -151,6 +152,7 @@ In `src/lib/`:
 |---|---|
 | `supabaseClient.js` | Supabase client init; exports `loginWithGoogle`, `logout`, `getSession`, `getCurrentUser` |
 | `access.js` | `SUPPORTER_PATHS` set + `isSupporterPath()` — single source of truth for supporter-gated routes (used by `App.jsx` and `HomePage`) |
+| `theme.js` | Dark-mode preference storage + resolution — `readStoredTheme()`/`storeTheme()`, `resolveTheme()`, `prefersDark()`, `subscribeToSystemTheme()`, `applyResolvedTheme()`. See "Dark Mode" below |
 | `db.js` | IndexedDB abstraction for the `lorcana_pro_tools` DB — `openDB()`, `getTx()`, `promisify()` |
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
 | `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
@@ -174,6 +176,24 @@ In `src/lib/`:
 | `gameExport.js` | Serialize game records for sharing (used by `AnalyticsPage`) |
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
+
+### Dark Mode
+
+**There are no `dark:` variants in this codebase, and new code should not add any.** Dark mode is implemented once, in `src/index.css`, by remapping Tailwind's color tokens under `html.dark`. Every color utility Tailwind v4 generates resolves through a CSS variable (`.bg-gray-50` compiles to `background-color: var(--color-gray-50)`), so redefining those variables flips the whole app at once — retrofitting ~16k lines of markup with paired `dark:` classes was never on the table, and pages added later get dark mode for free as long as they stay on the palette.
+
+What this means when writing UI:
+
+- Use the normal Tailwind palette (`bg-white`, `bg-gray-50`, `border-gray-200`, `text-gray-500`, `bg-gray-900 text-white`, tinted `bg-red-50`/`text-red-700` panels) and it will theme itself. The remap is built around exactly these idioms: grays 50–300 become dark surfaces and borders, 400–950 become light text, and accent families are mirrored so tinted panels darken while their paired text lightens.
+- **Don't use `bg-black` for a solid fill** — `--color-black` is deliberately *not* remapped, because it's the modal-scrim color (`bg-black/40`) and must stay dark in both themes. Use `bg-gray-900` for a solid dark-in-light fill.
+- Hardcoded colors (inline `style` hex values, canvas rendering) don't participate. `ProxyCard.jsx` is fully inline-styled on purpose — a printable proxy must stay white regardless of theme.
+- The remap is scoped to `@media screen`, so printed output (proxy sheets, standings) always uses the light palette.
+
+The preference itself (`light` | `dark` | `system`, default `system`) lives in `localStorage` under `lorcana_theme`:
+
+- `src/lib/theme.js` — storage, normalization, and resolution helpers (unit-tested in `src/lib/__tests__/theme.test.js`).
+- `src/context/ThemeProvider.jsx` — wraps the app in `main.jsx`, subscribes to `prefers-color-scheme` via `useSyncExternalStore` so `system` stays live, and toggles the `dark` class on `<html>`.
+- `src/hooks/useTheme.js` — the consumer hook; `SettingsPage`'s Appearance card is the only UI that writes.
+- An inline script in `index.html` applies the class **before first paint** so dark-mode users don't get a flash of the light palette. It duplicates the storage key and the `system` fallback from `theme.js` — change one, change the other. It always *toggles* rather than only adding, so the class baked into prerendered HTML by `prerender.js` can't override the user's real preference.
 
 ### Access Control & Supporters
 
@@ -231,6 +251,7 @@ Three surfaces keep `supporter_tier` in sync with Patreon, all funneling through
 | IndexedDB `lorcana_pro_tools` v3 | `coconutDecks` store (key: `id`) | Saved [Format Coconut] decks from `CoconutDeckBuilderPage` |
 | IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `AnalyticsPage` |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
+| localStorage `lorcana_theme` | — | Dark-mode preference: `light` \| `dark` \| `system` (see Dark Mode) |
 | localStorage (various) | — | Form state for `DrawOddsPage`, filter state, lore tracker (`lorcana_lore_tracker`), etc. |
 | `chrome.storage.local` | `lorcana_active_games` | Active game states captured by the Chrome extension (2-hour TTL) |
 | Supabase `auth` | session | Google OAuth user session |

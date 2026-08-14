@@ -20,7 +20,7 @@ const BUCKET_LABEL = {
   Item: 'Items',
   Location: 'Locations',
 }
-const MAX_SELECTED = 4
+const MAX_SELECTED = 3
 const DECK_TEXT_KEY = 'decklistInspector.deckText'
 const COST_BUCKET_LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9+']
 
@@ -473,7 +473,7 @@ export function DecklistInspectorPage() {
                 Click cards in the decklist to pin their full art here
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 {selected.map(entry => (
                   <FullArtCard key={entry.key} entry={entry} onRemove={toggleSelect} />
                 ))}

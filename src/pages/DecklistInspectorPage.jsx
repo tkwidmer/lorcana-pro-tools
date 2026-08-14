@@ -47,46 +47,16 @@ function textColorFor(colors) {
   return INK_TEXT_ON[first] || '#ffffff'
 }
 
-// Redrawn (not traced) versions of the game's inkwell cost emblem: a plain
-// hexagon outline for uninkable cards, and that same hexagon wrapped in an
-// aperture-blade ring for inkable ones.
-const HEX_POINTS = '30,18 70,18 92,50 70,82 30,82 8,50'
-
-function CostIcon({ inkable }) {
+// The game's own inkwell cost emblem: the hexagon wrapped in the
+// aperture-blade ring for inkable cards, or the bare hexagon for uninkable
+// ones. A small dark disc sits behind the number for legibility against the
+// gold artwork regardless of the card's ink color.
+function CostBadge({ cost, inkable }) {
+  const src = inkable ? '/ink-cost/inkable.png' : '/ink-cost/uninkable.png'
   return (
-    <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full" style={{ color: 'inherit' }}>
-      {inkable && (
-        <>
-          <circle
-            cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="5"
-            strokeDasharray="16 5" strokeLinecap="round" opacity="0.85"
-          />
-          {[0, 90, 180, 270].map(deg => (
-            <polygon
-              key={deg}
-              points="50,1 55,11 45,11"
-              fill="currentColor"
-              transform={`rotate(${deg} 50 50)`}
-            />
-          ))}
-        </>
-      )}
-      <polygon
-        points={HEX_POINTS}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={inkable ? 6 : 7}
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function CostBadge({ cost, inkable, textColor }) {
-  return (
-    <span className="relative flex-shrink-0 w-7 h-7" style={{ color: textColor }}>
-      <CostIcon inkable={inkable} />
-      <span className="absolute inset-0 flex items-center justify-center leading-none font-bold text-[11px]">
+    <span className="relative flex-shrink-0 w-7 h-7 flex items-center justify-center">
+      <img src={src} alt="" className="absolute inset-0 w-full h-full object-contain" />
+      <span className="relative w-4 h-4 rounded-full bg-black/45 flex items-center justify-center leading-none font-bold text-[10px] text-white">
         {cost}
       </span>
     </span>
@@ -115,7 +85,7 @@ function CardBar({ entry, selected, onToggle }) {
         selected ? 'ring-2 ring-offset-1 ring-gray-900' : 'hover:opacity-90'
       }`}
     >
-      <CostBadge cost={card.cost} inkable={card.inkwell} textColor={textColor} />
+      <CostBadge cost={card.cost} inkable={card.inkwell} />
       <span className="flex-1 min-w-0">
         <span className="block text-xs font-semibold truncate">{name}</span>
         {isCharacterOrLocation && stats && (

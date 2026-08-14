@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useCards } from '../hooks/useCards'
 import { parseDeckList } from '../lib/parseDeckList'
 import { buildCardIndex, toSimpleName } from '../lib/cardAnalysis'
@@ -33,6 +34,17 @@ function lsGet(key, fallback) {
 
 function lsSet(key, value) {
   try { localStorage.setItem(key, value) } catch { /* noop */ }
+}
+
+// Round-trips a decklist through a URL param so an OBS Browser Source (which
+// has its own isolated storage, separate from the tab you edit in) can load
+// it directly — see encodeDeckParam's usage in the "Copy overlay link" button.
+function encodeDeckParam(text) {
+  try { return btoa(encodeURIComponent(text)) } catch { return '' }
+}
+
+function decodeDeckParam(param) {
+  try { return decodeURIComponent(atob(param)) } catch { return null }
 }
 
 function inkFill(colors) {
@@ -244,9 +256,31 @@ function FullArtCard({ entry, onRemove }) {
 
 export function DecklistInspectorPage() {
   const { cards, loading, error } = useCards()
-  const [deckText, setDeckText] = useState(() => lsGet(DECK_TEXT_KEY, ''))
-  const [editing, setEditing] = useState(() => !lsGet(DECK_TEXT_KEY, ''))
+  const [searchParams] = useSearchParams()
+  const isOverlay = searchParams.get('overlay') === '1'
+  const deckParam = searchParams.get('deck')
+  const overlayDeckText = isOverlay && deckParam ? decodeDeckParam(deckParam) : null
+
+  const [deckText, setDeckText] = useState(() => overlayDeckText ?? lsGet(DECK_TEXT_KEY, ''))
+  const [editing, setEditing] = useState(() => !overlayDeckText && !lsGet(DECK_TEXT_KEY, ''))
   const [selectedKeys, setSelectedKeys] = useState([])
+  const [linkCopied, setLinkCopied] = useState(false)
+
+  // OBS composites a Browser Source's page background as-is, so the overlay
+  // view needs a genuinely transparent <html>/<body> rather than the app's
+  // normal light/dark surface color.
+  useEffect(() => {
+    if (!isOverlay) return
+    const html = document.documentElement
+    const prevHtmlBg = html.style.background
+    const prevBodyBg = document.body.style.background
+    html.style.background = 'transparent'
+    document.body.style.background = 'transparent'
+    return () => {
+      html.style.background = prevHtmlBg
+      document.body.style.background = prevBodyBg
+    }
+  }, [isOverlay])
 
   function updateDeckText(value) {
     setDeckText(value)
@@ -257,6 +291,15 @@ export function DecklistInspectorPage() {
     updateDeckText('')
     setSelectedKeys([])
     setEditing(true)
+  }
+
+  async function copyOverlayLink() {
+    const url = `${window.location.origin}${window.location.pathname}?overlay=1&deck=${encodeDeckParam(deckText)}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch { /* clipboard unavailable — noop */ }
   }
 
   const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
@@ -339,6 +382,38 @@ export function DecklistInspectorPage() {
     })
   }
 
+  const bucketListJsx = matchedEntries.length > 0 && (
+    <div className="space-y-2.5">
+      {BUCKET_ORDER.map(type => (
+        buckets[type].length > 0 && (
+          <div key={type}>
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">
+              {BUCKET_LABEL[type]} ({buckets[type].reduce((s, e) => s + e.count, 0)})
+            </h3>
+            <div className="space-y-0.5">
+              {buckets[type].map(entry => (
+                <CardBar
+                  key={entry.key}
+                  entry={entry}
+                  selected={selectedKeys.includes(entry.key)}
+                  onToggle={toggleSelect}
+                />
+              ))}
+            </div>
+          </div>
+        )
+      ))}
+    </div>
+  )
+
+  if (isOverlay) {
+    return (
+      <div className="w-[340px] px-3 py-3">
+        {bucketListJsx}
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-[1600px] mx-auto px-6 py-8">
       <div className="mb-6">
@@ -354,7 +429,7 @@ export function DecklistInspectorPage() {
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left: decklist, ~25% */}
-        <div className="lg:w-1/4 flex-shrink-0 space-y-4">
+        <div className="lg:w-1/4 flex-shrink-0 space-y-3">
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-semibold text-gray-700">Decklist</label>
@@ -409,28 +484,16 @@ export function DecklistInspectorPage() {
             )}
           </div>
 
+          {bucketListJsx}
+
           {matchedEntries.length > 0 && (
-            <div className="space-y-4">
-              {BUCKET_ORDER.map(type => (
-                buckets[type].length > 0 && (
-                  <div key={type}>
-                    <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                      {BUCKET_LABEL[type]} ({buckets[type].reduce((s, e) => s + e.count, 0)})
-                    </h3>
-                    <div className="space-y-1">
-                      {buckets[type].map(entry => (
-                        <CardBar
-                          key={entry.key}
-                          entry={entry}
-                          selected={selectedKeys.includes(entry.key)}
-                          onToggle={toggleSelect}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={copyOverlayLink}
+              className="text-xs font-medium text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              {linkCopied ? 'Link copied!' : 'Copy OBS overlay link'}
+            </button>
           )}
         </div>
 

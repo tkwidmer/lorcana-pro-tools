@@ -80,25 +80,26 @@ function PieChart({ data }) {
   const r = 42
   const cx = 50
   const cy = 50
-  let angle = -90
-  const slices = data.map(d => {
+  const toXY = a => {
+    const rad = (a * Math.PI) / 180
+    return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)]
+  }
+  let cursor = -90
+  const slices = []
+  for (const d of data) {
     const frac = d.value / total
     const sweep = frac * 360
-    const start = angle
-    const end = angle + sweep
-    angle = end
+    const start = cursor
+    const end = cursor + sweep
+    cursor = end
     const large = sweep > 180 ? 1 : 0
-    const toXY = a => {
-      const rad = (a * Math.PI) / 180
-      return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)]
-    }
     const [x1, y1] = toXY(start)
     const [x2, y2] = toXY(end)
     const path = frac >= 0.9999
       ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
       : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`
-    return { ...d, path, frac }
-  })
+    slices.push({ ...d, path, frac })
+  }
   return (
     <div className="flex items-center gap-4">
       <svg viewBox="0 0 100 100" className="w-24 h-24 flex-shrink-0">

@@ -20,6 +20,7 @@ import { ScoutedGamePage } from './pages/ScoutedGamePage'
 import { PlayerProfilePage } from './pages/PlayerProfilePage'
 import { OpponentDirectoryPage } from './pages/OpponentDirectoryPage'
 import { DeckComparisonPage } from './pages/DeckComparisonPage'
+import { DecklistInspectorPage } from './pages/DecklistInspectorPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { MatchHistoryPage } from './pages/MatchHistoryPage'
 import { GamelogViewerPage } from './pages/GamelogViewerPage'
@@ -73,6 +74,7 @@ function RoutedContent() {
         <Route path="/players/:name" element={<SupporterRoute><PlayerProfilePage /></SupporterRoute>} />
         <Route path="/opponent-directory" element={<SupporterRoute><OpponentDirectoryPage /></SupporterRoute>} />
         <Route path="/deck-comparison" element={<DeckComparisonPage />} />
+        <Route path="/decklist-inspector" element={<SupporterRoute><DecklistInspectorPage /></SupporterRoute>} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/match-history" element={<SupporterRoute><MatchHistoryPage /></SupporterRoute>} />
         <Route path="/gamelog" element={<GamelogViewerPage />} />

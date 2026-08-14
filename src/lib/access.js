@@ -11,6 +11,7 @@ export const SUPPORTER_PATHS = new Set([
   '/library',
   '/game-scraper',
   '/opponent-directory',
+  '/decklist-inspector',
 ])
 
 export function isSupporterPath(path) {

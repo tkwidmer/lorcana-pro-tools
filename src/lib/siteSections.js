@@ -125,6 +125,16 @@ export const SECTIONS = [
       },
     ],
   },
+  {
+    title: 'Content Creators',
+    tools: [
+      {
+        path: '/decklist-inspector',
+        name: 'Decklist Inspector',
+        description: 'Paste a decklist and browse it by type and cost, then pin up to 4 cards to show their full art alongside deck stat charts — built for making Lorcana videos.',
+      },
+    ],
+  },
   ...(DISCORD_INVITE_URL
     ? [
         {

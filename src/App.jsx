@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { Nav } from './components/Nav'
 import { Footer } from './components/Footer'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -34,6 +34,16 @@ import { LoginPage } from './pages/LoginPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { AdminPage } from './pages/AdminPage'
 import { SupporterRoute } from './components/SupporterRoute'
+
+// The OBS overlay view (?overlay=1) carries its decklist entirely in the URL
+// and runs in a fresh, unauthenticated OBS Browser Source with no Supabase
+// session — gating it behind SupporterRoute would just show the sign-in
+// wall there. It exposes no account data, so it's safe to skip the gate.
+function DecklistInspectorRoute() {
+  const [searchParams] = useSearchParams()
+  if (searchParams.get('overlay') === '1') return <DecklistInspectorPage />
+  return <SupporterRoute><DecklistInspectorPage /></SupporterRoute>
+}
 
 function RoutedContent() {
   const location = useLocation()
@@ -74,7 +84,7 @@ function RoutedContent() {
         <Route path="/players/:name" element={<SupporterRoute><PlayerProfilePage /></SupporterRoute>} />
         <Route path="/opponent-directory" element={<SupporterRoute><OpponentDirectoryPage /></SupporterRoute>} />
         <Route path="/deck-comparison" element={<DeckComparisonPage />} />
-        <Route path="/decklist-inspector" element={<SupporterRoute><DecklistInspectorPage /></SupporterRoute>} />
+        <Route path="/decklist-inspector" element={<DecklistInspectorRoute />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/match-history" element={<SupporterRoute><MatchHistoryPage /></SupporterRoute>} />
         <Route path="/gamelog" element={<GamelogViewerPage />} />

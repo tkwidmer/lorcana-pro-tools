@@ -1,4 +1,4 @@
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 const SUBSTACK_URL = 'https://inkbornforge.substack.com'
 const PATREON_URL = 'https://www.patreon.com/inkbornforge'
@@ -8,9 +8,8 @@ const PATREON_URL = 'https://www.patreon.com/inkbornforge'
 // reason Nav is (a chrome-less embed).
 export function Footer() {
   const { pathname } = useLocation()
-  const [searchParams] = useSearchParams()
   if (pathname === '/lore-tracker') return null
-  if (pathname === '/decklist-inspector' && searchParams.get('overlay') === '1') return null
+  if (pathname === '/decklist-inspector/overlay') return null
 
   return (
     <footer className="no-print border-t border-gray-200 bg-white mt-16">

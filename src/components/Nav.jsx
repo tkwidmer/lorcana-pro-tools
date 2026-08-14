@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useSupporter } from '../hooks/useSupporter'
 import { logout } from '../lib/supabaseClient'
@@ -61,7 +61,6 @@ function UserMenu({ user, isAdmin, onLogout, isLoggingOut }) {
 
 export function Nav() {
   const { pathname } = useLocation()
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { isAdmin } = useSupporter()
@@ -70,7 +69,7 @@ export function Nav() {
   if (pathname === '/lore-tracker') return null
   // Hidden for the Decklist Inspector's OBS overlay view — a chrome-less,
   // transparent-background render meant to be cropped into a stream scene.
-  if (pathname === '/decklist-inspector' && searchParams.get('overlay') === '1') return null
+  if (pathname === '/decklist-inspector/overlay') return null
   const isHome = pathname === '/'
 
   const handleLogout = async () => {

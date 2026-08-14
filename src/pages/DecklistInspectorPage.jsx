@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useState, useMemo } from 'react'
 import { useCards } from '../hooks/useCards'
 import { parseDeckList } from '../lib/parseDeckList'
 import { buildCardIndex, toSimpleName } from '../lib/cardAnalysis'
-import { resolveColors, VALID_INKS, INK_HEX, INK_TEXT_ON } from '../lib/inkColors'
+import { resolveColors, VALID_INKS, INK_HEX } from '../lib/inkColors'
+import { BUCKET_ORDER, BUCKET_LABEL, encodeDeckParam, buildBuckets } from '../lib/decklistShared'
+import { CardBar } from '../components/DecklistCardBar'
 
 const SAMPLE = `4x Maui - Hero to All
 4x Moana - Of Motunui
@@ -14,13 +15,6 @@ const SAMPLE = `4x Maui - Hero to All
 3x Cinderella's Castle
 4x Prince Phillip - Vanquisher of Foes`
 
-const BUCKET_ORDER = ['Character', 'Action', 'Item', 'Location']
-const BUCKET_LABEL = {
-  Character: 'Characters',
-  Action: 'Actions / Songs',
-  Item: 'Items',
-  Location: 'Locations',
-}
 const MAX_SELECTED = 3
 const DECK_TEXT_KEY = 'decklistInspector.deckText'
 const COST_BUCKET_LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9+']
@@ -34,85 +28,6 @@ function lsGet(key, fallback) {
 
 function lsSet(key, value) {
   try { localStorage.setItem(key, value) } catch { /* noop */ }
-}
-
-// Round-trips a decklist through a URL param so an OBS Browser Source (which
-// has its own isolated storage, separate from the tab you edit in) can load
-// it directly — see encodeDeckParam's usage in the "Copy overlay link" button.
-function encodeDeckParam(text) {
-  try { return btoa(encodeURIComponent(text)) } catch { return '' }
-}
-
-function decodeDeckParam(param) {
-  try { return decodeURIComponent(atob(param)) } catch { return null }
-}
-
-function inkFill(colors) {
-  const hexes = colors.map(c => INK_HEX[c]).filter(Boolean)
-  if (hexes.length === 0) return { background: '#9ca3af' }
-  if (hexes.length === 1) return { background: hexes[0] }
-  return { background: `linear-gradient(90deg, ${hexes[0]} 0%, ${hexes[0]} 48%, ${hexes[1]} 52%, ${hexes[1]} 100%)` }
-}
-
-function textColorFor(colors) {
-  const first = colors[0]
-  return INK_TEXT_ON[first] || '#ffffff'
-}
-
-// The game's own inkwell cost emblem: the hexagon wrapped in the
-// aperture-blade ring for inkable cards, or the bare hexagon for uninkable
-// ones. A small dark disc sits behind the number for legibility against the
-// gold artwork regardless of the card's ink color.
-function CostBadge({ cost, inkable }) {
-  const src = inkable ? '/ink-cost/inkable.png' : '/ink-cost/uninkable.png'
-  return (
-    <span className="relative flex-shrink-0 w-6 h-6 flex items-center justify-center">
-      <img src={src} alt="" className="absolute inset-0 w-full h-full object-contain" />
-      {/* Literal white-on-black, independent of the dark-mode `white` token remap
-          (which repurposes `text-white`/`bg-white` as a dark surface color) — this
-          badge always needs true white text on a true black disc. */}
-      <span
-        className="relative w-3.5 h-3.5 rounded-full flex items-center justify-center leading-none font-bold text-[9px]"
-        style={{ background: 'rgba(0,0,0,0.6)', color: '#ffffff' }}
-      >
-        {cost}
-      </span>
-    </span>
-  )
-}
-
-function CardBar({ entry, selected, onToggle }) {
-  const { card, name, count } = entry
-  const colors = resolveColors(card.colors?.length ? card.colors : [card.color])
-  const textColor = textColorFor(colors)
-  const isCharacterOrLocation = card.type === 'Character' || card.type === 'Location'
-
-  let stats = null
-  if (card.type === 'Character') {
-    stats = `${card.strength ?? '–'}/${card.willpower ?? '–'}${card.lore ? ` · ${'◆'.repeat(card.lore)}` : ''}`
-  } else if (card.type === 'Location') {
-    stats = `W:${card.willpower ?? '–'}${card.lore ? ` · ${'◆'.repeat(card.lore)}` : ''}`
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => onToggle(entry)}
-      style={{ ...inkFill(colors), color: textColor }}
-      className={`w-full text-left rounded-md px-2 py-1 flex items-center gap-2 transition-shadow ${
-        selected ? 'ring-2 ring-offset-1 ring-gray-900' : 'hover:opacity-90'
-      }`}
-    >
-      <CostBadge cost={card.cost} inkable={card.inkwell} />
-      <span className="flex-1 min-w-0 text-xs font-semibold truncate">
-        {name}
-        {isCharacterOrLocation && stats && (
-          <span className="font-normal opacity-80"> · {stats}</span>
-        )}
-      </span>
-      <span className="flex-shrink-0 text-xs font-bold tabular-nums">×{count}</span>
-    </button>
-  )
 }
 
 function PieChart({ data }) {
@@ -256,31 +171,10 @@ function FullArtCard({ entry, onRemove }) {
 
 export function DecklistInspectorPage() {
   const { cards, loading, error } = useCards()
-  const [searchParams] = useSearchParams()
-  const isOverlay = searchParams.get('overlay') === '1'
-  const deckParam = searchParams.get('deck')
-  const overlayDeckText = isOverlay && deckParam ? decodeDeckParam(deckParam) : null
-
-  const [deckText, setDeckText] = useState(() => overlayDeckText ?? lsGet(DECK_TEXT_KEY, ''))
-  const [editing, setEditing] = useState(() => !overlayDeckText && !lsGet(DECK_TEXT_KEY, ''))
+  const [deckText, setDeckText] = useState(() => lsGet(DECK_TEXT_KEY, ''))
+  const [editing, setEditing] = useState(() => !lsGet(DECK_TEXT_KEY, ''))
   const [selectedKeys, setSelectedKeys] = useState([])
   const [linkCopied, setLinkCopied] = useState(false)
-
-  // OBS composites a Browser Source's page background as-is, so the overlay
-  // view needs a genuinely transparent <html>/<body> rather than the app's
-  // normal light/dark surface color.
-  useEffect(() => {
-    if (!isOverlay) return
-    const html = document.documentElement
-    const prevHtmlBg = html.style.background
-    const prevBodyBg = document.body.style.background
-    html.style.background = 'transparent'
-    document.body.style.background = 'transparent'
-    return () => {
-      html.style.background = prevHtmlBg
-      document.body.style.background = prevBodyBg
-    }
-  }, [isOverlay])
 
   function updateDeckText(value) {
     setDeckText(value)
@@ -294,7 +188,7 @@ export function DecklistInspectorPage() {
   }
 
   async function copyOverlayLink() {
-    const url = `${window.location.origin}${window.location.pathname}?overlay=1&deck=${encodeDeckParam(deckText)}`
+    const url = `${window.location.origin}/decklist-inspector/overlay?deck=${encodeDeckParam(deckText)}`
     try {
       await navigator.clipboard.writeText(url)
       setLinkCopied(true)
@@ -316,17 +210,7 @@ export function DecklistInspectorPage() {
   const matchedEntries = entries.filter(e => e.card)
   const unmatchedEntries = entries.filter(e => !e.card)
 
-  const buckets = useMemo(() => {
-    const map = { Character: [], Action: [], Item: [], Location: [] }
-    for (const entry of matchedEntries) {
-      const type = entry.card.type
-      if (map[type]) map[type].push(entry)
-    }
-    for (const type of Object.keys(map)) {
-      map[type].sort((a, b) => (a.card.cost ?? 0) - (b.card.cost ?? 0) || a.name.localeCompare(b.name))
-    }
-    return map
-  }, [matchedEntries])
+  const buckets = useMemo(() => buildBuckets(matchedEntries), [matchedEntries])
 
   const totalCards = matchedEntries.reduce((s, e) => s + e.count, 0)
 
@@ -353,18 +237,18 @@ export function DecklistInspectorPage() {
 
   const costCurve = useMemo(() => {
     const inksUsed = new Set()
-    const buckets = COST_BUCKET_LABELS.map(label => ({ label, total: 0, byInk: {} }))
+    const curveBuckets = COST_BUCKET_LABELS.map(label => ({ label, total: 0, byInk: {} }))
     for (const e of matchedEntries) {
       const cost = e.card.cost ?? 0
       const idx = Math.min(Math.max(cost, 1), 9) - 1
       const colors = resolveColors(e.card.colors?.length ? e.card.colors : [e.card.color])
       const ink = colors[0] || 'steel'
       inksUsed.add(ink)
-      buckets[idx].total += e.count
-      buckets[idx].byInk[ink] = (buckets[idx].byInk[ink] || 0) + e.count
+      curveBuckets[idx].total += e.count
+      curveBuckets[idx].byInk[ink] = (curveBuckets[idx].byInk[ink] || 0) + e.count
     }
     const inks = VALID_INKS.filter(i => inksUsed.has(i))
-    const withSegments = buckets.map(b => ({
+    const withSegments = curveBuckets.map(b => ({
       label: b.label,
       total: b.total,
       segments: inks.map(ink => ({ ink, value: b.byInk[ink] || 0 })),
@@ -380,38 +264,6 @@ export function DecklistInspectorPage() {
       if (prev.length >= MAX_SELECTED) return prev
       return [...prev, entry.key]
     })
-  }
-
-  const bucketListJsx = matchedEntries.length > 0 && (
-    <div className="space-y-2.5">
-      {BUCKET_ORDER.map(type => (
-        buckets[type].length > 0 && (
-          <div key={type}>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">
-              {BUCKET_LABEL[type]} ({buckets[type].reduce((s, e) => s + e.count, 0)})
-            </h3>
-            <div className="space-y-0.5">
-              {buckets[type].map(entry => (
-                <CardBar
-                  key={entry.key}
-                  entry={entry}
-                  selected={selectedKeys.includes(entry.key)}
-                  onToggle={toggleSelect}
-                />
-              ))}
-            </div>
-          </div>
-        )
-      ))}
-    </div>
-  )
-
-  if (isOverlay) {
-    return (
-      <div className="w-[340px] px-3 py-3">
-        {bucketListJsx}
-      </div>
-    )
   }
 
   return (
@@ -484,7 +336,29 @@ export function DecklistInspectorPage() {
             )}
           </div>
 
-          {bucketListJsx}
+          {matchedEntries.length > 0 && (
+            <div className="space-y-2.5">
+              {BUCKET_ORDER.map(type => (
+                buckets[type].length > 0 && (
+                  <div key={type}>
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">
+                      {BUCKET_LABEL[type]} ({buckets[type].reduce((s, e) => s + e.count, 0)})
+                    </h3>
+                    <div className="space-y-0.5">
+                      {buckets[type].map(entry => (
+                        <CardBar
+                          key={entry.key}
+                          entry={entry}
+                          selected={selectedKeys.includes(entry.key)}
+                          onToggle={toggleSelect}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              ))}
+            </div>
+          )}
 
           {matchedEntries.length > 0 && (
             <button

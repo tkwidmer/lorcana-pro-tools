@@ -627,7 +627,7 @@ export function TournamentLookupPage() {
   const advancementAnalysis = player && structure ? analyzeAdvancement(player, structure) : null
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">
           Tournament Lookup

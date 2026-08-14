@@ -101,7 +101,7 @@ const EMPTY_FILTERS = {
 
 function DeckListView({ decks, loading, cardsLoading, onNew, onOpen, onDelete }) {
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Coconut Deck Builder</h1>
@@ -170,7 +170,7 @@ function PickCoconutCardView({ onPick, onCancel }) {
   }, [])
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <div className="flex items-center justify-between mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Choose your Coconut card</h1>
@@ -1073,7 +1073,7 @@ function BuildView({ initialDeck, cards, onBack }) {
 
   if (!coconutCard) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-8 text-sm text-red-500">
+      <div className="w-full px-6 py-8 text-sm text-red-500">
         This deck's Coconut card could not be found.
       </div>
     )
@@ -1082,7 +1082,7 @@ function BuildView({ initialDeck, cards, onBack }) {
   const imageUrl = getCoconutCardImageUrl(coconutCard)
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <HoverCardPreview preview={hoverPreview} />
       {shareCard && (
         <ShareCardModal
@@ -1311,7 +1311,7 @@ export function CoconutDeckBuilderPage() {
 
   if (cardsError) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="w-full px-6 py-8">
         <div className="text-sm text-red-500 border border-red-200 rounded px-4 py-2 bg-white">{cardsError}</div>
       </div>
     )
@@ -1333,7 +1333,7 @@ export function CoconutDeckBuilderPage() {
 
   if (view === 'build' && activeDeck) {
     if (cardsLoading) {
-      return <div className="max-w-7xl mx-auto px-6 py-8 text-sm text-gray-400">Loading card data…</div>
+      return <div className="w-full px-6 py-8 text-sm text-gray-400">Loading card data…</div>
     }
     return <BuildView key={activeDeck.id} initialDeck={activeDeck} cards={cards} onBack={handleBack} />
   }

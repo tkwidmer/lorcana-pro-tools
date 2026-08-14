@@ -56,7 +56,7 @@ export function WinrateMatrixPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="w-full px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Winrate Matrix</h1>
         <p className="text-gray-500">Loading stats...</p>
       </div>
@@ -65,7 +65,7 @@ export function WinrateMatrixPage() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="w-full px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Winrate Matrix</h1>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-900 font-medium">Error loading stats:</p>
@@ -77,7 +77,7 @@ export function WinrateMatrixPage() {
 
   if (!stats) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="w-full px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Winrate Matrix</h1>
         <p className="text-gray-500">No data available</p>
       </div>
@@ -129,7 +129,7 @@ export function WinrateMatrixPage() {
     .sort((a, b) => b.winRate - a.winRate)
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="w-full px-6 py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Winrate Matrix</h1>
         <p className="text-gray-500">Head-to-head matchup winrates for {stats.meta?.queue?.name || selectedQueue}</p>

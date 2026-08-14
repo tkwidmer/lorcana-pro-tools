@@ -54,7 +54,7 @@ function ToolCard({ tool }) {
 
 export function HomePage() {
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="w-full px-6 py-12">
       <div className="mb-10">
         <img
           src="/inkborn_forge_substack_header.png"

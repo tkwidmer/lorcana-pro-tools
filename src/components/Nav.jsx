@@ -86,7 +86,7 @@ export function Nav() {
 
   return (
     <nav className="no-print border-b border-gray-200 bg-white">
-      <div className="max-w-7xl mx-auto px-6 h-12 flex items-center gap-4">
+      <div className="w-full px-6 h-12 flex items-center gap-4">
         <Link to="/" className="flex items-center gap-2 font-bold text-gray-900 tracking-tight hover:text-gray-600 transition-colors">
           {/* The mark has an opaque white background baked into the PNG, which
               is invisible on a light page but reads as a white tile in dark

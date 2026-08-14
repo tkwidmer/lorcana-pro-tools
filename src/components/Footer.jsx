@@ -13,7 +13,7 @@ export function Footer() {
 
   return (
     <footer className="no-print border-t border-gray-200 bg-white mt-16">
-      <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="w-full px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <p className="text-sm text-gray-500">
           &copy; {new Date().getFullYear()} InkbornForge
         </p>

@@ -118,7 +118,7 @@ export function OpponentDirectoryPage() {
 
   if (games === null) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         <div className="text-gray-500">Loading imported games…</div>
       </div>
     )
@@ -126,7 +126,7 @@ export function OpponentDirectoryPage() {
 
   if (directory.length === 0) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Opponent Directory</h1>
         <p className="text-gray-600">
           No opponents found yet. Import gamelogs on the{' '}
@@ -137,7 +137,7 @@ export function OpponentDirectoryPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="w-full px-4 py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Opponent Directory</h1>
       <p className="text-gray-600 mb-6">
         Every card we've seen your opponents play, ink, or discard — aggregated across all imported games.

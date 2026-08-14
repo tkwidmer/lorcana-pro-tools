@@ -9,6 +9,26 @@ const INK_NAME_MAP = {
 
 export const VALID_INKS = ['amber', 'amethyst', 'emerald', 'ruby', 'sapphire', 'steel']
 
+// Hex values picked directly from /public/ink/{color}.png (the official ink icons).
+export const INK_HEX = {
+  amber: '#f4b223',
+  amethyst: '#7c4182',
+  emerald: '#329044',
+  ruby: '#d50037',
+  sapphire: '#0093c9',
+  steel: '#97a3ae',
+}
+
+// Text readable against a given ink's background fill.
+export const INK_TEXT_ON = {
+  amber: '#3a2a00',
+  amethyst: '#ffffff',
+  emerald: '#ffffff',
+  ruby: '#ffffff',
+  sapphire: '#ffffff',
+  steel: '#1a2228',
+}
+
 export function resolveInkName(color) {
   if (!color) return null
   return INK_NAME_MAP[color.toLowerCase()] ?? null

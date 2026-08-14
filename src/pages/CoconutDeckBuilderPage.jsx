@@ -113,7 +113,7 @@ function DeckListView({ decks, loading, cardsLoading, onNew, onOpen, onDelete })
           onClick={onNew}
           disabled={cardsLoading}
           title={cardsLoading ? 'Loading card data…' : undefined}
-          className="bg-black text-white text-sm px-4 py-2 rounded hover:bg-gray-800 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+          className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-800 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
         >
           + New deck
         </button>
@@ -269,7 +269,7 @@ function PickInksView({ coconutCard, onConfirm, onCancel }) {
         </button>
         <button
           onClick={() => onConfirm(inks)}
-          className="bg-black text-white text-sm px-4 py-2 rounded hover:bg-gray-800 ml-auto"
+          className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-800 ml-auto"
         >
           Continue →
         </button>
@@ -355,7 +355,7 @@ function CardFilterModal({
           <button onClick={onReset} className="px-3 py-1.5 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50 transition-colors">
             Reset
           </button>
-          <button onClick={onClose} className="px-4 py-1.5 text-xs font-medium rounded bg-black text-white hover:bg-gray-800 transition-colors">
+          <button onClick={onClose} className="px-4 py-1.5 text-xs font-medium rounded bg-gray-900 text-white hover:bg-gray-800 transition-colors">
             Done
           </button>
         </div>
@@ -933,7 +933,7 @@ function DecklistModal({ deck, coconutCard, cardsByFullName, onImport, onClose }
           </button>
           <button
             onClick={handleImport}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-black text-white hover:bg-gray-800 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium rounded bg-gray-900 text-white hover:bg-gray-800 transition-colors"
           >
             Import
           </button>

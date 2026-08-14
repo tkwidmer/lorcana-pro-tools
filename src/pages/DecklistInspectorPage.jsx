@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useCards } from '../hooks/useCards'
 import { parseDeckList } from '../lib/parseDeckList'
 import { buildCardIndex, toSimpleName } from '../lib/cardAnalysis'
-import { resolveColors, INK_HEX, INK_TEXT_ON } from '../lib/inkColors'
+import { resolveColors, VALID_INKS, INK_HEX, INK_TEXT_ON } from '../lib/inkColors'
 
 const SAMPLE = `4x Maui - Hero to All
 4x Moana - Of Motunui
@@ -21,6 +21,19 @@ const BUCKET_LABEL = {
   Location: 'Locations',
 }
 const MAX_SELECTED = 4
+const DECK_TEXT_KEY = 'decklistInspector.deckText'
+const COST_BUCKET_LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9+']
+
+function lsGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw === null ? fallback : raw
+  } catch { return fallback }
+}
+
+function lsSet(key, value) {
+  try { localStorage.setItem(key, value) } catch { /* noop */ }
+}
 
 function inkFill(colors) {
   const hexes = colors.map(c => INK_HEX[c]).filter(Boolean)
@@ -143,6 +156,50 @@ function BarChart({ data }) {
   )
 }
 
+function CostCurveChart({ buckets, inks }) {
+  // buckets: [{ label, total, segments: [{ ink, value }] }]
+  const max = Math.max(1, ...buckets.map(b => b.total))
+  const CHART_HEIGHT = 140
+  return (
+    <div>
+      <div className="flex items-end gap-1.5" style={{ height: CHART_HEIGHT }}>
+        {buckets.map(b => (
+          <div key={b.label} className="flex-1 flex flex-col items-center justify-end h-full">
+            <div className="w-full flex flex-col-reverse justify-start" style={{ height: '100%' }}>
+              {b.total === 0 ? null : (
+                <div style={{ height: `${(b.total / max) * 100}%` }} className="w-full flex flex-col-reverse">
+                  {b.segments.map(seg => seg.value > 0 && (
+                    <div
+                      key={seg.ink}
+                      style={{ height: `${(seg.value / b.total) * 100}%`, background: INK_HEX[seg.ink] || '#9ca3af' }}
+                      className="w-full"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-1.5 mt-1">
+        {buckets.map(b => (
+          <span key={b.label} className="flex-1 text-center text-[10px] text-gray-500">{b.label}</span>
+        ))}
+      </div>
+      {inks.length > 1 && (
+        <div className="flex flex-wrap gap-3 mt-2">
+          {inks.map(ink => (
+            <div key={ink} className="flex items-center gap-1.5 text-xs">
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: INK_HEX[ink] }} />
+              <span className="text-gray-600 capitalize">{ink}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FullArtCard({ entry, onRemove }) {
   const { card, name, count } = entry
   const img = card.images?.full || card.images?.thumbnail
@@ -170,8 +227,20 @@ function FullArtCard({ entry, onRemove }) {
 
 export function DecklistInspectorPage() {
   const { cards, loading, error } = useCards()
-  const [deckText, setDeckText] = useState('')
+  const [deckText, setDeckText] = useState(() => lsGet(DECK_TEXT_KEY, ''))
+  const [editing, setEditing] = useState(() => !lsGet(DECK_TEXT_KEY, ''))
   const [selectedKeys, setSelectedKeys] = useState([])
+
+  function updateDeckText(value) {
+    setDeckText(value)
+    lsSet(DECK_TEXT_KEY, value)
+  }
+
+  function clearDeckText() {
+    updateDeckText('')
+    setSelectedKeys([])
+    setEditing(true)
+  }
 
   const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
 
@@ -222,6 +291,27 @@ export function DecklistInspectorPage() {
     }))
   }, [buckets])
 
+  const costCurve = useMemo(() => {
+    const inksUsed = new Set()
+    const buckets = COST_BUCKET_LABELS.map(label => ({ label, total: 0, byInk: {} }))
+    for (const e of matchedEntries) {
+      const cost = e.card.cost ?? 0
+      const idx = Math.min(Math.max(cost, 1), 9) - 1
+      const colors = resolveColors(e.card.colors?.length ? e.card.colors : [e.card.color])
+      const ink = colors[0] || 'steel'
+      inksUsed.add(ink)
+      buckets[idx].total += e.count
+      buckets[idx].byInk[ink] = (buckets[idx].byInk[ink] || 0) + e.count
+    }
+    const inks = VALID_INKS.filter(i => inksUsed.has(i))
+    const withSegments = buckets.map(b => ({
+      label: b.label,
+      total: b.total,
+      segments: inks.map(ink => ({ ink, value: b.byInk[ink] || 0 })),
+    }))
+    return { buckets: withSegments, inks }
+  }, [matchedEntries])
+
   const selected = selectedKeys.map(k => matchedEntries.find(e => e.key === k)).filter(Boolean)
 
   function toggleSelect(entry) {
@@ -257,13 +347,43 @@ export function DecklistInspectorPage() {
                 </span>
               )}
             </div>
-            <textarea
-              className="w-full h-40 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-800 resize-none focus:outline-none focus:border-gray-500 placeholder-gray-300"
-              placeholder={SAMPLE}
-              value={deckText}
-              onChange={e => setDeckText(e.target.value)}
-              spellCheck={false}
-            />
+            {editing ? (
+              <>
+                <textarea
+                  className="w-full h-40 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-800 resize-none focus:outline-none focus:border-gray-500 placeholder-gray-300"
+                  placeholder={SAMPLE}
+                  value={deckText}
+                  onChange={e => updateDeckText(e.target.value)}
+                  spellCheck={false}
+                />
+                {deckText.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(false)}
+                    className="text-xs font-medium text-gray-500 hover:text-gray-900 mt-1"
+                  >
+                    Done editing
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-900 underline underline-offset-2"
+                >
+                  Edit list
+                </button>
+                <button
+                  type="button"
+                  onClick={clearDeckText}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-900 underline underline-offset-2"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             {unmatchedEntries.length > 0 && (
               <p className="text-xs text-amber-600 mt-1">
                 {unmatchedEntries.length} line{unmatchedEntries.length !== 1 ? 's' : ''} not matched to a card:{' '}
@@ -300,7 +420,7 @@ export function DecklistInspectorPage() {
         {/* Right: stats + full art, ~75% */}
         <div className="lg:w-3/4 space-y-6">
           {matchedEntries.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border border-gray-200 rounded-lg p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 border border-gray-200 rounded-lg p-4">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
                   Inkable / Uninkable
@@ -312,6 +432,12 @@ export function DecklistInspectorPage() {
                   Card Type
                 </h3>
                 <BarChart data={typeStats} />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+                  Cost Curve
+                </h3>
+                <CostCurveChart buckets={costCurve.buckets} inks={costCurve.inks} />
               </div>
             </div>
           )}

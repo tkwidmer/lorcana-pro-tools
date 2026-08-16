@@ -23,7 +23,12 @@ export function openDB() {
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
+    // Fires when another open connection (e.g. a stale tab) is blocking a
+    // version upgrade. Without this, the request never resolves or rejects —
+    // callers would hang forever with no error to catch or fall back on.
+    req.onblocked = () => reject(new Error('IndexedDB open blocked by another connection'))
   })
+  dbPromise.catch(() => { dbPromise = null })
   return dbPromise
 }
 

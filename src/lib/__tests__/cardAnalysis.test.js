@@ -146,6 +146,12 @@ describe('toSimpleName', () => {
   it('lowercases, strips punctuation, and collapses whitespace', () => {
     expect(toSimpleName('Elsa - Snow Queen!')).toBe('elsa snow queen')
   })
+
+  it('normalizes en-dash and em-dash separators the same as a hyphen', () => {
+    expect(toSimpleName('The Prince – Searching for His Love')).toBe('the prince searching for his love')
+    expect(toSimpleName('The Prince — Searching for His Love')).toBe('the prince searching for his love')
+    expect(toSimpleName('The Prince - Searching for His Love')).toBe('the prince searching for his love')
+  })
 })
 
 describe('buildCardIndex', () => {

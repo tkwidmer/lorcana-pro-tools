@@ -56,16 +56,13 @@ function simpleName(fullName) {
 export function buildKeywordAnalysis(cards, allApiCards) {
   if (cards.length === 0) return null
 
-  // Build a lookup: fullName.toLowerCase() → apiCard
-  const byName = new Map()
-  for (const c of allApiCards) {
-    if (c.fullName) byName.set(c.fullName.toLowerCase(), c)
-  }
+  // Build a lookup: normalized fullName → apiCard
+  const byName = buildCardIndex(allApiCards)
 
   // Build a lookup: simpleName → array of { fullName, cost, copies } for cards in deck
   const deckBySimple = new Map()
   for (const card of cards) {
-    const api = byName.get(card.name.toLowerCase())
+    const api = byName.get(toSimpleName(card.name))
     const sn = simpleName(card.name)
     if (!deckBySimple.has(sn)) deckBySimple.set(sn, [])
     deckBySimple.get(sn).push({ fullName: card.name, cost: api?.cost ?? null, copies: card.count })
@@ -80,7 +77,7 @@ export function buildKeywordAnalysis(cards, allApiCards) {
   let totalSongs = 0, totalSingers = 0, totalSingerCapacity = 0
 
   for (const card of cards) {
-    const api = byName.get(card.name.toLowerCase())
+    const api = byName.get(toSimpleName(card.name))
     const type = api?.type || ''
     const subs = api?.subtypes || api?.classifications || []
     const isSong = /song/i.test(type) || (Array.isArray(subs) && subs.some(s => /song/i.test(s)))
@@ -115,7 +112,7 @@ export function buildKeywordAnalysis(cards, allApiCards) {
       if (kw.keyword === 'Shift') {
         const sn = simpleName(card.name)
         const bases = (deckBySimple.get(sn) || []).filter(b => {
-          if (b.fullName.toLowerCase() === card.name.toLowerCase()) return false
+          if (toSimpleName(b.fullName) === toSimpleName(card.name)) return false
           if (b.cost == null || api.cost == null) return false
           return b.cost < api.cost
         })
@@ -164,10 +161,7 @@ export function buildKeywordAnalysis(cards, allApiCards) {
 // the exact draw count (e.g. "draw 2 cards" → drawCount: 2).
 export function buildDrawEffects(cards, allApiCards) {
   if (cards.length === 0) return null
-  const byName = new Map()
-  for (const c of allApiCards) {
-    if (c.fullName) byName.set(c.fullName.toLowerCase(), c)
-  }
+  const byName = buildCardIndex(allApiCards)
 
   const drawCards = []
   const rampCards = []
@@ -175,7 +169,7 @@ export function buildDrawEffects(cards, allApiCards) {
   const scryCards = []
 
   for (const card of cards) {
-    const api = byName.get(card.name.toLowerCase())
+    const api = byName.get(toSimpleName(card.name))
     if (!api) continue
     const role = classifyCardRole(api)
     const text = (
@@ -290,7 +284,7 @@ export function buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, medianC
   const tossThreshold = Math.max(5, medianCost + 2)
   const keep = [], flexible = [], toss = []
   for (const card of cards) {
-    const key = card.name.toLowerCase()
+    const key = toSimpleName(card.name)
     const cost = costMap.get(key)
     const inkable = inkwellMap.get(key)
     const role = roleMap.get(key) || {}

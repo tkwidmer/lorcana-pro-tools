@@ -199,7 +199,7 @@ export function DeckInsightsPage() {
   const costMap = useMemo(() => {
     const map = new Map()
     for (const c of allApiCards) {
-      if (c.fullName && c.cost != null) map.set(c.fullName.toLowerCase(), c.cost)
+      if (c.fullName && c.cost != null) map.set(toSimpleName(c.fullName), c.cost)
     }
     return map
   }, [allApiCards])
@@ -207,7 +207,7 @@ export function DeckInsightsPage() {
   const inkwellMap = useMemo(() => {
     const map = new Map()
     for (const c of allApiCards) {
-      if (c.fullName) map.set(c.fullName.toLowerCase(), c.inkwell)
+      if (c.fullName) map.set(toSimpleName(c.fullName), c.inkwell)
     }
     return map
   }, [allApiCards])
@@ -217,7 +217,7 @@ export function DeckInsightsPage() {
   const roleMap = useMemo(() => {
     const map = new Map()
     for (const c of allApiCards) {
-      if (c.fullName) map.set(c.fullName.toLowerCase(), classifyCardRole(c))
+      if (c.fullName) map.set(toSimpleName(c.fullName), classifyCardRole(c))
     }
     return map
   }, [allApiCards])
@@ -225,7 +225,7 @@ export function DeckInsightsPage() {
   const colorMap = useMemo(() => {
     const map = new Map()
     for (const c of allApiCards) {
-      if (c.fullName) map.set(c.fullName.toLowerCase(), (c.color || '').toLowerCase())
+      if (c.fullName) map.set(toSimpleName(c.fullName), (c.color || '').toLowerCase())
     }
     return map
   }, [allApiCards])
@@ -265,7 +265,7 @@ export function DeckInsightsPage() {
     let unknownCount = 0
     const costCopies = []
     for (const card of cards) {
-      const key = card.name.toLowerCase()
+      const key = toSimpleName(card.name)
       const inkwell = inkwellMap.get(key)
       const cost = costMap.get(key)
       if (inkwell === undefined) {
@@ -285,7 +285,7 @@ export function DeckInsightsPage() {
     const medianCost = costCopies.length > 0 ? costCopies[Math.floor(costCopies.length / 2)] : 3
     const curveThreshold = Math.max(1, Math.min(3, medianCost - 1))
     const playableCount = cards.reduce((s, c) => {
-      const cost = costMap.get(c.name.toLowerCase())
+      const cost = costMap.get(toSimpleName(c.name))
       return s + (cost != null && cost <= curveThreshold ? c.count : 0)
     }, 0)
     // Build flat deck arrays for MC simulations
@@ -293,7 +293,7 @@ export function DeckInsightsPage() {
     const deckInkable = new Uint8Array(deckSize) // 1 = inkable, 0 = non-inkable (unknown treated as inkable)
     let idx = 0
     for (const card of cards) {
-      const key = card.name.toLowerCase()
+      const key = toSimpleName(card.name)
       const cost = costMap.get(key)
       const inkwell = inkwellMap.get(key)
       const c = cost != null ? cost : 999
@@ -318,7 +318,7 @@ export function DeckInsightsPage() {
   const curveCounts = useMemo(() => {
     const counts = new Map()
     for (const card of cards) {
-      const cost = costMap.get(card.name.toLowerCase())
+      const cost = costMap.get(toSimpleName(card.name))
       if (cost != null) counts.set(cost, (counts.get(cost) || 0) + card.count)
     }
     return counts
@@ -328,7 +328,7 @@ export function DeckInsightsPage() {
   const curveByInkability = useMemo(() => {
     const map = new Map() // cost → { inkable, nonInkable }
     for (const card of cards) {
-      const key = card.name.toLowerCase()
+      const key = toSimpleName(card.name)
       const cost = costMap.get(key)
       const inkable = inkwellMap.get(key)
       if (cost == null || inkable === undefined) continue
@@ -346,7 +346,7 @@ export function DeckInsightsPage() {
     const counts = new Map() // color → { inkable, nonInkable, total }
     let unknown = 0
     for (const card of cards) {
-      const key = card.name.toLowerCase()
+      const key = toSimpleName(card.name)
       const color = colorMap.get(key)
       const inkable = inkwellMap.get(key)
       if (!color) { unknown += card.count; continue }
@@ -371,14 +371,10 @@ export function DeckInsightsPage() {
   // Lore density: distribution of lore values across characters and locations only.
   const loreDensity = useMemo(() => {
     if (cards.length === 0) return null
-    const byName = new Map()
-    for (const c of allApiCards) {
-      if (c.fullName) byName.set(c.fullName.toLowerCase(), c)
-    }
     const buckets = new Map() // lore value → copy count
     let totalQuesters = 0, totalLore = 0, unknownCount = 0
     for (const card of cards) {
-      const api = byName.get(card.name.toLowerCase())
+      const api = cardIndex.get(toSimpleName(card.name))
       if (!api) continue
       const type = api.type || ''
       if (!/character|location/i.test(type)) continue
@@ -402,7 +398,7 @@ export function DeckInsightsPage() {
     if (fourPlus > 0) distribution.push({ lore: '4+', count: fourPlus, pct: fourPlus / totalQuesters })
     const questingCopies = totalQuesters - (buckets.get(0) || 0)
     return { distribution, totalQuesters, questingCopies, avgLore, unknownCount }
-  }, [cards, allApiCards])
+  }, [cards, cardIndex])
 
   // Curve probability: P(can play at least one card) for each turn T1-T8
   // Monte Carlo — accounts for mulligan strategy (keep playable, send back non-playable)
@@ -412,7 +408,7 @@ export function DeckInsightsPage() {
     const deckCosts = new Int16Array(deckSize).fill(999)
     let idx = 0
     for (const card of cards) {
-      const cost = costMap.get(card.name.toLowerCase())
+      const cost = costMap.get(toSimpleName(card.name))
       const c = cost != null ? cost : 999
       for (let i = 0; i < card.count && idx < deckSize; i++) deckCosts[idx++] = c
     }
@@ -425,8 +421,7 @@ export function DeckInsightsPage() {
     if (cards.length === 0) return []
     const result = []
     for (const card of cards) {
-      const key = card.name.toLowerCase()
-      const apiCard = allApiCards.find(c => c.fullName?.toLowerCase() === key)
+      const apiCard = cardIndex.get(toSimpleName(card.name))
       if (!apiCard) continue
       for (let i = 0; i < card.count; i++) {
         result.push({
@@ -438,7 +433,7 @@ export function DeckInsightsPage() {
       }
     }
     return result
-  }, [cards, allApiCards])
+  }, [cards, cardIndex])
 
   const questPressure = useMemo(() => {
     if (questDeckCards.length === 0) return null
@@ -1616,11 +1611,11 @@ export function DeckInsightsPage() {
               </thead>
               <tbody>
                 {[...cards].sort((a, b) => {
-                  const ca = costMap.get(a.name.toLowerCase()) ?? 99
-                  const cb = costMap.get(b.name.toLowerCase()) ?? 99
+                  const ca = costMap.get(toSimpleName(a.name)) ?? 99
+                  const cb = costMap.get(toSimpleName(b.name)) ?? 99
                   return ca !== cb ? ca - cb : a.name.localeCompare(b.name)
                 }).map((card, i) => {
-                  const cost = costMap.get(card.name.toLowerCase())
+                  const cost = costMap.get(toSimpleName(card.name))
                   const defaultTurn = cost != null ? Math.max(1, Math.min(8, cost)) : 4
                   const curveT = targetTurnOverrides[card.name] ?? defaultTurn
                   const draws = gameDraws(curveT)

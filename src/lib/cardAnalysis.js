@@ -363,7 +363,7 @@ export function setLabel(setCode) {
 export function toSimpleName(str) {
   return str
     .toLowerCase()
-    .replace(/\s*-\s*/g, ' ')
+    .replace(/\s*[-‐-―]\s*/g, ' ')
     .replace(/[^a-z0-9 ]/g, '')
     .replace(/\s+/g, ' ')
     .trim()

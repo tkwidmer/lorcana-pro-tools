@@ -50,7 +50,7 @@ export function parseGamelog(id, logs, meta = {}) {
         drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0,
         loreGained: 0, shiftPlays: 0,
         effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
-        sings: 0, oppRestrictions: 0, statModifiers: 0,
+        sings: 0, oppRestrictions: 0, statModifiers: 0, oppLoreLoss: 0, damageHealed: 0,
       }
     }
     return pData.cards[name]
@@ -184,7 +184,10 @@ export function parseGamelog(id, logs, meta = {}) {
         ? pendingRemovalSource
         : (d.abilitySourceCardId || d.abilitySourceCardName) ? { name: d.abilitySourceCardName, id: d.abilitySourceCardId } : null
       if (src) ensureCard(causedBy, src.name, src.id).effectRemovals++
-    } else if (type !== 'CARD_DESTROYED') {
+    } else if (type === 'CARD_PLAYED' || type === 'TURN_START' || type === 'TURN_END') {
+      // A banish-type trigger can be immediately followed by unrelated events from the *same*
+      // ability (e.g. The Horseman Strikes!'s own "draws a card" firing before its CARD_DESTROYED
+      // lands) — only clear on a genuinely new play or turn boundary, not on every intervening event.
       pendingRemovalSource = null
     }
 
@@ -197,6 +200,14 @@ export function parseGamelog(id, logs, meta = {}) {
       if (src) ensureCard(causedBy, src.name, src.id).effectRemovals++
     }
 
+    // CARD_PUT_UNDER with fromZone === 'discard' (e.g. The Black Cauldron's "THE CAULDRON CALLS")
+    // moves a card out of discard to sit face-down under an item, to be played from later — that's
+    // a recovery for impact-scoring purposes, same as returnedFromDiscard. d.cardName/d.cardId here
+    // is the item gaining the card underneath it (e.g. The Black Cauldron), not the card recovered.
+    if (type === 'CARD_PUT_UNDER' && d.fromZone === 'discard' && d.cardName) {
+      ensureCard(p, d.cardName, d.cardId).cardsRecovered++
+    }
+
     // Damage counters placed by an ability (e.g. Malicious, Mean and Scary hitting each opposing
     // character) arrive as separate DAMAGE_COUNTERS_PUT events right after the triggering
     // ABILITY_TRIGGERED — one per character hit. Attribute each to the source ability.
@@ -205,7 +216,7 @@ export function parseGamelog(id, logs, meta = {}) {
       if (pendingDamageSource.player === causedBy) {
         ensureCard(causedBy, pendingDamageSource.name, pendingDamageSource.id).effectRemovals++
       }
-    } else if (type !== 'DAMAGE_COUNTERS_PUT') {
+    } else if (type === 'CARD_PLAYED' || type === 'TURN_START' || type === 'TURN_END') {
       pendingDamageSource = null
     }
 
@@ -257,6 +268,13 @@ export function parseGamelog(id, logs, meta = {}) {
       ensureCard(p, d.cardName, d.cardId).shiftPlays++
     }
 
+    // SUPPORT_GIVEN is a dedicated event type for the Support keyword ability (e.g. Agustin
+    // Madrigal - Exceptionally Kind) — unlike other stat modifiers it never fires as an
+    // ABILITY_TRIGGERED with effectDescriptionKeys, so it needs its own handling.
+    if (type === 'SUPPORT_GIVEN' && d.cardName) {
+      ensureCard(p, d.cardName, d.cardId).statModifiers++
+    }
+
     if (type === 'ABILITY_TRIGGERED' && d.abilitySourceCardName) {
       const c = ensureCard(p, d.abilitySourceCardName, d.abilitySourceCardId)
       for (const ek of (d.effectDescriptionKeys ?? [])) {
@@ -269,6 +287,31 @@ export function parseGamelog(id, logs, meta = {}) {
           c.effectDraws++
         else if (k === 'drawsCards' || k === 'youMayDrawCards' || k === 'drawCards')
           c.effectDraws += count
+        // Combined damage-removal + draw effects (e.g. Ohana Means Family: "removes 4 damage and
+        // draws 4 cards") report both amounts on a single key rather than as separate triggers.
+        else if (k === 'removedDamageAndDrew') {
+          c.effectDraws += (ek.params?.count ?? 0)
+          c.damageHealed += (ek.params?.damage ?? 0)
+        }
+        // Direct lore grants (e.g. Scrooge's Counting House - Ebenezer's Office's start-of-turn
+        // trigger, Incrediboy - Buddy Pine's NERDING OUT) — attribute to the source card/location.
+        else if (k === 'gainsLore') {
+          c.loreGained += (ek.params?.amount ?? 1)
+          if (ek.params?.total != null) {
+            loreByPlayer[p] = ek.params.total
+            loreEvents.push({ turn: entry.turnNumber ?? 0, player: p, total: ek.params.total })
+          }
+        // Direct lore loss inflicted on the opponent (e.g. Olaf - Snowman of Action's CHAOTIC
+        // COLLISION) is the mirror of gainsLore — track separately since it isn't lore this
+        // player gained. The `total` param is the opponent's new lore total, not this player's.
+        } else if (k === 'opponentLosesLore') {
+          c.oppLoreLoss += (ek.params?.amount ?? 1)
+          const opp = p === 1 ? 2 : 1
+          if (ek.params?.total != null) {
+            loreByPlayer[opp] = ek.params.total
+            loreEvents.push({ turn: entry.turnNumber ?? 0, player: opp, total: ek.params.total })
+          }
+        }
         else if (k === 'discardedCard' || k === 'opponentDiscardsACard')
           c.oppForcedDiscards++
         else if (k === 'opponentDiscardsCards')

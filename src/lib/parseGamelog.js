@@ -236,7 +236,10 @@ export function parseGamelog(id, logs, meta = {}) {
       if (src) ensureCard(p, src.name, src.id).effectDraws++
     }
 
-    if (type === 'CARD_QUEST' && d.cardName) {
+    // CARD_QUEST = questing with a character. LORE_GAINED is a separate, non-quest source of lore
+    // (e.g. Scrooge's Counting House - Ebenezer's Office's start-of-turn trigger) — same shape,
+    // different event type, so both need identical handling.
+    if ((type === 'CARD_QUEST' || type === 'LORE_GAINED') && d.cardName) {
       const gain = d.loreGained ?? 0
       ensureCard(p, d.cardName, d.cardId).loreGained += gain
       if (d.newLoreTotal != null) {
@@ -317,6 +320,11 @@ export function parseGamelog(id, logs, meta = {}) {
         else if (k === 'opponentDiscardsCards')
           c.oppForcedDiscards += count
         else if (k === 'grantsAnAdditionalInk' || k === 'additionalInk')
+          c.extraInks++
+        // Cost-reduction effects (e.g. Aurora - Holding Court's ROYAL WELCOME, "pay 1 less for the
+        // next character") are a distinct economy advantage from extra ink, but bucketed together
+        // for impact-scoring purposes since there's no dedicated stat for them.
+        else if (k === 'costReduction')
           c.extraInks++
         // Banish-type triggers (e.g. Prince Phillip - Vanquisher of Foes's "SWIFT AND SURE" /
         // banishesCard) fire once per ability regardless of how many characters actually get

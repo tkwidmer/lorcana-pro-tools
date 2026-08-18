@@ -63,7 +63,7 @@ export function Nav() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isAdmin } = useSupporter()
+  const { isAdmin, isSupporter } = useSupporter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   if (pathname === '/lore-tracker') return null
@@ -125,6 +125,21 @@ export function Nav() {
           </>
         )}
         <div className="ml-auto flex items-center gap-4">
+          {isSupporter && (
+            <span
+              className={`hidden sm:inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                isAdmin
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                  : 'bg-violet-50 text-violet-700 border border-violet-200'
+              }`}
+              title={isAdmin ? 'Admin' : 'Supporter'}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2 9.5 8.5 3 9l5 4.5L6.5 20 12 16.5 17.5 20 16 13.5l5-4.5-6.5-.5Z" />
+              </svg>
+              {isAdmin ? 'Admin' : 'Supporter'}
+            </span>
+          )}
           <Link
             to="/settings"
             className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1"

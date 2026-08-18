@@ -1,15 +1,16 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { computeStats } from '../lib/gameStats'
-import { listPlayers } from '../lib/playerProfiles'
+import { listPlayers, buildPlayerProfile } from '../lib/playerProfiles'
 import { parseSnapshot } from '../lib/gameSnapshot'
 import { getAllGames, deleteGame, clearAllGames, summarizeGame, saveGame as saveHistoryGame } from '../lib/scoutedGames'
 import { getAllGamelogs } from '../lib/gamelogHistory'
-import { resolveColors } from '../lib/inkColors'
+import { resolveColors, VALID_INKS } from '../lib/inkColors'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { GameView } from '../components/GameView'
-import { InkIcons } from '../components/InkIcons'
+import { InkIcons, InkIcon } from '../components/InkIcons'
 import { StatCard } from '../components/StatCard'
+import { PlayerProfileDetail } from '../components/PlayerProfileDetail'
 
 // --- Ignored players (stored in localStorage) ---
 
@@ -286,18 +287,44 @@ function HistoryTab({ records, onDelete, onClearAll }) {
 function PlayersTab({ records, gamelogs }) {
   const [ignored, setIgnoredState] = useState(getIgnored)
   const [showIgnored, setShowIgnored] = useState(false)
-  const allPlayers = listPlayers(records, gamelogs)
-  const visible = allPlayers.filter(p => !ignored.includes(p.name))
-  const hiddenPlayers = allPlayers.filter(p => ignored.includes(p.name))
+  const [search, setSearch] = useState('')
+  const [inkFilter, setInkFilter] = useState([])
+  const [selected, setSelected] = useState(null)
+
+  const allPlayers = useMemo(() => listPlayers(records, gamelogs), [records, gamelogs])
+  const visible = useMemo(() => allPlayers.filter(p => !ignored.includes(p.name)), [allPlayers, ignored])
+  const hiddenPlayers = useMemo(() => allPlayers.filter(p => ignored.includes(p.name)), [allPlayers, ignored])
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return visible.filter(p => {
+      if (term && !p.name.toLowerCase().includes(term)) return false
+      if (inkFilter.length > 0) {
+        const playerColors = new Set(p.deckKeys.flatMap(k => resolveColors(k.split('+'))))
+        if (!inkFilter.every(c => playerColors.has(c))) return false
+      }
+      return true
+    })
+  }, [visible, search, inkFilter])
+
+  const selectedProfile = useMemo(
+    () => selected ? buildPlayerProfile(records, gamelogs, selected) : null,
+    [records, gamelogs, selected]
+  )
 
   const handleIgnore = (name) => {
     ignorePlayer(name)
     setIgnoredState(getIgnored())
+    if (selected === name) setSelected(null)
   }
 
   const handleUnignore = (name) => {
     unignorePlayer(name)
     setIgnoredState(getIgnored())
+  }
+
+  const toggleInk = color => {
+    setInkFilter(prev => (prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]))
   }
 
   if (allPlayers.length === 0) {
@@ -313,73 +340,121 @@ function PlayersTab({ records, gamelogs }) {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-2 mb-4">
-        {visible.map(p => (
-          <div key={p.name} className="group flex items-center gap-4 bg-white border border-gray-200 rounded-lg px-4 py-3">
-            <Link to={`/players/${encodeURIComponent(p.name)}`} className="flex-1 min-w-0 hover:opacity-75">
-              <div className="text-sm font-semibold text-gray-900 truncate">{p.name}</div>
-              <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                <span
-                  title={p.scoutedGameCount && p.gamelogGameCount
-                    ? `${p.scoutedGameCount} scouted, ${p.gamelogGameCount} from gamelogs`
-                    : undefined}
-                >
-                  {p.games} game{p.games !== 1 ? 's' : ''}
-                </span>
-                {p.winRate != null && <span>{p.wins}–{p.losses} ({Math.round(p.winRate * 100)}%)</span>}
-                <span>{p.deckCount} deck{p.deckCount !== 1 ? 's' : ''}</span>
-              </div>
-            </Link>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1 flex-wrap justify-end max-w-[120px]">
-                {p.deckKeys.slice(0, 4).map(k => (
-                  <div key={k} className="flex gap-0.5">
-                    {resolveColors(k.split('+')).map(c => (
-                      <img key={c} src={`/ink/${c}.png`} alt={c} className="w-3 h-3" />
-                    ))}
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => handleIgnore(p.name)}
-                className="text-xs text-gray-300 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
-                title="Hide this player"
-              >
-                Hide
-              </button>
-            </div>
-          </div>
-        ))}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search player name…"
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+        />
+        <div className="flex flex-wrap gap-1.5 items-center">
+          {VALID_INKS.map(color => (
+            <button
+              key={color}
+              onClick={() => toggleInk(color)}
+              className={`p-1.5 rounded-md border transition ${
+                inkFilter.includes(color) ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+              }`}
+              title={color}
+            >
+              <InkIcon color={color} size="w-5 h-5" />
+            </button>
+          ))}
+        </div>
       </div>
 
-      {hiddenPlayers.length > 0 && (
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_1fr] gap-6">
         <div>
-          <button
-            onClick={() => setShowIgnored(v => !v)}
-            className="text-xs text-gray-400 hover:text-gray-600 underline mb-3"
-          >
-            {showIgnored ? 'Hide' : 'Show'} {hiddenPlayers.length} hidden player{hiddenPlayers.length !== 1 ? 's' : ''}
-          </button>
-          {showIgnored && (
-            <div className="grid grid-cols-1 gap-2">
-              {hiddenPlayers.map(p => (
-                <div key={p.name} className="flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 opacity-60">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-gray-500 truncate">{p.name}</div>
-                    <div className="text-xs text-gray-400 mt-1">{p.games} game{p.games !== 1 ? 's' : ''} · hidden</div>
+          <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
+            {filtered.length === 0 && <div className="p-4 text-sm text-gray-500">No players match your filters.</div>}
+            {filtered.map(p => (
+              <div key={p.name} className="group relative">
+                <button
+                  onClick={() => setSelected(p.name)}
+                  className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition ${
+                    selected === p.name ? 'bg-indigo-50' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 pr-10">
+                    <span className="text-sm font-semibold text-gray-900 truncate">{p.name}</span>
+                    <span
+                      className="text-xs text-gray-500 flex-shrink-0"
+                      title={p.scoutedGameCount && p.gamelogGameCount
+                        ? `${p.scoutedGameCount} scouted, ${p.gamelogGameCount} from gamelogs`
+                        : undefined}
+                    >
+                      {p.games}g
+                    </span>
                   </div>
-                  <button
-                    onClick={() => handleUnignore(p.name)}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap"
-                  >
-                    Unhide
-                  </button>
+                  <div className="flex items-center justify-between mt-1">
+                    <div className="flex gap-1 flex-wrap max-w-[220px]">
+                      {p.deckKeys.slice(0, 4).map(k => (
+                        <div key={k} className="flex gap-0.5">
+                          {resolveColors(k.split('+')).map(c => (
+                            <img key={c} src={`/ink/${c}.png`} alt={c} className="w-3 h-3" />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    {p.winRate != null && (
+                      <span className="text-xs font-medium text-gray-500">
+                        {Math.round(p.winRate * 100)}% ({p.wins}–{p.losses})
+                      </span>
+                    )}
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleIgnore(p.name)}
+                  className="absolute top-3 right-3 text-xs text-gray-300 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Hide this player"
+                >
+                  Hide
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {hiddenPlayers.length > 0 && (
+            <div className="mt-3">
+              <button
+                onClick={() => setShowIgnored(v => !v)}
+                className="text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                {showIgnored ? 'Hide' : 'Show'} {hiddenPlayers.length} hidden player{hiddenPlayers.length !== 1 ? 's' : ''}
+              </button>
+              {showIgnored && (
+                <div className="grid grid-cols-1 gap-2 mt-2">
+                  {hiddenPlayers.map(p => (
+                    <div key={p.name} className="flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 opacity-60">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-gray-500 truncate">{p.name}</div>
+                        <div className="text-xs text-gray-400 mt-1">{p.games} game{p.games !== 1 ? 's' : ''} · hidden</div>
+                      </div>
+                      <button
+                        onClick={() => handleUnignore(p.name)}
+                        className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap"
+                      >
+                        Unhide
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
-      )}
+
+        <div>
+          {selectedProfile ? (
+            <PlayerProfileDetail profile={selectedProfile} />
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-lg p-8 text-center text-gray-500">
+              Select a player to see their profile — deck breakdowns, inferred decklists, and win rates.
+            </div>
+          )}
+        </div>
+      </div>
     </>
   )
 }

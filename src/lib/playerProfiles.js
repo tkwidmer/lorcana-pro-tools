@@ -325,9 +325,15 @@ export function buildPlayerProfile(records, gamelogs, name) {
 
   const scoutedGameCount = scouted?.gameCount ?? 0
   const gamelogGameCount = gamelogOpp?.gameCount ?? 0
-  const wins = (scouted?.wins ?? 0) + (gamelogOpp?.wins ?? 0)
-  const losses = (scouted?.losses ?? 0) + (gamelogOpp?.losses ?? 0)
+  // gamelogOpp's wins/losses are from *my* perspective (buildDirectory) — flip
+  // them so this stays "this opponent's own record", matching the per-deck
+  // merge and listPlayers.
+  const wins = (scouted?.wins ?? 0) + (gamelogOpp?.losses ?? 0)
+  const losses = (scouted?.losses ?? 0) + (gamelogOpp?.wins ?? 0)
   const completed = wins + losses
+
+  const scoutedLastPlayed = Math.max(0, ...(scouted?.games ?? []).map(g => g.record?.lastUpdated ?? 0))
+  const lastPlayed = Math.max(scoutedLastPlayed, gamelogOpp?.lastPlayed ?? 0) || null
 
   return {
     name,
@@ -338,6 +344,7 @@ export function buildPlayerProfile(records, gamelogs, name) {
     wins,
     losses,
     winRate: completed > 0 ? wins / completed : null,
+    lastPlayed,
     decks,
   }
 }

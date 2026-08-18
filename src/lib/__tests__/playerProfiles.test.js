@@ -126,6 +126,14 @@ describe('buildPlayerProfile', () => {
     expect(card.played).toBe(3)
     expect(card.discarded).toBe(1)
     expect(card.seenIn).toBe(2) // 1 scouted + 1 gamelog
+
+    // Rival loses both the scouted game and the gamelog game (I win both) ->
+    // Rival's own record should be 0-2, not the raw (unflipped) 2-0.
+    expect(profile.wins).toBe(0)
+    expect(profile.losses).toBe(2)
+
+    // lastPlayed is the max across both sources.
+    expect(profile.lastPlayed).toBe(2000) // gamelog playedAt, later than the scouted record's lastUpdated (1000)
   })
 
   it('keeps decks from different ink combos as separate buckets even when merged', () => {

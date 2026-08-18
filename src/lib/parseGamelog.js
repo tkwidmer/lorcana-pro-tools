@@ -63,6 +63,10 @@ export function parseGamelog(id, logs, meta = {}) {
   // the CARD_DESTROYED / DAMAGE_COUNTERS_PUT events that immediately follow it (see below).
   let pendingRemovalSource = null
   let pendingDamageSource = null
+  // Source of the most recent returnsTargetToHand ABILITY_TRIGGERED, used to attribute the
+  // CARD_RETURNED event that immediately follows it — see the CARD_RETURNED handling below for
+  // how this decides recover vs. removal.
+  let pendingReturnSource = null
 
   // Track unique instanceIds from CARD_DRAWN per player for opponent decklist inference
   const instanceCards = { 1: new Map(), 2: new Map() }
@@ -208,6 +212,25 @@ export function parseGamelog(id, logs, meta = {}) {
       ensureCard(p, d.cardName, d.cardId).cardsRecovered++
     }
 
+    // returnsTargetToHand (e.g. Rapunzel - Tower Defender, Milo Thatch - Getting His Hands Dirty,
+    // Tigger - Bouncing All the Way, Pocahontas & Meeko - Adventurous Friends) bounces a character
+    // to hand, but whether that's a recovery or a removal depends entirely on who controls the
+    // target — some of these bounce your own character back to replay it, others bounce the
+    // opponent's for tempo. The event itself doesn't say which; the CARD_RETURNED event that
+    // immediately follows does, via its top-level `player` field (the returned card's *owner*,
+    // not the actor) — compare that against the triggering ability's owner to tell them apart.
+    if (type === 'CARD_RETURNED' && pendingReturnSource) {
+      const returnedOwner = p
+      if (pendingReturnSource.player === returnedOwner) {
+        ensureCard(returnedOwner, pendingReturnSource.name, pendingReturnSource.id).cardsRecovered++
+      } else {
+        ensureCard(pendingReturnSource.player, pendingReturnSource.name, pendingReturnSource.id).effectRemovals++
+      }
+      pendingReturnSource = null
+    } else if (type === 'CARD_PLAYED' || type === 'TURN_START' || type === 'TURN_END') {
+      pendingReturnSource = null
+    }
+
     // Damage counters placed by an ability (e.g. Malicious, Mean and Scary hitting each opposing
     // character) arrive as separate DAMAGE_COUNTERS_PUT events right after the triggering
     // ABILITY_TRIGGERED — one per character hit. Attribute each to the source ability.
@@ -336,6 +359,10 @@ export function parseGamelog(id, logs, meta = {}) {
         // the actual per-character hits arrive as separate DAMAGE_COUNTERS_PUT events.
         else if (kLower.includes('damagecounter'))
           pendingDamageSource = { name: d.abilitySourceCardName, id: d.abilitySourceCardId, player: p }
+        // Bounce-to-hand triggers (e.g. Rapunzel - Tower Defender's THE FATES' DESIGN) — resolved
+        // as recover vs. removal by the CARD_RETURNED handling above, once the target's owner is known.
+        else if (k === 'returnsTargetToHand')
+          pendingReturnSource = { name: d.abilitySourceCardName, id: d.abilitySourceCardId, player: p }
         // Bouncing characters to the bottom of the deck (e.g. Under the Sea) is a removal for
         // impact-scoring purposes — counted via the CARD_RETURNED_TO_DECK path below, which
         // reliably fires once per character actually moved.

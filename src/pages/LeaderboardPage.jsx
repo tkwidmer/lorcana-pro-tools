@@ -45,11 +45,15 @@ function RankTierChart({ buckets, highlightMmr }) {
   // Group consecutive buckets that fall in the same tier into one colored
   // rect segment (clipped to the mountain shape) — recreates the layered
   // "rank tiers" look duels.ink's own leaderboard page shows.
+  // Bucket i's x position (i * stepX) is its left MMR edge (b.bucket), so the
+  // bucket's 50-MMR-wide band spans from that point to the next bucket's
+  // position — not centered on it — to line up exactly with the breakpoint
+  // lines below (which are placed the same way, via xForMmr).
   const segments = []
   buckets.forEach((b, i) => {
     const tier = tierForMmr(b.bucket)
-    const x0 = i * stepX - stepX / 2
-    const x1 = i * stepX + stepX / 2
+    const x0 = i * stepX
+    const x1 = Math.min((i + 1) * stepX, W)
     const last = segments[segments.length - 1]
     if (last && last.tier === tier) {
       last.x1 = x1

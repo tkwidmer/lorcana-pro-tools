@@ -50,7 +50,7 @@ export function parseGamelog(id, logs, meta = {}) {
         drawn: 0, played: 0, inked: 0, discarded: 0, destroyed: 0,
         loreGained: 0, shiftPlays: 0,
         effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0,
-        sings: 0, oppRestrictions: 0, statModifiers: 0, oppLoreLoss: 0, damageHealed: 0,
+        sings: 0, oppRestrictions: 0, statModifiers: 0, oppLoreLoss: 0, damageHealed: 0, infoGained: 0,
       }
     }
     return pData.cards[name]
@@ -374,6 +374,13 @@ export function parseGamelog(id, logs, meta = {}) {
           c.cardsRecovered++
         else if (k === 'cannotPlayTypes')
           c.oppRestrictions++
+        // Information-advantage effects (e.g. Lenny - Toy Binoculars's TAKE A GOOD LOOK, Ursula -
+        // Deceiver's YOU'LL NEVER EVEN MISS IT, Mowgli - Man Cub's HAVE A BETTER LOOK) reveal the
+        // opponent's hand. These commonly chain into a forced discard, but that's a separate
+        // ABILITY_TRIGGERED with its own discardedCard key (handled above) — this only tracks the
+        // look itself, since seeing the hand is valuable on its own even without a discard attached.
+        else if (k === 'looksAtOpponentHand')
+          c.infoGained++
         // Stat-modifier effects (e.g. Della's Moon Lullaby's -2 strength to a target) — buffs
         // and debuffs alike, matched by substring since the key varies by target shape
         // (single target, all characters, your/opposing characters).

@@ -50,6 +50,7 @@ export function enrichGame(gamelog, myName) {
       statModifiers: card.statModifiers ?? 0,
       oppLoreLoss: card.oppLoreLoss ?? 0,
       damageHealed: card.damageHealed ?? 0,
+      infoGained: card.infoGained ?? 0,
     }
   }
 
@@ -94,7 +95,7 @@ export function aggregateMyCards(games) {
           fullName: key, name: key,
           playedCount: 0, inkedCount: 0, loreGained: 0,
           effectDraws: 0, oppForcedDiscards: 0, extraInks: 0, effectRemovals: 0, exerts: 0, cardsRecovered: 0, sings: 0, oppRestrictions: 0, statModifiers: 0,
-          oppLoreLoss: 0, damageHealed: 0,
+          oppLoreLoss: 0, damageHealed: 0, infoGained: 0,
         }
       }
       const m = map[key]
@@ -112,6 +113,7 @@ export function aggregateMyCards(games) {
       m.statModifiers += card.statModifiers ?? 0
       m.oppLoreLoss += card.oppLoreLoss ?? 0
       m.damageHealed += card.damageHealed ?? 0
+      m.infoGained += card.infoGained ?? 0
     }
   }
   return Object.values(map)

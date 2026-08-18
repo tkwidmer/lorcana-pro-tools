@@ -1,13 +1,38 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchLeaderboard } from '../lib/leaderboardApi'
 
-function Histogram({ buckets, highlightMmr }) {
+// Ranked MMR tier thresholds, lowest to highest. duels.ink doesn't return
+// these from the API (a leaderboard row's `tier` only carries a name/icon
+// for that player, not the band's MMR range) — these are the fixed
+// breakpoints duels.ink's own site uses, in 150-MMR steps starting at 1000.
+const RANK_TIERS = [
+  { name: 'Common', min: -Infinity, color: '#9a5b2e' },
+  { name: 'Uncommon', min: 1000, color: '#6b7280' },
+  { name: 'Rare', min: 1150, color: '#b7791f' },
+  { name: 'Super Rare', min: 1300, color: '#0f7c8c' },
+  { name: 'Epic', min: 1450, color: '#b08900' },
+  { name: 'Legendary', min: 1600, color: '#0e9169' },
+  { name: 'Enchanted', min: 1750, color: '#8b5cf6' },
+  { name: 'Iconic', min: 1900, color: '#dc2626' },
+]
+
+function tierForMmr(mmr) {
+  let tier = RANK_TIERS[0]
+  for (const t of RANK_TIERS) {
+    if (mmr >= t.min) tier = t
+  }
+  return tier
+}
+
+function RankTierChart({ buckets, highlightMmr }) {
   if (!buckets.length) return null
   const max = Math.max(...buckets.map(b => b.count), 1)
   const W = 1000
   const H = 160
   const padY = 4
   const stepX = W / (buckets.length - 1 || 1)
+  const baseMmr = buckets[0].bucket
+
   const points = buckets.map((b, i) => {
     const x = i * stepX
     const y = H - padY - ((b.count / max) * (H - padY * 2))
@@ -15,51 +40,120 @@ function Histogram({ buckets, highlightMmr }) {
   })
   const linePath = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ')
   const areaPath = `${linePath} L${W},${H} L0,${H} Z`
+  const clipId = 'rank-tier-mountain-clip'
+
+  // Group consecutive buckets that fall in the same tier into one colored
+  // rect segment (clipped to the mountain shape) — recreates the layered
+  // "rank tiers" look duels.ink's own leaderboard page shows.
+  const segments = []
+  buckets.forEach((b, i) => {
+    const tier = tierForMmr(b.bucket)
+    const x0 = i * stepX - stepX / 2
+    const x1 = i * stepX + stepX / 2
+    const last = segments[segments.length - 1]
+    if (last && last.tier === tier) {
+      last.x1 = x1
+    } else {
+      segments.push({ tier, x0, x1 })
+    }
+  })
+
+  const xForMmr = mmr => ((mmr - baseMmr) / 50) * stepX
+  const breakpoints = RANK_TIERS
+    .filter(t => Number.isFinite(t.min))
+    .map(t => ({ mmr: t.min, x: xForMmr(t.min) }))
+    .filter(bp => bp.x >= 0 && bp.x <= W)
+
   const highlightIdx = highlightMmr == null
     ? -1
     : buckets.findIndex(b => highlightMmr >= b.bucket && highlightMmr < b.bucket + 50)
+
+  // Tier name labels above the chart, one per segment wide enough to fit a
+  // label without crowding — positioned at each segment's midpoint.
+  const labelSegments = segments.filter(s => s.x1 - s.x0 >= 60)
+
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      className="w-full h-40"
-      role="img"
-      aria-label="MMR distribution"
-    >
-      <path d={areaPath} fill="rgb(229 231 235)" />
-      <path d={linePath} fill="none" stroke="rgb(55 65 81)" strokeWidth="2" />
-      {highlightIdx >= 0 && (
-        <>
+    <div>
+      <div className="relative h-5 mb-1">
+        {labelSegments.map((s, i) => (
+          <span
+            key={i}
+            className="absolute -translate-x-1/2 text-[10px] font-medium text-gray-500 whitespace-nowrap"
+            style={{ left: `${((s.x0 + s.x1) / 2 / W) * 100}%` }}
+          >
+            {s.tier.name}
+          </span>
+        ))}
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        className="w-full h-40"
+        role="img"
+        aria-label="MMR distribution by rank tier"
+      >
+        <defs>
+          <clipPath id={clipId}>
+            <path d={areaPath} />
+          </clipPath>
+        </defs>
+        <g clipPath={`url(#${clipId})`}>
+          {segments.map((s, i) => (
+            <rect key={i} x={s.x0} y={0} width={s.x1 - s.x0} height={H} fill={s.tier.color} opacity={0.75} />
+          ))}
+        </g>
+        <path d={linePath} fill="none" stroke="rgb(55 65 81)" strokeWidth="1.5" />
+        {breakpoints.map(bp => (
           <line
-            x1={points[highlightIdx][0]}
-            x2={points[highlightIdx][0]}
-            y1={0}
-            y2={H}
-            stroke="rgb(17 24 39)"
-            strokeWidth="1"
-            strokeDasharray="3 3"
+            key={bp.mmr}
+            x1={bp.x} x2={bp.x} y1={0} y2={H}
+            stroke="white" strokeWidth="1" opacity={0.5}
           />
-          <circle
-            cx={points[highlightIdx][0]}
-            cy={points[highlightIdx][1]}
-            r="3.5"
-            fill="rgb(17 24 39)"
-          />
-        </>
-      )}
-      {buckets.map((b, i) => (
-        <rect
-          key={b.bucket}
-          x={i * stepX - stepX / 2}
-          y={0}
-          width={stepX}
-          height={H}
-          fill="transparent"
-        >
-          <title>{`${b.bucket}-${b.bucket + 49} MMR: ${b.count} players`}</title>
-        </rect>
-      ))}
-    </svg>
+        ))}
+        {highlightIdx >= 0 && (
+          <>
+            <line
+              x1={points[highlightIdx][0]}
+              x2={points[highlightIdx][0]}
+              y1={0}
+              y2={H}
+              stroke="rgb(17 24 39)"
+              strokeWidth="1"
+              strokeDasharray="3 3"
+            />
+            <circle
+              cx={points[highlightIdx][0]}
+              cy={points[highlightIdx][1]}
+              r="3.5"
+              fill="rgb(17 24 39)"
+            />
+          </>
+        )}
+        {buckets.map((b, i) => (
+          <rect
+            key={b.bucket}
+            x={i * stepX - stepX / 2}
+            y={0}
+            width={stepX}
+            height={H}
+            fill="transparent"
+          >
+            <title>{`${b.bucket}-${b.bucket + 49} MMR (${tierForMmr(b.bucket).name}): ${b.count} players`}</title>
+          </rect>
+        ))}
+      </svg>
+      <div className="relative h-4 mt-1">
+        {breakpoints.map(bp => (
+          <span
+            key={bp.mmr}
+            className="absolute -translate-x-1/2 text-[10px] text-gray-400"
+            style={{ left: `${(bp.x / W) * 100}%` }}
+          >
+            {bp.mmr}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -195,21 +289,13 @@ export function LeaderboardPage() {
         <>
           <div className="mb-8 border border-gray-200 rounded-lg p-4">
             <div className="flex items-baseline justify-between mb-2">
-              <h2 className="text-sm font-semibold text-gray-900">MMR Distribution</h2>
+              <h2 className="text-sm font-semibold text-gray-900">Rank Tiers</h2>
               <span className="text-xs text-gray-500">
                 {totalPlayers.toLocaleString()} ranked players · top MMR{' '}
                 {top1Mmr ?? '—'}
               </span>
             </div>
-            <Histogram buckets={distribution} highlightMmr={top1Mmr} />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>{distribution[0]?.bucket ?? ''}</span>
-              <span>
-                {distribution[distribution.length - 1]?.bucket
-                  ? `${distribution[distribution.length - 1].bucket}+`
-                  : ''}
-              </span>
-            </div>
+            <RankTierChart buckets={distribution} highlightMmr={top1Mmr} />
           </div>
 
           <div className="border border-gray-200 rounded-lg overflow-hidden">

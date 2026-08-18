@@ -133,6 +133,8 @@ export function ImpactTable({ games, order }) {
         c.statModifiers +
         c.sings * 1.5 +
         c.oppRestrictions * 2 +
+        c.oppLoreLoss * 2 +
+        c.damageHealed * 0.5 +
         ch.kills * 2 +
         ch.survived * 0.5
       return { ...c, impactScore, ch }
@@ -160,6 +162,8 @@ export function ImpactTable({ games, order }) {
         if (c.ch.kills > 0) tags.push(`${c.ch.kills} kills`)
         if (c.sings > 0) tags.push(`${c.sings} sings`)
         if (c.oppRestrictions > 0) tags.push(`${c.oppRestrictions} lock`)
+        if (c.oppLoreLoss > 0) tags.push(`${c.oppLoreLoss} opp lore loss`)
+        if (c.damageHealed > 0) tags.push(`${c.damageHealed} dmg healed`)
         return (
           <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
             <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.playedCount}</span>

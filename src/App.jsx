@@ -18,7 +18,6 @@ import { GameScraperPage } from './pages/GameScraperPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { ScoutedGamePage } from './pages/ScoutedGamePage'
 import { PlayerProfilePage } from './pages/PlayerProfilePage'
-import { OpponentDirectoryPage } from './pages/OpponentDirectoryPage'
 import { DeckComparisonPage } from './pages/DeckComparisonPage'
 import { DecklistInspectorPage } from './pages/DecklistInspectorPage'
 import { DecklistOverlayPage } from './pages/DecklistOverlayPage'
@@ -73,7 +72,6 @@ function RoutedContent() {
         <Route path="/library" element={<SupporterRoute><LibraryPage /></SupporterRoute>} />
         <Route path="/scouting/game/:uuid" element={<SupporterRoute><ScoutedGamePage /></SupporterRoute>} />
         <Route path="/players/:name" element={<SupporterRoute><PlayerProfilePage /></SupporterRoute>} />
-        <Route path="/opponent-directory" element={<SupporterRoute><OpponentDirectoryPage /></SupporterRoute>} />
         <Route path="/deck-comparison" element={<DeckComparisonPage />} />
         <Route path="/decklist-inspector" element={<SupporterRoute><DecklistInspectorPage /></SupporterRoute>} />
         {/* Unguarded: an OBS Browser Source has no Supabase session, and this
@@ -96,6 +94,9 @@ function RoutedContent() {
         <Route path="/game-library" element={<Navigate to="/analytics" replace />} />
         <Route path="/shared" element={<Navigate to="/library" replace />} />
         <Route path="/legality-checker" element={<Navigate to="/deck-insights" replace />} />
+        {/* Opponent Directory was merged into the Library's Players tab, which now
+            combines scouted-game and gamelog-derived opponent data in one place. */}
+        <Route path="/opponent-directory" element={<Navigate to="/library?tab=players" replace />} />
       </Routes>
     </ErrorBoundary>
   )

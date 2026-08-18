@@ -7,7 +7,6 @@ Disallow: /practice-plan
 Disallow: /tournament-lookup
 Disallow: /library
 Disallow: /game-scraper
-Disallow: /opponent-directory
 Disallow: /players/
 Disallow: /scouting/game/
 Disallow: /admin

@@ -4,6 +4,7 @@ import { computeStats } from '../lib/gameStats'
 import { listPlayers } from '../lib/playerProfiles'
 import { parseSnapshot } from '../lib/gameSnapshot'
 import { getAllGames, deleteGame, clearAllGames, summarizeGame, saveGame as saveHistoryGame } from '../lib/scoutedGames'
+import { getAllGamelogs } from '../lib/gamelogHistory'
 import { resolveColors } from '../lib/inkColors'
 import { downloadGameIds } from '../lib/exportGameIds'
 import { GameView } from '../components/GameView'
@@ -282,10 +283,10 @@ function HistoryTab({ records, onDelete, onClearAll }) {
 
 // --- Players tab ---
 
-function PlayersTab({ records }) {
+function PlayersTab({ records, gamelogs }) {
   const [ignored, setIgnoredState] = useState(getIgnored)
   const [showIgnored, setShowIgnored] = useState(false)
-  const allPlayers = listPlayers(records)
+  const allPlayers = listPlayers(records, gamelogs)
   const visible = allPlayers.filter(p => !ignored.includes(p.name))
   const hiddenPlayers = allPlayers.filter(p => ignored.includes(p.name))
 
@@ -304,6 +305,8 @@ function PlayersTab({ records }) {
       <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-lg text-gray-500">
         <div className="text-sm mb-2">No players yet.</div>
         <Link to="/game-scraper" className="text-sm text-blue-600 hover:underline">Scrape a game →</Link>
+        {' · '}
+        <Link to="/analytics" className="text-sm text-blue-600 hover:underline">Import gamelogs →</Link>
       </div>
     )
   }
@@ -316,7 +319,13 @@ function PlayersTab({ records }) {
             <Link to={`/players/${encodeURIComponent(p.name)}`} className="flex-1 min-w-0 hover:opacity-75">
               <div className="text-sm font-semibold text-gray-900 truncate">{p.name}</div>
               <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                <span>{p.games} game{p.games !== 1 ? 's' : ''}</span>
+                <span
+                  title={p.scoutedGameCount && p.gamelogGameCount
+                    ? `${p.scoutedGameCount} scouted, ${p.gamelogGameCount} from gamelogs`
+                    : undefined}
+                >
+                  {p.games} game{p.games !== 1 ? 's' : ''}
+                </span>
                 {p.winRate != null && <span>{p.wins}–{p.losses} ({Math.round(p.winRate * 100)}%)</span>}
                 <span>{p.deckCount} deck{p.deckCount !== 1 ? 's' : ''}</span>
               </div>
@@ -380,6 +389,7 @@ function PlayersTab({ records }) {
 export function LibraryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [records, setRecords] = useState([])
+  const [gamelogs, setGamelogs] = useState([])
   const [loading, setLoading] = useState(true)
   const activeTab = searchParams.get('tab') ?? 'history'
 
@@ -387,7 +397,11 @@ export function LibraryPage() {
 
   const reload = () => {
     setLoading(true)
-    getAllGames().then(rs => { setRecords(rs); setLoading(false) })
+    Promise.all([getAllGames(), getAllGamelogs()]).then(([rs, logs]) => {
+      setRecords(rs)
+      setGamelogs(logs)
+      setLoading(false)
+    })
   }
 
   useEffect(() => { reload() }, []) // eslint-disable-line react-hooks/set-state-in-effect
@@ -434,7 +448,7 @@ export function LibraryPage() {
       ) : activeTab === 'history' ? (
         <HistoryTab records={records} onDelete={handleDelete} onClearAll={handleClearAll} />
       ) : (
-        <PlayersTab records={records} />
+        <PlayersTab records={records} gamelogs={gamelogs} />
       )}
     </div>
   )

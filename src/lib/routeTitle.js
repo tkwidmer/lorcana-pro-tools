@@ -18,7 +18,6 @@ const TITLES = {
   '/deck-insights': 'Deck Insights',
   '/game-scraper': 'Game Scraper',
   '/library': 'Scouting Library',
-  '/opponent-directory': 'Opponent Directory',
   '/deck-comparison': 'Deck Comparison',
   '/decklist-inspector': 'Decklist Inspector',
   '/settings': 'Settings',

@@ -1,4 +1,5 @@
 import { matchupKey } from './inkColors'
+import { buildDirectory } from './opponentDirectory'
 
 const PLACEHOLDER_NAMES = new Set(['Player 1', 'Player 2', 'Unknown', ''])
 
@@ -27,7 +28,9 @@ function playerTurnsFor(game, side) {
   return Math.floor(total / 2)
 }
 
-export function listPlayers(records) {
+// Per-opponent summary from scouted games only (spectated via the Chrome
+// extension or imported as a shared snapshot) — no gamelog data mixed in.
+function listScoutedPlayers(records) {
   const players = {}
   for (const r of records) {
     const g = r.game
@@ -53,9 +56,48 @@ export function listPlayers(records) {
       if (r.lastUpdated > p.lastSeen) p.lastSeen = r.lastUpdated
     }
   }
+  return players
+}
+
+// Unified per-opponent list combining scouted games (`scoutedGames.js`, full
+// board-state snapshots) and imported duels.ink gamelogs (`gamelogHistory.js`,
+// coarser but far more numerous) — the two systems have no way to detect the
+// same physical match was captured by both, so overlapping games are simply
+// summed rather than deduplicated. `scoutedGameCount`/`gamelogGameCount` are
+// broken out so the UI can be transparent about where the numbers came from.
+export function listPlayers(records, gamelogs = []) {
+  const players = listScoutedPlayers(records)
+  const gamelogOpponents = buildDirectory(gamelogs)
+
+  for (const opp of gamelogOpponents) {
+    if (!players[opp.name]) {
+      players[opp.name] = {
+        name: opp.name,
+        games: 0,
+        wins: 0,
+        losses: 0,
+        deckKeys: new Set(),
+        lastSeen: 0,
+      }
+    }
+    const p = players[opp.name]
+    p.scoutedGameCount = p.games
+    p.games += opp.gameCount
+    // buildDirectory's wins/losses are from *my* perspective (my wins against
+    // this opponent) — flip them here so `wins`/`losses` stay consistent with
+    // the scouted side's meaning: this named player's own record.
+    p.wins += opp.losses
+    p.losses += opp.wins
+    for (const d of opp.decks) p.deckKeys.add(d.key)
+    if (opp.lastPlayed > p.lastSeen) p.lastSeen = opp.lastPlayed
+    p.gamelogGameCount = opp.gameCount
+  }
+
   return Object.values(players)
     .map(p => ({
       ...p,
+      scoutedGameCount: p.scoutedGameCount ?? p.games,
+      gamelogGameCount: p.gamelogGameCount ?? 0,
       deckCount: p.deckKeys.size,
       deckKeys: Array.from(p.deckKeys),
       winRate: (p.wins + p.losses) > 0 ? p.wins / (p.wins + p.losses) : null,
@@ -63,7 +105,10 @@ export function listPlayers(records) {
     .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name))
 }
 
-export function buildPlayerProfile(records, name) {
+// Deck buckets built from scouted games only — same shape `buildPlayerProfile`
+// has always returned. Kept separate so it can be merged with gamelog-derived
+// deck data below without disturbing this logic.
+function buildScoutedProfile(records, name) {
   const playerGames = []
   for (const r of records) {
     const g = r.game
@@ -180,6 +225,119 @@ export function buildPlayerProfile(records, name) {
     wins: overallWins,
     losses: overallLosses,
     winRate: (overallWins + overallLosses) > 0 ? overallWins / (overallWins + overallLosses) : null,
+    decks,
+  }
+}
+
+// Merges a scouted-game deck bucket and a gamelog-derived deck bucket (from
+// buildDirectory) that share a deckKey. Either side may be absent — a deck
+// only ever seen via one source keeps that source's fields and zeroes the
+// other's. Card stats are combined by name: scouted `plays`/`inks` (max
+// observed in a single game — used for the inferred decklist) sit alongside
+// gamelog `played`/`inked`/`discarded`/`destroyed` (summed across games).
+function mergeDeckBuckets(scoutedDeck, gamelogDeck) {
+  const key = scoutedDeck?.key ?? gamelogDeck?.key
+  const colors = scoutedDeck?.colors?.length ? scoutedDeck.colors : (gamelogDeck?.colors ?? [])
+
+  const cardsByName = {}
+  for (const c of scoutedDeck?.cards ?? []) {
+    cardsByName[c.name] = { name: c.name, plays: c.plays, inks: c.inks, estimatedCopies: c.estimatedCopies, played: 0, inked: 0, discarded: 0, destroyed: 0, seenIn: c.seenIn }
+  }
+  for (const c of gamelogDeck?.cards ?? []) {
+    if (!cardsByName[c.name]) {
+      cardsByName[c.name] = {
+        name: c.name, plays: 0, inks: 0,
+        estimatedCopies: Math.min(4, Math.max(c.played, c.inked, 1)),
+        played: 0, inked: 0, discarded: 0, destroyed: 0, seenIn: 0,
+      }
+    }
+    const entry = cardsByName[c.name]
+    entry.played += c.played
+    entry.inked += c.inked
+    entry.discarded += c.discarded
+    entry.destroyed += c.destroyed
+    entry.seenIn += c.seenIn
+  }
+  const cards = Object.values(cardsByName).sort((a, b) =>
+    b.estimatedCopies - a.estimatedCopies ||
+    (b.plays + b.played) - (a.plays + a.played) ||
+    a.name.localeCompare(b.name)
+  )
+  const totalSlots = cards.reduce((sum, c) => sum + c.estimatedCopies, 0)
+
+  const scoutedGameCount = scoutedDeck?.gameCount ?? 0
+  const gamelogGameCount = gamelogDeck?.gameCount ?? 0
+  const gameCount = scoutedGameCount + gamelogGameCount
+  // gamelogDeck's wins/losses are from *my* perspective (buildDirectory) —
+  // flip them so this stays "this opponent's own record", matching scouted.
+  const wins = (scoutedDeck?.wins ?? 0) + (gamelogDeck?.losses ?? 0)
+  const losses = (scoutedDeck?.losses ?? 0) + (gamelogDeck?.wins ?? 0)
+  const completed = wins + losses
+
+  return {
+    key,
+    colors,
+    games: scoutedDeck?.games ?? [], // full board-state games, scouted only
+    scoutedGameCount,
+    gamelogGameCount,
+    gameCount,
+    wins,
+    losses,
+    winRate: completed > 0 ? wins / completed : null,
+    cards,
+    uniqueCards: cards.length,
+    totalSlots,
+    // Play-pattern stats (quests/turn, ink rate, etc.) require the full
+    // per-turn log a gamelog import doesn't carry — scouted-only.
+    questsPerTurn: scoutedDeck?.questsPerTurn ?? 0,
+    challengesPerTurn: scoutedDeck?.challengesPerTurn ?? 0,
+    inkRate: scoutedDeck?.inkRate ?? 0,
+    avgFinalLore: scoutedDeck?.avgFinalLore ?? 0,
+    avgTurns: scoutedDeck?.avgTurns ?? 0,
+    wentFirst: scoutedDeck?.wentFirst ?? 0,
+    wentSecond: scoutedDeck?.wentSecond ?? 0,
+    hasScoutedData: !!scoutedDeck,
+    hasGamelogData: !!gamelogDeck,
+  }
+}
+
+// Unified opponent profile combining scouted games (full board-state, from
+// the Chrome extension or an imported snapshot) and duels.ink gamelog
+// imports (coarser per-card totals, no turn-by-turn detail). The two sources
+// can't be deduplicated against each other — there's no shared game ID
+// between a spectated match and a duels.ink gamelog export — so overlapping
+// games are summed rather than merged 1:1. `hasScoutedData`/`hasGamelogData`
+// on each deck let the UI show which stats are actually available.
+export function buildPlayerProfile(records, gamelogs, name) {
+  const scouted = buildScoutedProfile(records, name)
+  const gamelogOpp = buildDirectory(gamelogs).find(o => o.name === name) ?? null
+  if (!scouted && !gamelogOpp) return null
+
+  const scoutedDecksByKey = {}
+  for (const d of scouted?.decks ?? []) scoutedDecksByKey[d.key] = d
+  const gamelogDecksByKey = {}
+  for (const d of gamelogOpp?.decks ?? []) gamelogDecksByKey[d.key] = d
+
+  const allKeys = new Set([...Object.keys(scoutedDecksByKey), ...Object.keys(gamelogDecksByKey)])
+  const decks = Array.from(allKeys)
+    .map(key => mergeDeckBuckets(scoutedDecksByKey[key], gamelogDecksByKey[key]))
+    .sort((a, b) => b.gameCount - a.gameCount)
+
+  const scoutedGameCount = scouted?.gameCount ?? 0
+  const gamelogGameCount = gamelogOpp?.gameCount ?? 0
+  const wins = (scouted?.wins ?? 0) + (gamelogOpp?.wins ?? 0)
+  const losses = (scouted?.losses ?? 0) + (gamelogOpp?.losses ?? 0)
+  const completed = wins + losses
+
+  return {
+    name,
+    games: scouted?.games ?? [],
+    gameCount: scoutedGameCount + gamelogGameCount,
+    scoutedGameCount,
+    gamelogGameCount,
+    wins,
+    losses,
+    winRate: completed > 0 ? wins / completed : null,
     decks,
   }
 }

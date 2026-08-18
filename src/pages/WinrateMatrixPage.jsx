@@ -23,10 +23,28 @@ const RANKS = [
   { id: 'Common', label: 'Common' },
 ]
 
+const FILTERS_KEY = 'lorcana_winrate_matrix_filters'
+
+function loadStoredFilters() {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return {
+      queue: typeof parsed.queue === 'string' ? parsed.queue : 'infinity-bo1',
+      period: typeof parsed.period === 'string' ? parsed.period : 'all_time',
+      ranks: Array.isArray(parsed.ranks) ? parsed.ranks.filter(r => typeof r === 'string') : [],
+    }
+  } catch {
+    return null
+  }
+}
+
 export function WinrateMatrixPage() {
-  const [selectedQueue, setSelectedQueue] = useState('infinity-bo1')
-  const [selectedPeriod, setSelectedPeriod] = useState('all_time')
-  const [selectedRanks, setSelectedRanks] = useState([])
+  const stored = loadStoredFilters()
+  const [selectedQueue, setSelectedQueue] = useState(stored?.queue ?? 'infinity-bo1')
+  const [selectedPeriod, setSelectedPeriod] = useState(stored?.period ?? 'all_time')
+  const [selectedRanks, setSelectedRanks] = useState(stored?.ranks ?? [])
   const [availableWeeks, setAvailableWeeks] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -36,6 +54,14 @@ export function WinrateMatrixPage() {
   const [snapshots, setSnapshots] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+
+  useEffect(() => {
+    localStorage.setItem(FILTERS_KEY, JSON.stringify({
+      queue: selectedQueue,
+      period: selectedPeriod,
+      ranks: selectedRanks,
+    }))
+  }, [selectedQueue, selectedPeriod, selectedRanks])
 
   const refreshSnapshots = useCallback(async () => {
     const saved = await getSnapshotsForConfig(selectedQueue, selectedPeriod, selectedRanks)
@@ -64,7 +90,14 @@ export function WinrateMatrixPage() {
           setToDate(prev => prev && saved.some(s => s.dateStr === prev) ? prev : saved[saved.length - 1].dateStr)
         }
       } catch (err) {
-        setError(err.message)
+        // A restored "week:<date>" filter can point at a week duels.ink no longer
+        // serves (weeks roll off over time) — fall back to All Time rather than
+        // leaving a returning user stuck on a permanent error.
+        if (selectedPeriod !== 'all_time') {
+          setSelectedPeriod('all_time')
+        } else {
+          setError(err.message)
+        }
       } finally {
         setLoading(false)
       }

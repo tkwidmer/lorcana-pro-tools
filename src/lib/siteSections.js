@@ -116,12 +116,7 @@ export const SECTIONS = [
       {
         path: '/library',
         name: 'Scouting Library',
-        description: 'Review saved games, stats dashboards, and player profiles with inferred decklists. Import shared game snapshots to view or save them.',
-      },
-      {
-        path: '/opponent-directory',
-        name: 'Opponent Directory',
-        description: 'Look up any opponent from your imported games, filter by their ink colors, and see every card we\'ve seen them play, ink, or discard.',
+        description: 'Review saved games, stats dashboards, and unified opponent profiles combining scouted games and imported gamelogs — inferred decklists, win rates, and every card we\'ve seen them play, ink, or discard.',
       },
     ],
   },

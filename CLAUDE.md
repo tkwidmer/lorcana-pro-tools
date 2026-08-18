@@ -90,9 +90,9 @@ Defined in `src/App.jsx`:
 | `/limited-guide` | `LimitedGuidePage.jsx` | Limited format reference — BREAD framework, mana curves, uninkable counts |
 | `/deck-insights` | `DrawOddsPage.jsx` | Comprehensive deck analytics: draw odds, mulligan/scry simulation, keyword analysis, brickability, quest pressure curves |
 | `/game-scraper` | `GameScraperPage.jsx` | Live game state viewer via Chrome extension (automatic) or bookmarklet (manual) |
-| `/library` | `LibraryPage.jsx` | Saved games (`?tab=history`) and opponent player profiles (`?tab=players`) |
+| `/library` | `LibraryPage.jsx` | Saved games (`?tab=history`) and a unified opponent directory (`?tab=players`) merging scouted-game and imported-gamelog opponent data |
 | `/scouting/game/:uuid` | `ScoutedGamePage.jsx` | Full game state replay with action log (single scraped snapshot) |
-| `/players/:name` | `PlayerProfilePage.jsx` | Per-opponent stats — win rates, deck archetypes, matchup data |
+| `/players/:name` | `PlayerProfilePage.jsx` | Unified per-opponent profile — win rates, deck archetypes, and inferred decklists merged from scouted games and imported duels.ink gamelogs (see "Unified Opponent Profiles" below) |
 | `/deck-comparison` | `DeckComparisonPage.jsx` | Paste two decklists to highlight differences |
 | `/settings` | `SettingsPage.jsx` | Auth management and preferences — including the Appearance (dark mode) toggle |
 | `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
@@ -118,6 +118,7 @@ Legacy redirects:
 - `/game-library` → `/analytics`
 - `/shared` → `/library`
 - `/legality-checker` → `/deck-insights`
+- `/opponent-directory` → `/library?tab=players` (the two pages were merged into one — see below)
 
 ### Components
 
@@ -165,7 +166,8 @@ In `src/lib/`:
 | `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
 | `gameStats.js` | Aggregate stats across game records — matchups, card plays, ink curves |
 | `gameSnapshot.js` | Export/import game state as JSON files for sharing |
-| `playerProfiles.js` | Build opponent deck profiles and win rates from saved game history |
+| `playerProfiles.js` | `listPlayers()`/`buildPlayerProfile()` — unified per-opponent profiles merging scouted games (`scoutedGames.js`) and imported duels.ink gamelogs (via `opponentDirectory.js`'s `buildDirectory()`); see "Unified Opponent Profiles" below |
+| `opponentDirectory.js` | `buildDirectory()` — aggregates parsed gamelogs into per-opponent, per-deck card totals (played/inked/discarded/destroyed). Used directly by `playerProfiles.js` to fold gamelog data into the unified profile — no longer has its own page |
 | `handInference.js` | Hypergeometric P(≥1 in hand) calculator — powers `HandPredictor` |
 | `leakDetection.js` | Detect when hand information is leaked (quests, zones); used by `PracticePlanPage` and `AnalyticsPage` |
 | `tournamentShareImage.js` | Renders a shareable summary image (canvas) for tournament/practice results |
@@ -301,6 +303,18 @@ Data flow when spectating a duels.ink game:
 6. `GameScraperPage` listens for the message and renders the live game state
 
 The extension merges incoming `spectator_update` payloads — any field that ever appeared in a game's `meta` is retained across updates.
+
+### Unified Opponent Profiles
+
+`/library?tab=players` and `/players/:name` merge two independent opponent-tracking systems into one view — there is no route dedicated to gamelog-only opponent data anymore (`/opponent-directory` redirects to `/library?tab=players`):
+- **Scouted games** (`scoutedGames.js`) — full board-state snapshots captured via the Chrome extension or an imported shared snapshot. Games may not even involve the signed-in user (spectating two strangers is possible), so stats here are tracked per named player as *that player's own* record, not "my record against them".
+- **Imported duels.ink gamelogs** (`gamelogHistory.js`, aggregated per-opponent by `opponentDirectory.js`'s `buildDirectory()`) — always games the signed-in user actually played, with coarser per-card totals (played/inked/discarded/destroyed) but no turn-by-turn detail. `buildDirectory()`'s `wins`/`losses` are from *my* perspective (my record against that opponent); `playerProfiles.js` flips them (`wins`/`losses` swapped) when merging so the unified profile's `wins`/`losses` consistently mean "this opponent's own record", matching the scouted side.
+
+`playerProfiles.js` does the merge:
+- `listPlayers(records, gamelogs)` — per-opponent summary (games/W-L/deck count) for the Players tab list, keyed by name across both sources. `scoutedGameCount`/`gamelogGameCount` are broken out so the UI can show where the numbers came from.
+- `buildPlayerProfile(records, gamelogs, name)` — full per-opponent detail for `PlayerProfilePage`. Decks are bucketed by ink-color key (`matchupKey()`) and merged via `mergeDeckBuckets()`: a deck seen in only one source keeps that source's fields (`hasScoutedData`/`hasGamelogData` flags tell the UI which); a deck seen in both sums games/wins/losses and combines card stats by name (scouted `plays`/`inks` — max observed in a single game, used for the inferred-decklist `estimatedCopies` — alongside gamelog `played`/`inked`/`discarded`/`destroyed`, summed across games). Play-pattern stats (quests/turn, ink rate, went-first rate) require the full per-turn log a gamelog import doesn't carry, so they're scouted-only and read as 0 for a gamelog-only deck.
+
+The two sources can't be deduplicated against each other — there's no shared game ID between a spectated match and a duels.ink gamelog export — so if the same physical game was somehow captured by both, it's counted twice rather than merged 1:1. In practice this is rare enough not to matter (spectating your own game and also importing its gamelog).
 
 ### Match History Filters
 

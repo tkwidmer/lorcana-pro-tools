@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeCardImpact } from '../cardImpact'
+import { computeCardImpact, computeCardImpactTrend } from '../cardImpact'
 
 const cardId = (name) => `id-${name}`
 
@@ -138,5 +138,61 @@ describe('computeCardImpact', () => {
     const { results } = computeCardImpact(games)
     expect(results.every(r => r.lowSample)).toBe(true)
     expect(results[0].war).toBeGreaterThanOrEqual(results[results.length - 1].war)
+  })
+})
+
+describe('computeCardImpactTrend', () => {
+  const jan = new Date('2026-01-15T00:00:00.000Z').getTime()
+  const feb = new Date('2026-02-15T00:00:00.000Z').getTime()
+
+  it('returns no points for games with no playedAt', () => {
+    const games = [makeGame(1, true, [MICKEY])]
+    const { points } = computeCardImpactTrend(games, { cardName: MICKEY })
+    expect(points).toEqual([])
+  })
+
+  it('buckets games by calendar month and computes per-month war', () => {
+    const inDeck = [{ cardId: cardId(MICKEY), count: 1 }]
+    const games = [
+      makeGame(1, true, [MICKEY], null, jan),
+      makeGame(1, false, [], inDeck, jan),
+      makeGame(1, true, [MICKEY], null, feb),
+      makeGame(1, true, [MICKEY], null, feb),
+      makeGame(1, false, [], inDeck, feb),
+    ]
+    const { points } = computeCardImpactTrend(games, { cardName: MICKEY })
+    expect(points.map(p => p.bucket)).toEqual(['2026-01', '2026-02'])
+
+    const janPoint = points[0]
+    expect(janPoint.gamesWith).toBe(1)
+    expect(janPoint.winsWith).toBe(1)
+    expect(janPoint.gamesWithout).toBe(1)
+    expect(janPoint.winsWithout).toBe(0)
+    expect(janPoint.war).toBe(1)
+
+    const febPoint = points[1]
+    expect(febPoint.gamesWith).toBe(2)
+    expect(febPoint.gamesWithout).toBe(1)
+  })
+
+  it('excludes months where deck membership cannot be confirmed for a miss', () => {
+    const games = [
+      makeGame(1, true, [MICKEY], null, jan),
+      makeGame(1, false, [], null, jan), // no decklist recorded — unconfirmed miss
+    ]
+    const { points } = computeCardImpactTrend(games, { cardName: MICKEY })
+    expect(points[0].gamesWith).toBe(1)
+    expect(points[0].gamesWithout).toBe(0)
+    expect(points[0].war).toBeNull()
+  })
+
+  it('flags a bucket as low sample under the trend threshold', () => {
+    const inDeck = [{ cardId: cardId(MICKEY), count: 1 }]
+    const games = [
+      makeGame(1, true, [MICKEY], null, jan),
+      makeGame(1, false, [], inDeck, jan),
+    ]
+    const { points } = computeCardImpactTrend(games, { cardName: MICKEY })
+    expect(points[0].lowSample).toBe(true)
   })
 })

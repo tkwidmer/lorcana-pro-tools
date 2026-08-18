@@ -1,10 +1,11 @@
 const DB_NAME = 'lorcana_pro_tools'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 const STORE_KEY_PATHS = {
   games: 'uuid',
   cards: 'version',
   coconutDecks: 'id',
+  metaSnapshots: 'id',
 }
 
 let dbPromise = null

@@ -171,9 +171,12 @@ In `src/lib/`:
 | `tournamentShareImage.js` | Renders a shareable summary image (canvas) for tournament/practice results |
 | `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
 | `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
+| `cardImpact.js` | `computeCardImpact()` — per-card "wins above replacement" (WAR) for a deck's games; `computeCardImpactTrend()` — the same logic bucketed by calendar month, powering `CardImpactTrendView`'s WAR-over-time chart |
 | `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
 | `duelsApi.js` | duels.ink API client — match history, gamelog, replay fetches |
 | `leaderboardApi.js` | Fetches duels.ink ranked leaderboards via `/api/duels?endpoint=leaderboard` |
+| `metaSnapshots.js` | IndexedDB CRUD for daily meta-matchup snapshots (`lorcana_pro_tools` DB, `metaSnapshots` store, keyed by `id`) — `saveSnapshotIfNew()` captures one snapshot per queue/period/ranks config per day from `WinrateMatrixPage`'s `fetchStats` result; `getSnapshotsForConfig()` reads them back for the Meta Drift comparison |
+| `metaDrift.js` | `computeMetaDrift()` — diffs two saved meta snapshots' matchups (win rate, games) for `WinrateMatrixPage`'s Meta Drift view |
 | `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
 | `gameExport.js` | Serialize game records for sharing (used by `AnalyticsPage`) |
 | `gameImport.js` | Deserialize imported game records |
@@ -251,6 +254,7 @@ Three surfaces keep `supporter_tier` in sync with Patreon, all funneling through
 | IndexedDB `lorcana_pro_tools` v2 | `games` store (key: `uuid`) | Scraped game snapshots from `GameScraperPage` |
 | IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
 | IndexedDB `lorcana_pro_tools` v3 | `coconutDecks` store (key: `id`) | Saved [Format Coconut] decks from `CoconutDeckBuilderPage` |
+| IndexedDB `lorcana_pro_tools` v4 | `metaSnapshots` store (key: `id`) | Daily meta-matchup snapshots from `WinrateMatrixPage`, one per queue/period/ranks config per day, used by its Meta Drift comparison |
 | IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `AnalyticsPage` |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
 | localStorage `lorcana_theme` | — | Dark-mode preference: `light` \| `dark` \| `system` (see Dark Mode) |
@@ -324,6 +328,8 @@ Key fields on game objects from the duels.ink API:
 - Returns `{ matchups, colorPairs, totalGames, winLossMatrix }` — the matrix is a nested map `[playerColorKey][oppColorKey]`
 
 `metagameAnalysis.js` (`analyzeOpponentMetagame`) groups by opponent color pair and returns frequency + win rate sorted by game count.
+
+`WinrateMatrixPage`'s Meta Drift section compares two locally-saved snapshots of the public duels.ink matchup data for the same queue/period/ranks config, to surface how the meta has shifted over time. Every time the page loads, `saveSnapshotIfNew()` (`metaSnapshots.js`) stores that day's `fetchStats` matchups/colorPairs/activity in the `metaSnapshots` IndexedDB store — one snapshot per exact config per day, so repeat visits within a day don't create duplicates. The user picks two saved dates and `computeMetaDrift()` (`metaDrift.js`) diffs the two snapshots' matchups (win rate delta, games delta, matched by color pair regardless of A/B order), sorted by absolute win rate movement. Since snapshots only accumulate as the user actually visits the page, there's no backfill — history starts from whenever this shipped.
 
 ### Tournament Lookup
 

@@ -1,6 +1,7 @@
+import { useMemo, useState } from 'react'
 import { InkIcon as InkImg } from '../InkIcons'
 import { buildWinrateMatrixFromGames } from '../../lib/buildWinrateMatrix'
-import { computeCardImpact } from '../../lib/cardImpact'
+import { computeCardImpact, computeCardImpactTrend } from '../../lib/cardImpact'
 import { analyzeOpponentMetagame } from '../../lib/metagameAnalysis'
 import { aggregateMulliganWinRates } from '../../lib/analyticsAggregation'
 
@@ -526,6 +527,114 @@ export function CardImpactView({ games, deckSelected, deckVersions, hasToken }) 
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+const TREND_CHART_W = 1000
+const TREND_CHART_H = 200
+const TREND_PAD = { top: 16, right: 16, bottom: 32, left: 40 }
+
+function formatMonthLabel(bucket) {
+  const [year, month] = bucket.split('-').map(Number)
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+}
+
+export function CardImpactTrendView({ games, deckVersions }) {
+  const [selectedCard, setSelectedCard] = useState('')
+
+  const { results } = useMemo(() => computeCardImpact(games, { deckVersions }), [games, deckVersions])
+  const candidates = useMemo(
+    () => results
+      .filter(r => r.gamesWith + r.gamesWithout >= 3)
+      .sort((a, b) => (b.gamesWith + b.gamesWithout) - (a.gamesWith + a.gamesWithout)),
+    [results]
+  )
+
+  const activeCard = selectedCard || candidates[0]?.name || ''
+  const { points } = useMemo(
+    () => activeCard ? computeCardImpactTrend(games, { deckVersions, cardName: activeCard }) : { points: [] },
+    [games, deckVersions, activeCard]
+  )
+  const scored = points.filter(p => p.war != null)
+
+  if (candidates.length === 0) {
+    return <div className="text-sm text-gray-500">Not enough data yet to chart card trends over time.</div>
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center gap-2">
+        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Card</label>
+        <select
+          value={activeCard}
+          onChange={e => setSelectedCard(e.target.value)}
+          className="text-sm border border-gray-300 rounded px-2 py-1 bg-white text-gray-800"
+        >
+          {candidates.map(c => (
+            <option key={c.name} value={c.name}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+      {scored.length < 2 ? (
+        <div className="text-sm text-gray-500">Not enough months with confirmed with/without data for this card to chart a trend — try a card played across more months.</div>
+      ) : (
+        <CardWarTrendChart points={scored} />
+      )}
+    </div>
+  )
+}
+
+function CardWarTrendChart({ points }) {
+  const chartW = TREND_CHART_W - TREND_PAD.left - TREND_PAD.right
+  const chartH = TREND_CHART_H - TREND_PAD.top - TREND_PAD.bottom
+
+  const wars = points.map(p => p.war)
+  const minWar = Math.min(0, ...wars)
+  const maxWar = Math.max(0, ...wars)
+  const range = maxWar - minWar
+  const paddedMin = minWar - (range * 0.15 || 1)
+  const paddedMax = maxWar + (range * 0.15 || 1)
+  const paddedRange = paddedMax - paddedMin
+
+  const xPos = (i) => TREND_PAD.left + (points.length === 1 ? chartW / 2 : (i / (points.length - 1)) * chartW)
+  const yPos = (war) => TREND_PAD.top + (1 - (war - paddedMin) / paddedRange) * chartH
+  const zeroY = yPos(0)
+
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(p.war).toFixed(1)}`).join(' ')
+
+  return (
+    <div>
+      <div className="text-xs text-gray-400 mb-2">WAR by month (faded points had fewer than 3 games on one side — low confidence)</div>
+      <svg viewBox={`0 0 ${TREND_CHART_W} ${TREND_CHART_H}`} className="w-full" style={{ height: 180 }}>
+        <line
+          x1={TREND_PAD.left} y1={zeroY} x2={TREND_CHART_W - TREND_PAD.right} y2={zeroY}
+          stroke="#e5e7eb" strokeWidth={1} strokeDasharray="6 3"
+        />
+        <text x={TREND_PAD.left - 6} y={zeroY + 4} textAnchor="end" fontSize={18} fill="#9ca3af">0</text>
+
+        <path d={linePath} fill="none" stroke="#8b5cf6" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+
+        {points.map((p, i) => (
+          <circle
+            key={p.bucket}
+            cx={xPos(i)} cy={yPos(p.war)}
+            r={p.lowSample ? 4 : 6}
+            fill={p.war >= 0 ? '#10b981' : '#ef4444'}
+            opacity={p.lowSample ? 0.4 : 1}
+          />
+        ))}
+
+        {points.map((p, i) => (
+          <text
+            key={p.bucket} x={xPos(i)} y={TREND_CHART_H - 4}
+            textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}
+            fontSize={16} fill="#9ca3af"
+          >
+            {formatMonthLabel(p.bucket)}
+          </text>
+        ))}
+      </svg>
     </div>
   )
 }

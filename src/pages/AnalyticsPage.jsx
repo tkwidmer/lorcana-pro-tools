@@ -16,6 +16,7 @@ import {
   WinRateTrendView,
   MMRTrendView,
   CardImpactView,
+  CardImpactTrendView,
   OpponentMetagameView,
 } from '../components/analytics/MatchupViews'
 import { DeckStats, ChallengeStats } from '../components/analytics/StatTables'
@@ -46,6 +47,7 @@ export function AnalyticsPage() {
   const [metagameOpen, setMetagameOpen] = useState(true)
   const [matchupOpen, setMatchupOpen] = useState(true)
   const [cardImpactOpen, setCardImpactOpen] = useState(true)
+  const [cardImpactTrendOpen, setCardImpactTrendOpen] = useState(false)
   const [trendOpen, setTrendOpen] = useState(true)
   const [mmrTrendOpen, setMmrTrendOpen] = useState(true)
   const [turnDistOpen, setTurnDistOpen] = useState(true)
@@ -809,6 +811,27 @@ export function AnalyticsPage() {
                 deckVersions={selectedDeckId ? deckVersionsByDeckId[selectedDeckId] : null}
                 hasToken={!!getToken()}
               />
+              {filterDeck != null && (
+                <div className="mt-6">
+                  <button
+                    onClick={() => setCardImpactTrendOpen(o => !o)}
+                    className="w-full flex items-center justify-between py-2 border-b border-gray-200 hover:border-gray-400 transition-colors group"
+                  >
+                    <span className="text-sm font-bold text-gray-700 group-hover:text-gray-900 transition-colors">WAR Trends Over Time</span>
+                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${cardImpactTrendOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {cardImpactTrendOpen && (
+                    <div className="mt-4">
+                      <CardImpactTrendView
+                        games={enrichedGames}
+                        deckVersions={selectedDeckId ? deckVersionsByDeckId[selectedDeckId] : null}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

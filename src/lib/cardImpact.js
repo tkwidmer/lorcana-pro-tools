@@ -96,3 +96,78 @@ export function computeCardImpact(games, { deckVersions } = {}) {
 
   return { results, totalGames: eligible.length }
 }
+
+const TREND_MIN_SAMPLE = 3
+
+// Buckets a game's playedAt into a "YYYY-MM" label, or null if unset.
+function monthBucket(playedAt) {
+  if (!playedAt) return null
+  const d = new Date(playedAt)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+// Same "wins above replacement" logic as computeCardImpact, but bucketed by
+// calendar month so a card's impact can be charted over time — e.g. to see
+// whether a card's performance has drifted as the meta or the deck's list
+// around it has changed. Buckets use a lower sample threshold than the
+// all-time view since a month of games is naturally a smaller sample.
+export function computeCardImpactTrend(games, { deckVersions, cardName } = {}) {
+  const eligible = games.filter(g => g.myPlayerNum != null && g.winner != null && g.playedAt)
+
+  // The card's id may only appear on games where it was actually seen (drawn/played/
+  // inked) — collect it across all eligible games first so a "miss" game (where the
+  // card doesn't appear in cardList at all) can still be checked against deckIds.
+  let cardId = null
+  for (const g of eligible) {
+    const mySide = g.myPlayerNum === 1 ? g.p1 : g.p2
+    const c = mySide?.cardList?.find(c => c.name === cardName)
+    if (c?.id) { cardId = c.id; break }
+  }
+
+  const byBucket = {}
+  for (const g of eligible) {
+    const bucket = monthBucket(g.playedAt)
+    if (!bucket) continue
+    const mySide = g.myPlayerNum === 1 ? g.p1 : g.p2
+    if (!mySide?.cardList) continue
+    const won = g.winner === g.myPlayerNum || g.winner === String(g.myPlayerNum)
+    const c = mySide.cardList.find(c => c.name === cardName)
+    const seenCard = !!c && ((c.drawn ?? 0) > 0 || (c.played ?? 0) > 0 || (c.inked ?? 0) > 0)
+    const version = findDeckVersion(deckVersions, g.playedAt)
+    const deckIds = version
+      ? new Set(version.cardIds)
+      : g.yourDecklist?.length
+        ? new Set(g.yourDecklist.filter(d => (d.count ?? 1) > 0).map(d => d.cardId))
+        : null
+
+    if (!byBucket[bucket]) {
+      byBucket[bucket] = { gamesWith: 0, winsWith: 0, gamesWithout: 0, winsWithout: 0 }
+    }
+    const s = byBucket[bucket]
+    if (seenCard) {
+      s.gamesWith++
+      if (won) s.winsWith++
+    } else if (deckIds && cardId && deckIds.has(cardId)) {
+      s.gamesWithout++
+      if (won) s.winsWithout++
+    }
+    // Games where the card's deck membership can't be confirmed, or is
+    // confirmed cut, are excluded from both buckets — same as computeCardImpact.
+  }
+
+  const points = Object.entries(byBucket)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([bucket, s]) => {
+      const winRateWith = s.gamesWith > 0 ? s.winsWith / s.gamesWith : null
+      const winRateWithout = s.gamesWithout > 0 ? s.winsWithout / s.gamesWithout : null
+      const war = (winRateWith != null && winRateWithout != null)
+        ? s.winsWith - winRateWithout * s.gamesWith
+        : null
+      return {
+        bucket, ...s, winRateWith, winRateWithout, war,
+        lowSample: s.gamesWith < TREND_MIN_SAMPLE || s.gamesWithout < TREND_MIN_SAMPLE,
+      }
+    })
+
+  return { points }
+}

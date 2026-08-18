@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { fetchStats } from '../lib/duelsApi'
 import { InkIcons as ColorPairIcons } from '../components/InkIcons'
 import { winrateCellColor as getWinrateColor } from '../lib/statColors'
+import { saveSnapshotIfNew, getSnapshotsForConfig } from '../lib/metaSnapshots'
+import { computeMetaDrift } from '../lib/metaDrift'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -30,6 +32,17 @@ export function WinrateMatrixPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [snapshots, setSnapshots] = useState([])
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+
+  const refreshSnapshots = useCallback(async () => {
+    const saved = await getSnapshotsForConfig(selectedQueue, selectedPeriod, selectedRanks)
+    setSnapshots(saved)
+    return saved
+  }, [selectedQueue, selectedPeriod, selectedRanks])
+
   useEffect(() => {
     const loadStats = async () => {
       setLoading(true)
@@ -44,6 +57,12 @@ export function WinrateMatrixPage() {
         if (data.meta?.availableWeeks) {
           setAvailableWeeks(data.meta.availableWeeks)
         }
+        await saveSnapshotIfNew(selectedQueue, selectedPeriod, selectedRanks, data)
+        const saved = await refreshSnapshots()
+        if (saved.length >= 2) {
+          setFromDate(prev => prev && saved.some(s => s.dateStr === prev) ? prev : saved[0].dateStr)
+          setToDate(prev => prev && saved.some(s => s.dateStr === prev) ? prev : saved[saved.length - 1].dateStr)
+        }
       } catch (err) {
         setError(err.message)
       } finally {
@@ -52,7 +71,13 @@ export function WinrateMatrixPage() {
     }
 
     loadStats()
-  }, [selectedQueue, selectedPeriod, selectedRanks])
+  }, [selectedQueue, selectedPeriod, selectedRanks, refreshSnapshots])
+
+  const fromSnapshot = snapshots.find(s => s.dateStr === fromDate) ?? null
+  const toSnapshot = snapshots.find(s => s.dateStr === toDate) ?? null
+  const driftRows = (compareOpen && fromSnapshot && toSnapshot && fromDate !== toDate)
+    ? computeMetaDrift(fromSnapshot, toSnapshot)
+    : []
 
   if (loading) {
     return (
@@ -230,6 +255,104 @@ export function WinrateMatrixPage() {
           Total games: <span className="font-semibold text-gray-900">{stats.activity?.totalGames.toLocaleString() || 0}</span>
           {' '} • Unique players: <span className="font-semibold text-gray-900">{stats.activity?.uniquePlayers.toLocaleString() || 0}</span>
         </p>
+      </div>
+
+      {/* Meta drift — compares two locally-saved snapshots of this exact queue/period/rank
+          config. A snapshot is saved automatically the first time this page loads on a new
+          day for a given config, so this fills in as you keep visiting. */}
+      <div className="mb-8">
+        <button
+          onClick={() => setCompareOpen(o => !o)}
+          className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+        >
+          <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Meta Drift</span>
+          <svg className={`w-4 h-4 text-gray-400 transition-transform ${compareOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {compareOpen && (
+          <div className="mt-6">
+            {snapshots.length < 2 ? (
+              <p className="text-sm text-gray-500">
+                Only {snapshots.length} saved snapshot{snapshots.length === 1 ? '' : 's'} for this queue/period/rank combo so far — a new one is captured automatically each day you visit this page. Check back after a couple of days to see drift.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <label className="text-sm font-semibold text-gray-900">From</label>
+                  <select
+                    value={fromDate}
+                    onChange={e => setFromDate(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg text-sm border border-gray-300 bg-white text-gray-900"
+                  >
+                    {snapshots.map(s => (
+                      <option key={s.id} value={s.dateStr}>{s.dateStr}</option>
+                    ))}
+                  </select>
+                  <span className="text-gray-400">→</span>
+                  <label className="text-sm font-semibold text-gray-900">To</label>
+                  <select
+                    value={toDate}
+                    onChange={e => setToDate(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg text-sm border border-gray-300 bg-white text-gray-900"
+                  >
+                    {snapshots.map(s => (
+                      <option key={s.id} value={s.dateStr}>{s.dateStr}</option>
+                    ))}
+                  </select>
+                </div>
+                {fromDate === toDate ? (
+                  <p className="text-sm text-gray-500">Pick two different dates to see the delta.</p>
+                ) : driftRows.length === 0 ? (
+                  <p className="text-sm text-gray-500">No overlapping matchup data between these two snapshots.</p>
+                ) : (
+                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
+                          <th className="py-2 px-3">Matchup</th>
+                          <th className="py-2 px-3 text-right">{fromDate}</th>
+                          <th className="py-2 px-3 text-right">{toDate}</th>
+                          <th className="py-2 px-3 text-right">Δ Winrate</th>
+                          <th className="py-2 px-3 text-right">Δ Games</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {driftRows.map((row, idx) => (
+                          <tr key={idx} className="border-b border-gray-100">
+                            <td className="py-1.5 px-3">
+                              <span className="inline-flex items-center gap-1">
+                                <ColorPairIcons colors={row.colorsA} size={16} />
+                                <span className="text-gray-400 text-xs">vs</span>
+                                <ColorPairIcons colors={row.colorsB} size={16} />
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-3 text-right text-gray-600">
+                              {row.prevWinRate != null ? `${row.prevWinRate.toFixed(0)}%` : '—'}
+                            </td>
+                            <td className="py-1.5 px-3 text-right text-gray-600">
+                              {row.currWinRate != null ? `${row.currWinRate.toFixed(0)}%` : '—'}
+                            </td>
+                            <td className={`py-1.5 px-3 text-right font-semibold ${
+                              row.winRateDelta == null ? 'text-gray-400'
+                                : row.winRateDelta > 0 ? 'text-emerald-600'
+                                : row.winRateDelta < 0 ? 'text-red-500' : 'text-gray-500'
+                            }`}>
+                              {row.isNew ? 'new' : row.isGone ? 'gone' : `${row.winRateDelta > 0 ? '+' : ''}${row.winRateDelta.toFixed(1)}%`}
+                            </td>
+                            <td className="py-1.5 px-3 text-right text-gray-400">
+                              {row.gamesDelta != null ? `${row.gamesDelta > 0 ? '+' : ''}${row.gamesDelta.toLocaleString()}` : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Matrix */}

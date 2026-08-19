@@ -81,6 +81,39 @@ describe('buildMCDeck + mcSim', () => {
     const deck = buildMCDeck(60, cards, ['Scryer'], true, [{ name: 'Scryer', copies: 60, lookAt: 1, keep: 1, mulliganMode: 'mulligan' }])
     expect(deck.scryForceMulligan[0]).toBe(1)
   })
+
+  it('a scry source too expensive to cast on the target turn provides no boost over no scry at all', () => {
+    // Going first with T=1, the only gameplay draw lands on turn 2 (turn 1 has no draw) — so a
+    // scry source costing more than 2 can never be cast in time even if drawn. Different scry
+    // configs perturb the deterministic seed, so results aren't bit-identical to a no-scry
+    // baseline, but with the effect fully gated off they should land within Monte Carlo noise
+    // of each other (MC_ITERS=10000 gives a standard error on the order of 0.5%).
+    const cards = [
+      { name: 'Target', count: 4 },
+      { name: 'Scryer', count: 4 },
+      { name: 'Filler', count: 52 },
+    ]
+    const withScry = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 10, keep: 4, cost: 3 }])
+    const noScry = buildMCDeck(60, cards, ['Target'], false, [])
+    for (const m of [0, 3, 7]) {
+      const pWith = mcSim({ ...withScry, N: 60, M: m, T: 1, need: 1, goingFirst: true, additionalDraws: 0 })
+      const pWithout = mcSim({ ...noScry, N: 60, M: m, T: 1, need: 1, goingFirst: true, additionalDraws: 0 })
+      expect(Math.abs(pWith - pWithout)).toBeLessThan(0.02)
+    }
+  })
+
+  it('a cheap scry source boosts odds once its turn is reached, but a same-config expensive one does not', () => {
+    const cards = [
+      { name: 'Target', count: 4 },
+      { name: 'Scryer', count: 4 },
+      { name: 'Filler', count: 52 },
+    ]
+    const cheapDeck = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 10, keep: 4, cost: 1 }])
+    const expensiveDeck = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 10, keep: 4, cost: 6 }])
+    const pCheap = mcSim({ ...cheapDeck, N: 60, M: 0, T: 3, need: 1, goingFirst: false, additionalDraws: 0 })
+    const pExpensive = mcSim({ ...expensiveDeck, N: 60, M: 0, T: 3, need: 1, goingFirst: false, additionalDraws: 0 })
+    expect(pCheap).toBeGreaterThan(pExpensive)
+  })
 })
 
 describe('buildMCJointDeckN + mcJointSimN determinism', () => {

@@ -170,7 +170,7 @@ export function DeckInsightsPage() {
   }
   function addScrySource() {
     const id = nextScryId.current++
-    saveScrySources(ss => [...ss, { id, name: '', copies: 4, lookAt: 2, keep: 1, mulliganMode: 'default' }])
+    saveScrySources(ss => [...ss, { id, name: '', copies: 4, lookAt: 2, keep: 1, cost: 1, mulliganMode: 'default' }])
   }
   function removeScrySource(id) {
     saveScrySources(ss => ss.filter(s => s.id !== id))
@@ -483,13 +483,13 @@ export function DeckInsightsPage() {
         result[group.id] = {
           mulliganRange: Array.from({ length: maxMulligan + 1 }, (_, m) => ({
             m,
-            p: mcSim({ ...deck, N, M: m, T: gDraws(group.targetTurn), need }),
+            p: mcSim({ ...deck, N, M: m, T: gDraws(group.targetTurn), need, goingFirst, additionalDraws }),
           })),
         }
       } else {
         result[group.id] = {
-          opening: mcSim({ ...deck, N, M: 0, T: 0, need }),
-          turns: TURN_COLS.map(T => mcSim({ ...deck, N, M: 0, T: gDraws(T), need })),
+          opening: mcSim({ ...deck, N, M: 0, T: 0, need, goingFirst, additionalDraws }),
+          turns: TURN_COLS.map(T => mcSim({ ...deck, N, M: 0, T: gDraws(T), need, goingFirst, additionalDraws })),
         }
       }
     }
@@ -502,7 +502,7 @@ export function DeckInsightsPage() {
         const deck = buildMCJointDeckN(N, cards, [gA, gB], scrySources)
         result[`${gA.id}-${gB.id}`] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
           m,
-          p: mcJointSimN({ ...deck, N, M: m, Ts: [gDraws(gA.targetTurn), gDraws(gB.targetTurn)], needs: [gA.need ?? 1, gB.need ?? 1] }),
+          p: mcJointSimN({ ...deck, N, M: m, Ts: [gDraws(gA.targetTurn), gDraws(gB.targetTurn)], needs: [gA.need ?? 1, gB.need ?? 1], goingFirst, additionalDraws }),
         }))
       }
     }
@@ -513,7 +513,7 @@ export function DeckInsightsPage() {
       const deck = buildMCJointDeckN(N, cards, groups, scrySources)
       result[key] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
         m,
-        p: mcJointSimN({ ...deck, N, M: m, Ts: groups.map(g => gDraws(g.targetTurn)), needs: groups.map(g => g.need ?? 1) }),
+        p: mcJointSimN({ ...deck, N, M: m, Ts: groups.map(g => gDraws(g.targetTurn)), needs: groups.map(g => g.need ?? 1), goingFirst, additionalDraws }),
       }))
     }
 
@@ -565,185 +565,6 @@ export function DeckInsightsPage() {
         <p className="text-gray-500">
           Paste a deck list to analyse your curve, consistency, lore pressure, keyword synergies, mulligan strategy, and draw odds.
         </p>
-      </div>
-
-      {/* Settings */}
-      <div className="border border-gray-200 rounded-lg p-6 mb-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-4">Settings</h2>
-        <div className="flex flex-wrap gap-6 items-end mb-6">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Deck Size</label>
-            <input
-              type="number"
-              min="7"
-              max="120"
-              inputMode="numeric"
-              value={deckSize}
-              onChange={e => saveDeckSize(Math.max(7, parseInt(e.target.value) || 60))}
-              className="w-24 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Turn Order</label>
-            <div className="flex rounded border border-gray-200 overflow-hidden text-sm">
-              <button
-                onClick={() => saveGoingFirst(true)}
-                className={`px-4 py-2 transition-colors ${goingFirst ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-              >
-                Going First
-              </button>
-              <button
-                onClick={() => saveGoingFirst(false)}
-                className={`px-4 py-2 border-l border-gray-200 transition-colors ${!goingFirst ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-              >
-                Going Second
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-6 items-end">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Max Mulligan <span className="text-gray-400">(max cards replaced)</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => saveMaxMulligan(Math.max(0, maxMulligan - 1))}
-                disabled={maxMulligan === 0}
-                className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
-              >
-                −
-              </button>
-              <span className="text-xl font-bold w-6 text-center tabular-nums">{maxMulligan}</span>
-              <button
-                onClick={() => saveMaxMulligan(Math.min(7, maxMulligan + 1))}
-                disabled={maxMulligan === 7}
-                className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Additional Draws
-            </label>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => saveAdditionalDraws(Math.max(0, additionalDraws - 1))}
-                disabled={additionalDraws === 0}
-                className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
-              >
-                −
-              </button>
-              <span className="text-xl font-bold w-6 text-center tabular-nums">{additionalDraws}</span>
-              <button
-                onClick={() => saveAdditionalDraws(Math.min(20, additionalDraws + 1))}
-                disabled={additionalDraws === 20}
-                className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Scry Sources */}
-      <div className="border border-gray-200 rounded-lg p-6 mb-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Scry Sources</h2>
-          <span className="text-xs text-gray-400">Develop Your Brain &amp; similar</span>
-        </div>
-        <div className="border-l-2 border-yellow-400 pl-3 mb-4 text-xs text-gray-500 leading-relaxed">
-          A <strong>scry source</strong> looks at the top <em>N</em> cards of your deck, lets you keep <em>K</em> in hand, and bottoms the rest.
-          Example: <em>Develop Your Brain</em> = look at 2, keep 1. The calculator models each scry as seeing those extra cards from your remaining
-          deck — if your target is among them, you keep it. A scry source counts only as a scry — not toward any group.
-        </div>
-        {scrySources.length > 0 && (
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Source Name</span>
-              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Copies</span>
-              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Look At</span>
-              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Keep</span>
-              <span className="w-44 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Mulligan</span>
-              <span className="w-6" />
-            </div>
-            <div className="space-y-2">
-              {scrySources.map(src => (
-                <div key={src.id} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={src.name}
-                    onChange={e => updateScrySource(src.id, 'name', e.target.value)}
-                    placeholder="Card name (optional)"
-                    className="flex-1 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="4"
-                    value={src.copies}
-                    onChange={e => updateScrySource(src.id, 'copies', Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))}
-                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={src.lookAt}
-                    onChange={e => {
-                      const v = Math.max(1, Math.min(10, parseInt(e.target.value) || 1))
-                      updateScrySource(src.id, 'lookAt', v)
-                      if (src.keep > v) updateScrySource(src.id, 'keep', v)
-                    }}
-                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max={src.lookAt}
-                    value={src.keep}
-                    onChange={e => updateScrySource(src.id, 'keep', Math.max(1, Math.min(src.lookAt, parseInt(e.target.value) || 1)))}
-                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
-                  />
-                  <div className="w-44 flex items-center justify-center gap-1">
-                    <button
-                      onClick={() => updateScrySource(src.id, 'mulliganMode', src.mulliganMode === 'keep' ? 'default' : 'keep')}
-                      title="Always keep this scry source in your opening hand — it's never sent back on mulligan"
-                      className={`text-xs px-2 py-1 rounded border transition-colors ${src.mulliganMode === 'keep' ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-400 hover:border-gray-400'}`}
-                    >
-                      Keep
-                    </button>
-                    <button
-                      onClick={() => updateScrySource(src.id, 'mulliganMode', src.mulliganMode === 'mulligan' ? 'default' : 'mulligan')}
-                      title="Always mulligan this scry source away — it never counts toward the opening hand"
-                      className={`text-xs px-2 py-1 rounded border transition-colors ${src.mulliganMode === 'mulligan' ? 'border-red-400 bg-red-50 text-red-700' : 'border-gray-200 text-gray-400 hover:border-gray-400'}`}
-                    >
-                      Toss
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => removeScrySource(src.id)}
-                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <button
-          onClick={addScrySource}
-          className="w-full border border-dashed border-gray-300 rounded py-2 text-sm text-gray-500 hover:border-gray-500 hover:text-gray-700 transition-colors"
-        >
-          + Add scry source
-        </button>
       </div>
 
       {/* Deck List */}
@@ -1584,6 +1405,206 @@ export function DeckInsightsPage() {
           </div>
         )
       })()}
+
+      {/* Settings */}
+      <div className="border border-gray-200 rounded-lg p-6 mb-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-4">Settings</h2>
+        <div className="flex flex-wrap gap-6 items-end mb-6">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Deck Size</label>
+            <input
+              type="number"
+              min="7"
+              max="120"
+              inputMode="numeric"
+              value={deckSize}
+              onChange={e => saveDeckSize(Math.max(7, parseInt(e.target.value) || 60))}
+              className="w-24 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Turn Order</label>
+            <div className="flex rounded border border-gray-200 overflow-hidden text-sm">
+              <button
+                onClick={() => saveGoingFirst(true)}
+                className={`px-4 py-2 transition-colors ${goingFirst ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                Going First
+              </button>
+              <button
+                onClick={() => saveGoingFirst(false)}
+                className={`px-4 py-2 border-l border-gray-200 transition-colors ${!goingFirst ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                Going Second
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-6 items-end">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Max Mulligan <span className="text-gray-400">(max cards replaced)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => saveMaxMulligan(Math.max(0, maxMulligan - 1))}
+                disabled={maxMulligan === 0}
+                className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
+              >
+                −
+              </button>
+              <span className="text-xl font-bold w-6 text-center tabular-nums">{maxMulligan}</span>
+              <button
+                onClick={() => saveMaxMulligan(Math.min(7, maxMulligan + 1))}
+                disabled={maxMulligan === 7}
+                className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Additional Draws
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => saveAdditionalDraws(Math.max(0, additionalDraws - 1))}
+                disabled={additionalDraws === 0}
+                className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
+              >
+                −
+              </button>
+              <span className="text-xl font-bold w-6 text-center tabular-nums">{additionalDraws}</span>
+              <button
+                onClick={() => saveAdditionalDraws(Math.min(20, additionalDraws + 1))}
+                disabled={additionalDraws === 20}
+                className="w-8 h-8 rounded border border-gray-200 hover:border-gray-900 transition-colors disabled:opacity-30 text-lg leading-none"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Scry Sources */}
+      <div className="border border-gray-200 rounded-lg p-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Scry Sources</h2>
+          <span className="text-xs text-gray-400">Develop Your Brain &amp; similar</span>
+        </div>
+        <div className="border-l-2 border-yellow-400 pl-3 mb-4 text-xs text-gray-500 leading-relaxed">
+          A <strong>scry source</strong> looks at the top <em>N</em> cards of your deck, lets you keep <em>K</em> in hand, and bottoms the rest.
+          Example: <em>Develop Your Brain</em> = look at 2, keep 1. The calculator models each scry as seeing those extra cards from your remaining
+          deck — if your target is among them, you keep it. A scry source counts only as a scry — not toward any group.
+        </div>
+        {scrySources.length > 0 && (
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Source Name</span>
+              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Copies</span>
+              <span className="w-16 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Cost</span>
+              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Look At</span>
+              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Keep</span>
+              <span className="w-44 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Mulligan</span>
+              <span className="w-6" />
+            </div>
+            <div className="space-y-2">
+              {scrySources.map(src => {
+                const nameFoundInDeck = !src.name || cards.some(c => c.name === src.name)
+                return (
+                <div key={src.id} className="flex items-center gap-2">
+                  <select
+                    value={src.name}
+                    onChange={e => {
+                      const name = e.target.value
+                      updateScrySource(src.id, 'name', name)
+                      const inferredCost = costMap.get(toSimpleName(name))
+                      if (inferredCost != null) updateScrySource(src.id, 'cost', inferredCost)
+                    }}
+                    className={`flex-1 border rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-900 ${nameFoundInDeck ? 'border-gray-200' : 'border-orange-300 text-orange-600'}`}
+                  >
+                    <option value="">Select card…</option>
+                    {!nameFoundInDeck && <option value={src.name}>{src.name} (not in deck list)</option>}
+                    {cards.map(c => (
+                      <option key={c.name} value={c.name}>{c.name} ({c.count})</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="1"
+                    max="4"
+                    value={src.copies}
+                    onChange={e => updateScrySource(src.id, 'copies', Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))}
+                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={src.cost ?? 1}
+                    title="Ink cost to cast this scry source — it can't fire before you could actually afford to play it"
+                    onChange={e => updateScrySource(src.id, 'cost', Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                    className="w-16 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={src.lookAt}
+                    onChange={e => {
+                      const v = Math.max(1, Math.min(10, parseInt(e.target.value) || 1))
+                      updateScrySource(src.id, 'lookAt', v)
+                      if (src.keep > v) updateScrySource(src.id, 'keep', v)
+                    }}
+                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max={src.lookAt}
+                    value={src.keep}
+                    onChange={e => updateScrySource(src.id, 'keep', Math.max(1, Math.min(src.lookAt, parseInt(e.target.value) || 1)))}
+                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
+                  />
+                  <div className="w-44 flex items-center justify-center gap-1">
+                    <button
+                      onClick={() => updateScrySource(src.id, 'mulliganMode', src.mulliganMode === 'keep' ? 'default' : 'keep')}
+                      title="Always keep this scry source in your opening hand — it's never sent back on mulligan"
+                      className={`text-xs px-2 py-1 rounded border transition-colors ${src.mulliganMode === 'keep' ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-400 hover:border-gray-400'}`}
+                    >
+                      Keep
+                    </button>
+                    <button
+                      onClick={() => updateScrySource(src.id, 'mulliganMode', src.mulliganMode === 'mulligan' ? 'default' : 'mulligan')}
+                      title="Always mulligan this scry source away — it never counts toward the opening hand"
+                      className={`text-xs px-2 py-1 rounded border transition-colors ${src.mulliganMode === 'mulligan' ? 'border-red-400 bg-red-50 text-red-700' : 'border-gray-200 text-gray-400 hover:border-gray-400'}`}
+                    >
+                      Toss
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => removeScrySource(src.id)}
+                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              )})}
+            </div>
+          </div>
+        )}
+        <button
+          onClick={addScrySource}
+          className="w-full border border-dashed border-gray-300 rounded py-2 text-sm text-gray-500 hover:border-gray-500 hover:text-gray-700 transition-colors"
+        >
+          + Add scry source
+        </button>
+      </div>
 
       {/* Draw Rates — collapsible results table */}
       {cards.length > 0 && (

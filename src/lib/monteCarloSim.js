@@ -4,7 +4,39 @@
 const MC_ITERS = 10000
 export const SIM_TURNS = 12  // turns simulated in quest pressure / win turn
 
+// Deterministic seeding: every sim below hashes its own inputs into a seed instead of
+// pulling from the shared Math.random() stream. Without this, re-rendering the exact same
+// deck/config reruns the simulation with a fresh random sample every time, so two visually
+// identical configs (or the same config recomputed twice) can show different — sometimes
+// even order-flipped — percentages purely from sampling noise, which reads as a bug.
+function hashSeed(parts) {
+  let h = 0x811c9dc5
+  for (const p of parts) {
+    if (ArrayBuffer.isView(p)) {
+      for (let i = 0; i < p.length; i++) h = Math.imul(h ^ p[i], 16777619)
+    } else {
+      h = Math.imul(h ^ (p | 0), 16777619)
+    }
+    h = Math.imul(h ^ 0xff, 16777619)
+  }
+  return h >>> 0
+}
+
+function mulberry32(seed) {
+  let a = seed >>> 0
+  return function rng() {
+    a |= 0; a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 // Build typed arrays for a single group simulation.
+// scrySourceList entries may carry `mulliganMode`: 'keep' forces that scry card to never be
+// sent back on mulligan, 'mulligan' forces it to always be sent back (overriding the default
+// heuristic, which only keeps it if it happens to also be a target); 'default'/unset leaves
+// the normal mulligan logic (isKeep/isTarget) in charge of that card.
 export function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceList) {
   const targetSet = new Set(targetNames)
   const scryByName = new Map()
@@ -12,9 +44,10 @@ export function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceLis
     if (s.name && s.copies > 0 && s.lookAt > 0) scryByName.set(s.name, s)
   }
   const isTarget = new Uint8Array(N)
-  const isKeep = new Uint8Array(N)   // alwaysKeep = isTarget && keepInMulligan
+  const isKeep = new Uint8Array(N)   // alwaysKeep = isTarget && keepInMulligan, or scry alwaysKeep
   const scryLookAt = new Uint8Array(N)
   const scryKeep = new Uint8Array(N) // max cards actually kept from that scry (rest are bottomed)
+  const scryForceMulligan = new Uint8Array(N)
   let pos = 0
   for (const card of cards) {
     const t = targetSet.has(card.name)
@@ -22,13 +55,14 @@ export function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceLis
     const count = Math.min(card.count, N - pos)
     for (let i = 0; i < count; i++) {
       isTarget[pos] = t ? 1 : 0
-      isKeep[pos] = (t && keepInMulligan) ? 1 : 0
+      isKeep[pos] = ((t && keepInMulligan) || s?.mulliganMode === 'keep') ? 1 : 0
       scryLookAt[pos] = s ? s.lookAt : 0
       scryKeep[pos] = s ? Math.max(1, Math.min(s.keep || s.lookAt, s.lookAt)) : 0
+      scryForceMulligan[pos] = s?.mulliganMode === 'mulligan' ? 1 : 0
       pos++
     }
   }
-  return { isTarget, isKeep, scryLookAt, scryKeep }
+  return { isTarget, isKeep, scryLookAt, scryKeep, scryForceMulligan }
 }
 
 // Build typed arrays for an N-group joint simulation.
@@ -42,6 +76,7 @@ export function buildMCJointDeckN(N, cards, groupList, scrySourceList) {
   const keeps = groupList.map(() => new Uint8Array(N))
   const scryLookAt = new Uint8Array(N)
   const scryKeep = new Uint8Array(N) // max cards actually kept from that scry (rest are bottomed)
+  const scryForceMulligan = new Uint8Array(N)
   let pos = 0
   for (const card of cards) {
     const s = scryByName.get(card.name)
@@ -50,28 +85,30 @@ export function buildMCJointDeckN(N, cards, groupList, scrySourceList) {
       for (let gi = 0; gi < groupList.length; gi++) {
         const t = sets[gi].has(card.name)
         targets[gi][pos] = t ? 1 : 0
-        keeps[gi][pos] = (t && groupList[gi].keepInMulligan) ? 1 : 0
+        keeps[gi][pos] = ((t && groupList[gi].keepInMulligan) || s?.mulliganMode === 'keep') ? 1 : 0
       }
       scryLookAt[pos] = s ? s.lookAt : 0
       scryKeep[pos] = s ? Math.max(1, Math.min(s.keep || s.lookAt, s.lookAt)) : 0
+      scryForceMulligan[pos] = s?.mulliganMode === 'mulligan' ? 1 : 0
       pos++
     }
   }
-  return { targets, keeps, scryLookAt, scryKeep }
+  return { targets, keeps, scryLookAt, scryKeep, scryForceMulligan }
 }
 
 // Simulate P(find ≥need targets by T gameplay draws with M-card mulligan).
 // keepInMulligan cards are never sent back; when need>1, partial target progress is also kept.
 // Scry cards: when drawn, look at next `lookAt` cards; of any targets among them, only
 // `scryKeep` many can actually be kept (the rest are bottomed) — matters when need > 1.
-export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, N, M, T, need = 1 }) {
+export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, scryForceMulligan, N, M, T, need = 1 }) {
+  const rng = mulberry32(hashSeed([isTarget, isKeep, scryLookAt, scryKeep, N, M, T, need]))
   const order = new Int32Array(N)
   for (let i = 0; i < N; i++) order[i] = i
   const pool = new Int32Array(N)
   let hits = 0
   for (let iter = 0; iter < MC_ITERS; iter++) {
     for (let i = N - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0
+      const j = (rng() * (i + 1)) | 0
       const t = order[i]; order[i] = order[j]; order[j] = t
     }
     let count = 0
@@ -85,12 +122,13 @@ export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, N, M, T, need = 
       let sent = 0
       for (let i = 0; i < 7 && sent < M; i++) {
         // When need>1, keep any targets already in hand (partial progress toward goal)
-        const keepThis = isKeep[order[i]] || (need > 1 && isTarget[order[i]])
-        if (!keepThis) { pool[pi++] = order[i]; sent++ }
+        const c = order[i]
+        const keepThis = (isKeep[c] || (need > 1 && isTarget[c])) && !(scryForceMulligan && scryForceMulligan[c])
+        if (!keepThis) { pool[pi++] = c; sent++ }
       }
       const actualM = sent, poolSize = pi
       for (let i = poolSize - 1; i > 0; i--) {
-        const j = (Math.random() * (i + 1)) | 0
+        const j = (rng() * (i + 1)) | 0
         const t = pool[i]; pool[i] = pool[j]; pool[j] = t
       }
       for (let i = 0; i < actualM && !found; i++) {
@@ -139,9 +177,10 @@ export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, N, M, T, need = 
 // Groups are disjoint, so a scry-revealed card matches at most one group; if more useful
 // cards are revealed than `scryKeep` allows, only the first `scryKeep` (in reveal order)
 // are actually kept — the rest are bottomed and don't count toward any group.
-export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, N, M, Ts, needs }) {
+export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, scryForceMulligan, N, M, Ts, needs }) {
   const G = targets.length
   const T = Math.max(...Ts)
+  const rng = mulberry32(hashSeed([...targets, ...keeps, scryLookAt, scryKeep, N, M, ...Ts, ...needs]))
   const order = new Int32Array(N)
   for (let i = 0; i < N; i++) order[i] = i
   const pool = new Int32Array(N)
@@ -150,7 +189,7 @@ export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, N, M, Ts, ne
   let hits = 0
   for (let iter = 0; iter < MC_ITERS; iter++) {
     for (let i = N - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0
+      const j = (rng() * (i + 1)) | 0
       const t = order[i]; order[i] = order[j]; order[j] = t
     }
     cnt.fill(0)
@@ -173,11 +212,12 @@ export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, N, M, Ts, ne
         for (let gi = 0; gi < G; gi++) {
           if (keeps[gi][c] || (needs[gi] > 1 && cnt[gi] < needs[gi] && targets[gi][c])) { keepThis = true; break }
         }
+        if (keepThis && scryForceMulligan && scryForceMulligan[c]) keepThis = false
         if (!keepThis) { pool[pi++] = c; sent++ }
       }
       const actualM = sent, poolSize = pi
       for (let i = poolSize - 1; i > 0; i--) {
-        const j = (Math.random() * (i + 1)) | 0
+        const j = (rng() * (i + 1)) | 0
         const t = pool[i]; pool[i] = pool[j]; pool[j] = t
       }
       for (let i = 0; i < actualM; i++) {
@@ -266,6 +306,7 @@ export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, N, M, Ts, ne
 // Accounts for mulligan: keeps playable cards, sends back up to maxMulligan non-playable ones.
 // When no playable card is in opening hand, sends back min(maxMulligan, 7) cards and redraws.
 export function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDraws, iterations = 4000) {
+  const rng = mulberry32(hashSeed([deckCosts, N, maxMulligan, goingFirst ? 1 : 0, additionalDraws, iterations]))
   const hits = new Int32Array(8)
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
@@ -273,7 +314,7 @@ export function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDra
   for (let iter = 0; iter < iterations; iter++) {
     for (let i = 0; i < N; i++) order[i] = i
     for (let i = N - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0
+      const j = (rng() * (i + 1)) | 0
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp
     }
 
@@ -310,7 +351,7 @@ export function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDra
 
       // Shuffle pool
       for (let i = pi - 1; i > 0; i--) {
-        const j = (Math.random() * (i + 1)) | 0
+        const j = (rng() * (i + 1)) | 0
         const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
       }
 
@@ -330,6 +371,7 @@ export function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDra
 // P(3+ non-inkable cards in opening hand even after mulliganing excess non-inkables).
 // Strategy: if hand has 3+ non-inkable, send back non-inkable cards (up to maxMulligan).
 export function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 5000) {
+  const rng = mulberry32(hashSeed([deckInkable, N, maxMulligan, iterations]))
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   let hits = 0
@@ -337,7 +379,7 @@ export function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 5000) 
   for (let iter = 0; iter < iterations; iter++) {
     for (let i = 0; i < N; i++) order[i] = i
     for (let i = N - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0
+      const j = (rng() * (i + 1)) | 0
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp
     }
 
@@ -358,7 +400,7 @@ export function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 5000) 
 
     // Shuffle pool
     for (let i = pi - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0
+      const j = (rng() * (i + 1)) | 0
       const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
     }
 
@@ -377,6 +419,7 @@ export function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 5000) 
 // P(no card with cost ≤ threshold in opening hand even after mulliganing non-playable cards).
 // Used for Brickability dead draw risk.
 export function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations = 5000) {
+  const rng = mulberry32(hashSeed([deckCosts, N, threshold, maxMulligan, iterations]))
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   let misses = 0
@@ -384,7 +427,7 @@ export function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations 
   for (let iter = 0; iter < iterations; iter++) {
     for (let i = 0; i < N; i++) order[i] = i
     for (let i = N - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0
+      const j = (rng() * (i + 1)) | 0
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp
     }
 
@@ -404,7 +447,7 @@ export function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations 
 
     // Shuffle pool
     for (let i = pi - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0
+      const j = (rng() * (i + 1)) | 0
       const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
     }
 
@@ -438,6 +481,15 @@ export function questPressureSim(deckCards, goingFirst, additionalDraws, iterati
     winTurnCdf: new Array(SIM_TURNS).fill(0), winTurnPmf: new Array(SIM_TURNS).fill(0),
     medianWinTurn: null, neverWinRate: 1,
   }
+  const deckFingerprint = new Int32Array(N * 4)
+  for (let i = 0; i < N; i++) {
+    const c = deckCards[i]
+    deckFingerprint[i * 4] = c.cost ?? 0
+    deckFingerprint[i * 4 + 1] = c.lore ?? 0
+    deckFingerprint[i * 4 + 2] = c.inkwell ? 1 : 0
+    deckFingerprint[i * 4 + 3] = c.type === 'Character' ? 1 : c.type === 'Location' ? 2 : 0
+  }
+  const rng = mulberry32(hashSeed([deckFingerprint, N, goingFirst ? 1 : 0, additionalDraws, iterations]))
   const order = new Uint16Array(N)
   const loreSums = new Float64Array(SIM_TURNS)
   // Per-turn cumulative lore samples (one column per simulated game) for percentile bands.
@@ -449,7 +501,7 @@ export function questPressureSim(deckCards, goingFirst, additionalDraws, iterati
   for (let iter = 0; iter < iterations; iter++) {
     for (let i = 0; i < N; i++) order[i] = i
     for (let i = N - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0
+      const j = (rng() * (i + 1)) | 0
       const tmp = order[i]; order[i] = order[j]; order[j] = tmp
     }
 

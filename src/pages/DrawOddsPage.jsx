@@ -170,7 +170,7 @@ export function DeckInsightsPage() {
   }
   function addScrySource() {
     const id = nextScryId.current++
-    saveScrySources(ss => [...ss, { id, name: '', copies: 4, lookAt: 2, keep: 1 }])
+    saveScrySources(ss => [...ss, { id, name: '', copies: 4, lookAt: 2, keep: 1, mulliganMode: 'default' }])
   }
   function removeScrySource(id) {
     saveScrySources(ss => ss.filter(s => s.id !== id))
@@ -670,6 +670,7 @@ export function DeckInsightsPage() {
               <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Copies</span>
               <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Look At</span>
               <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Keep</span>
+              <span className="w-44 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Mulligan</span>
               <span className="w-6" />
             </div>
             <div className="space-y-2">
@@ -710,6 +711,22 @@ export function DeckInsightsPage() {
                     onChange={e => updateScrySource(src.id, 'keep', Math.max(1, Math.min(src.lookAt, parseInt(e.target.value) || 1)))}
                     className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
                   />
+                  <div className="w-44 flex items-center justify-center gap-1">
+                    <button
+                      onClick={() => updateScrySource(src.id, 'mulliganMode', src.mulliganMode === 'keep' ? 'default' : 'keep')}
+                      title="Always keep this scry source in your opening hand — it's never sent back on mulligan"
+                      className={`text-xs px-2 py-1 rounded border transition-colors ${src.mulliganMode === 'keep' ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-400 hover:border-gray-400'}`}
+                    >
+                      Keep
+                    </button>
+                    <button
+                      onClick={() => updateScrySource(src.id, 'mulliganMode', src.mulliganMode === 'mulligan' ? 'default' : 'mulligan')}
+                      title="Always mulligan this scry source away — it never counts toward the opening hand"
+                      className={`text-xs px-2 py-1 rounded border transition-colors ${src.mulliganMode === 'mulligan' ? 'border-red-400 bg-red-50 text-red-700' : 'border-gray-200 text-gray-400 hover:border-gray-400'}`}
+                    >
+                      Toss
+                    </button>
+                  </div>
                   <button
                     onClick={() => removeScrySource(src.id)}
                     className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"

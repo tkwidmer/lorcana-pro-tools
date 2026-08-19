@@ -75,6 +75,11 @@ const SAMPLE = `4 John Silver - Alien Pirate
 
 const TURN_COLS = [1, 2, 3, 4, 5, 6]
 
+// Iteration count for the per-card / per-turn overview simulations. Lower than the
+// Targeted Card Odds default because these run one sim per card (or per turn column)
+// rather than one per group, and they're a scan-the-table view rather than a decision point.
+const DRAW_RATE_ITERS = 4000
+
 // --- Component ---
 
 function lsGet(key, fallback) {
@@ -170,7 +175,7 @@ export function DeckInsightsPage() {
   }
   function addScrySource() {
     const id = nextScryId.current++
-    saveScrySources(ss => [...ss, { id, name: '', copies: 4, lookAt: 2, keep: 1, cost: 1, mulliganMode: 'default' }])
+    saveScrySources(ss => [...ss, { id, name: '', lookAt: 2, keep: 1, cost: 1, mulliganMode: 'default' }])
   }
   function removeScrySource(id) {
     saveScrySources(ss => ss.filter(s => s.id !== id))
@@ -444,11 +449,13 @@ export function DeckInsightsPage() {
     buildKeywordAnalysis(cards, allApiCards)
   , [cards, allApiCards])
 
-  // Lowercase names of Shift cards whose base is in the deck (a live Shift line).
+  // Shift cards whose base is in the deck (a live Shift line). Keyed with toSimpleName
+  // because that's how buildMulliganAdvice looks them up — plain toLowerCase() leaves the
+  // " - " subtitle separator in and never matches, silently disabling the Shift rescue.
   const shiftLineNames = useMemo(() => {
     const set = new Set()
     for (const s of keywordAnalysis?.shifts ?? []) {
-      if (s.covered) set.add(s.name.toLowerCase())
+      if (s.covered) set.add(toSimpleName(s.name))
     }
     return set
   }, [keywordAnalysis])
@@ -516,8 +523,70 @@ export function DeckInsightsPage() {
       }))
     }
 
+    // Per-turn overview for combos with no target turn set. Simulated for the same reason
+    // the single-group branch above is: scry can't be expressed in the closed form, and a
+    // row that silently ignored configured scry sources is exactly the confusion we're
+    // fixing. No mulligan here, matching this row's caption.
+    const overviewCombos = []
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) overviewCombos.push([groups[i], groups[j]])
+    }
+    if (groups.length >= 3) overviewCombos.push(groups)
+    for (const combo of overviewCombos) {
+      if (combo.some(g => g.cardNames.length === 0)) continue
+      if (combo.every(g => g.targetTurn != null)) continue // full simulated range already shown
+      const key = combo.map(g => g.id).join('-')
+      const deck = buildMCJointDeckN(N, cards, combo, scrySources)
+      const needs = combo.map(g => g.need ?? 1)
+      result[`${key}:overview`] = {
+        opening: mcJointSimN({ ...deck, N, M: 0, targetTurns: combo.map(() => 0), needs, goingFirst, additionalDraws, iters: DRAW_RATE_ITERS }),
+        turns: TURN_COLS.map(T => mcJointSimN({ ...deck, N, M: 0, targetTurns: combo.map(() => T), needs, goingFirst, additionalDraws, iters: DRAW_RATE_ITERS })),
+      }
+    }
+
     return result
   }, [N, cards, groups, scrySources, maxMulligan, goingFirst, additionalDraws])
+
+  // Card Draw Rates rows. With no scry sources this is exact closed-form hypergeometric.
+  // With scry sources it has to be simulated, because whether a scry fires depends on
+  // holding it and affording it on the turn in question — so the table agrees with the
+  // Targeted Card Odds panel instead of using a separate, cruder approximation.
+  // Fewer iterations than the Targeted panel: this is a per-card overview, and it runs
+  // one sim per unique card rather than one per group.
+  const drawRateRows = useMemo(() => {
+    if (cards.length === 0) return []
+    const hasScry = scrySources.some(s => s.name && s.lookAt > 0)
+    return cards.map(card => {
+      const cost = costMap.get(toSimpleName(card.name))
+      const defaultTurn = cost != null ? Math.max(1, Math.min(8, cost)) : 4
+      const curveT = targetTurnOverrides[card.name] ?? defaultTurn
+      const draws = (goingFirst ? Math.max(0, curveT - 1) : curveT) + additionalDraws
+      const noScry = drawOdds(N, card.count, maxMulligan, draws)
+      let onCurve = noScry
+      let scryBoost = 0
+      if (hasScry) {
+        const deck = buildMCDeck(N, cards, [card.name], false, scrySources)
+        const sim = M => mcSim({
+          ...deck, N, M, need: 1, targetTurn: curveT, goingFirst, additionalDraws,
+          iters: DRAW_RATE_ITERS,
+        })
+        // Both sides simulated so common random numbers cancel and the boost is a clean
+        // differential rather than a difference of two independently-noisy estimates.
+        const bare = buildMCDeck(N, cards, [card.name], false, [])
+        onCurve = sim(maxMulligan)
+        scryBoost = onCurve - mcSim({
+          ...bare, N, M: maxMulligan, need: 1, targetTurn: curveT, goingFirst, additionalDraws,
+          iters: DRAW_RATE_ITERS,
+        })
+      }
+      return {
+        card, cost, curveT, onCurve, scryBoost,
+        avgSeen: card.count * (7 + draws) / N,
+        isCustom: targetTurnOverrides[card.name] != null,
+        simulated: hasScry,
+      }
+    }).sort((a, b) => (a.cost ?? 99) - (b.cost ?? 99) || a.card.name.localeCompare(b.card.name))
+  }, [cards, costMap, N, maxMulligan, goingFirst, additionalDraws, scrySources, targetTurnOverrides])
 
   function addGroup() {
     const id = nextGroupId.current++
@@ -1498,14 +1567,15 @@ export function DeckInsightsPage() {
         </div>
         <div className="border-l-2 border-yellow-400 pl-3 mb-4 text-xs text-gray-500 leading-relaxed">
           A <strong>scry source</strong> looks at the top <em>N</em> cards of your deck, lets you keep <em>K</em> in hand, and bottoms the rest.
-          Example: <em>Develop Your Brain</em> = look at 2, keep 1. The calculator models each scry as seeing those extra cards from your remaining
-          deck — if your target is among them, you keep it. A scry source counts only as a scry — not toward any group.
+          Example: <em>Develop Your Brain</em> = look at 2, keep 1. It&apos;s simulated the way you&apos;d actually play it: held in hand (from your
+          opener, a mulligan, or a draw) and cast on the first turn you can afford its <strong>cost</strong>, which is why a cheap source helps on an
+          early turn and an expensive one doesn&apos;t. Copies come from your deck list. Listing a card here doesn&apos;t remove it from a card group —
+          if it&apos;s in both, it counts as both.
         </div>
         {scrySources.length > 0 && (
           <div className="mb-3">
             <div className="flex items-center gap-2 mb-2">
               <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Source Name</span>
-              <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Copies</span>
               <span className="w-16 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Cost</span>
               <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Look At</span>
               <span className="w-24 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Keep</span>
@@ -1533,14 +1603,6 @@ export function DeckInsightsPage() {
                       <option key={c.name} value={c.name}>{c.name} ({c.count})</option>
                     ))}
                   </select>
-                  <input
-                    type="number"
-                    min="1"
-                    max="4"
-                    value={src.copies}
-                    onChange={e => updateScrySource(src.id, 'copies', Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))}
-                    className="w-24 border border-gray-200 rounded px-3 py-2 text-sm text-center focus:outline-none focus:border-gray-900"
-                  />
                   <input
                     type="number"
                     min="1"
@@ -1647,21 +1709,7 @@ export function DeckInsightsPage() {
                 </tr>
               </thead>
               <tbody>
-                {[...cards].sort((a, b) => {
-                  const ca = costMap.get(toSimpleName(a.name)) ?? 99
-                  const cb = costMap.get(toSimpleName(b.name)) ?? 99
-                  return ca !== cb ? ca - cb : a.name.localeCompare(b.name)
-                }).map((card, i) => {
-                  const cost = costMap.get(toSimpleName(card.name))
-                  const defaultTurn = cost != null ? Math.max(1, Math.min(8, cost)) : 4
-                  const curveT = targetTurnOverrides[card.name] ?? defaultTurn
-                  const draws = gameDraws(curveT)
-                  const totalDrawn = 7 + draws
-                  const onCurve = drawOdds(N, card.count, maxMulligan, draws, scrySources)
-                  const onCurveNoScry = drawOdds(N, card.count, maxMulligan, draws)
-                  const avgSeen = card.count * totalDrawn / N
-                  const scryBoost = onCurve - onCurveNoScry
-                  const isCustom = targetTurnOverrides[card.name] != null
+                {drawRateRows.map(({ card, cost, curveT, onCurve, scryBoost, avgSeen, isCustom }, i) => {
                   return (
                     <tr key={card.name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
                       <td className="px-4 py-2.5 text-gray-900">{card.name}</td>
@@ -1943,8 +1991,9 @@ export function DeckInsightsPage() {
           const isFullSet = combo.length > 2
           const ks = combo.map(g => g.cardNames.reduce((s, n) => s + (cards.find(c => c.name === n)?.count || 0), 0))
           const hasJointTarget = combo.every(g => g.targetTurn != null)
-          const opening = jointDrawOddsN(N, ks, 0, 0)
-          const turns = TURN_COLS.map(T => jointDrawOddsN(N, ks, 0, gameDraws(T), scrySources))
+          const overview = mcResults[`${key}:overview`]
+          const opening = overview ? overview.opening : jointDrawOddsN(N, ks, 0, 0)
+          const turns = overview ? overview.turns : TURN_COLS.map(T => jointDrawOddsN(N, ks, 0, gameDraws(T)))
           const jointMulliganRange = hasJointTarget ? (mcResults[key] ?? null) : null
           const firstTurn = combo[0].targetTurn
           const turnLabel = hasJointTarget

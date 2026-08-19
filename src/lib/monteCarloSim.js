@@ -40,8 +40,10 @@ function mulberry32(seed) {
 export function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceList) {
   const targetSet = new Set(targetNames)
   const scryByName = new Map()
+  // How many copies are in the deck comes from the deck list itself, not from the scry
+  // source entry — the entry only says how that named card behaves.
   for (const s of scrySourceList) {
-    if (s.name && s.copies > 0 && s.lookAt > 0) scryByName.set(s.name, s)
+    if (s.name && s.lookAt > 0) scryByName.set(s.name, s)
   }
   const isTarget = new Uint8Array(N)
   const isKeep = new Uint8Array(N)   // alwaysKeep = isTarget && keepInMulligan, or scry alwaysKeep
@@ -71,8 +73,10 @@ export function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceLis
 export function buildMCJointDeckN(N, cards, groupList, scrySourceList) {
   const sets = groupList.map(g => new Set(g.cardNames))
   const scryByName = new Map()
+  // How many copies are in the deck comes from the deck list itself, not from the scry
+  // source entry — the entry only says how that named card behaves.
   for (const s of scrySourceList) {
-    if (s.name && s.copies > 0 && s.lookAt > 0) scryByName.set(s.name, s)
+    if (s.name && s.lookAt > 0) scryByName.set(s.name, s)
   }
   const targets = groupList.map(() => new Uint8Array(N))
   const keeps = groupList.map(() => new Uint8Array(N))
@@ -123,20 +127,22 @@ function drawsOnTurn(turn, goingFirst, additionalDraws) {
 export function mcSim({
   isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan,
   N, M, need = 1, targetTurn = 0, goingFirst = false, additionalDraws = 0,
+  iters = MC_ITERS, seedOffset = 0,
 }) {
   // Common random numbers: the seed depends only on deck size, so every configuration of the
   // same deck is evaluated against the SAME sequence of shuffles. Toggling an option that has
   // no mechanical effect then returns a bit-identical number instead of resampling and
   // wobbling by ~1%, and a real effect shows up as a clean differential rather than being
-  // buried in sampling noise.
-  const rngDeck = mulberry32(hashSeed([N]))
-  const rngPool = mulberry32(hashSeed([N, 1]))
+  // buried in sampling noise. (seedOffset exists only so tests can resample the same
+  // configuration to separate genuine bias from one unlucky draw.)
+  const rngDeck = mulberry32(hashSeed([N, seedOffset]))
+  const rngPool = mulberry32(hashSeed([N, 1, seedOffset]))
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   const hand = new Int32Array(N)
   let hits = 0
 
-  for (let iter = 0; iter < MC_ITERS; iter++) {
+  for (let iter = 0; iter < iters; iter++) {
     // Reset to identity before shuffling so the n-th opening hand is identical across configs.
     for (let i = 0; i < N; i++) order[i] = i
     for (let i = N - 1; i > 0; i--) {
@@ -221,7 +227,7 @@ export function mcSim({
 
     if (found) hits++
   }
-  return hits / MC_ITERS
+  return hits / iters
 }
 
 // Simulate P(find ≥needs[i] of group i by turn targetTurns[i], for EVERY group, with an
@@ -232,12 +238,13 @@ export function mcSim({
 export function mcJointSimN({
   targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan,
   N, M, targetTurns, needs, goingFirst = false, additionalDraws = 0,
+  iters = MC_ITERS, seedOffset = 0,
 }) {
   const G = targets.length
   const lastTurn = Math.max(...targetTurns)
   // Common random numbers, same rationale as mcSim.
-  const rngDeck = mulberry32(hashSeed([N]))
-  const rngPool = mulberry32(hashSeed([N, 1]))
+  const rngDeck = mulberry32(hashSeed([N, seedOffset]))
+  const rngPool = mulberry32(hashSeed([N, 1, seedOffset]))
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   const hand = new Int32Array(N)
@@ -245,7 +252,7 @@ export function mcJointSimN({
   const found = new Uint8Array(G)
   let hits = 0
 
-  for (let iter = 0; iter < MC_ITERS; iter++) {
+  for (let iter = 0; iter < iters; iter++) {
     for (let i = 0; i < N; i++) order[i] = i
     for (let i = N - 1; i > 0; i--) {
       const j = (rngDeck() * (i + 1)) | 0
@@ -349,7 +356,7 @@ export function mcJointSimN({
 
     if (allFound) hits++
   }
-  return hits / MC_ITERS
+  return hits / iters
 }
 
 // --- Keyword Analysis ---

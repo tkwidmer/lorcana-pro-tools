@@ -277,3 +277,44 @@ describe('questPressureSim', () => {
     expect(result.avgLore[SIM_TURNS - 1]).toBeGreaterThan(0)
   })
 })
+
+describe('scry source wiring', () => {
+  const N = 60
+  const cards = [{ name: 'T', count: 8 }, { name: 'S', count: 4 }, { name: 'F', count: 48 }]
+
+  it('can find the scry source via mulligan replacements, not just the opener', () => {
+    // Turn 1 going first draws nothing, so every hit must come from a scry played out of
+    // hand. More mulligan => more chances to turn up the scry source => strictly better.
+    const deck = buildMCDeck(N, cards, ['T'], false,
+      [{ name: 'S', lookAt: 20, keep: 1, cost: 1, mulliganMode: 'keep' }])
+    const run = M => mcSim({ ...deck, N, M, targetTurn: 1, need: 1, goingFirst: true, iters: 50000 })
+    const p0 = run(0), p3 = run(3), p7 = run(7)
+    expect(p3).toBeGreaterThan(p0)
+    expect(p7).toBeGreaterThan(p3)
+  })
+
+  it('takes the copy count from the deck list, not from the scry entry', () => {
+    // "Copies" used to be a separate input that the simulation ignored entirely.
+    const a = buildMCDeck(N, cards, ['T'], false, [{ name: 'S', lookAt: 6, keep: 1, cost: 1 }])
+    const flagged = [...a.scryLookAt].filter(v => v > 0).length
+    expect(flagged).toBe(4) // the deck list's count for 'S'
+  })
+
+  it('respects scryKeep — keeping 1 of N revealed is worse than keeping all of them', () => {
+    // need 2 so the keep cap actually binds.
+    const mk = keep => buildMCDeck(N, cards, ['T'], false,
+      [{ name: 'S', lookAt: 8, keep, cost: 1, mulliganMode: 'keep' }])
+    const run = d => mcSim({ ...d, N, M: 0, targetTurn: 2, need: 2, goingFirst: true, iters: 50000 })
+    expect(run(mk(8))).toBeGreaterThan(run(mk(1)))
+  })
+
+  it('converges to the exact closed form when no scry is configured', async () => {
+    const { drawOdds } = await import('../drawOddsMath')
+    const deck = buildMCDeck(N, [{ name: 'T', count: 4 }, { name: 'F', count: 56 }], ['T'], false, [])
+    for (const [M, T, gf] of [[0, 4, false], [3, 2, true], [7, 3, false]]) {
+      const draws = (gf ? Math.max(0, T - 1) : T)
+      const mc = mcSim({ ...deck, N, M, targetTurn: T, need: 1, goingFirst: gf, iters: 400000 })
+      expect(Math.abs(mc - drawOdds(N, 4, M, draws))).toBeLessThan(0.005)
+    }
+  })
+})

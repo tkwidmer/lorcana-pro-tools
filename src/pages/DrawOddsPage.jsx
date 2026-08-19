@@ -472,7 +472,6 @@ export function DeckInsightsPage() {
   // Recomputes only when deck, groups, scry sources, or draw settings change.
   const mcResults = useMemo(() => {
     if (cards.length === 0) return {}
-    const gDraws = (T) => (goingFirst ? Math.max(0, T - 1) : T) + additionalDraws
     const result = {}
 
     for (const group of groups) {
@@ -483,13 +482,13 @@ export function DeckInsightsPage() {
         result[group.id] = {
           mulliganRange: Array.from({ length: maxMulligan + 1 }, (_, m) => ({
             m,
-            p: mcSim({ ...deck, N, M: m, T: gDraws(group.targetTurn), need, goingFirst, additionalDraws }),
+            p: mcSim({ ...deck, N, M: m, targetTurn: group.targetTurn, need, goingFirst, additionalDraws }),
           })),
         }
       } else {
         result[group.id] = {
-          opening: mcSim({ ...deck, N, M: 0, T: 0, need, goingFirst, additionalDraws }),
-          turns: TURN_COLS.map(T => mcSim({ ...deck, N, M: 0, T: gDraws(T), need, goingFirst, additionalDraws })),
+          opening: mcSim({ ...deck, N, M: 0, targetTurn: 0, need, goingFirst, additionalDraws }),
+          turns: TURN_COLS.map(T => mcSim({ ...deck, N, M: 0, targetTurn: T, need, goingFirst, additionalDraws })),
         }
       }
     }
@@ -502,7 +501,7 @@ export function DeckInsightsPage() {
         const deck = buildMCJointDeckN(N, cards, [gA, gB], scrySources)
         result[`${gA.id}-${gB.id}`] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
           m,
-          p: mcJointSimN({ ...deck, N, M: m, Ts: [gDraws(gA.targetTurn), gDraws(gB.targetTurn)], needs: [gA.need ?? 1, gB.need ?? 1], goingFirst, additionalDraws }),
+          p: mcJointSimN({ ...deck, N, M: m, targetTurns: [gA.targetTurn, gB.targetTurn], needs: [gA.need ?? 1, gB.need ?? 1], goingFirst, additionalDraws }),
         }))
       }
     }
@@ -513,7 +512,7 @@ export function DeckInsightsPage() {
       const deck = buildMCJointDeckN(N, cards, groups, scrySources)
       result[key] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
         m,
-        p: mcJointSimN({ ...deck, N, M: m, Ts: groups.map(g => gDraws(g.targetTurn)), needs: groups.map(g => g.need ?? 1), goingFirst, additionalDraws }),
+        p: mcJointSimN({ ...deck, N, M: m, targetTurns: groups.map(g => g.targetTurn), needs: groups.map(g => g.need ?? 1), goingFirst, additionalDraws }),
       }))
     }
 

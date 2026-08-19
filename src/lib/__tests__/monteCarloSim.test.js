@@ -15,14 +15,14 @@ describe('buildMCDeck + mcSim', () => {
   it('finds the target with certainty when every card in the deck is a target', () => {
     const cards = [{ name: 'Elsa', count: 60 }]
     const deck = buildMCDeck(60, cards, ['Elsa'], false, [])
-    const p = mcSim({ ...deck, N: 60, M: 0, T: 0, need: 1 })
+    const p = mcSim({ ...deck, N: 60, M: 0, targetTurn: 0, need: 1 })
     expect(p).toBe(1)
   })
 
   it('never finds the target when no card in the deck is a target', () => {
     const cards = [{ name: 'Elsa', count: 60 }]
     const deck = buildMCDeck(60, cards, ['Mickey'], false, [])
-    const p = mcSim({ ...deck, N: 60, M: 0, T: 0, need: 1 })
+    const p = mcSim({ ...deck, N: 60, M: 0, targetTurn: 0, need: 1 })
     expect(p).toBe(0)
   })
 
@@ -36,7 +36,7 @@ describe('buildMCDeck + mcSim', () => {
     const scrySources = [{ name: 'Besties', copies: 4, lookAt: 4, keep: 1 }]
     const runOnce = () => {
       const deck = buildMCDeck(60, cards, ['Grandmother Willow', 'Hamm'], true, scrySources)
-      return mcSim({ ...deck, N: 60, M: 3, T: 2, need: 1 })
+      return mcSim({ ...deck, N: 60, M: 3, targetTurn: 2, need: 1 })
     }
     const p1 = runOnce()
     const p2 = runOnce()
@@ -53,8 +53,8 @@ describe('buildMCDeck + mcSim', () => {
     for (const m of [0, 3, 7]) {
       const weakDeck = buildMCDeck(60, cards, ['Grandmother Willow', 'Hamm'], false, [{ name: 'Scryer', copies: 4, lookAt: 2, keep: 1 }])
       const strongDeck = buildMCDeck(60, cards, ['Grandmother Willow', 'Hamm'], false, [{ name: 'Scryer', copies: 4, lookAt: 4, keep: 1 }])
-      const pWeak = mcSim({ ...weakDeck, N: 60, M: m, T: 2, need: 1 })
-      const pStrong = mcSim({ ...strongDeck, N: 60, M: m, T: 2, need: 1 })
+      const pWeak = mcSim({ ...weakDeck, N: 60, M: m, targetTurn: 3, need: 1 })
+      const pStrong = mcSim({ ...strongDeck, N: 60, M: m, targetTurn: 3, need: 1 })
       expect(pStrong).toBeGreaterThanOrEqual(pWeak)
     }
   })
@@ -83,11 +83,9 @@ describe('buildMCDeck + mcSim', () => {
   })
 
   it('a scry source too expensive to cast on the target turn provides no boost over no scry at all', () => {
-    // Going first with T=1, the only gameplay draw lands on turn 2 (turn 1 has no draw) — so a
-    // scry source costing more than 2 can never be cast in time even if drawn. Different scry
-    // configs perturb the deterministic seed, so results aren't bit-identical to a no-scry
-    // baseline, but with the effect fully gated off they should land within Monte Carlo noise
-    // of each other (MC_ITERS=10000 gives a standard error on the order of 0.5%).
+    // Going first, turn 2 gives you 2 ink, so a cost-3 scry source can never be cast in time
+    // — the effect is fully gated off and, thanks to common random numbers, the result is
+    // bit-identical to the no-scry baseline rather than merely close to it.
     const cards = [
       { name: 'Target', count: 4 },
       { name: 'Scryer', count: 4 },
@@ -96,9 +94,9 @@ describe('buildMCDeck + mcSim', () => {
     const withScry = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 10, keep: 4, cost: 3 }])
     const noScry = buildMCDeck(60, cards, ['Target'], false, [])
     for (const m of [0, 3, 7]) {
-      const pWith = mcSim({ ...withScry, N: 60, M: m, T: 1, need: 1, goingFirst: true, additionalDraws: 0 })
-      const pWithout = mcSim({ ...noScry, N: 60, M: m, T: 1, need: 1, goingFirst: true, additionalDraws: 0 })
-      expect(Math.abs(pWith - pWithout)).toBeLessThan(0.02)
+      const pWith = mcSim({ ...withScry, N: 60, M: m, targetTurn: 2, need: 1, goingFirst: true, additionalDraws: 0 })
+      const pWithout = mcSim({ ...noScry, N: 60, M: m, targetTurn: 2, need: 1, goingFirst: true, additionalDraws: 0 })
+      expect(pWith).toBe(pWithout)
     }
   })
 
@@ -110,11 +108,86 @@ describe('buildMCDeck + mcSim', () => {
     ]
     const cheapDeck = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 10, keep: 4, cost: 1 }])
     const expensiveDeck = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 10, keep: 4, cost: 6 }])
-    const pCheap = mcSim({ ...cheapDeck, N: 60, M: 0, T: 3, need: 1, goingFirst: false, additionalDraws: 0 })
-    const pExpensive = mcSim({ ...expensiveDeck, N: 60, M: 0, T: 3, need: 1, goingFirst: false, additionalDraws: 0 })
+    const pCheap = mcSim({ ...cheapDeck, N: 60, M: 0, targetTurn: 3, need: 1, goingFirst: false, additionalDraws: 0 })
+    const pExpensive = mcSim({ ...expensiveDeck, N: 60, M: 0, targetTurn: 3, need: 1, goingFirst: false, additionalDraws: 0 })
     expect(pCheap).toBeGreaterThan(pExpensive)
   })
+
+  it('fires a scry source sitting in the OPENING HAND, not only one drawn off the top', () => {
+    // The whole point of a cheap scry source is that you play it from your opener. A deck
+    // where the scry source is guaranteed in the opening 7 (and no target can be drawn
+    // naturally in time) must still find targets purely through the scry.
+    const cards = [
+      { name: 'Scryer', count: 53 },
+      { name: 'Target', count: 7 },
+    ]
+    const deck = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 10, keep: 1, cost: 1 }])
+    // Turn 1 going first draws nothing at all, so any hit must come from the scry itself.
+    const p = mcSim({ ...deck, N: 60, M: 0, targetTurn: 1, need: 1, goingFirst: true, additionalDraws: 0 })
+    expect(p).toBeGreaterThan(0.5)
+  })
+
+  it('keeping a scry source through the mulligan beats tossing it', () => {
+    // With a full mulligan and no target in the opener, a Toss-flagged scry source is always
+    // shipped back, while a Keep-flagged one survives to be played and dig for the target.
+    const cards = [
+      { name: 'Target', count: 4 },
+      { name: 'Scryer', count: 4 },
+      { name: 'Filler', count: 52 },
+    ]
+    const keepDeck = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 5, keep: 1, cost: 1, mulliganMode: 'keep' }])
+    const tossDeck = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 5, keep: 1, cost: 1, mulliganMode: 'mulligan' }])
+    const pKeep = mcSim({ ...keepDeck, N: 60, M: 7, targetTurn: 2, need: 1, goingFirst: true, additionalDraws: 0 })
+    const pToss = mcSim({ ...tossDeck, N: 60, M: 7, targetTurn: 2, need: 1, goingFirst: true, additionalDraws: 0 })
+    expect(pKeep).toBeGreaterThan(pToss)
+  })
+
+  it('adding a usable scry source strictly improves the odds over the same deck without one', () => {
+    const cards = [
+      { name: 'Target', count: 4 },
+      { name: 'Scryer', count: 4 },
+      { name: 'Filler', count: 52 },
+    ]
+    const withScry = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 4, lookAt: 4, keep: 1, cost: 1, mulliganMode: 'keep' }])
+    const noScry = buildMCDeck(60, cards, ['Target'], false, [])
+    const pWith = mcSim({ ...withScry, N: 60, M: 0, targetTurn: 2, need: 1, goingFirst: true, additionalDraws: 0 })
+    const pWithout = mcSim({ ...noScry, N: 60, M: 0, targetTurn: 2, need: 1, goingFirst: true, additionalDraws: 0 })
+    // Look 4 keep 1 off a 4-of scry source is worth several points, well clear of noise.
+    expect(pWith).toBeGreaterThan(pWithout + 0.03)
+  })
+
+  it('group "always keep" is a no-op at need=1 and returns an identical number, not a wobble', () => {
+    // The mulligan only runs when the opener MISSED, so at need=1 there is never a target in
+    // hand for "always keep" to protect. Under common random numbers that must come back
+    // bit-identical — previously it resampled and moved the displayed percentage by ~1%.
+    const cards = [
+      { name: 'Target', count: 8 },
+      { name: 'Filler', count: 52 },
+    ]
+    const keepDeck = buildMCDeck(60, cards, ['Target'], true, [])
+    const noKeepDeck = buildMCDeck(60, cards, ['Target'], false, [])
+    for (const m of [0, 3, 7]) {
+      const pKeep = mcSim({ ...keepDeck, N: 60, M: m, targetTurn: 2, need: 1, goingFirst: true })
+      const pNoKeep = mcSim({ ...noKeepDeck, N: 60, M: m, targetTurn: 2, need: 1, goingFirst: true })
+      expect(pKeep).toBe(pNoKeep)
+    }
+  })
+
+  it('is monotonic in mulligan count for a fixed configuration', () => {
+    const cards = [
+      { name: 'Target', count: 8 },
+      { name: 'Filler', count: 52 },
+    ]
+    const deck = buildMCDeck(60, cards, ['Target'], false, [])
+    let prev = 0
+    for (let m = 0; m <= 7; m++) {
+      const p = mcSim({ ...deck, N: 60, M: m, targetTurn: 2, need: 1, goingFirst: true })
+      expect(p).toBeGreaterThanOrEqual(prev - 0.005)
+      prev = p
+    }
+  })
 })
+
 
 describe('buildMCJointDeckN + mcJointSimN determinism', () => {
   it('is deterministic across repeated calls with identical inputs', () => {
@@ -131,7 +204,7 @@ describe('buildMCJointDeckN + mcJointSimN determinism', () => {
     const scrySources = [{ name: 'Besties', copies: 4, lookAt: 4, keep: 1 }]
     const runOnce = () => {
       const deck = buildMCJointDeckN(60, cards, groups, scrySources)
-      return mcJointSimN({ ...deck, N: 60, M: 3, Ts: [2, 2], needs: [1, 1] })
+      return mcJointSimN({ ...deck, N: 60, M: 3, targetTurns: [2, 2], needs: [1, 1] })
     }
     expect(runOnce()).toBe(runOnce())
   })

@@ -1,7 +1,13 @@
 // --- Monte Carlo simulation ---
 // Used for group/joint calculations to accurately model keepInMulligan and scry effects.
 
-const MC_ITERS = 10000
+// Iteration count for the group / joint mulligan ranges — the numbers people actually make
+// deck decisions on. Standard error is sqrt(p(1-p)/n), so 25k puts it near 0.3 points at
+// p=0.5. Raising this is bounded by the joint panel: combos grow quadratically with group
+// count (3 groups = 3 groups + 3 pairs + 1 full intersection), so the worst realistic case
+// costs ~8x a single group. Batching the mulligan levels onto shared deals (see
+// mcSimMulliganRange) is what made this increase affordable.
+const MC_ITERS = 25000
 export const SIM_TURNS = 12  // turns simulated in quest pressure / win turn
 
 // Deterministic seeding: every sim below hashes its own inputs into a seed instead of
@@ -113,7 +119,9 @@ function drawsOnTurn(turn, goingFirst, additionalDraws) {
   return (goingFirst ? 0 : 1) + additionalDraws
 }
 
-// Simulate P(find ≥need targets by end of turn `targetTurn`, with an M-card mulligan).
+// Evaluates ONE already-shuffled deal for a single mulligan count, returning whether the
+// goal was met. Split out of mcSim so a whole mulligan range can reuse one shuffle — see
+// mcSimMulliganRange. `order` must already be shuffled; `pool`/`hand` are scratch buffers.
 //
 // This models an actual hand rather than a flat sequence of draws, which matters for scry:
 // a scry source is playable from your OPENING HAND, not just when you happen to topdeck it.
@@ -124,239 +132,304 @@ function drawsOnTurn(turn, goingFirst, additionalDraws) {
 // Mulligan: cards are sent back only when the opener didn't already satisfy the goal.
 // `isKeep` cards are never sent back (group "always keep", or a scry source set to Keep);
 // `scryForceMulligan` cards are always sent back even if some other rule would keep them.
+function evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, rngPool) {
+  const { isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan } = d
+  let handN = 0
+  let count = 0
+  for (let i = 0; i < 7; i++) {
+    const c = order[i]
+    hand[handN++] = c
+    if (isTarget[c]) count++
+  }
+  let found = count >= need
+
+  // The zone we draw from: the undrawn deck, or the reshuffled pool after a mulligan.
+  let deck = order
+  let deckLen = N
+  let dp = 7
+
+  if (!found && M > 0) {
+    let pi = 0
+    for (let i = 7; i < N; i++) pool[pi++] = order[i]
+    let sent = 0
+    let kept = 0
+    for (let i = 0; i < handN; i++) {
+      const c = hand[i]
+      // need>1 keeps partial progress; scryForceMulligan overrides every keep rule.
+      let keepThis = isKeep[c] || (need > 1 && isTarget[c])
+      if (scryForceMulligan[c]) keepThis = false
+      if (!keepThis && sent < M) { pool[pi++] = c; sent++ }
+      else hand[kept++] = c
+    }
+    handN = kept
+    const poolSize = pi
+    for (let i = poolSize - 1; i > 0; i--) {
+      const j = (rngPool() * (i + 1)) | 0
+      const t = pool[i]; pool[i] = pool[j]; pool[j] = t
+    }
+    for (let i = 0; i < sent; i++) {
+      const c = pool[i]
+      hand[handN++] = c
+      if (isTarget[c]) count++
+    }
+    found = count >= need
+    deck = pool
+    deckLen = poolSize
+    dp = sent
+  }
+
+  for (let turn = 1; turn <= targetTurn && !found; turn++) {
+    let draws = drawsOnTurn(turn, goingFirst, additionalDraws)
+    while (draws > 0 && dp < deckLen) {
+      const c = deck[dp++]
+      hand[handN++] = c
+      if (isTarget[c]) { count++; if (count >= need) { found = true; break } }
+      draws--
+    }
+    if (found) break
+
+    // Play every scry source in hand this turn's ink can pay for.
+    let ink = turn
+    let i = 0
+    while (i < handN && !found) {
+      const c = hand[i]
+      if (scryLookAt[c] === 0 || scryCost[c] > ink) { i++; continue }
+      ink -= scryCost[c]
+      hand[i] = hand[--handN] // playing it removes it from hand; re-check this slot
+      const look = Math.min(scryLookAt[c], deckLen - dp)
+      const cap = scryKeep[c]
+      let taken = 0
+      for (let s = 0; s < look && taken < cap; s++) {
+        if (isTarget[deck[dp + s]]) {
+          count++; taken++
+          if (count >= need) { found = true; break }
+        }
+      }
+      dp += look // whatever we didn't keep goes to the bottom
+    }
+  }
+  return found
+}
+
+// Common random numbers: the seed depends only on deck size, so every configuration of the
+// same deck is evaluated against the SAME sequence of shuffles. Toggling an option that has
+// no mechanical effect then returns a bit-identical number instead of resampling and
+// wobbling by ~1%, and a real effect shows up as a clean differential rather than being
+// buried in sampling noise. (seedOffset exists only so tests can resample the same
+// configuration to separate genuine bias from one unlucky draw.)
+function makeRngs(N, seedOffset) {
+  return {
+    rngDeck: mulberry32(hashSeed([N, seedOffset])),
+    rngPool: mulberry32(hashSeed([N, 1, seedOffset])),
+  }
+}
+
+// Reset to identity before shuffling so the n-th deal is identical across configurations.
+function shuffleDeck(order, N, rngDeck) {
+  for (let i = 0; i < N; i++) order[i] = i
+  for (let i = N - 1; i > 0; i--) {
+    const j = (rngDeck() * (i + 1)) | 0
+    const t = order[i]; order[i] = order[j]; order[j] = t
+  }
+}
+
+// P(find ≥need targets by end of turn `targetTurn`, with an M-card mulligan).
 export function mcSim({
   isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan,
   N, M, need = 1, targetTurn = 0, goingFirst = false, additionalDraws = 0,
   iters = MC_ITERS, seedOffset = 0,
 }) {
-  // Common random numbers: the seed depends only on deck size, so every configuration of the
-  // same deck is evaluated against the SAME sequence of shuffles. Toggling an option that has
-  // no mechanical effect then returns a bit-identical number instead of resampling and
-  // wobbling by ~1%, and a real effect shows up as a clean differential rather than being
-  // buried in sampling noise. (seedOffset exists only so tests can resample the same
-  // configuration to separate genuine bias from one unlucky draw.)
-  const rngDeck = mulberry32(hashSeed([N, seedOffset]))
-  const rngPool = mulberry32(hashSeed([N, 1, seedOffset]))
+  const d = { isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan }
+  const { rngDeck, rngPool } = makeRngs(N, seedOffset)
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   const hand = new Int32Array(N)
   let hits = 0
-
   for (let iter = 0; iter < iters; iter++) {
-    // Reset to identity before shuffling so the n-th opening hand is identical across configs.
-    for (let i = 0; i < N; i++) order[i] = i
-    for (let i = N - 1; i > 0; i--) {
-      const j = (rngDeck() * (i + 1)) | 0
-      const t = order[i]; order[i] = order[j]; order[j] = t
-    }
-
-    let handN = 0
-    let count = 0
-    for (let i = 0; i < 7; i++) {
-      const c = order[i]
-      hand[handN++] = c
-      if (isTarget[c]) count++
-    }
-    let found = count >= need
-
-    // The zone we draw from: the undrawn deck, or the reshuffled pool after a mulligan.
-    let deck = order
-    let deckLen = N
-    let dp = 7
-
-    if (!found && M > 0) {
-      let pi = 0
-      for (let i = 7; i < N; i++) pool[pi++] = order[i]
-      let sent = 0
-      let kept = 0
-      for (let i = 0; i < handN; i++) {
-        const c = hand[i]
-        // need>1 keeps partial progress; scryForceMulligan overrides every keep rule.
-        let keepThis = isKeep[c] || (need > 1 && isTarget[c])
-        if (scryForceMulligan[c]) keepThis = false
-        if (!keepThis && sent < M) { pool[pi++] = c; sent++ }
-        else hand[kept++] = c
-      }
-      handN = kept
-      const poolSize = pi
-      for (let i = poolSize - 1; i > 0; i--) {
-        const j = (rngPool() * (i + 1)) | 0
-        const t = pool[i]; pool[i] = pool[j]; pool[j] = t
-      }
-      for (let i = 0; i < sent; i++) {
-        const c = pool[i]
-        hand[handN++] = c
-        if (isTarget[c]) count++
-      }
-      found = count >= need
-      deck = pool
-      deckLen = poolSize
-      dp = sent
-    }
-
-    for (let turn = 1; turn <= targetTurn && !found; turn++) {
-      let draws = drawsOnTurn(turn, goingFirst, additionalDraws)
-      while (draws > 0 && dp < deckLen) {
-        const c = deck[dp++]
-        hand[handN++] = c
-        if (isTarget[c]) { count++; if (count >= need) { found = true; break } }
-        draws--
-      }
-      if (found) break
-
-      // Play every scry source in hand this turn's ink can pay for.
-      let ink = turn
-      let i = 0
-      while (i < handN && !found) {
-        const c = hand[i]
-        if (scryLookAt[c] === 0 || scryCost[c] > ink) { i++; continue }
-        ink -= scryCost[c]
-        hand[i] = hand[--handN] // playing it removes it from hand; re-check this slot
-        const look = Math.min(scryLookAt[c], deckLen - dp)
-        const cap = scryKeep[c]
-        let taken = 0
-        for (let s = 0; s < look && taken < cap; s++) {
-          if (isTarget[deck[dp + s]]) {
-            count++; taken++
-            if (count >= need) { found = true; break }
-          }
-        }
-        dp += look // whatever we didn't keep goes to the bottom
-      }
-    }
-
-    if (found) hits++
+    shuffleDeck(order, N, rngDeck)
+    if (evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, rngPool)) hits++
   }
   return hits / iters
 }
 
-// Simulate P(find ≥needs[i] of group i by turn targetTurns[i], for EVERY group, with an
-// M-card mulligan. Same hand/turn model as mcSim — see there for the scry and mulligan rules.
-// Groups are disjoint, so a scry-revealed card matches at most one group; if more useful
-// cards are revealed than `scryKeep` allows, only the first `scryKeep` (in reveal order)
-// are actually kept — the rest are bottomed and don't count toward any group.
+// P(find ≥need targets) for EVERY mulligan count 0..maxM, from a single pass.
+// The mulligan levels differ only in how many cards go back, so they can share one shuffled
+// deal per iteration instead of reshuffling the same deck eight times — shuffling is ~2/3 of
+// a simulation's cost, so this pays for a much higher iteration count at the same wall time.
+// It also means the whole Mull 0..7 row is measured against identical deals, which removes
+// the independent per-column noise that could make the curve read as non-monotonic.
+export function mcSimMulliganRange({
+  isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan,
+  N, maxM, need = 1, targetTurn = 0, goingFirst = false, additionalDraws = 0,
+  iters = MC_ITERS, seedOffset = 0,
+}) {
+  const d = { isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan }
+  const { rngDeck, rngPool } = makeRngs(N, seedOffset)
+  const order = new Int32Array(N)
+  const pool = new Int32Array(N)
+  const hand = new Int32Array(N)
+  const hits = new Int32Array(maxM + 1)
+  for (let iter = 0; iter < iters; iter++) {
+    shuffleDeck(order, N, rngDeck)
+    for (let M = 0; M <= maxM; M++) {
+      if (evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, rngPool)) hits[M]++
+    }
+  }
+  return Array.from(hits, (h, M) => ({ m: M, p: h / iters }))
+}
+
+// Evaluates ONE already-shuffled joint deal for a single mulligan count. Same hand/turn
+// model as evaluateDeal — see there for the scry and mulligan rules. Groups are disjoint, so
+// a scry-revealed card matches at most one group; if more useful cards are revealed than
+// `scryKeep` allows, only the first `scryKeep` (in reveal order) are kept and the rest are
+// bottomed. Scratch buffers cnt/found are reused across calls and reset here.
+function evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDraws,
+                           order, pool, hand, cnt, found, rngPool) {
+  const { targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan } = d
+  const G = targets.length
+  const lastTurn = Math.max(...targetTurns)
+
+  cnt.fill(0)
+  let handN = 0
+  for (let i = 0; i < 7; i++) {
+    const c = order[i]
+    hand[handN++] = c
+    for (let gi = 0; gi < G; gi++) if (targets[gi][c]) cnt[gi]++
+  }
+  let allFound = true
+  for (let gi = 0; gi < G; gi++) {
+    found[gi] = cnt[gi] >= needs[gi] ? 1 : 0
+    if (!found[gi]) allFound = false
+  }
+
+  let deck = order
+  let deckLen = N
+  let dp = 7
+
+  if (!allFound && M > 0) {
+    let pi = 0
+    for (let i = 7; i < N; i++) pool[pi++] = order[i]
+    let sent = 0
+    let kept = 0
+    for (let i = 0; i < handN; i++) {
+      const c = hand[i]
+      let keepThis = false
+      for (let gi = 0; gi < G; gi++) {
+        if (keeps[gi][c] || (needs[gi] > 1 && cnt[gi] < needs[gi] && targets[gi][c])) { keepThis = true; break }
+      }
+      if (scryForceMulligan[c]) keepThis = false
+      if (!keepThis && sent < M) { pool[pi++] = c; sent++ }
+      else hand[kept++] = c
+    }
+    handN = kept
+    const poolSize = pi
+    for (let i = poolSize - 1; i > 0; i--) {
+      const j = (rngPool() * (i + 1)) | 0
+      const t = pool[i]; pool[i] = pool[j]; pool[j] = t
+    }
+    for (let i = 0; i < sent; i++) {
+      const c = pool[i]
+      hand[handN++] = c
+      for (let gi = 0; gi < G; gi++) {
+        if (!found[gi] && targets[gi][c]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
+      }
+    }
+    allFound = true
+    for (let gi = 0; gi < G; gi++) if (!found[gi]) allFound = false
+    deck = pool
+    deckLen = poolSize
+    dp = sent
+  }
+
+  for (let turn = 1; turn <= lastTurn && !allFound; turn++) {
+    let draws = drawsOnTurn(turn, goingFirst, additionalDraws)
+    while (draws > 0 && dp < deckLen) {
+      const c = deck[dp++]
+      hand[handN++] = c
+      for (let gi = 0; gi < G; gi++) {
+        if (!found[gi] && turn <= targetTurns[gi] && targets[gi][c]) {
+          cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1
+        }
+      }
+      draws--
+    }
+    allFound = true
+    for (let gi = 0; gi < G; gi++) if (!found[gi]) allFound = false
+    if (allFound) break
+
+    let ink = turn
+    let i = 0
+    while (i < handN && !allFound) {
+      const c = hand[i]
+      if (scryLookAt[c] === 0 || scryCost[c] > ink) { i++; continue }
+      ink -= scryCost[c]
+      hand[i] = hand[--handN]
+      const look = Math.min(scryLookAt[c], deckLen - dp)
+      const cap = scryKeep[c]
+      let taken = 0
+      for (let s = 0; s < look && taken < cap; s++) {
+        const sc = deck[dp + s]
+        for (let gi = 0; gi < G; gi++) {
+          if (!found[gi] && turn <= targetTurns[gi] && targets[gi][sc]) {
+            cnt[gi]++; taken++
+            if (cnt[gi] >= needs[gi]) found[gi] = 1
+            break
+          }
+        }
+      }
+      dp += look
+      allFound = true
+      for (let gi = 0; gi < G; gi++) if (!found[gi]) allFound = false
+    }
+  }
+  return allFound
+}
+
+// P(find ≥needs[i] of group i by turn targetTurns[i], for EVERY group, with an M-card mulligan).
 export function mcJointSimN({
   targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan,
   N, M, targetTurns, needs, goingFirst = false, additionalDraws = 0,
   iters = MC_ITERS, seedOffset = 0,
 }) {
-  const G = targets.length
-  const lastTurn = Math.max(...targetTurns)
-  // Common random numbers, same rationale as mcSim.
-  const rngDeck = mulberry32(hashSeed([N, seedOffset]))
-  const rngPool = mulberry32(hashSeed([N, 1, seedOffset]))
+  const d = { targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan }
+  const { rngDeck, rngPool } = makeRngs(N, seedOffset)
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   const hand = new Int32Array(N)
-  const cnt = new Int32Array(G)
-  const found = new Uint8Array(G)
+  const cnt = new Int32Array(targets.length)
+  const found = new Uint8Array(targets.length)
   let hits = 0
-
   for (let iter = 0; iter < iters; iter++) {
-    for (let i = 0; i < N; i++) order[i] = i
-    for (let i = N - 1; i > 0; i--) {
-      const j = (rngDeck() * (i + 1)) | 0
-      const t = order[i]; order[i] = order[j]; order[j] = t
-    }
-
-    cnt.fill(0)
-    let handN = 0
-    for (let i = 0; i < 7; i++) {
-      const c = order[i]
-      hand[handN++] = c
-      for (let gi = 0; gi < G; gi++) if (targets[gi][c]) cnt[gi]++
-    }
-    let allFound = true
-    for (let gi = 0; gi < G; gi++) {
-      found[gi] = cnt[gi] >= needs[gi] ? 1 : 0
-      if (!found[gi]) allFound = false
-    }
-
-    let deck = order
-    let deckLen = N
-    let dp = 7
-
-    if (!allFound && M > 0) {
-      let pi = 0
-      for (let i = 7; i < N; i++) pool[pi++] = order[i]
-      let sent = 0
-      let kept = 0
-      for (let i = 0; i < handN; i++) {
-        const c = hand[i]
-        let keepThis = false
-        for (let gi = 0; gi < G; gi++) {
-          if (keeps[gi][c] || (needs[gi] > 1 && cnt[gi] < needs[gi] && targets[gi][c])) { keepThis = true; break }
-        }
-        if (scryForceMulligan[c]) keepThis = false
-        if (!keepThis && sent < M) { pool[pi++] = c; sent++ }
-        else hand[kept++] = c
-      }
-      handN = kept
-      const poolSize = pi
-      for (let i = poolSize - 1; i > 0; i--) {
-        const j = (rngPool() * (i + 1)) | 0
-        const t = pool[i]; pool[i] = pool[j]; pool[j] = t
-      }
-      for (let i = 0; i < sent; i++) {
-        const c = pool[i]
-        hand[handN++] = c
-        for (let gi = 0; gi < G; gi++) {
-          if (!found[gi] && targets[gi][c]) { cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1 }
-        }
-      }
-      allFound = true
-      for (let gi = 0; gi < G; gi++) if (!found[gi]) allFound = false
-      deck = pool
-      deckLen = poolSize
-      dp = sent
-    }
-
-    for (let turn = 1; turn <= lastTurn && !allFound; turn++) {
-      let draws = drawsOnTurn(turn, goingFirst, additionalDraws)
-      while (draws > 0 && dp < deckLen) {
-        const c = deck[dp++]
-        hand[handN++] = c
-        for (let gi = 0; gi < G; gi++) {
-          if (!found[gi] && turn <= targetTurns[gi] && targets[gi][c]) {
-            cnt[gi]++; if (cnt[gi] >= needs[gi]) found[gi] = 1
-          }
-        }
-        draws--
-      }
-      allFound = true
-      for (let gi = 0; gi < G; gi++) if (!found[gi]) allFound = false
-      if (allFound) break
-
-      let ink = turn
-      let i = 0
-      while (i < handN && !allFound) {
-        const c = hand[i]
-        if (scryLookAt[c] === 0 || scryCost[c] > ink) { i++; continue }
-        ink -= scryCost[c]
-        hand[i] = hand[--handN]
-        const look = Math.min(scryLookAt[c], deckLen - dp)
-        const cap = scryKeep[c]
-        let taken = 0
-        // Groups are disjoint, so a revealed card counts toward at most one of them.
-        for (let s = 0; s < look && taken < cap; s++) {
-          const sc = deck[dp + s]
-          for (let gi = 0; gi < G; gi++) {
-            if (!found[gi] && turn <= targetTurns[gi] && targets[gi][sc]) {
-              cnt[gi]++; taken++
-              if (cnt[gi] >= needs[gi]) found[gi] = 1
-              break
-            }
-          }
-        }
-        dp += look
-        allFound = true
-        for (let gi = 0; gi < G; gi++) if (!found[gi]) allFound = false
-      }
-    }
-
-    if (allFound) hits++
+    shuffleDeck(order, N, rngDeck)
+    if (evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDraws,
+                          order, pool, hand, cnt, found, rngPool)) hits++
   }
   return hits / iters
+}
+
+// Joint version of mcSimMulliganRange: every mulligan count 0..maxM from one pass, sharing
+// a single shuffled deal per iteration.
+export function mcJointSimMulliganRange({
+  targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan,
+  N, maxM, targetTurns, needs, goingFirst = false, additionalDraws = 0,
+  iters = MC_ITERS, seedOffset = 0,
+}) {
+  const d = { targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan }
+  const { rngDeck, rngPool } = makeRngs(N, seedOffset)
+  const order = new Int32Array(N)
+  const pool = new Int32Array(N)
+  const hand = new Int32Array(N)
+  const cnt = new Int32Array(targets.length)
+  const found = new Uint8Array(targets.length)
+  const hits = new Int32Array(maxM + 1)
+  for (let iter = 0; iter < iters; iter++) {
+    shuffleDeck(order, N, rngDeck)
+    for (let M = 0; M <= maxM; M++) {
+      if (evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDraws,
+                            order, pool, hand, cnt, found, rngPool)) hits[M]++
+    }
+  }
+  return Array.from(hits, (h, M) => ({ m: M, p: h / iters }))
 }
 
 // --- Keyword Analysis ---
@@ -367,7 +440,7 @@ export function mcJointSimN({
 
 // Accounts for mulligan: keeps playable cards, sends back up to maxMulligan non-playable ones.
 // When no playable card is in opening hand, sends back min(maxMulligan, 7) cards and redraws.
-export function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDraws, iterations = 4000) {
+export function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDraws, iterations = 20000) {
   const rng = mulberry32(hashSeed([deckCosts, N, maxMulligan, goingFirst ? 1 : 0, additionalDraws, iterations]))
   const hits = new Int32Array(8)
   const order = new Int32Array(N)
@@ -432,7 +505,7 @@ export function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDra
 
 // P(3+ non-inkable cards in opening hand even after mulliganing excess non-inkables).
 // Strategy: if hand has 3+ non-inkable, send back non-inkable cards (up to maxMulligan).
-export function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 5000) {
+export function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 20000) {
   const rng = mulberry32(hashSeed([deckInkable, N, maxMulligan, iterations]))
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
@@ -480,7 +553,7 @@ export function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 5000) 
 
 // P(no card with cost ≤ threshold in opening hand even after mulliganing non-playable cards).
 // Used for Brickability dead draw risk.
-export function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations = 5000) {
+export function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations = 20000) {
   const rng = mulberry32(hashSeed([deckCosts, N, threshold, maxMulligan, iterations]))
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
@@ -535,7 +608,7 @@ export function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations 
 //   - Locations generate lore passively each turn after played, no characters needed
 // Note: scry sources aren't modeled — this sim only plays Characters/Locations, never
 // the Action/Item cards scry sources (and other draw effects) would come from.
-export function questPressureSim(deckCards, goingFirst, additionalDraws, iterations = 6000) {
+export function questPressureSim(deckCards, goingFirst, additionalDraws, iterations = 15000) {
   const N = deckCards.length
   if (N === 0) return {
     avgLore: new Array(SIM_TURNS).fill(0), estWinTurn: null,

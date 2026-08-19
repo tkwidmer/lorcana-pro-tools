@@ -2,8 +2,8 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useCards } from '../hooks/useCards'
 import { oddsColor, brickGrade, brickGradeColor, brickRiskColor, brickBarColor } from '../lib/statColors'
 import { parseDeckList } from '../lib/parseDeckList'
-import { drawOdds, jointDrawOddsN, drawOddsAtLeast, pct } from '../lib/drawOddsMath'
-import { buildMCDeck, buildMCJointDeckN, mcSim, mcJointSimN, curveProbMC, uninkableRiskMC, deadDrawRiskMC, questPressureSim, SIM_TURNS } from '../lib/monteCarloSim'
+import { jointDrawOddsN, drawOddsAtLeast, pct } from '../lib/drawOddsMath'
+import { buildMCDeck, buildMCJointDeckN, mcSim, mcSimMulliganRange, mcJointSimN, mcJointSimMulliganRange, curveProbMC, uninkableRiskMC, deadDrawRiskMC, questPressureSim, SIM_TURNS } from '../lib/monteCarloSim'
 import {
   buildKeywordAnalysis,
   buildDrawEffects,
@@ -75,10 +75,10 @@ const SAMPLE = `4 John Silver - Alien Pirate
 
 const TURN_COLS = [1, 2, 3, 4, 5, 6]
 
-// Iteration count for the per-card / per-turn overview simulations. Lower than the
-// Targeted Card Odds default because these run one sim per card (or per turn column)
-// rather than one per group, and they're a scan-the-table view rather than a decision point.
-const DRAW_RATE_ITERS = 4000
+// Iteration count for the per-turn overview row shown when a combo has no target turn set.
+// Lower than MC_ITERS because it runs one simulation per turn column and is a quick scan
+// rather than the decision point the mulligan range is.
+const OVERVIEW_ITERS = 8000
 
 // --- Component ---
 
@@ -127,8 +127,6 @@ export function DeckInsightsPage() {
   const [copied, setCopied] = useState(false)
   const [insightsOpen, setInsightsOpen] = useState(true)
   const [mulliganOpen, setMulliganOpen] = useState(true)
-  const [drawRatesOpen, setDrawRatesOpen] = useState(false)
-  const [targetTurnOverrides, setTargetTurnOverrides] = useState({})
   const [targetedOddsOpen, setTargetedOddsOpen] = useState(true)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [legalityOpen, setLegalityOpen] = useState(false)
@@ -487,10 +485,9 @@ export function DeckInsightsPage() {
       const need = group.need ?? 1
       if (group.targetTurn != null) {
         result[group.id] = {
-          mulliganRange: Array.from({ length: maxMulligan + 1 }, (_, m) => ({
-            m,
-            p: mcSim({ ...deck, N, M: m, targetTurn: group.targetTurn, need, goingFirst, additionalDraws }),
-          })),
+          mulliganRange: mcSimMulliganRange({
+            ...deck, N, maxM: maxMulligan, targetTurn: group.targetTurn, need, goingFirst, additionalDraws,
+          }),
         }
       } else {
         result[group.id] = {
@@ -506,10 +503,10 @@ export function DeckInsightsPage() {
         if (gA.cardNames.length === 0 || gB.cardNames.length === 0) continue
         if (gA.targetTurn == null || gB.targetTurn == null) continue
         const deck = buildMCJointDeckN(N, cards, [gA, gB], scrySources)
-        result[`${gA.id}-${gB.id}`] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
-          m,
-          p: mcJointSimN({ ...deck, N, M: m, targetTurns: [gA.targetTurn, gB.targetTurn], needs: [gA.need ?? 1, gB.need ?? 1], goingFirst, additionalDraws }),
-        }))
+        result[`${gA.id}-${gB.id}`] = mcJointSimMulliganRange({
+          ...deck, N, maxM: maxMulligan, targetTurns: [gA.targetTurn, gB.targetTurn],
+          needs: [gA.need ?? 1, gB.need ?? 1], goingFirst, additionalDraws,
+        })
       }
     }
 
@@ -517,10 +514,10 @@ export function DeckInsightsPage() {
     if (groups.length >= 3 && groups.every(g => g.cardNames.length > 0 && g.targetTurn != null)) {
       const key = groups.map(g => g.id).join('-')
       const deck = buildMCJointDeckN(N, cards, groups, scrySources)
-      result[key] = Array.from({ length: maxMulligan + 1 }, (_, m) => ({
-        m,
-        p: mcJointSimN({ ...deck, N, M: m, targetTurns: groups.map(g => g.targetTurn), needs: groups.map(g => g.need ?? 1), goingFirst, additionalDraws }),
-      }))
+      result[key] = mcJointSimMulliganRange({
+        ...deck, N, maxM: maxMulligan, targetTurns: groups.map(g => g.targetTurn),
+        needs: groups.map(g => g.need ?? 1), goingFirst, additionalDraws,
+      })
     }
 
     // Per-turn overview for combos with no target turn set. Simulated for the same reason
@@ -539,54 +536,13 @@ export function DeckInsightsPage() {
       const deck = buildMCJointDeckN(N, cards, combo, scrySources)
       const needs = combo.map(g => g.need ?? 1)
       result[`${key}:overview`] = {
-        opening: mcJointSimN({ ...deck, N, M: 0, targetTurns: combo.map(() => 0), needs, goingFirst, additionalDraws, iters: DRAW_RATE_ITERS }),
-        turns: TURN_COLS.map(T => mcJointSimN({ ...deck, N, M: 0, targetTurns: combo.map(() => T), needs, goingFirst, additionalDraws, iters: DRAW_RATE_ITERS })),
+        opening: mcJointSimN({ ...deck, N, M: 0, targetTurns: combo.map(() => 0), needs, goingFirst, additionalDraws, iters: OVERVIEW_ITERS }),
+        turns: TURN_COLS.map(T => mcJointSimN({ ...deck, N, M: 0, targetTurns: combo.map(() => T), needs, goingFirst, additionalDraws, iters: OVERVIEW_ITERS })),
       }
     }
 
     return result
   }, [N, cards, groups, scrySources, maxMulligan, goingFirst, additionalDraws])
-
-  // Card Draw Rates rows. With no scry sources this is exact closed-form hypergeometric.
-  // With scry sources it has to be simulated, because whether a scry fires depends on
-  // holding it and affording it on the turn in question — so the table agrees with the
-  // Targeted Card Odds panel instead of using a separate, cruder approximation.
-  // Fewer iterations than the Targeted panel: this is a per-card overview, and it runs
-  // one sim per unique card rather than one per group.
-  const drawRateRows = useMemo(() => {
-    if (cards.length === 0) return []
-    const hasScry = scrySources.some(s => s.name && s.lookAt > 0)
-    return cards.map(card => {
-      const cost = costMap.get(toSimpleName(card.name))
-      const defaultTurn = cost != null ? Math.max(1, Math.min(8, cost)) : 4
-      const curveT = targetTurnOverrides[card.name] ?? defaultTurn
-      const draws = (goingFirst ? Math.max(0, curveT - 1) : curveT) + additionalDraws
-      const noScry = drawOdds(N, card.count, maxMulligan, draws)
-      let onCurve = noScry
-      let scryBoost = 0
-      if (hasScry) {
-        const deck = buildMCDeck(N, cards, [card.name], false, scrySources)
-        const sim = M => mcSim({
-          ...deck, N, M, need: 1, targetTurn: curveT, goingFirst, additionalDraws,
-          iters: DRAW_RATE_ITERS,
-        })
-        // Both sides simulated so common random numbers cancel and the boost is a clean
-        // differential rather than a difference of two independently-noisy estimates.
-        const bare = buildMCDeck(N, cards, [card.name], false, [])
-        onCurve = sim(maxMulligan)
-        scryBoost = onCurve - mcSim({
-          ...bare, N, M: maxMulligan, need: 1, targetTurn: curveT, goingFirst, additionalDraws,
-          iters: DRAW_RATE_ITERS,
-        })
-      }
-      return {
-        card, cost, curveT, onCurve, scryBoost,
-        avgSeen: card.count * (7 + draws) / N,
-        isCustom: targetTurnOverrides[card.name] != null,
-        simulated: hasScry,
-      }
-    }).sort((a, b) => (a.cost ?? 99) - (b.cost ?? 99) || a.card.name.localeCompare(b.card.name))
-  }, [cards, costMap, N, maxMulligan, goingFirst, additionalDraws, scrySources, targetTurnOverrides])
 
   function addGroup() {
     const id = nextGroupId.current++
@@ -1667,114 +1623,6 @@ export function DeckInsightsPage() {
         </button>
       </div>
 
-      {/* Draw Rates — collapsible results table */}
-      {cards.length > 0 && (
-        <div className="mb-4">
-          <button
-            onClick={() => setDrawRatesOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
-          >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Card Draw Rates</span>
-            <svg className={`w-4 h-4 text-gray-400 transition-transform ${drawRatesOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {drawRatesOpen && <div className="mt-3">
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Card</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Cost</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Count</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Target Turn
-                    <div className="font-normal normal-case tracking-normal text-gray-400">defaults to cost</div>
-                  </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    On Curve %
-                    <div className="font-normal normal-case tracking-normal text-gray-400">P(≥1 by target)</div>
-                  </th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Avg Seen
-                    <div className="font-normal normal-case tracking-normal text-gray-400">copies by target</div>
-                  </th>
-                  {scrySources.length > 0 && (
-                    <th className="text-center px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Scry Boost
-                      <div className="font-normal normal-case tracking-normal text-gray-400">vs no scry</div>
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {drawRateRows.map(({ card, cost, curveT, onCurve, scryBoost, avgSeen, isCustom }, i) => {
-                  return (
-                    <tr key={card.name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                      <td className="px-4 py-2.5 text-gray-900">{card.name}</td>
-                      <td className="px-3 py-2.5 text-center text-gray-400 text-xs tabular-nums">
-                        {cost != null ? cost : '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-center text-gray-400 text-xs tabular-nums">{card.count}</td>
-                      <td className="px-2 py-1.5 text-center">
-                        <input
-                          type="number"
-                          min={1}
-                          max={8}
-                          value={curveT}
-                          onChange={e => {
-                            const v = Math.max(1, Math.min(8, parseInt(e.target.value) || 1))
-                            setTargetTurnOverrides(prev => ({ ...prev, [card.name]: v }))
-                          }}
-                          className={`w-12 text-center text-sm rounded border py-0.5 tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                            isCustom
-                              ? 'border-blue-300 bg-blue-50 text-blue-700 font-semibold'
-                              : 'border-gray-200 bg-transparent text-gray-500'
-                          }`}
-                        />
-                      </td>
-                      <td className={`px-3 py-2.5 text-center font-semibold tabular-nums ${oddsColor(onCurve)}`}>
-                        {pct(onCurve)}
-                      </td>
-                      <td className={`px-3 py-2.5 text-center font-semibold tabular-nums ${
-                        avgSeen >= 1 ? 'text-green-600'
-                        : avgSeen >= 0.5 ? 'text-yellow-500'
-                        : 'text-red-500'
-                      }`}>
-                        {avgSeen.toFixed(2)}
-                      </td>
-                      {scrySources.length > 0 && (
-                        <td className={`px-3 py-2.5 text-center tabular-nums text-xs font-medium ${
-                          scryBoost > 0.01 ? 'text-blue-500' : 'text-gray-400'
-                        }`}>
-                          {scryBoost > 0.001 ? `+${pct(scryBoost)}` : '—'}
-                        </td>
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="border-t border-gray-200 px-4 py-3 bg-gray-50/50">
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Sorted by cost. <strong className="text-gray-500">Target Turn</strong> defaults to each card's ink cost — adjust it for songs or off-curve plays. <strong className="text-gray-500">On Curve %</strong> = P(see ≥1 copy by that turn) with up to {maxMulligan}-card mulligan{scrySources.length > 0 ? ' and scry' : ''}. <strong className="text-gray-500">Avg Seen</strong> = expected copies in hand — below 0.5 means you'll often miss it entirely.{' '}
-              {scrySources.length > 0 && <><strong className="text-gray-500">Scry Boost</strong> = improvement from your scry sources. </>}
-              {goingFirst ? 'Going first.' : 'Going second.'}
-            </p>
-          </div>
-        </div>
-          </div>}
-        </div>
-      )}
-
-      {cards.length === 0 && (
-        <p className="text-center text-sm text-gray-400 py-8">
-          Paste a deck list above to see draw odds.
-        </p>
-      )}
-
       {/* Targeted Card Odds — collapsible groups + joint probability */}
       {cards.length > 0 && (
         <div className="mb-4">
@@ -2162,13 +2010,6 @@ export function DeckInsightsPage() {
                 <li><span className="font-medium text-gray-700">Singer–song balance</span> — total Singer characters vs. total songs, with the average Singer level and the gap between your cheapest singer and most expensive song. A Singer 4 character can&apos;t pay for a 6-cost song; mismatches are flagged in amber.</li>
                 <li><span className="font-medium text-gray-700">Shift coverage</span> — for each Shift card in your deck, checks whether a lower-cost version of that character (same name before the dash) is also in the deck. A missing base is flagged in red, since Shifting without a target means always hard-casting at full cost.</li>
               </ul>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-gray-800 mb-1">Card Draw Rates</h3>
-              <p>
-                A card-by-card table showing how likely you are to have seen each card by your chosen target turn. The target turn defaults to each card's ink cost (its "on curve" turn), but you can adjust it — useful for songs you plan to sing with a character rather than hard-cast, or late-game finishers you just need to see eventually. The percentages account for your mulligan and any scry sources you've configured. <span className="font-medium text-gray-700">Avg Seen</span> is the expected number of copies in your hand by that turn: a value below 0.5 means you'll typically miss it entirely.
-              </p>
             </div>
 
             <div>

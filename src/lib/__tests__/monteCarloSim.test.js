@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildMCDeck,
+  buildMCJointDeckN,
   mcSim,
+  mcJointSimN,
   curveProbMC,
   uninkableRiskMC,
   deadDrawRiskMC,
@@ -22,6 +24,83 @@ describe('buildMCDeck + mcSim', () => {
     const deck = buildMCDeck(60, cards, ['Mickey'], false, [])
     const p = mcSim({ ...deck, N: 60, M: 0, T: 0, need: 1 })
     expect(p).toBe(0)
+  })
+
+  it('is deterministic — identical inputs produce identical output across repeated calls', () => {
+    const cards = [
+      { name: 'Grandmother Willow', count: 4 },
+      { name: 'Hamm', count: 4 },
+      { name: 'Besties', count: 4 },
+      { name: 'Filler', count: 48 },
+    ]
+    const scrySources = [{ name: 'Besties', copies: 4, lookAt: 4, keep: 1 }]
+    const runOnce = () => {
+      const deck = buildMCDeck(60, cards, ['Grandmother Willow', 'Hamm'], true, scrySources)
+      return mcSim({ ...deck, N: 60, M: 3, T: 2, need: 1 })
+    }
+    const p1 = runOnce()
+    const p2 = runOnce()
+    expect(p1).toBe(p2)
+  })
+
+  it('a strictly better scry source (more looks) never scores lower than a weaker one at the same mulligan count', () => {
+    const cards = [
+      { name: 'Grandmother Willow', count: 4 },
+      { name: 'Hamm', count: 4 },
+      { name: 'Scryer', count: 4 },
+      { name: 'Filler', count: 48 },
+    ]
+    for (const m of [0, 3, 7]) {
+      const weakDeck = buildMCDeck(60, cards, ['Grandmother Willow', 'Hamm'], false, [{ name: 'Scryer', copies: 4, lookAt: 2, keep: 1 }])
+      const strongDeck = buildMCDeck(60, cards, ['Grandmother Willow', 'Hamm'], false, [{ name: 'Scryer', copies: 4, lookAt: 4, keep: 1 }])
+      const pWeak = mcSim({ ...weakDeck, N: 60, M: m, T: 2, need: 1 })
+      const pStrong = mcSim({ ...strongDeck, N: 60, M: m, T: 2, need: 1 })
+      expect(pStrong).toBeGreaterThanOrEqual(pWeak)
+    }
+  })
+
+  it('mulliganMode "keep" always keeps the scry source card in the opening hand through mulligan', () => {
+    // A deck where the scry source is the ONLY card that can trigger the scry — if it's
+    // always kept, the look/keep effect should always fire; if not forced, it can be
+    // mulliganed away like any other non-target card.
+    const cards = [
+      { name: 'Target', count: 1 },
+      { name: 'Scryer', count: 1 },
+      { name: 'Filler', count: 58 },
+    ]
+    const deck = buildMCDeck(60, cards, ['Target'], false, [{ name: 'Scryer', copies: 1, lookAt: 10, keep: 1, mulliganMode: 'keep' }])
+    // isKeep should be set for the scry source position even though it isn't a group target.
+    const scryIdx = 1 // Target(1) then Scryer(1)
+    expect(deck.isKeep[scryIdx]).toBe(1)
+  })
+
+  it('mulliganMode "mulligan" forces the scry source out of the kept hand even if it would otherwise be kept', () => {
+    const cards = [{ name: 'Scryer', count: 60 }]
+    // Scryer is also the group target, so it'd normally be force-kept when need>1's partial-progress
+    // rule or keepInMulligan applies — mulliganMode 'mulligan' should override that.
+    const deck = buildMCDeck(60, cards, ['Scryer'], true, [{ name: 'Scryer', copies: 60, lookAt: 1, keep: 1, mulliganMode: 'mulligan' }])
+    expect(deck.scryForceMulligan[0]).toBe(1)
+  })
+})
+
+describe('buildMCJointDeckN + mcJointSimN determinism', () => {
+  it('is deterministic across repeated calls with identical inputs', () => {
+    const cards = [
+      { name: 'A', count: 4 },
+      { name: 'B', count: 4 },
+      { name: 'Besties', count: 4 },
+      { name: 'Filler', count: 48 },
+    ]
+    const groups = [
+      { id: 1, cardNames: ['A'], keepInMulligan: false, need: 1 },
+      { id: 2, cardNames: ['B'], keepInMulligan: false, need: 1 },
+    ]
+    const scrySources = [{ name: 'Besties', copies: 4, lookAt: 4, keep: 1 }]
+    const runOnce = () => {
+      const deck = buildMCJointDeckN(60, cards, groups, scrySources)
+      return mcJointSimN({ ...deck, N: 60, M: 3, Ts: [2, 2], needs: [1, 1] })
+    }
+    expect(runOnce()).toBe(runOnce())
   })
 })
 

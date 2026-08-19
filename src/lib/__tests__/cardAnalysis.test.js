@@ -198,3 +198,35 @@ describe('getLegality', () => {
     expect(getLegality(card).banned).toBe(true)
   })
 })
+
+describe('buildMulliganAdvice — Shift line rescue', () => {
+  // Regression: DrawOddsPage built the shiftLineNames set with plain toLowerCase(), which
+  // leaves the " - " subtitle separator in ("elsa - snow queen"), while buildMulliganAdvice
+  // looks up toSimpleName ("elsa snow queen"). The keys never matched, so the rescue below
+  // was dead code and every Shift payoff got tossed.
+  const name = 'Prince Phillip - Vanquisher of Foes'
+  const key = toSimpleName(name)
+  const cards = [{ name, count: 4 }]
+  const costMap = new Map([[key, 6]])
+  const inkwellMap = new Map([[key, true]])
+  const roleMap = new Map([[key, { isCharacter: true, develops: true }]])
+  const tierOf = r => (r.keep.length ? 'keep' : r.flexible.length ? 'flexible' : 'toss')
+
+  it('holds an expensive Shift card as flexible when its base is in the deck', () => {
+    const r = buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, 3, 60, new Set([key]))
+    expect(tierOf(r)).toBe('flexible')
+    expect(r.flexible[0].reason).toMatch(/Shift line/)
+  })
+
+  it('still tosses it when there is no live Shift line', () => {
+    const r = buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, 3, 60, new Set())
+    expect(tierOf(r)).toBe('toss')
+  })
+
+  it('is keyed by toSimpleName, not by a raw lowercased full name', () => {
+    // The exact shape of the old bug: a set built with toLowerCase() must not work.
+    const withRawLowercase = buildMulliganAdvice(cards, costMap, inkwellMap, roleMap, 3, 60, new Set([name.toLowerCase()]))
+    expect(tierOf(withRawLowercase)).toBe('toss')
+    expect(name.toLowerCase()).not.toBe(key)
+  })
+})

@@ -17,11 +17,15 @@ export function logBinom(n, k) {
 //   1) Initial 7-card opening draw from N-card deck
 //   2) M mulligan replacement draws (cards go back, deck reshuffled to N-7+M)
 //   3) g additional gameplay draws from the N-7 card remaining deck
-//   4) Scry sources: each played copy looks at `lookAt` cards from the remaining deck;
-//      if a target is among them it's kept, so P(hit in scry) uses the same hypergeometric
-//      formula as a regular draw of `lookAt` cards.
 // Each stage is only included if you missed in the prior stage.
-export function drawOdds(N, K, M, g, scrySources = []) {
+//
+// This is exact, and deliberately models NO scry. Scry can't be expressed in closed form
+// here: whether a scry source fires depends on holding it, affording its ink cost on the
+// turn in question, and how many of the revealed cards you're allowed to keep — all
+// path-dependent. An earlier version approximated it by adding round(copies * lookAt *
+// drawnFraction) extra hypergeometric draws, which ignored cost and keep entirely and
+// overstated a 6-cost source by ~7 points. Anything scry-aware goes through mcSim instead.
+export function drawOdds(N, K, M, g) {
   const safeG = Math.min(g, Math.max(0, N - 7))
   let logPMiss = logBinom(N - K, 7) - logBinom(N, 7)
   if (M > 0) {
@@ -32,22 +36,6 @@ export function drawOdds(N, K, M, g, scrySources = []) {
     const pool = N - 7
     logPMiss += logBinom(pool - K, safeG) - logBinom(pool, safeG)
   }
-  if (scrySources.length > 0) {
-    const totalDrawn = 7 + (M > 0 ? M : 0) + safeG
-    const remainingPool = N - 7 - safeG
-    // Expected scry cards in hand by this point, proportional to cards drawn so far.
-    let totalLooks = 0
-    for (const src of scrySources) {
-      if (src.copies > 0 && src.lookAt > 0) {
-        const fraction = Math.min(1, totalDrawn / N)
-        totalLooks += src.copies * fraction * src.lookAt
-      }
-    }
-    const intLooks = Math.min(Math.round(totalLooks), Math.max(0, remainingPool - K))
-    if (intLooks > 0 && remainingPool >= K) {
-      logPMiss += logBinom(remainingPool - K, intLooks) - logBinom(remainingPool, intLooks)
-    }
-  }
   if (!isFinite(logPMiss)) return logPMiss < 0 ? 1 : 0
   return Math.max(0, Math.min(1, 1 - Math.exp(logPMiss)))
 }
@@ -57,7 +45,7 @@ export function drawOdds(N, K, M, g, scrySources = []) {
 // P(miss every group in S) = 1 - drawOdds treating the union of S as a single pool.
 // P(hit every group) = 1 - P(union of "missed group i" events), expanded via inclusion-exclusion.
 // For two groups this reduces to the familiar P(A∩B) = P(A) + P(B) - P(A∪B).
-export function jointDrawOddsN(N, ks, M, g, scrySources = []) {
+export function jointDrawOddsN(N, ks, M, g) {
   const n = ks.length
   let missUnion = 0
   for (let mask = 1; mask < (1 << n); mask++) {
@@ -66,7 +54,7 @@ export function jointDrawOddsN(N, ks, M, g, scrySources = []) {
       if (mask & (1 << i)) { sumK += ks[i]; bits++ }
     }
     const sign = bits % 2 === 1 ? 1 : -1
-    missUnion += sign * (1 - drawOdds(N, sumK, M, g, scrySources))
+    missUnion += sign * (1 - drawOdds(N, sumK, M, g))
   }
   return Math.max(0, Math.min(1, 1 - missUnion))
 }

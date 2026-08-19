@@ -47,6 +47,7 @@ export function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceLis
   const isKeep = new Uint8Array(N)   // alwaysKeep = isTarget && keepInMulligan, or scry alwaysKeep
   const scryLookAt = new Uint8Array(N)
   const scryKeep = new Uint8Array(N) // max cards actually kept from that scry (rest are bottomed)
+  const scryCost = new Uint8Array(N) // ink cost to cast — the scry can't fire before you can afford it
   const scryForceMulligan = new Uint8Array(N)
   let pos = 0
   for (const card of cards) {
@@ -58,11 +59,12 @@ export function buildMCDeck(N, cards, targetNames, keepInMulligan, scrySourceLis
       isKeep[pos] = ((t && keepInMulligan) || s?.mulliganMode === 'keep') ? 1 : 0
       scryLookAt[pos] = s ? s.lookAt : 0
       scryKeep[pos] = s ? Math.max(1, Math.min(s.keep || s.lookAt, s.lookAt)) : 0
+      scryCost[pos] = s ? Math.max(1, s.cost || 1) : 0
       scryForceMulligan[pos] = s?.mulliganMode === 'mulligan' ? 1 : 0
       pos++
     }
   }
-  return { isTarget, isKeep, scryLookAt, scryKeep, scryForceMulligan }
+  return { isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan }
 }
 
 // Build typed arrays for an N-group joint simulation.
@@ -76,6 +78,7 @@ export function buildMCJointDeckN(N, cards, groupList, scrySourceList) {
   const keeps = groupList.map(() => new Uint8Array(N))
   const scryLookAt = new Uint8Array(N)
   const scryKeep = new Uint8Array(N) // max cards actually kept from that scry (rest are bottomed)
+  const scryCost = new Uint8Array(N) // ink cost to cast — the scry can't fire before you can afford it
   const scryForceMulligan = new Uint8Array(N)
   let pos = 0
   for (const card of cards) {
@@ -89,19 +92,38 @@ export function buildMCJointDeckN(N, cards, groupList, scrySourceList) {
       }
       scryLookAt[pos] = s ? s.lookAt : 0
       scryKeep[pos] = s ? Math.max(1, Math.min(s.keep || s.lookAt, s.lookAt)) : 0
+      scryCost[pos] = s ? Math.max(1, s.cost || 1) : 0
       scryForceMulligan[pos] = s?.mulliganMode === 'mulligan' ? 1 : 0
       pos++
     }
   }
-  return { targets, keeps, scryLookAt, scryKeep, scryForceMulligan }
+  return { targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan }
+}
+
+// Maps gameplay draw index (0-indexed within the T post-mulligan turn draws passed to
+// mcSim/mcJointSimN) to the physical turn it's drawn on, so a scry source's ink cost can be
+// checked against what you could actually afford that turn. additionalDraws cards are treated
+// as already in hand pre-game (turn 1, matching questPressureSim's convention), and the
+// remaining draws land one per turn starting turn 1 (or turn 2 going first, since turn 1 has
+// no draw there). Assumes 1 ink per turn, same as the rest of this file.
+function buildDrawTurns(T, goingFirst, additionalDraws) {
+  const drawTurn = new Int32Array(T)
+  for (let i = 0; i < T; i++) {
+    if (i < additionalDraws) { drawTurn[i] = 1; continue }
+    const normalIdx = i - additionalDraws
+    drawTurn[i] = goingFirst ? normalIdx + 2 : normalIdx + 1
+  }
+  return drawTurn
 }
 
 // Simulate P(find ≥need targets by T gameplay draws with M-card mulligan).
 // keepInMulligan cards are never sent back; when need>1, partial target progress is also kept.
 // Scry cards: when drawn, look at next `lookAt` cards; of any targets among them, only
-// `scryKeep` many can actually be kept (the rest are bottomed) — matters when need > 1.
-export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, scryForceMulligan, N, M, T, need = 1 }) {
-  const rng = mulberry32(hashSeed([isTarget, isKeep, scryLookAt, scryKeep, N, M, T, need]))
+// `scryKeep` many can actually be kept (the rest are bottomed) — matters when need > 1. A scry
+// card can only fire once its physical turn (see buildDrawTurns) can afford its ink cost.
+export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan, N, M, T, need = 1, goingFirst = false, additionalDraws = 0 }) {
+  const rng = mulberry32(hashSeed([isTarget, isKeep, scryLookAt, scryKeep, N, M, T, need, goingFirst ? 1 : 0, additionalDraws]))
+  const drawTurn = buildDrawTurns(T, goingFirst, additionalDraws)
   const order = new Int32Array(N)
   for (let i = 0; i < N; i++) order[i] = i
   const pool = new Int32Array(N)
@@ -139,7 +161,7 @@ export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, scryForceMulliga
         for (let draw = 0; draw < T && dp < poolSize && !found; draw++) {
           const c = pool[dp++]
           if (isTarget[c]) { count++; if (count >= need) { found = true; break } }
-          if (scryLookAt[c] > 0 && dp < poolSize) {
+          if (scryLookAt[c] > 0 && scryCost[c] <= drawTurn[draw] && dp < poolSize) {
             const look = Math.min(scryLookAt[c], poolSize - dp)
             let targetsSeen = 0
             for (let s = 0; s < look; s++) {
@@ -156,7 +178,7 @@ export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, scryForceMulliga
       for (let draw = 0; draw < T && dp < N && !found; draw++) {
         const c = order[dp++]
         if (isTarget[c]) { count++; if (count >= need) { found = true; break } }
-        if (scryLookAt[c] > 0 && dp < N) {
+        if (scryLookAt[c] > 0 && scryCost[c] <= drawTurn[draw] && dp < N) {
           const look = Math.min(scryLookAt[c], N - dp)
           let targetsSeen = 0
           for (let s = 0; s < look; s++) {
@@ -177,10 +199,11 @@ export function mcSim({ isTarget, isKeep, scryLookAt, scryKeep, scryForceMulliga
 // Groups are disjoint, so a scry-revealed card matches at most one group; if more useful
 // cards are revealed than `scryKeep` allows, only the first `scryKeep` (in reveal order)
 // are actually kept — the rest are bottomed and don't count toward any group.
-export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, scryForceMulligan, N, M, Ts, needs }) {
+export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan, N, M, Ts, needs, goingFirst = false, additionalDraws = 0 }) {
   const G = targets.length
   const T = Math.max(...Ts)
-  const rng = mulberry32(hashSeed([...targets, ...keeps, scryLookAt, scryKeep, N, M, ...Ts, ...needs]))
+  const rng = mulberry32(hashSeed([...targets, ...keeps, scryLookAt, scryKeep, N, M, ...Ts, ...needs, goingFirst ? 1 : 0, additionalDraws]))
+  const drawTurn = buildDrawTurns(T, goingFirst, additionalDraws)
   const order = new Int32Array(N)
   for (let i = 0; i < N; i++) order[i] = i
   const pool = new Int32Array(N)
@@ -238,7 +261,7 @@ export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, scryForceMul
             if (!found[gi]) anyLeft = true
           }
           if (!anyLeft) break
-          if (scryLookAt[c] > 0 && dp < poolSize) {
+          if (scryLookAt[c] > 0 && scryCost[c] <= drawTurn[draw] && dp < poolSize) {
             const look = Math.min(scryLookAt[c], poolSize - dp)
             const keepCap = scryKeep[c]
             let kept = 0
@@ -269,7 +292,7 @@ export function mcJointSimN({ targets, keeps, scryLookAt, scryKeep, scryForceMul
           if (!found[gi]) anyLeft = true
         }
         if (!anyLeft) break
-        if (scryLookAt[c] > 0 && dp < N) {
+        if (scryLookAt[c] > 0 && scryCost[c] <= drawTurn[draw] && dp < N) {
           const look = Math.min(scryLookAt[c], N - dp)
           const keepCap = scryKeep[c]
           let kept = 0

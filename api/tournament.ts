@@ -16,6 +16,10 @@ function str(v: string | string[] | undefined): string | undefined {
 // query string.
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 
+// The events list endpoint takes the store's internal numeric id (distinct
+// from the game-stores UUID used for the `store` type above).
+const NUMERIC_ID_RE = /^[0-9]{1,10}$/
+
 function clampInt(v: string | undefined, def: number, max: number): number {
   const n = parseInt(v ?? '', 10)
   if (!Number.isFinite(n) || n < 1) return def
@@ -27,6 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const eventId = str(req.query.eventId)
   const roundId = str(req.query.roundId)
   const storeId = str(req.query.storeId)
+  const storeNumericId = str(req.query.storeNumericId)
   const page = clampInt(str(req.query.page), 1, 10000)
   const pageSize = clampInt(str(req.query.pageSize), 10, 200)
 
@@ -57,6 +62,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!storeId) return res.status(400).json({ error: 'Missing storeId' })
       if (!ID_RE.test(storeId)) return res.status(400).json({ error: 'Invalid storeId' })
       url = `${HYDRA_BASE}/game-stores/${encodeURIComponent(storeId)}/`
+      break
+    case 'storeEvents':
+      if (!storeNumericId) return res.status(400).json({ error: 'Missing storeNumericId' })
+      if (!NUMERIC_ID_RE.test(storeNumericId)) return res.status(400).json({ error: 'Invalid storeNumericId' })
+      url = `${RAVEN_BASE}/events/?store=${encodeURIComponent(storeNumericId)}&game_slug=disney-lorcana&page=${page}&page_size=${pageSize}`
       break
     default:
       return res.status(400).json({ error: 'Missing or invalid type param' })

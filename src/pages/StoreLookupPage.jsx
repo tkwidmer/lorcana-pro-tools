@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { fetchGameStore } from '../lib/tournamentApi'
+import {
+  fetchGameStore,
+  fetchAllStoreEvents,
+  fetchUniqueFanCount,
+  mapWithConcurrency,
+} from '../lib/tournamentApi'
+import { eventsInWindow, computeTierProgress, PRORATE_WINDOW } from '../lib/storeTiers'
 import { DEFAULT_TRACKED_STORE_URLS } from '../lib/trackedStores'
 
 const LAST_INPUT_KEY = 'lorcana_store_lookup_last_input'
@@ -18,6 +24,62 @@ function extractStoreIds(input) {
 const STORE_TYPE_LABELS = {
   physicalAndOnlineRetailer: 'Physical and Online Retailer',
   organizedPlay: 'Organized Play',
+}
+
+const PRORATE_WINDOW_LABEL = 'Sep 1 – Nov 1, 2026'
+
+function TierMetric({ label, value, target }) {
+  const met = value >= target
+  return (
+    <div className={`rounded px-2 py-1 ${met ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-600'}`}>
+      <div className="font-semibold">{value}/{target}</div>
+      <div className="text-[10px] text-gray-400">{label}</div>
+    </div>
+  )
+}
+
+function TierStatusBlock({ tier }) {
+  if (!tier || tier.status === 'idle') return null
+
+  if (tier.status === 'loading') {
+    return <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">Checking tier status…</p>
+  }
+
+  if (tier.status === 'error') {
+    return (
+      <p className="text-xs text-red-500 mt-3 pt-3 border-t border-gray-100">
+        Tier status: {tier.error}
+      </p>
+    )
+  }
+
+  const { totalEvents, eventTickets, uniqueFans, hasHyperiaPrerelease, requirements, meetsProvisionalLegendary } =
+    tier.data
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          Pro-rated Legendary ({PRORATE_WINDOW_LABEL})
+        </span>
+        <span
+          className={`flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${
+            meetsProvisionalLegendary ? 'text-emerald-700 bg-emerald-100' : 'text-gray-600 bg-gray-100'
+          }`}
+        >
+          {meetsProvisionalLegendary ? 'On Pace' : 'Not Yet'}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
+        <TierMetric label="Events" value={totalEvents} target={requirements.totalEvents} />
+        <TierMetric label="Unique Fans" value={uniqueFans} target={requirements.uniqueFans} />
+        <TierMetric label="Tickets" value={eventTickets} target={requirements.eventTickets} />
+      </div>
+      <p className={`text-xs mt-2 ${hasHyperiaPrerelease ? 'text-emerald-700' : 'text-gray-500'}`}>
+        {hasHyperiaPrerelease ? '✓' : '—'} Hyperia City Prerelease
+      </p>
+    </div>
+  )
 }
 
 function StoreCard({ result }) {
@@ -98,6 +160,8 @@ function StoreCard({ result }) {
         )}
       </dl>
 
+      <TierStatusBlock tier={result.tier} />
+
       <p className="text-xs text-gray-400 mt-3 break-all">{data.id}</p>
     </div>
   )
@@ -109,6 +173,30 @@ export function StoreLookupPage() {
   const [loading, setLoading] = useState(false)
   const hasAutoLoaded = useRef(false)
 
+  function patchResult(storeId, patch) {
+    setResults((prev) => prev.map((r) => (r.storeId === storeId ? { ...r, ...patch } : r)))
+  }
+
+  async function loadTierStatus(storeId, store) {
+    const numericStoreId = store?.store?.id
+    if (numericStoreId == null) {
+      patchResult(storeId, { tier: { status: 'error', error: 'Missing internal store id' } })
+      return
+    }
+
+    patchResult(storeId, { tier: { status: 'loading' } })
+
+    try {
+      const allEvents = await fetchAllStoreEvents(numericStoreId)
+      const windowEvents = eventsInWindow(allEvents, PRORATE_WINDOW.start, PRORATE_WINDOW.end)
+      const uniqueFans = await fetchUniqueFanCount(windowEvents)
+      const data = computeTierProgress(windowEvents, uniqueFans)
+      patchResult(storeId, { tier: { status: 'ok', data } })
+    } catch (err) {
+      patchResult(storeId, { tier: { status: 'error', error: err.message || 'Failed to load events' } })
+    }
+  }
+
   async function runLookup(text) {
     const storeIds = extractStoreIds(text)
     if (storeIds.length === 0) {
@@ -118,35 +206,40 @@ export function StoreLookupPage() {
 
     localStorage.setItem(LAST_INPUT_KEY, text)
     setLoading(true)
-    setResults(storeIds.map((storeId) => ({ status: 'loading', storeId })))
+    setResults(storeIds.map((storeId) => ({ status: 'loading', storeId, tier: { status: 'idle' } })))
 
-    await Promise.all(
-      storeIds.map(async (storeId) => {
-        try {
-          const store = await fetchGameStore(storeId)
-          setResults((prev) =>
-            prev.map((r) => (r.storeId === storeId ? { status: 'ok', storeId, store } : r))
-          )
-        } catch (err) {
-          setResults((prev) =>
-            prev.map((r) =>
-              r.storeId === storeId
-                ? { status: 'error', storeId, error: err.message || 'Failed to load store' }
-                : r
-            )
-          )
-        }
-      })
-    )
+    const loadedStores = []
+
+    // Limit concurrent store-info requests so we don't fire dozens of
+    // simultaneous serverless invocations at once.
+    await mapWithConcurrency(storeIds, 8, async (storeId) => {
+      try {
+        const store = await fetchGameStore(storeId)
+        patchResult(storeId, { status: 'ok', store })
+        loadedStores.push({ storeId, store })
+      } catch (err) {
+        patchResult(storeId, { status: 'error', error: err.message || 'Failed to load store' })
+      }
+    })
 
     setLoading(false)
+
+    // Tier status is a second, heavier pass (event history + per-event
+    // registrations) — run it after store cards are up, with its own
+    // (lower) concurrency cap since each store fans out into several
+    // more requests internally.
+    await mapWithConcurrency(loadedStores, 4, ({ storeId, store }) => loadTierStatus(storeId, store))
   }
 
   // Auto-load once on first visit so the page is useful without an extra click.
+  // Deferred to the next tick (rather than called synchronously in the effect
+  // body) so the resulting setState calls don't trigger cascading renders.
   useEffect(() => {
     if (hasAutoLoaded.current) return
     hasAutoLoaded.current = true
-    if (input) runLookup(input)
+    if (!input) return
+    const id = setTimeout(() => runLookup(input), 0)
+    return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -154,6 +247,12 @@ export function StoreLookupPage() {
     e.preventDefault()
     runLookup(input)
   }
+
+  const tiersDone = results.filter((r) => r.status === 'ok' && r.tier?.status === 'ok')
+  const tiersPending = results.some(
+    (r) => r.status === 'ok' && (!r.tier || r.tier.status === 'idle' || r.tier.status === 'loading')
+  )
+  const onPaceCount = tiersDone.filter((r) => r.tier.data.meetsProvisionalLegendary).length
 
   return (
     <div className="w-full px-6 py-8">
@@ -163,7 +262,8 @@ export function StoreLookupPage() {
         </h1>
         <p className="text-sm text-gray-500">
           Paste one or more Ravensburger Play store IDs or store URLs (one per line, or separated by commas)
-          to look up store details.
+          to look up store details and check progress toward provisional Legendary tier status for the{' '}
+          {PRORATE_WINDOW_LABEL} pro-rating window.
         </p>
       </div>
 
@@ -183,6 +283,14 @@ export function StoreLookupPage() {
           {loading ? 'Loading…' : 'Look Up Stores'}
         </button>
       </form>
+
+      {results.length > 0 && (
+        <div className="mb-4 text-sm text-gray-600">
+          {tiersPending
+            ? 'Checking pro-rated Legendary tier status for each store…'
+            : `${onPaceCount} of ${tiersDone.length} stores on pace for provisional Legendary status (${PRORATE_WINDOW_LABEL}).`}
+        </div>
+      )}
 
       {results.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -29,6 +29,7 @@ const TITLES = {
   '/practice-plan': 'Practice Plan',
   '/leaderboard': 'Leaderboard',
   '/tournament-lookup': 'Tournament Lookup',
+  '/store-lookup': 'Store Lookup',
   '/lore-tracker': 'Lore Tracker',
   '/admin': 'Admin',
 }

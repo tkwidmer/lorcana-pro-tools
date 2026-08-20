@@ -14,6 +14,83 @@ export async function fetchEventDetails(eventId) {
   }
 }
 
+export async function fetchGameStore(storeId) {
+  try {
+    const response = await fetch(`/api/tournament?type=store&storeId=${encodeURIComponent(storeId)}`)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || error.error || `Failed to fetch store ${storeId}`)
+    }
+
+    return await response.json()
+  } catch (err) {
+    console.error('Game store fetch error:', err)
+    throw err
+  }
+}
+
+// Fetches every Disney Lorcana event ever run at a store, paginating until
+// exhausted. `numericStoreId` is the store's internal integer id
+// (`store.store.id` from fetchGameStore), not the store-page UUID.
+export async function fetchAllStoreEvents(numericStoreId) {
+  const allResults = []
+  let page = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const response = await fetch(
+      `/api/tournament?type=storeEvents&storeNumericId=${encodeURIComponent(numericStoreId)}&page=${page}&pageSize=100`
+    )
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.detail || error.error || `Failed to fetch events for store ${numericStoreId}`)
+    }
+    const data = await response.json()
+    allResults.push(...(data.results ?? []))
+    hasMore = data.next_page_number !== null && data.next_page_number !== undefined
+    page = data.next_page_number || page + 1
+  }
+
+  return allResults
+}
+
+// Runs `fn` over `items` with at most `limit` calls in flight at once.
+export async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length)
+  let index = 0
+
+  async function worker() {
+    while (index < items.length) {
+      const i = index++
+      results[i] = await fn(items[i], i)
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+// Fetches registrations for each event and returns the count of distinct
+// registered users across all of them — a store's "unique fans" for a period,
+// as opposed to raw ticket count which double-counts repeat attendees.
+export async function fetchUniqueFanCount(events, concurrency = 5) {
+  const userIds = new Set()
+
+  await mapWithConcurrency(events, concurrency, async (event) => {
+    try {
+      const regs = await fetchAllRegistrations(event.id)
+      for (const reg of regs) {
+        if (reg.user?.id != null) userIds.add(reg.user.id)
+      }
+    } catch {
+      // Skip events whose registrations fail to load; don't block the rest
+    }
+  })
+
+  return userIds.size
+}
+
 export function getTournamentStructure(eventDetails) {
   if (!eventDetails || !eventDetails.tournament_phases) return null
 

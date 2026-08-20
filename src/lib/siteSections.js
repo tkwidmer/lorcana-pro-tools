@@ -108,6 +108,11 @@ export const SECTIONS = [
         name: 'Lore Tracker',
         description: 'Mobile-optimized lore counter for in-game tracking. Tap left to decrease, tap right to increase. Includes full audit log of all changes.',
       },
+      {
+        path: '/store-lookup',
+        name: 'Store Lookup',
+        description: 'Paste one or more Ravensburger Play store IDs or store URLs to look up store details — address, contact info, seat count, and store types.',
+      },
     ],
   },
   {

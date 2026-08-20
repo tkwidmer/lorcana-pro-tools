@@ -3,8 +3,18 @@ import { fetchStats, fetchCurrentMmr } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
 import { buildCardIdToName } from '../lib/cardIdResolver'
 import { InkIcons } from '../components/InkIcons'
+import { MetaTrendChart } from '../components/MetaTrendChart'
+import { ShareCardModal } from '../components/ShareCardModal'
+import { generateMetaSynthesisImage } from '../lib/metaSynthesisShareImage'
 import { RANK_TIERS, tierForMmr, ranksAtOrAbove, ranksBelow } from '../lib/rankTiers'
-import { buildSynthesis, compareRankBands, compareWeeks, listReliableArchetypes } from '../lib/metaSynthesis'
+import {
+  buildSynthesis,
+  compareRankBands,
+  compareWeeks,
+  listReliableArchetypes,
+  topPlayedArchetypes,
+  aggregateArchetypes,
+} from '../lib/metaSynthesis'
 
 const FORMATS = [
   { id: 'core', label: 'Core' },
@@ -51,21 +61,51 @@ function periodFromWeeks(weekDates) {
   return `weeks:${[...weekDates].sort().join(',')}`
 }
 
+// Remembers the user's queue/period/band/deck choices across visits, the
+// same pattern WinrateMatrixPage uses for its own filters.
+const FILTERS_KEY = 'lorcana_meta_synthesis_filters'
+
+function loadStoredFilters() {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return {
+      format: typeof parsed.format === 'string' ? parsed.format : 'core',
+      mode: typeof parsed.mode === 'string' ? parsed.mode : 'bo1',
+      periodMode: parsed.periodMode === 'all_time' ? 'all_time' : 'weeks',
+      selectedWeeks: Array.isArray(parsed.selectedWeeks) ? parsed.selectedWeeks.filter(d => typeof d === 'string') : [],
+      band: typeof parsed.band === 'string' ? parsed.band : 'ALL',
+      focusArchetypeKey: typeof parsed.focusArchetypeKey === 'string' ? parsed.focusArchetypeKey : '',
+    }
+  } catch {
+    return null
+  }
+}
+
 export function MetaSynthesisPage() {
-  const [format, setFormat] = useState('core')
-  const [mode, setMode] = useState('bo1')
-  const [bootstrapped, setBootstrapped] = useState(false) // becomes true once the latest week is known
-  const [periodMode, setPeriodMode] = useState('weeks') // 'weeks' | 'all_time'
-  const [selectedWeeks, setSelectedWeeks] = useState([]) // array of week startDates
+  const stored = loadStoredFilters()
+  const [format, setFormat] = useState(stored?.format ?? 'core')
+  const [mode, setMode] = useState(stored?.mode ?? 'bo1')
+  // Becomes true once the latest week is known. A restored config already
+  // has a concrete period, so it can skip the "learn the latest week first"
+  // bootstrap fetch that a fresh session needs.
+  const [bootstrapped, setBootstrapped] = useState(() => !!stored && (stored.periodMode === 'all_time' || stored.selectedWeeks.length > 0))
+  const [periodMode, setPeriodMode] = useState(stored?.periodMode ?? 'weeks') // 'weeks' | 'all_time'
+  const [selectedWeeks, setSelectedWeeks] = useState(stored?.selectedWeeks ?? []) // array of week startDates
   const [availableWeeks, setAvailableWeeks] = useState([])
-  const [band, setBand] = useState('ALL')
-  const [bandAutoSet, setBandAutoSet] = useState(true)
+  const [band, setBand] = useState(stored?.band ?? 'ALL')
+  // A restored band is treated as a deliberate choice (even "All Players")
+  // rather than something to silently override with the detected MMR tier.
+  const [bandAutoSet, setBandAutoSet] = useState(!stored)
   const [detectedTier, setDetectedTier] = useState(null)
-  const [focusArchetypeKey, setFocusArchetypeKey] = useState('') // '' = no deck picked, overall snapshot
+  const [focusArchetypeKey, setFocusArchetypeKey] = useState(stored?.focusArchetypeKey ?? '') // '' = no deck picked, overall snapshot
 
   const [stats, setStats] = useState(null)
   const [lowerStats, setLowerStats] = useState(null)
   const [weekTrend, setWeekTrend] = useState(null)
+  const [trendData, setTrendData] = useState(null)
+  const [shareCard, setShareCard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -74,6 +114,10 @@ export function MetaSynthesisPage() {
 
   const queue = queueId(format, mode)
   const weekKey = [...selectedWeeks].sort().join(',')
+
+  useEffect(() => {
+    localStorage.setItem(FILTERS_KEY, JSON.stringify({ format, mode, periodMode, selectedWeeks, band, focusArchetypeKey }))
+  }, [format, mode, periodMode, selectedWeeks, band, focusArchetypeKey])
 
   // A different queue has an entirely different archetype pool, so switching
   // either drops any deck focus rather than carrying a stale/meaningless
@@ -222,6 +266,56 @@ export function MetaSynthesisPage() {
     return () => { cancelled = true }
   }, [stats, periodMode, weekKey, availableWeeks, band, queue, periodLabel, selectedWeeks])
 
+  const availableWeeksKey = availableWeeks.map(w => w.startDate).join(',')
+
+  // Play-rate trend chart: independent of the period selector — always
+  // tracks the most recent handful of weeks (regardless of which
+  // week/range is currently selected above) so it reads as "recent
+  // trajectory" context rather than duplicating whatever's selected.
+  useEffect(() => {
+    let cancelled = false
+    async function run() {
+      if (availableWeeks.length < 2) {
+        setTrendData(null)
+        return
+      }
+      const sorted = [...availableWeeks].sort((a, b) => a.startDate.localeCompare(b.startDate))
+      const recentWeeks = sorted.slice(-6)
+      try {
+        const ranks = band === 'ALL' ? [] : ranksAtOrAbove(band)
+        const weekStats = await Promise.all(
+          recentWeeks.map(w => fetchStats({ queue, period: `week:${w.startDate}`, ranks }))
+        )
+        if (cancelled) return
+
+        // Track whichever archetypes are most played in the latest week.
+        const latest = weekStats[weekStats.length - 1]
+        const trackedKeys = topPlayedArchetypes(latest, { limit: 3 }).map(a => a.key)
+        if (trackedKeys.length === 0) {
+          setTrendData(null)
+          return
+        }
+
+        const series = trackedKeys.map(key => {
+          let name = key
+          const values = weekStats.map(ws => {
+            const totalGames = ws?.activity?.totalGames ?? 0
+            const found = aggregateArchetypes(ws?.profiles).find(a => a.key === key)
+            if (found) name = found.name
+            return found && totalGames > 0 ? (found.gamesPlayed / totalGames) * 100 : 0
+          })
+          return { key, name, values }
+        })
+
+        setTrendData({ weeks: recentWeeks, series })
+      } catch {
+        if (!cancelled) setTrendData(null)
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [queue, band, availableWeeksKey, availableWeeks])
+
   const deckOptions = useMemo(() => (stats ? listReliableArchetypes(stats) : []), [stats])
 
   const synthesis = stats ? buildSynthesis(stats, {
@@ -237,13 +331,44 @@ export function MetaSynthesisPage() {
     lowerLabel: 'lower ranks',
   }) : null
 
+  async function handleShare() {
+    if (!synthesis) return
+    const allBlocks = [
+      ...synthesis.blocks,
+      ...(comparison?.blocks ?? []),
+      ...(weekTrend?.blocks ?? []),
+    ]
+    const subtitle = `${queueName} · ${periodLabel} · ${band === 'ALL' ? 'All Players' : `${band}+`}`
+    const canvas = await generateMetaSynthesisImage({
+      title: 'Meta Synthesis',
+      subtitle,
+      blocks: allBlocks,
+      topPlayed: synthesis.topPlayed,
+    })
+    setShareCard({
+      canvas,
+      imageUrl: canvas.toDataURL('image/jpeg', 0.95),
+      filename: `meta-synthesis-${queue}.jpg`,
+    })
+  }
+
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Meta Synthesis</h1>
-        <p className="text-sm text-gray-500">
-          A plain-language read on what's actually happening in the meta right now — most-played archetypes, win rates, and how it shifts by rank.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Meta Synthesis</h1>
+          <p className="text-sm text-gray-500">
+            A plain-language read on what's actually happening in the meta right now — most-played archetypes, win rates, and how it shifts by rank.
+          </p>
+        </div>
+        {synthesis && (
+          <button
+            onClick={handleShare}
+            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
+          >
+            Share Card
+          </button>
+        )}
       </div>
 
       <div className="mb-6 flex flex-wrap gap-6">
@@ -382,6 +507,17 @@ export function MetaSynthesisPage() {
           </div>
 
           <div className="space-y-6">
+            {trendData && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Play Rate Trend
+                </div>
+                <div className="p-4">
+                  <MetaTrendChart weeks={trendData.weeks} series={trendData.series} />
+                </div>
+              </div>
+            )}
+
             {synthesis.topPlayed.length > 0 && (
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -509,6 +645,16 @@ export function MetaSynthesisPage() {
             )}
           </div>
         </div>
+      )}
+
+      {shareCard && (
+        <ShareCardModal
+          shareCard={shareCard}
+          onClose={() => setShareCard(null)}
+          title="Share Meta Synthesis"
+          altText="Meta synthesis summary card"
+          shareTitle="Lorcana Meta Synthesis"
+        />
       )}
     </div>
   )

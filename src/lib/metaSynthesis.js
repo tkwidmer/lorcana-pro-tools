@@ -1,7 +1,8 @@
 // Turns a raw /api/stats/meta response (see archetypeStats.js for the shape
 // duels.ink returns) into a plain-English synthesis: what's most played,
-// what's winning, and how that shifts across rank bands. Pure functions only
-// so this stays unit-testable independent of MetaSynthesisPage's fetching/UI.
+// what's winning, and how that shifts across rank bands and over time. Pure
+// functions only so this stays unit-testable independent of
+// MetaSynthesisPage's fetching/UI.
 
 import { getCuratedArchetypes } from './archetypeStats'
 
@@ -78,6 +79,92 @@ export function bottomWinRateArchetypes(stats, { limit = 3, minGames } = {}) {
     .slice(0, limit)
 }
 
+// Every archetype with enough games to be worth naming — used to populate
+// the "Pick your deck" selector. Sorted by play rate desc.
+export function listReliableArchetypes(stats, { minGames } = {}) {
+  const totalGames = stats?.activity?.totalGames ?? 0
+  const floor = minGames ?? (stats?.meta?.archetypeMinDisplayGames ?? 50)
+  return withPlayRate(aggregateArchetypes(stats?.profiles), totalGames)
+    .filter(a => a.gamesPlayed >= floor)
+    .sort((a, b) => b.gamesPlayed - a.gamesPlayed)
+}
+
+// Head-to-head record for one aggregated archetype against every other
+// archetype it has faced, rolling duels.ink's per-build-variant
+// `archetypeMatchups` rows up to the same colors+archetypeName grouping
+// `aggregateArchetypes` uses everywhere else. Returns null if `archetypeKey`
+// isn't a known archetype in this stats response.
+export function archetypeMatchupSummary(stats, archetypeKey, { minGames = 30 } = {}) {
+  const aggregates = aggregateArchetypes(stats?.profiles)
+  const idToKey = new Map()
+  for (const a of aggregates) for (const id of a.ids) idToKey.set(id, a.key)
+  const keyToName = new Map(aggregates.map(a => [a.key, a.name]))
+  if (!keyToName.has(archetypeKey)) return null
+
+  const totals = new Map() // opponentKey -> { games, wins }
+  for (const m of stats?.archetypeMatchups ?? []) {
+    const keyA = idToKey.get(m.archetypeIdA)
+    const keyB = idToKey.get(m.archetypeIdB)
+    if (keyA === archetypeKey && keyB) {
+      const t = totals.get(keyB) ?? { games: 0, wins: 0 }
+      t.games += m.games
+      t.wins += m.winsA
+      totals.set(keyB, t)
+    } else if (keyB === archetypeKey && keyA && keyA !== keyB) {
+      const t = totals.get(keyA) ?? { games: 0, wins: 0 }
+      t.games += m.games
+      t.wins += (m.games - m.winsA)
+      totals.set(keyA, t)
+    }
+  }
+
+  const rows = [...totals.entries()]
+    .map(([key, t]) => ({
+      key,
+      name: keyToName.get(key) ?? key,
+      games: t.games,
+      winRate: t.games > 0 ? (t.wins / t.games) * 100 : 0,
+      isMirror: key === archetypeKey,
+    }))
+    .filter(r => r.games >= minGames)
+    .sort((a, b) => b.games - a.games)
+
+  const ranked = rows.filter(r => !r.isMirror).sort((a, b) => b.winRate - a.winRate)
+  const mirror = rows.find(r => r.isMirror) ?? null
+
+  return {
+    rows,
+    best: ranked[0] ?? null,
+    worst: ranked.length > 0 ? ranked[ranked.length - 1] : null,
+    mirror,
+  }
+}
+
+// The cards most correlated with winning inside one archetype (duels.ink's
+// per-card "lift" stat). Pulled from whichever build-variant profile in the
+// aggregated group has the largest sample, since lift isn't meaningfully
+// additive across variants the way games/wins are.
+export function topSignatureCards(stats, archetypeKey, { limit = 3, resolveName = id => id } = {}) {
+  const aggregates = aggregateArchetypes(stats?.profiles)
+  const agg = aggregates.find(a => a.key === archetypeKey)
+  if (!agg) return []
+
+  const variants = (stats?.profiles ?? []).filter(p => agg.ids.includes(p.id))
+  const representative = variants.sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0]
+
+  return (representative?.cardLift ?? [])
+    .filter(c => c.lift > 0)
+    .sort((a, b) => b.lift - a.lift)
+    .slice(0, limit)
+    .map(c => ({
+      cardId: c.cardId,
+      name: resolveName(c.cardId),
+      lift: c.lift,
+      winRateWith: c.winRateWith,
+      presence: c.presence,
+    }))
+}
+
 function pct(n, digits = 1) {
   return `${n.toFixed(digits)}%`
 }
@@ -94,14 +181,26 @@ function joinEnglish(items) {
 }
 
 // Builds the plain-text synthesis paragraphs shown on MetaSynthesisPage.
-// `context` = { queueLabel, periodLabel, bandLabel }.
+// `context` = { queueLabel, periodLabel, bandLabel, focusArchetypeKey,
+// resolveCardName }. When `focusArchetypeKey` names a known archetype, two
+// extra paragraphs are appended covering its matchup spread and signature
+// cards — otherwise the synthesis stays a general meta overview.
 export function buildSynthesis(stats, context = {}) {
-  const { queueLabel = 'this queue', periodLabel = 'this period', bandLabel = 'all ranks' } = context
+  const {
+    queueLabel = 'this queue',
+    periodLabel = 'this period',
+    bandLabel = 'all ranks',
+    focusArchetypeKey = null,
+    resolveCardName = id => id,
+  } = context
   const totalGames = stats?.activity?.totalGames ?? 0
   const paragraphs = []
 
   if (!totalGames) {
-    return { paragraphs: ['No games recorded for this queue, period, and rank band yet.'], topPlayed: [], topWinRate: [], underperformers: [] }
+    return {
+      paragraphs: ['No games recorded for this queue, period, and rank band yet.'],
+      topPlayed: [], topWinRate: [], underperformers: [], focusMatchups: null, focusCards: [],
+    }
   }
 
   const topPlayed = topPlayedArchetypes(stats, { limit: 5 })
@@ -159,45 +258,107 @@ export function buildSynthesis(stats, context = {}) {
     )
   }
 
-  return { paragraphs, topPlayed, topWinRate, underperformers }
+  let focusMatchups = null
+  let focusCards = []
+  const focus = focusArchetypeKey ? aggregateArchetypes(stats.profiles).find(a => a.key === focusArchetypeKey) : null
+  if (focus) {
+    focusMatchups = archetypeMatchupSummary(stats, focusArchetypeKey)
+    focusCards = topSignatureCards(stats, focusArchetypeKey, { resolveName: resolveCardName })
+
+    if (focusMatchups && (focusMatchups.best || focusMatchups.worst)) {
+      const bits = []
+      if (focusMatchups.best) {
+        bits.push(`its best matchup is ${focusMatchups.best.name} at ${pct(focusMatchups.best.winRate)} win rate (${focusMatchups.best.games.toLocaleString()} games)`)
+      }
+      if (focusMatchups.worst && focusMatchups.worst.key !== focusMatchups.best?.key) {
+        bits.push(`its toughest is ${focusMatchups.worst.name} at ${pct(focusMatchups.worst.winRate)}`)
+      }
+      let sentence = `Playing ${focus.name}? ${bits.join('; ')}.`
+      if (focusMatchups.mirror) {
+        sentence += ` The mirror runs ${pct(focusMatchups.mirror.winRate)}.`
+      }
+      paragraphs.push(sentence)
+    }
+
+    if (focusCards.length > 0) {
+      paragraphs.push(
+        `Its biggest signature cards are ${joinEnglish(focusCards.map(c => `${c.name} (${pct(c.winRateWith)} win rate when included)`))}.`
+      )
+    }
+  }
+
+  return { paragraphs, topPlayed, topWinRate, underperformers, focusMatchups, focusCards }
+}
+
+// Diffs archetype play-rate share between two stats responses over the same
+// queue — used both for the rank-band comparison and the week-over-week
+// trend, which only differ in which two `/api/stats/meta` calls they diff
+// and how the result reads in prose.
+function diffArchetypeShares(aStats, bStats, minDelta) {
+  const aTotal = aStats?.activity?.totalGames ?? 0
+  const bTotal = bStats?.activity?.totalGames ?? 0
+  if (!aTotal || !bTotal) return null
+
+  const aMap = new Map(withPlayRate(aggregateArchetypes(aStats.profiles), aTotal).map(x => [x.key, x]))
+  const bMap = new Map(withPlayRate(aggregateArchetypes(bStats.profiles), bTotal).map(x => [x.key, x]))
+
+  const deltas = []
+  for (const [key, a] of aMap) {
+    const bRate = bMap.get(key)?.playRate ?? 0
+    deltas.push({ key, name: a.name, aPlayRate: a.playRate, bPlayRate: bRate, delta: a.playRate - bRate })
+  }
+  for (const [key, b] of bMap) {
+    if (!aMap.has(key)) deltas.push({ key, name: b.name, aPlayRate: 0, bPlayRate: b.playRate, delta: -b.playRate })
+  }
+
+  return {
+    risers: deltas.filter(d => d.delta >= minDelta).sort((x, y) => y.delta - x.delta).slice(0, 3),
+    fallers: deltas.filter(d => d.delta <= -minDelta).sort((x, y) => x.delta - y.delta).slice(0, 3),
+  }
 }
 
 // Compares the same queue/period across two rank bands (e.g. the user's
 // selected band vs everyone below it) to surface what shifts with MMR.
 // `upperLabel`/`lowerLabel` describe the two bands in the returned paragraph.
 export function compareRankBands(upperStats, lowerStats, { upperLabel, lowerLabel, minDelta = 3 } = {}) {
-  const upperTotal = upperStats?.activity?.totalGames ?? 0
-  const lowerTotal = lowerStats?.activity?.totalGames ?? 0
-  if (!upperTotal || !lowerTotal) return { risers: [], fallers: [], paragraph: null }
-
-  const upper = new Map(withPlayRate(aggregateArchetypes(upperStats.profiles), upperTotal).map(a => [a.key, a]))
-  const lower = new Map(withPlayRate(aggregateArchetypes(lowerStats.profiles), lowerTotal).map(a => [a.key, a]))
-
-  const deltas = []
-  for (const [key, up] of upper) {
-    const down = lower.get(key)
-    const lowerPlayRate = down?.playRate ?? 0
-    deltas.push({ key, name: up.name, upperPlayRate: up.playRate, lowerPlayRate, delta: up.playRate - lowerPlayRate })
-  }
-  for (const [key, down] of lower) {
-    if (!upper.has(key)) {
-      deltas.push({ key, name: down.name, upperPlayRate: 0, lowerPlayRate: down.playRate, delta: -down.playRate })
-    }
-  }
-
-  const risers = deltas.filter(d => d.delta >= minDelta).sort((a, b) => b.delta - a.delta).slice(0, 3)
-  const fallers = deltas.filter(d => d.delta <= -minDelta).sort((a, b) => a.delta - b.delta).slice(0, 3)
+  const diff = diffArchetypeShares(upperStats, lowerStats, minDelta)
+  if (!diff) return { risers: [], fallers: [], paragraph: null }
+  const { risers, fallers } = diff
 
   let paragraph = null
   if (risers.length > 0 || fallers.length > 0) {
     const parts = []
     if (risers.length > 0) {
-      parts.push(`more common at ${upperLabel} than ${lowerLabel}: ${joinEnglish(risers.map(r => `${r.name} (${pct(r.upperPlayRate)} vs ${pct(r.lowerPlayRate)})`))}`)
+      parts.push(`more common at ${upperLabel} than ${lowerLabel}: ${joinEnglish(risers.map(r => `${r.name} (${pct(r.aPlayRate)} vs ${pct(r.bPlayRate)})`))}`)
     }
     if (fallers.length > 0) {
-      parts.push(`more common at ${lowerLabel}: ${joinEnglish(fallers.map(f => `${f.name} (${pct(f.lowerPlayRate)} vs ${pct(f.upperPlayRate)})`))}`)
+      parts.push(`more common at ${lowerLabel}: ${joinEnglish(fallers.map(f => `${f.name} (${pct(f.bPlayRate)} vs ${pct(f.aPlayRate)})`))}`)
     }
     paragraph = `The meta shifts with rank — ${parts.join('; ')}.`
+  }
+
+  return { risers, fallers, paragraph }
+}
+
+// Compares the current period's stats against the immediately preceding
+// week's, to surface week-over-week movement — the meta shifts fast, so
+// "what's different from last week" is often more useful than a static
+// snapshot. `thisLabel`/`lastLabel` describe the two periods in the prose.
+export function compareWeeks(thisWeekStats, lastWeekStats, { thisLabel = 'this week', lastLabel = 'last week', minDelta = 3 } = {}) {
+  const diff = diffArchetypeShares(thisWeekStats, lastWeekStats, minDelta)
+  if (!diff) return { risers: [], fallers: [], paragraph: null }
+  const { risers, fallers } = diff
+
+  let paragraph = null
+  if (risers.length > 0 || fallers.length > 0) {
+    const parts = []
+    if (risers.length > 0) {
+      parts.push(`gaining ground: ${joinEnglish(risers.map(r => `${r.name} (${pct(r.aPlayRate)}, up from ${pct(r.bPlayRate)})`))}`)
+    }
+    if (fallers.length > 0) {
+      parts.push(`losing ground: ${joinEnglish(fallers.map(f => `${f.name} (${pct(f.aPlayRate)}, down from ${pct(f.bPlayRate)})`))}`)
+    }
+    paragraph = `From ${lastLabel} to ${thisLabel}, the meta is moving — ${parts.join('; ')}.`
   }
 
   return { risers, fallers, paragraph }

@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { fetchStats, fetchCurrentMmr } from '../lib/duelsApi'
+import { useCards } from '../hooks/useCards'
+import { buildCardIdToName } from '../lib/cardIdResolver'
 import { InkIcons } from '../components/InkIcons'
 import { RANK_TIERS, tierForMmr, ranksAtOrAbove, ranksBelow } from '../lib/rankTiers'
-import { buildSynthesis, compareRankBands } from '../lib/metaSynthesis'
+import { buildSynthesis, compareRankBands, compareWeeks, listReliableArchetypes } from '../lib/metaSynthesis'
 
 const FORMATS = [
   { id: 'core', label: 'Core' },
@@ -44,14 +46,32 @@ export function MetaSynthesisPage() {
   const [band, setBand] = useState('ALL')
   const [bandAutoSet, setBandAutoSet] = useState(true)
   const [detectedTier, setDetectedTier] = useState(null)
+  const [focusArchetypeKey, setFocusArchetypeKey] = useState('') // '' = no deck picked, overall snapshot
 
   const [stats, setStats] = useState(null)
   const [lowerStats, setLowerStats] = useState(null)
+  const [weekTrend, setWeekTrend] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const { cards } = useCards()
+  const cardIdToName = useMemo(() => buildCardIdToName(cards), [cards])
+
   const queue = queueId(format, mode)
   const weekKey = [...selectedWeeks].sort().join(',')
+
+  // A different queue has an entirely different archetype pool, so switching
+  // either drops any deck focus rather than carrying a stale/meaningless
+  // selection across it.
+  const selectFormat = useCallback(newFormat => {
+    setFormat(newFormat)
+    setFocusArchetypeKey('')
+  }, [])
+
+  const selectMode = useCallback(newMode => {
+    setMode(newMode)
+    setFocusArchetypeKey('')
+  }, [])
 
   // Best-effort: center the default band on the signed-in user's own rank
   // in this queue. Only applies while the user hasn't picked a band by hand.
@@ -156,10 +176,45 @@ export function MetaSynthesisPage() {
     return `${weeks.length} weeks (${weeks[0].label.split(' - ')[0]} – ${weeks[weeks.length - 1].label.split(' - ')[1] ?? weeks[weeks.length - 1].label})`
   }, [periodMode, selectedWeeks, availableWeeks])
 
+  // Week-over-week trend: only meaningful when exactly one week is selected
+  // (not all-time, not a combined multi-week range) and there's a preceding
+  // week duels.ink has stats for. Fires a second cheap fetch off the main
+  // stats response rather than blocking it.
+  useEffect(() => {
+    let cancelled = false
+    async function run() {
+      if (!stats || periodMode !== 'weeks' || selectedWeeks.length !== 1 || availableWeeks.length === 0) {
+        setWeekTrend(null)
+        return
+      }
+      const sorted = [...availableWeeks].sort((a, b) => a.startDate.localeCompare(b.startDate))
+      const idx = sorted.findIndex(w => w.startDate === selectedWeeks[0])
+      const prevWeek = idx > 0 ? sorted[idx - 1] : null
+      if (!prevWeek) {
+        setWeekTrend(null)
+        return
+      }
+      try {
+        const ranks = band === 'ALL' ? [] : ranksAtOrAbove(band)
+        const prevStats = await fetchStats({ queue, period: `week:${prevWeek.startDate}`, ranks })
+        if (cancelled) return
+        setWeekTrend(compareWeeks(stats, prevStats, { thisLabel: periodLabel, lastLabel: prevWeek.label }))
+      } catch {
+        if (!cancelled) setWeekTrend(null)
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [stats, periodMode, weekKey, availableWeeks, band, queue, periodLabel, selectedWeeks])
+
+  const deckOptions = useMemo(() => (stats ? listReliableArchetypes(stats) : []), [stats])
+
   const synthesis = stats ? buildSynthesis(stats, {
     queueLabel: queueName,
     periodLabel,
     bandLabel: band === 'ALL' ? 'all players' : `${band}+ players`,
+    focusArchetypeKey: focusArchetypeKey || null,
+    resolveCardName: id => cardIdToName[id] ?? id,
   }) : null
 
   const comparison = (stats && lowerStats) ? compareRankBands(stats, lowerStats, {
@@ -183,7 +238,7 @@ export function MetaSynthesisPage() {
             {FORMATS.map(f => (
               <button
                 key={f.id}
-                onClick={() => setFormat(f.id)}
+                onClick={() => selectFormat(f.id)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   format === f.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
@@ -200,7 +255,7 @@ export function MetaSynthesisPage() {
             {MODES.map(m => (
               <button
                 key={m.id}
-                onClick={() => setMode(m.id)}
+                onClick={() => selectMode(m.id)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   mode === m.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
@@ -279,6 +334,20 @@ export function MetaSynthesisPage() {
             ))}
           </div>
         </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">Your Deck</label>
+          <select
+            value={focusArchetypeKey}
+            onChange={e => setFocusArchetypeKey(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white max-w-xs"
+          >
+            <option value="">None — overall snapshot</option>
+            {deckOptions.map(a => (
+              <option key={a.key} value={a.key}>{a.name} ({a.playRate.toFixed(1)}%)</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading && <p className="text-sm text-gray-500">Loading meta data...</p>}
@@ -297,6 +366,9 @@ export function MetaSynthesisPage() {
             ))}
             {comparison?.paragraph && (
               <p className="text-gray-800 leading-relaxed">{comparison.paragraph}</p>
+            )}
+            {weekTrend?.paragraph && (
+              <p className="text-gray-800 leading-relaxed">{weekTrend.paragraph}</p>
             )}
           </div>
 
@@ -363,6 +435,34 @@ export function MetaSynthesisPage() {
                         <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
                           {a.gamesPlayed.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {synthesis.focusCards.length > 0 && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Signature Cards — {deckOptions.find(a => a.key === focusArchetypeKey)?.name ?? 'Selected Deck'}
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase tracking-wide text-gray-400">
+                    <tr>
+                      <th className="text-left px-4 py-2">Card</th>
+                      <th className="text-right px-4 py-2">Win Rate With</th>
+                      <th className="text-right px-4 py-2 hidden sm:table-cell">Presence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {synthesis.focusCards.map(c => (
+                      <tr key={c.cardId} className="border-t border-gray-100">
+                        <td className="px-4 py-2">{c.name}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{c.winRateWith.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
+                          {(c.presence * 100).toFixed(1)}%
                         </td>
                       </tr>
                     ))}

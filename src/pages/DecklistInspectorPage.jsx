@@ -15,7 +15,7 @@ const SAMPLE = `4x Maui - Hero to All
 3x Cinderella's Castle
 4x Prince Phillip - Vanquisher of Foes`
 
-const MAX_SELECTED = 3
+const MAX_SELECTED = 4
 const DECK_TEXT_KEY = 'decklistInspector.deckText'
 const COST_BUCKET_LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9+']
 
@@ -416,7 +416,7 @@ export function DecklistInspectorPage() {
                 Click cards in the decklist to pin their full art here
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {selected.map(entry => (
                   <FullArtCard key={entry.key} entry={entry} onRemove={toggleSelect} />
                 ))}

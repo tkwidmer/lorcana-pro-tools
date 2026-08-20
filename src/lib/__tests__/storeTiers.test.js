@@ -6,6 +6,11 @@ import {
   eventsInWindow,
   computeTierProgress,
   LEGENDARY_PRORATED_REQUIREMENTS,
+  deriveSeasons,
+  standingWindowEvents,
+  computeStandingTierStatus,
+  STANDARD_MAINTENANCE_REQUIREMENTS,
+  LEGENDARY_MAINTENANCE_REQUIREMENTS,
 } from '../storeTiers'
 
 function makeEvent(overrides = {}) {
@@ -118,5 +123,136 @@ describe('computeTierProgress', () => {
   it('treats missing starting_player_count as zero tickets', () => {
     const events = [makeEvent({ starting_player_count: undefined })]
     expect(computeTierProgress(events, 0).eventTickets).toBe(0)
+  })
+})
+
+describe('deriveSeasons', () => {
+  it('anchors one season per Prerelease, in chronological order', () => {
+    const events = [
+      makeEvent({ id: 1, name: 'Weekly Play', start_datetime: '2026-01-10T00:00:00Z' }),
+      makeEvent({ id: 2, name: 'WinterSpell Prerelease', start_datetime: '2026-02-19T00:00:00Z' }),
+      makeEvent({ id: 3, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-05-09T00:00:00Z' }),
+      makeEvent({ id: 4, name: 'Hyperia City Prerelease', start_datetime: '2026-07-18T00:00:00Z' }),
+    ]
+    const seasons = deriveSeasons(events)
+    expect(seasons.map((s) => s.name)).toEqual([
+      'WinterSpell Prerelease',
+      'Wilds Unknown Prerelease (Sealed)',
+      'Hyperia City Prerelease',
+    ])
+    expect(seasons[0].end).toBe(seasons[1].start)
+    expect(seasons[2].end).toBeNull() // most recent season is ongoing
+  })
+
+  it('merges Prerelease events run close together into a single season', () => {
+    const events = [
+      makeEvent({ id: 1, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-05-09T00:00:00Z' }),
+      makeEvent({ id: 2, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-05-14T00:00:00Z' }), // 5 days later
+    ]
+    expect(deriveSeasons(events)).toHaveLength(1)
+  })
+
+  it('ignores unreported (upcoming/in-progress) Prerelease events', () => {
+    const events = [makeEvent({ name: 'Hyperia City Prerelease', display_status: 'upcoming' })]
+    expect(deriveSeasons(events)).toHaveLength(0)
+  })
+
+  it('returns an empty list when there is no Prerelease history', () => {
+    expect(deriveSeasons([makeEvent({ name: 'Weekly Play' })])).toHaveLength(0)
+    expect(deriveSeasons(undefined)).toHaveLength(0)
+  })
+})
+
+describe('standingWindowEvents', () => {
+  it('includes only events from the trailing N seasons onward', () => {
+    const events = [
+      makeEvent({ id: 1, name: 'Weekly Play', start_datetime: '2025-06-01T00:00:00Z' }), // before any season
+      makeEvent({ id: 2, name: 'Set A Prerelease', start_datetime: '2025-09-01T00:00:00Z' }),
+      makeEvent({ id: 3, name: 'Weekly Play', start_datetime: '2025-10-01T00:00:00Z' }),
+      makeEvent({ id: 4, name: 'Set B Prerelease', start_datetime: '2026-01-01T00:00:00Z' }),
+      makeEvent({ id: 5, name: 'Weekly Play', start_datetime: '2026-02-01T00:00:00Z' }),
+    ]
+    const { recentSeasons, eligibleEvents } = standingWindowEvents(events, 1)
+    expect(recentSeasons).toHaveLength(1)
+    expect(eligibleEvents.map((e) => e.id)).toEqual([4, 5])
+  })
+
+  it('returns no eligible events when there is no Prerelease history', () => {
+    expect(standingWindowEvents([makeEvent({ name: 'Weekly Play' })]).eligibleEvents).toEqual([])
+  })
+})
+
+describe('computeStandingTierStatus', () => {
+  function seasonEvents({ seasons, ticketsPerEvent = 30, eventsPerSeason = 13 }) {
+    const events = []
+    seasons.forEach((seasonStart, seasonIndex) => {
+      events.push(
+        makeEvent({
+          id: `${seasonIndex}-prerelease`,
+          name: `Set ${seasonIndex} Prerelease`,
+          start_datetime: seasonStart,
+          starting_player_count: ticketsPerEvent,
+        })
+      )
+      for (let i = 1; i < eventsPerSeason; i++) {
+        const d = new Date(seasonStart)
+        d.setDate(d.getDate() + i * 5)
+        events.push(
+          makeEvent({
+            id: `${seasonIndex}-${i}`,
+            name: 'Weekly Play',
+            start_datetime: d.toISOString(),
+            starting_player_count: ticketsPerEvent,
+          })
+        )
+      }
+    })
+    return events
+  }
+
+  it('reports insufficient history with no Prerelease events at all', () => {
+    const status = computeStandingTierStatus([makeEvent({ name: 'Weekly Play' })], 0)
+    expect(status.insufficientHistory).toBe(true)
+    expect(status.tier).toBe('welcome')
+  })
+
+  it('classifies Legendary when totals clear the maintenance bar across 4 seasons', () => {
+    const seasons = ['2025-01-01T00:00:00Z', '2025-04-01T00:00:00Z', '2025-07-01T00:00:00Z', '2025-10-01T00:00:00Z']
+    const events = seasonEvents({ seasons, eventsPerSeason: 13, ticketsPerEvent: 40 }) // 52 events, 2080 tickets
+    const status = computeStandingTierStatus(events, 60)
+
+    expect(status.seasonsAvailable).toBe(4)
+    expect(status.metrics.totalEvents).toBeGreaterThanOrEqual(LEGENDARY_MAINTENANCE_REQUIREMENTS.totalEvents)
+    expect(status.metrics.prereleaseCount).toBe(4)
+    expect(status.tier).toBe('legendary')
+  })
+
+  it('classifies Standard when totals clear the Standard but not the Legendary bar', () => {
+    const seasons = ['2025-01-01T00:00:00Z', '2025-04-01T00:00:00Z', '2025-07-01T00:00:00Z', '2025-10-01T00:00:00Z']
+    const events = seasonEvents({ seasons, eventsPerSeason: 7, ticketsPerEvent: 10 }) // 28 events, 280 tickets
+    const status = computeStandingTierStatus(events, 26)
+
+    expect(status.metrics.totalEvents).toBeGreaterThanOrEqual(STANDARD_MAINTENANCE_REQUIREMENTS.totalEvents)
+    expect(status.metrics.totalEvents).toBeLessThan(LEGENDARY_MAINTENANCE_REQUIREMENTS.totalEvents)
+    expect(status.tier).toBe('standard')
+  })
+
+  it('falls back to Welcome when metrics fall short', () => {
+    const seasons = ['2025-10-01T00:00:00Z']
+    const events = seasonEvents({ seasons, eventsPerSeason: 3, ticketsPerEvent: 5 })
+    const status = computeStandingTierStatus(events, 3)
+
+    expect(status.tier).toBe('welcome')
+    expect(status.seasonsAvailable).toBe(1)
+  })
+
+  it('caps the Prerelease requirement for stores newer than the season count', () => {
+    const seasons = ['2025-10-01T00:00:00Z', '2026-01-01T00:00:00Z'] // only 2 seasons of history
+    const events = seasonEvents({ seasons, eventsPerSeason: 13, ticketsPerEvent: 40 })
+    const status = computeStandingTierStatus(events, 30)
+
+    expect(status.seasonsAvailable).toBe(2)
+    expect(status.metrics.prereleaseRequirement).toBe(2)
+    expect(status.metrics.prereleaseCount).toBe(2)
   })
 })

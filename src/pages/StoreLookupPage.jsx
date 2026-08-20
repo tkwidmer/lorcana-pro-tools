@@ -5,7 +5,13 @@ import {
   fetchUniqueFanCount,
   mapWithConcurrency,
 } from '../lib/tournamentApi'
-import { eventsInWindow, computeTierProgress, PRORATE_WINDOW } from '../lib/storeTiers'
+import {
+  eventsInWindow,
+  computeTierProgress,
+  PRORATE_WINDOW,
+  standingWindowEvents,
+  computeStandingTierStatus,
+} from '../lib/storeTiers'
 import { DEFAULT_TRACKED_STORE_URLS } from '../lib/trackedStores'
 
 const LAST_INPUT_KEY = 'lorcana_store_lookup_last_input'
@@ -77,6 +83,72 @@ function TierStatusBlock({ tier }) {
       </div>
       <p className={`text-xs mt-2 ${hasHyperiaPrerelease ? 'text-emerald-700' : 'text-gray-500'}`}>
         {hasHyperiaPrerelease ? '✓' : '—'} Hyperia City Prerelease
+      </p>
+    </div>
+  )
+}
+
+const STANDING_TIER_LABELS = {
+  welcome: 'Welcome',
+  standard: 'Standard',
+  legendary: 'Legendary',
+}
+
+const STANDING_TIER_STYLES = {
+  welcome: 'text-gray-600 bg-gray-100',
+  standard: 'text-blue-700 bg-blue-100',
+  legendary: 'text-emerald-700 bg-emerald-100',
+}
+
+function StandingTierBlock({ standing }) {
+  if (!standing || standing.status === 'idle') return null
+
+  if (standing.status === 'loading') {
+    return <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">Checking standing tier (trailing 4 set seasons)…</p>
+  }
+
+  if (standing.status === 'error') {
+    return (
+      <p className="text-xs text-red-500 mt-3 pt-3 border-t border-gray-100">
+        Standing tier: {standing.error}
+      </p>
+    )
+  }
+
+  const { tier, insufficientHistory, seasonsAvailable } = standing.data
+
+  if (insufficientHistory) {
+    return (
+      <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
+        Standing tier: no Prerelease history found — can't determine set seasons yet.
+      </p>
+    )
+  }
+
+  const { metrics, standardRequirements, legendaryRequirements } = standing.data
+  const requirements = tier === 'legendary' || metrics.totalEvents >= standardRequirements.totalEvents
+    ? legendaryRequirements
+    : standardRequirements
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          Standing Tier (last {seasonsAvailable} set season{seasonsAvailable === 1 ? '' : 's'})
+        </span>
+        <span
+          className={`flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${STANDING_TIER_STYLES[tier]}`}
+        >
+          {STANDING_TIER_LABELS[tier]}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
+        <TierMetric label="Events" value={metrics.totalEvents} target={requirements.totalEvents} />
+        <TierMetric label="Unique Fans" value={metrics.uniqueFans} target={requirements.uniqueFans} />
+        <TierMetric label="Tickets" value={metrics.eventTickets} target={requirements.eventTickets} />
+      </div>
+      <p className="text-xs text-gray-500 mt-2">
+        {metrics.prereleaseCount}/{metrics.prereleaseRequirement} Prerelease seasons run
       </p>
     </div>
   )
@@ -161,6 +233,7 @@ function StoreCard({ result }) {
       </dl>
 
       <TierStatusBlock tier={result.tier} />
+      <StandingTierBlock standing={result.standing} />
 
       <p className="text-xs text-gray-400 mt-3 break-all">{data.id}</p>
     </div>
@@ -180,20 +253,40 @@ export function StoreLookupPage() {
   async function loadTierStatus(storeId, store) {
     const numericStoreId = store?.store?.id
     if (numericStoreId == null) {
-      patchResult(storeId, { tier: { status: 'error', error: 'Missing internal store id' } })
+      const error = { status: 'error', error: 'Missing internal store id' }
+      patchResult(storeId, { tier: error, standing: error })
       return
     }
 
-    patchResult(storeId, { tier: { status: 'loading' } })
+    patchResult(storeId, { tier: { status: 'loading' }, standing: { status: 'loading' } })
 
+    let allEvents
     try {
-      const allEvents = await fetchAllStoreEvents(numericStoreId)
+      allEvents = await fetchAllStoreEvents(numericStoreId)
+    } catch (err) {
+      const error = { status: 'error', error: err.message || 'Failed to load events' }
+      patchResult(storeId, { tier: error, standing: error })
+      return
+    }
+
+    // Pro-rated window (Sep 1 – Nov 1, 2026) — a handful of events, resolves fast.
+    try {
       const windowEvents = eventsInWindow(allEvents, PRORATE_WINDOW.start, PRORATE_WINDOW.end)
       const uniqueFans = await fetchUniqueFanCount(windowEvents)
-      const data = computeTierProgress(windowEvents, uniqueFans)
-      patchResult(storeId, { tier: { status: 'ok', data } })
+      patchResult(storeId, { tier: { status: 'ok', data: computeTierProgress(windowEvents, uniqueFans) } })
     } catch (err) {
-      patchResult(storeId, { tier: { status: 'error', error: err.message || 'Failed to load events' } })
+      patchResult(storeId, { tier: { status: 'error', error: err.message || 'Failed to compute tier status' } })
+    }
+
+    // Steady-state standing (trailing 4 set seasons, derived from each
+    // store's own Prerelease history) — a larger event set, so this settles
+    // after the pro-rated panel above.
+    try {
+      const { eligibleEvents } = standingWindowEvents(allEvents)
+      const uniqueFans = eligibleEvents.length > 0 ? await fetchUniqueFanCount(eligibleEvents) : 0
+      patchResult(storeId, { standing: { status: 'ok', data: computeStandingTierStatus(allEvents, uniqueFans) } })
+    } catch (err) {
+      patchResult(storeId, { standing: { status: 'error', error: err.message || 'Failed to compute standing tier' } })
     }
   }
 
@@ -206,7 +299,14 @@ export function StoreLookupPage() {
 
     localStorage.setItem(LAST_INPUT_KEY, text)
     setLoading(true)
-    setResults(storeIds.map((storeId) => ({ status: 'loading', storeId, tier: { status: 'idle' } })))
+    setResults(
+      storeIds.map((storeId) => ({
+        status: 'loading',
+        storeId,
+        tier: { status: 'idle' },
+        standing: { status: 'idle' },
+      }))
+    )
 
     const loadedStores = []
 
@@ -262,8 +362,9 @@ export function StoreLookupPage() {
         </h1>
         <p className="text-sm text-gray-500">
           Paste one or more Ravensburger Play store IDs or store URLs (one per line, or separated by commas)
-          to look up store details and check progress toward provisional Legendary tier status for the{' '}
-          {PRORATE_WINDOW_LABEL} pro-rating window.
+          to look up store details, progress toward provisional Legendary status for the {PRORATE_WINDOW_LABEL}{' '}
+          pro-rating window, and steady-state Standard/Legendary standing over the trailing 4 set seasons
+          (derived from each store's own Prerelease event history).
         </p>
       </div>
 

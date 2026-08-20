@@ -14,8 +14,12 @@ export const LEGENDARY_PRORATED_REQUIREMENTS = {
   eventTickets: 80,
 }
 
+// Stores name these events inconsistently — "Prerelease", "Pre-release",
+// "Pre release" all show up in the wild (e.g. "Wilds Unknown Pre-release!!").
+// Matching only the exact word "prerelease" silently drops real Prerelease
+// events (and therefore season anchors — see deriveSeasons below).
 export function isPrereleaseEvent(name) {
-  return /prerelease/i.test(name ?? '')
+  return /pre[\s-]?release/i.test(name ?? '')
 }
 
 export function isHyperiaCityPrerelease(name) {

@@ -1,28 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchLeaderboard } from '../lib/leaderboardApi'
-
-// Ranked MMR tier thresholds, lowest to highest. duels.ink doesn't return
-// these from the API (a leaderboard row's `tier` only carries a name/icon
-// for that player, not the band's MMR range) — these are the fixed
-// breakpoints duels.ink's own site uses, in 150-MMR steps starting at 1000.
-const RANK_TIERS = [
-  { name: 'Common', min: -Infinity, color: '#9a5b2e' },
-  { name: 'Uncommon', min: 1000, color: '#6b7280' },
-  { name: 'Rare', min: 1150, color: '#b7791f' },
-  { name: 'Super Rare', min: 1300, color: '#0f7c8c' },
-  { name: 'Epic', min: 1450, color: '#b08900' },
-  { name: 'Legendary', min: 1600, color: '#0e9169' },
-  { name: 'Enchanted', min: 1750, color: '#8b5cf6' },
-  { name: 'Iconic', min: 1900, color: '#dc2626' },
-]
-
-function tierForMmr(mmr) {
-  let tier = RANK_TIERS[0]
-  for (const t of RANK_TIERS) {
-    if (mmr >= t.min) tier = t
-  }
-  return tier
-}
+import { RANK_TIERS, tierForMmr } from '../lib/rankTiers'
 
 function RankTierChart({ buckets, highlightMmr }) {
   if (!buckets.length) return null

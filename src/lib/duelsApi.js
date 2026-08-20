@@ -283,7 +283,7 @@ export async function testToken(token) {
   return res.json()
 }
 
-export async function fetchMatchHistory({ cursor, limit = 100, from, to, source } = {}) {
+export async function fetchMatchHistory({ cursor, limit = 100, from, to, source, queue } = {}) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
 
@@ -292,6 +292,7 @@ export async function fetchMatchHistory({ cursor, limit = 100, from, to, source 
   if (from) params.set('from', from)
   if (to) params.set('to', to)
   if (source) params.set('source', source)
+  if (queue) params.set('queue', queue)
 
   const res = await fetch(`/api/duels?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -397,6 +398,24 @@ export async function fetchPersonalStats({ deckId, source }) {
   if (!res.ok) throw new Error(`API error ${res.status}`)
 
   return res.json() // { activity, colorPairs, matchups, deckVersions, filters }
+}
+
+// Best-effort lookup of the signed-in user's current MMR in a queue, used to
+// center the meta synthesis page on their own rank band. Reads it off the
+// most recent ranked game's mmr_after rather than a dedicated endpoint —
+// duels.ink doesn't expose "my current rating" directly, only match rows.
+// Returns null if there's no token configured or no recent ranked game.
+export async function fetchCurrentMmr(queue) {
+  const token = getToken()
+  if (!token) return null
+
+  try {
+    const { games } = await fetchMatchHistory({ limit: 10, queue, source: 'matchmaking' })
+    const recentRanked = (games ?? []).find(g => g.mmr_after != null)
+    return recentRanked?.mmr_after ?? null
+  } catch {
+    return null
+  }
 }
 
 export async function fetchStats({ queue, period, ranks }) {

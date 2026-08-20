@@ -290,7 +290,7 @@ export function MetaSynthesisPage() {
       )}
 
       {!loading && !error && synthesis && (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_26rem] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <div className="border border-gray-200 rounded-lg p-5 space-y-3">
             {synthesis.paragraphs.map((p, i) => (
               <p key={i} className="text-gray-800 leading-relaxed">{p}</p>

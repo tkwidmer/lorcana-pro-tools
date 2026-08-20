@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { fetchStats, fetchCurrentMmr } from '../lib/duelsApi'
 import { InkIcons } from '../components/InkIcons'
 import { RANK_TIERS, tierForMmr, ranksAtOrAbove, ranksBelow } from '../lib/rankTiers'
@@ -25,10 +25,21 @@ function queueId(format, mode) {
   return `${format}-${mode}`
 }
 
+// Builds the `period` query value duels.ink expects: `all_time`, a single
+// `week:<date>`, or a multi-week `weeks:<date>,<date>,...` when more than
+// one week is selected (see the "Last 2/4 Weeks" presets below).
+function periodFromWeeks(weekDates) {
+  if (weekDates.length === 0) return 'all_time'
+  if (weekDates.length === 1) return `week:${weekDates[0]}`
+  return `weeks:${[...weekDates].sort().join(',')}`
+}
+
 export function MetaSynthesisPage() {
   const [format, setFormat] = useState('core')
   const [mode, setMode] = useState('bo1')
-  const [period, setPeriod] = useState(null) // null until the latest week is known
+  const [bootstrapped, setBootstrapped] = useState(false) // becomes true once the latest week is known
+  const [periodMode, setPeriodMode] = useState('weeks') // 'weeks' | 'all_time'
+  const [selectedWeeks, setSelectedWeeks] = useState([]) // array of week startDates
   const [availableWeeks, setAvailableWeeks] = useState([])
   const [band, setBand] = useState('ALL')
   const [bandAutoSet, setBandAutoSet] = useState(true)
@@ -40,6 +51,7 @@ export function MetaSynthesisPage() {
   const [error, setError] = useState(null)
 
   const queue = queueId(format, mode)
+  const weekKey = [...selectedWeeks].sort().join(',')
 
   // Best-effort: center the default band on the signed-in user's own rank
   // in this queue. Only applies while the user hasn't picked a band by hand.
@@ -60,13 +72,32 @@ export function MetaSynthesisPage() {
     setBand(newBand)
   }, [])
 
+  const selectAllTime = useCallback(() => {
+    setPeriodMode('all_time')
+  }, [])
+
+  const toggleWeek = useCallback(startDate => {
+    setPeriodMode('weeks')
+    setSelectedWeeks(prev => {
+      const next = prev.includes(startDate) ? prev.filter(d => d !== startDate) : [...prev, startDate]
+      // Never let the selection empty out from under the user — fall back
+      // to just that one week rather than silently becoming all-time.
+      return next.length === 0 ? [startDate] : next
+    })
+  }, [])
+
+  const selectLastNWeeks = useCallback((weeks, n) => {
+    setPeriodMode('weeks')
+    setSelectedWeeks(weeks.slice(-n).map(w => w.startDate))
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     async function run() {
       setLoading(true)
       setError(null)
       try {
-        const effectivePeriod = period ?? 'all_time'
+        const effectivePeriod = !bootstrapped ? 'all_time' : (periodMode === 'all_time' ? 'all_time' : periodFromWeeks(selectedWeeks))
         const ranks = band === 'ALL' ? [] : ranksAtOrAbove(band)
         const data = await fetchStats({ queue, period: effectivePeriod, ranks })
         if (cancelled) return
@@ -75,8 +106,12 @@ export function MetaSynthesisPage() {
         // week" rather than all-time, since the meta shifts fast. Triggers
         // a second, cheap fetch (both hit the same server cache) with the
         // real period — nothing above renders the all-time data.
-        if (period === null && data.meta?.currentWeek?.startDate) {
-          setPeriod(`week:${data.meta.currentWeek.startDate}`)
+        if (!bootstrapped) {
+          setBootstrapped(true)
+          if (data.meta?.currentWeek?.startDate) {
+            setSelectedWeeks([data.meta.currentWeek.startDate])
+          }
+          setAvailableWeeks(data.meta?.availableWeeks ?? [])
           return
         }
 
@@ -91,10 +126,10 @@ export function MetaSynthesisPage() {
           setLowerStats(null)
         }
       } catch (err) {
-        if (period !== null && period !== 'all_time') {
-          // A restored/derived "week:<date>" can point at a week duels.ink
+        if (bootstrapped && periodMode === 'weeks') {
+          // A restored/derived week selection can point at a week duels.ink
           // no longer serves — fall back rather than getting stuck.
-          setPeriod('all_time')
+          setPeriodMode('all_time')
         } else {
           setError(err.message || String(err))
         }
@@ -104,13 +139,22 @@ export function MetaSynthesisPage() {
     }
     run()
     return () => { cancelled = true }
-  }, [queue, period, band])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue, bootstrapped, periodMode, weekKey, band])
 
   const queueName = stats?.meta?.queue?.name ?? `${FORMATS.find(f => f.id === format)?.label} ${MODES.find(m => m.id === mode)?.label}`
-  const currentWeekKey = stats?.meta?.currentWeek?.startDate ? `week:${stats.meta.currentWeek.startDate}` : null
-  const periodLabel = period === 'all_time'
-    ? 'all-time'
-    : (availableWeeks.find(w => `week:${w.startDate}` === period)?.label ?? 'the selected week')
+  const currentWeekStart = stats?.meta?.currentWeek?.startDate ?? null
+
+  const periodLabel = useMemo(() => {
+    if (periodMode === 'all_time') return 'all-time'
+    const weeks = selectedWeeks
+      .map(d => availableWeeks.find(w => w.startDate === d))
+      .filter(Boolean)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    if (weeks.length === 0) return 'the selected week'
+    if (weeks.length === 1) return weeks[0].label
+    return `${weeks.length} weeks (${weeks[0].label.split(' - ')[0]} – ${weeks[weeks.length - 1].label.split(' - ')[1] ?? weeks[weeks.length - 1].label})`
+  }, [periodMode, selectedWeeks, availableWeeks])
 
   const synthesis = stats ? buildSynthesis(stats, {
     queueLabel: queueName,
@@ -168,27 +212,46 @@ export function MetaSynthesisPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">Period</label>
-          <div className="flex gap-2 flex-wrap max-w-xl">
+          <label className="block text-sm font-semibold text-gray-900 mb-2">
+            Period
+            <span className="ml-2 font-normal text-xs text-gray-400">(click multiple weeks to combine them)</span>
+          </label>
+          <div className="flex gap-2 flex-wrap max-w-2xl">
             <button
-              onClick={() => setPeriod('all_time')}
+              onClick={selectAllTime}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                period === 'all_time' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                periodMode === 'all_time' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               All Time
             </button>
+            {availableWeeks.length > 1 && (
+              <button
+                onClick={() => selectLastNWeeks(availableWeeks, 2)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                Last 2 Weeks
+              </button>
+            )}
+            {availableWeeks.length > 3 && (
+              <button
+                onClick={() => selectLastNWeeks(availableWeeks, 4)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                Last Month
+              </button>
+            )}
             {availableWeeks.map(week => {
-              const key = `week:${week.startDate}`
+              const isSelected = periodMode === 'weeks' && selectedWeeks.includes(week.startDate)
               return (
                 <button
-                  key={key}
-                  onClick={() => setPeriod(key)}
+                  key={week.startDate}
+                  onClick={() => toggleWeek(week.startDate)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    period === key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    isSelected ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {key === currentWeekKey ? `${week.label} (latest)` : week.label}
+                  {week.startDate === currentWeekStart ? `${week.label} (latest)` : week.label}
                 </button>
               )
             })}
@@ -227,7 +290,7 @@ export function MetaSynthesisPage() {
       )}
 
       {!loading && !error && synthesis && (
-        <div className="max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_26rem] gap-6 items-start">
           <div className="border border-gray-200 rounded-lg p-5 space-y-3">
             {synthesis.paragraphs.map((p, i) => (
               <p key={i} className="text-gray-800 leading-relaxed">{p}</p>

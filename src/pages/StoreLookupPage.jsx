@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { fetchGameStore } from '../lib/tournamentApi'
+import { DEFAULT_TRACKED_STORE_URLS } from '../lib/trackedStores'
 
 const LAST_INPUT_KEY = 'lorcana_store_lookup_last_input'
+const DEFAULT_INPUT = DEFAULT_TRACKED_STORE_URLS.join('\n')
 
 // Store IDs are UUIDs. Accept either raw IDs (one per line / comma-separated)
 // or pasted store URLs — pull every UUID out of the input regardless of
@@ -102,19 +104,19 @@ function StoreCard({ result }) {
 }
 
 export function StoreLookupPage() {
-  const [input, setInput] = useState(() => localStorage.getItem(LAST_INPUT_KEY) ?? '')
+  const [input, setInput] = useState(() => localStorage.getItem(LAST_INPUT_KEY) ?? DEFAULT_INPUT)
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
+  const hasAutoLoaded = useRef(false)
 
-  async function loadStores(e) {
-    e.preventDefault()
-    const storeIds = extractStoreIds(input)
+  async function runLookup(text) {
+    const storeIds = extractStoreIds(text)
     if (storeIds.length === 0) {
       setResults([{ status: 'error', storeId: '(none found)', error: 'No store IDs found in the input.' }])
       return
     }
 
-    localStorage.setItem(LAST_INPUT_KEY, input)
+    localStorage.setItem(LAST_INPUT_KEY, text)
     setLoading(true)
     setResults(storeIds.map((storeId) => ({ status: 'loading', storeId })))
 
@@ -138,6 +140,19 @@ export function StoreLookupPage() {
     )
 
     setLoading(false)
+  }
+
+  // Auto-load once on first visit so the page is useful without an extra click.
+  useEffect(() => {
+    if (hasAutoLoaded.current) return
+    hasAutoLoaded.current = true
+    if (input) runLookup(input)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function loadStores(e) {
+    e.preventDefault()
+    runLookup(input)
   }
 
   return (

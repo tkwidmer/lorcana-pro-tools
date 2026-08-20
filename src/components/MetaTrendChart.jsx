@@ -3,11 +3,18 @@
 // series should follow.
 const SERIES_COLORS = ['#0072B2', '#E69F00', '#CC79A7']
 
-// Small multi-line sparkline showing each tracked archetype's play rate
-// across the most recent weeks duels.ink has stats for. `series`:
+// Small multi-line sparkline showing each tracked archetype's play rate or
+// win rate across the most recent weeks duels.ink has stats for. `series`:
 // [{ key, name, values }] — one value per entry in `weeks`, oldest first.
 // `weeks`: [{ startDate, label }].
-export function MetaTrendChart({ weeks, series }) {
+//
+// `scaleFromZero` picks the y-axis domain: play rate reads naturally
+// against a 0 baseline (most archetypes cluster well below the max), but
+// win rate clusters tightly around 50% — a 0 baseline would flatten a
+// meaningful 47%→53% swing into a barely-visible line near the top of the
+// chart, so win-rate charts should pass `scaleFromZero={false}` to get a
+// tight, padded domain around the actual data instead.
+export function MetaTrendChart({ weeks, series, metricLabel = 'play rate', formatValue = v => `${v.toFixed(1)}%`, scaleFromZero = true }) {
   if (weeks.length < 2 || series.length === 0) return null
 
   const W = 600
@@ -20,10 +27,14 @@ export function MetaTrendChart({ weeks, series }) {
   const plotH = H - PAD_TOP - PAD_BOTTOM
 
   const allValues = series.flatMap(s => s.values)
-  const maxV = Math.max(...allValues, 1)
+  const rawMax = Math.max(...allValues, scaleFromZero ? 1 : -Infinity)
+  const rawMin = Math.min(...allValues)
+  const domainMax = scaleFromZero ? rawMax : rawMax + (rawMax - rawMin || 1) * 0.15
+  const domainMin = scaleFromZero ? 0 : rawMin - (rawMax - rawMin || 1) * 0.15
+  const domainSpan = domainMax - domainMin || 1
 
   const xForIndex = i => PAD_LEFT + (weeks.length === 1 ? 0 : (i / (weeks.length - 1)) * plotW)
-  const yForValue = v => PAD_TOP + plotH - (v / maxV) * plotH
+  const yForValue = v => PAD_TOP + plotH - ((v - domainMin) / domainSpan) * plotH
 
   // Stack end-of-line labels vertically when their natural positions would
   // otherwise overlap.
@@ -42,7 +53,7 @@ export function MetaTrendChart({ weeks, series }) {
   }
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40" role="img" aria-label="Archetype play rate trend over recent weeks">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40" role="img" aria-label={`Archetype ${metricLabel} trend over recent weeks`}>
       {series.map((s, i) => {
         const color = SERIES_COLORS[i % SERIES_COLORS.length]
         const points = s.values.map((v, vi) => [xForIndex(vi), yForValue(v)])
@@ -52,7 +63,7 @@ export function MetaTrendChart({ weeks, series }) {
             <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             {points.map(([x, y], vi) => (
               <circle key={vi} cx={x} cy={y} r="3" fill={color}>
-                <title>{`${s.name}: ${s.values[vi].toFixed(1)}% play rate (${weeks[vi].label})`}</title>
+                <title>{`${s.name}: ${formatValue(s.values[vi])} ${metricLabel} (${weeks[vi].label})`}</title>
               </circle>
             ))}
           </g>
@@ -68,7 +79,7 @@ export function MetaTrendChart({ weeks, series }) {
           fontWeight="600"
           fill={ep.color}
         >
-          {ep.name} · {ep.values[ep.values.length - 1].toFixed(1)}%
+          {ep.name} · {formatValue(ep.values[ep.values.length - 1])}
         </text>
       ))}
       {weeks.map((w, i) => (

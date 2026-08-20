@@ -188,6 +188,11 @@ function pct(n, digits = 1) {
   return `${n.toFixed(digits)}%`
 }
 
+// Item cap for bullet lists in the summary prose — kept short so the
+// left-column summary stays scannable. Tables on the right (topPlayed,
+// topWinRate, signature/weakest cards) show more (up to 5) independently.
+const SUMMARY_LIST_LIMIT = 3
+
 // A synthesis is a sequence of blocks the page renders as either a <p> (type
 // 'text') or a labeled bullet list (type 'list', an intro line + items).
 // Keeping this structured (rather than pre-joining everything into prose
@@ -237,7 +242,7 @@ export function buildSynthesis(stats, context = {}) {
   if (topPlayed.length > 0) {
     const top = topPlayed[0]
     blocks.push(textBlock(`${top.name} is the most-played archetype at ${pct(top.playRate)} of games, sitting at ${pct(top.winRate)} win rate.`))
-    const rest = topPlayed.slice(1, 5)
+    const rest = topPlayed.slice(1, 1 + SUMMARY_LIST_LIMIT)
     if (rest.length > 0) {
       blocks.push(listBlock('Also seeing significant play:', rest.map(a => `${a.name} — ${pct(a.playRate)} play rate, ${pct(a.winRate)} win rate`)))
     }
@@ -249,7 +254,7 @@ export function buildSynthesis(stats, context = {}) {
     blocks.push(textBlock(isAlsoTopPlayed
       ? `${best.name} isn't just the most popular deck — it also leads on win rate at ${pct(best.winRate)}.`
       : `${best.name} has the best win rate among established decks at ${pct(best.winRate)}, on ${pct(best.playRate)} play rate.`))
-    const others = topWinRate.slice(1, 5).filter(a => a.key !== topPlayed[0]?.key)
+    const others = topWinRate.slice(1, 1 + SUMMARY_LIST_LIMIT).filter(a => a.key !== topPlayed[0]?.key)
     if (others.length > 0) {
       blocks.push(listBlock('Right behind it:', others.map(a => `${a.name} — ${pct(a.winRate)} win rate`)))
     }
@@ -297,12 +302,14 @@ export function buildSynthesis(stats, context = {}) {
       blocks.push(listBlock(`Playing ${focus.name}?`, items))
     }
 
+    // The full 5-card lists (focusCards/focusWorstCards) feed the tables on
+    // the right; the summary prose only calls out the top 3 of each.
     if (focusCards.length > 0) {
-      blocks.push(listBlock('Its biggest signature cards:', focusCards.map(c => `${c.name} — ${pct(c.winRateWith)} win rate when included`)))
+      blocks.push(listBlock('Its biggest signature cards:', focusCards.slice(0, SUMMARY_LIST_LIMIT).map(c => `${c.name} — ${pct(c.winRateWith)} win rate when included`)))
     }
 
     if (focusWorstCards.length > 0) {
-      blocks.push(listBlock('Its weakest cards (lowest win rate when included):', focusWorstCards.map(c => `${c.name} — ${pct(c.winRateWith)} win rate when included`)))
+      blocks.push(listBlock('Its weakest cards (lowest win rate when included):', focusWorstCards.slice(0, SUMMARY_LIST_LIMIT).map(c => `${c.name} — ${pct(c.winRateWith)} win rate when included`)))
     }
   }
 
@@ -331,8 +338,8 @@ function diffArchetypeShares(aStats, bStats, minDelta) {
   }
 
   return {
-    risers: deltas.filter(d => d.delta >= minDelta).sort((x, y) => y.delta - x.delta).slice(0, 5),
-    fallers: deltas.filter(d => d.delta <= -minDelta).sort((x, y) => x.delta - y.delta).slice(0, 5),
+    risers: deltas.filter(d => d.delta >= minDelta).sort((x, y) => y.delta - x.delta).slice(0, SUMMARY_LIST_LIMIT),
+    fallers: deltas.filter(d => d.delta <= -minDelta).sort((x, y) => x.delta - y.delta).slice(0, SUMMARY_LIST_LIMIT),
   }
 }
 

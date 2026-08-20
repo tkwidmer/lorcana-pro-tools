@@ -227,8 +227,8 @@ export function MetaSynthesisPage() {
       )}
 
       {!loading && !error && synthesis && (
-        <div className="max-w-3xl">
-          <div className="border border-gray-200 rounded-lg p-5 mb-6 space-y-3">
+        <div className="max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="border border-gray-200 rounded-lg p-5 space-y-3">
             {synthesis.paragraphs.map((p, i) => (
               <p key={i} className="text-gray-800 leading-relaxed">{p}</p>
             ))}
@@ -237,75 +237,77 @@ export function MetaSynthesisPage() {
             )}
           </div>
 
-          {synthesis.topPlayed.length > 0 && (
-            <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
-              <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Most Played Archetypes
-              </div>
-              <table className="w-full text-sm">
-                <thead className="text-xs uppercase tracking-wide text-gray-400">
-                  <tr>
-                    <th className="text-left px-4 py-2">Archetype</th>
-                    <th className="text-right px-4 py-2">Play Rate</th>
-                    <th className="text-right px-4 py-2">Win Rate</th>
-                    <th className="text-right px-4 py-2 hidden sm:table-cell">Games</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {synthesis.topPlayed.map(a => (
-                    <tr key={a.key} className="border-t border-gray-100">
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <InkIcons colors={a.colors} size={16} />
-                          <span>{a.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{a.winRate.toFixed(1)}%</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
-                        {a.gamesPlayed.toLocaleString()}
-                      </td>
+          <div className="space-y-6">
+            {synthesis.topPlayed.length > 0 && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Most Played Archetypes
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase tracking-wide text-gray-400">
+                    <tr>
+                      <th className="text-left px-4 py-2">Archetype</th>
+                      <th className="text-right px-4 py-2">Play Rate</th>
+                      <th className="text-right px-4 py-2">Win Rate</th>
+                      <th className="text-right px-4 py-2 hidden sm:table-cell">Games</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {synthesis.topPlayed.map(a => (
+                      <tr key={a.key} className="border-t border-gray-100">
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <InkIcons colors={a.colors} size={16} />
+                            <span>{a.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.winRate.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
+                          {a.gamesPlayed.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-          {synthesis.topWinRate.length > 0 && (
-            <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
-              <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Highest Win Rate (min. sample size)
-              </div>
-              <table className="w-full text-sm">
-                <thead className="text-xs uppercase tracking-wide text-gray-400">
-                  <tr>
-                    <th className="text-left px-4 py-2">Archetype</th>
-                    <th className="text-right px-4 py-2">Win Rate</th>
-                    <th className="text-right px-4 py-2">Play Rate</th>
-                    <th className="text-right px-4 py-2 hidden sm:table-cell">Games</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {synthesis.topWinRate.map(a => (
-                    <tr key={a.key} className="border-t border-gray-100">
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <InkIcons colors={a.colors} size={16} />
-                          <span>{a.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{a.winRate.toFixed(1)}%</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
-                        {a.gamesPlayed.toLocaleString()}
-                      </td>
+            {synthesis.topWinRate.length > 0 && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Highest Win Rate (min. sample size)
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase tracking-wide text-gray-400">
+                    <tr>
+                      <th className="text-left px-4 py-2">Archetype</th>
+                      <th className="text-right px-4 py-2">Win Rate</th>
+                      <th className="text-right px-4 py-2">Play Rate</th>
+                      <th className="text-right px-4 py-2 hidden sm:table-cell">Games</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {synthesis.topWinRate.map(a => (
+                      <tr key={a.key} className="border-t border-gray-100">
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <InkIcons colors={a.colors} size={16} />
+                            <span>{a.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.winRate.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
+                          {a.gamesPlayed.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

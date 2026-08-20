@@ -26,6 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const type = str(req.query.type)
   const eventId = str(req.query.eventId)
   const roundId = str(req.query.roundId)
+  const storeId = str(req.query.storeId)
   const page = clampInt(str(req.query.page), 1, 10000)
   const pageSize = clampInt(str(req.query.pageSize), 10, 200)
 
@@ -51,6 +52,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!roundId) return res.status(400).json({ error: 'Missing roundId' })
       if (!ID_RE.test(roundId)) return res.status(400).json({ error: 'Invalid roundId' })
       url = `${HYDRA_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/matches/paginated/?page=${page}&page_size=${pageSize}&avoid_cache=false`
+      break
+    case 'store':
+      if (!storeId) return res.status(400).json({ error: 'Missing storeId' })
+      if (!ID_RE.test(storeId)) return res.status(400).json({ error: 'Invalid storeId' })
+      url = `${HYDRA_BASE}/game-stores/${encodeURIComponent(storeId)}/`
       break
     default:
       return res.status(400).json({ error: 'Missing or invalid type param' })

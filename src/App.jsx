@@ -30,6 +30,7 @@ import { MetaSynthesisPage } from './pages/MetaSynthesisPage'
 import { PracticePlanPage } from './pages/PracticePlanPage'
 import { LeaderboardPage } from './pages/LeaderboardPage'
 import { TournamentLookupPage } from './pages/TournamentLookupPage'
+import { StoreLookupPage } from './pages/StoreLookupPage'
 import { LoreTrackerPage } from './pages/LoreTrackerPage'
 import { LoginPage } from './pages/LoginPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
@@ -90,6 +91,7 @@ function RoutedContent() {
         <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />
+        <Route path="/store-lookup" element={<SupporterRoute><StoreLookupPage /></SupporterRoute>} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />
         {/* Redirects from old routes */}

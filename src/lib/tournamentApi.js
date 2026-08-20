@@ -14,6 +14,22 @@ export async function fetchEventDetails(eventId) {
   }
 }
 
+export async function fetchGameStore(storeId) {
+  try {
+    const response = await fetch(`/api/tournament?type=store&storeId=${encodeURIComponent(storeId)}`)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || error.error || `Failed to fetch store ${storeId}`)
+    }
+
+    return await response.json()
+  } catch (err) {
+    console.error('Game store fetch error:', err)
+    throw err
+  }
+}
+
 export function getTournamentStructure(eventDetails) {
   if (!eventDetails || !eventDetails.tournament_phases) return null
 

@@ -31,6 +31,13 @@ describe('isPrereleaseEvent', () => {
     expect(isPrereleaseEvent('Weekly Play (Constructed)')).toBe(false)
   })
 
+  it('matches hyphenated/spaced "pre-release" variants stores actually use', () => {
+    // Real-world example that was silently missed before this regex was
+    // broadened, collapsing a store's derived season history to ~3 weeks.
+    expect(isPrereleaseEvent('Wilds Unknown Pre-release!!')).toBe(true)
+    expect(isPrereleaseEvent('Wilds Unknown Pre release')).toBe(true)
+  })
+
   it('returns false for missing input', () => {
     expect(isPrereleaseEvent(undefined)).toBe(false)
     expect(isPrereleaseEvent(null)).toBe(false)
@@ -155,6 +162,20 @@ describe('deriveSeasons', () => {
   it('ignores unreported (upcoming/in-progress) Prerelease events', () => {
     const events = [makeEvent({ name: 'Hyperia City Prerelease', display_status: 'upcoming' })]
     expect(deriveSeasons(events)).toHaveLength(0)
+  })
+
+  it('picks up a hyphenated "Pre-release" anchor (regression: Victory Point Cafe)', () => {
+    // A real store ran "Winterspell...", then "Wilds Unknown Pre-release!!",
+    // then "...Prerelease Sealed" for the next set. The hyphenated middle
+    // event used to be missed entirely, leaving only the most recent
+    // Prerelease as an anchor and collapsing the standing window to ~3 weeks.
+    const events = [
+      makeEvent({ id: 1, name: 'Wilds Unknown Pre-release!!', start_datetime: '2026-05-10T00:00:00Z' }),
+      makeEvent({ id: 2, name: 'ATTACK OF THE VINE! Prerelease Sealed', start_datetime: '2026-07-24T00:00:00Z' }),
+    ]
+    const seasons = deriveSeasons(events)
+    expect(seasons).toHaveLength(2)
+    expect(seasons[0].name).toBe('Wilds Unknown Pre-release!!')
   })
 
   it('returns an empty list when there is no Prerelease history', () => {

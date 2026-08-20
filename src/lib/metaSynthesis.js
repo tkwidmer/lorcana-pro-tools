@@ -140,51 +140,73 @@ export function archetypeMatchupSummary(stats, archetypeKey, { minGames = 30 } =
   }
 }
 
-// The cards most correlated with winning inside one archetype (duels.ink's
-// per-card "lift" stat). Pulled from whichever build-variant profile in the
-// aggregated group has the largest sample, since lift isn't meaningfully
-// additive across variants the way games/wins are.
-export function topSignatureCards(stats, archetypeKey, { limit = 3, resolveName = id => id } = {}) {
+// The single build-variant profile (within one aggregated archetype) with
+// the largest sample — used as the source for card-lift data, since lift
+// isn't meaningfully additive across variants the way games/wins are.
+function representativeProfile(stats, archetypeKey) {
   const aggregates = aggregateArchetypes(stats?.profiles)
   const agg = aggregates.find(a => a.key === archetypeKey)
-  if (!agg) return []
-
+  if (!agg) return null
   const variants = (stats?.profiles ?? []).filter(p => agg.ids.includes(p.id))
-  const representative = variants.sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0]
+  return variants.sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0] ?? null
+}
 
+function mapLiftEntry(c, resolveName) {
+  return {
+    cardId: c.cardId,
+    name: resolveName(c.cardId),
+    lift: c.lift,
+    winRateWith: c.winRateWith,
+    presence: c.presence,
+  }
+}
+
+// The cards most correlated with winning inside one archetype (duels.ink's
+// per-card "lift" stat).
+export function topSignatureCards(stats, archetypeKey, { limit = 5, resolveName = id => id } = {}) {
+  const representative = representativeProfile(stats, archetypeKey)
   return (representative?.cardLift ?? [])
     .filter(c => c.lift > 0)
     .sort((a, b) => b.lift - a.lift)
     .slice(0, limit)
-    .map(c => ({
-      cardId: c.cardId,
-      name: resolveName(c.cardId),
-      lift: c.lift,
-      winRateWith: c.winRateWith,
-      presence: c.presence,
-    }))
+    .map(c => mapLiftEntry(c, resolveName))
+}
+
+// The cards most correlated with *losing* inside one archetype — the other
+// end of the same duels.ink "lift" stat. Sorted worst (most negative lift)
+// first.
+export function worstSignatureCards(stats, archetypeKey, { limit = 5, resolveName = id => id } = {}) {
+  const representative = representativeProfile(stats, archetypeKey)
+  return (representative?.cardLift ?? [])
+    .filter(c => c.lift < 0)
+    .sort((a, b) => a.lift - b.lift)
+    .slice(0, limit)
+    .map(c => mapLiftEntry(c, resolveName))
 }
 
 function pct(n, digits = 1) {
   return `${n.toFixed(digits)}%`
 }
 
-function listNames(archetypes) {
-  return archetypes.map(a => a.name)
+// A synthesis is a sequence of blocks the page renders as either a <p> (type
+// 'text') or a labeled bullet list (type 'list', an intro line + items).
+// Keeping this structured (rather than pre-joining everything into prose
+// strings) is what lets multi-item call-outs — most-played runners-up,
+// underperformers, rank/week shifts — render as scannable lists instead of
+// a comma-joined wall of text.
+function textBlock(text) {
+  return { type: 'text', text }
 }
 
-function joinEnglish(items) {
-  if (items.length === 0) return ''
-  if (items.length === 1) return items[0]
-  if (items.length === 2) return `${items[0]} and ${items[1]}`
-  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
+function listBlock(intro, items) {
+  return { type: 'list', intro, items }
 }
 
-// Builds the plain-text synthesis paragraphs shown on MetaSynthesisPage.
-// `context` = { queueLabel, periodLabel, bandLabel, focusArchetypeKey,
-// resolveCardName }. When `focusArchetypeKey` names a known archetype, two
-// extra paragraphs are appended covering its matchup spread and signature
-// cards — otherwise the synthesis stays a general meta overview.
+// Builds the synthesis blocks shown on MetaSynthesisPage. `context` =
+// { queueLabel, periodLabel, bandLabel, focusArchetypeKey, resolveCardName }.
+// When `focusArchetypeKey` names a known archetype, extra blocks are
+// appended covering its matchup spread and signature cards — otherwise the
+// synthesis stays a general meta overview.
 export function buildSynthesis(stats, context = {}) {
   const {
     queueLabel = 'this queue',
@@ -194,106 +216,103 @@ export function buildSynthesis(stats, context = {}) {
     resolveCardName = id => id,
   } = context
   const totalGames = stats?.activity?.totalGames ?? 0
-  const paragraphs = []
 
   if (!totalGames) {
     return {
-      paragraphs: ['No games recorded for this queue, period, and rank band yet.'],
-      topPlayed: [], topWinRate: [], underperformers: [], focusMatchups: null, focusCards: [],
+      blocks: [textBlock('No games recorded for this queue, period, and rank band yet.')],
+      topPlayed: [], topWinRate: [], underperformers: [], focusMatchups: null, focusCards: [], focusWorstCards: [],
     }
   }
 
+  const blocks = []
   const topPlayed = topPlayedArchetypes(stats, { limit: 5 })
   const topWinRate = topWinRateArchetypes(stats, { limit: 5 })
   const underperformers = bottomWinRateArchetypes(stats, { limit: 3 })
 
-  paragraphs.push(
+  blocks.push(textBlock(
     `${totalGames.toLocaleString()} games played in ${queueLabel} during ${periodLabel} among ${bandLabel}` +
     (stats?.activity?.uniquePlayers ? `, across ${stats.activity.uniquePlayers.toLocaleString()} players.` : '.')
-  )
+  ))
 
   if (topPlayed.length > 0) {
     const top = topPlayed[0]
-    const rest = topPlayed.slice(1, 4)
-    let sentence = `${top.name} is the most-played archetype at ${pct(top.playRate)} of games, sitting at ${pct(top.winRate)} win rate.`
+    blocks.push(textBlock(`${top.name} is the most-played archetype at ${pct(top.playRate)} of games, sitting at ${pct(top.winRate)} win rate.`))
+    const rest = topPlayed.slice(1, 5)
     if (rest.length > 0) {
-      sentence += ` Also seeing significant play: ${joinEnglish(rest.map(a => `${a.name} (${pct(a.playRate)}, ${pct(a.winRate)} win rate)`))}.`
+      blocks.push(listBlock('Also seeing significant play:', rest.map(a => `${a.name} — ${pct(a.playRate)} play rate, ${pct(a.winRate)} win rate`)))
     }
-    paragraphs.push(sentence)
   }
 
   if (topWinRate.length > 0) {
     const best = topWinRate[0]
     const isAlsoTopPlayed = topPlayed[0]?.key === best.key
-    let sentence = isAlsoTopPlayed
+    blocks.push(textBlock(isAlsoTopPlayed
       ? `${best.name} isn't just the most popular deck — it also leads on win rate at ${pct(best.winRate)}.`
-      : `${best.name} has the best win rate among established decks at ${pct(best.winRate)}, on ${pct(best.playRate)} play rate.`
-    const others = topWinRate.slice(1, 4).filter(a => a.key !== topPlayed[0]?.key)
+      : `${best.name} has the best win rate among established decks at ${pct(best.winRate)}, on ${pct(best.playRate)} play rate.`))
+    const others = topWinRate.slice(1, 5).filter(a => a.key !== topPlayed[0]?.key)
     if (others.length > 0) {
-      sentence += ` Right behind it: ${joinEnglish(others.map(a => `${a.name} (${pct(a.winRate)})`))}.`
-    }
-    paragraphs.push(sentence)
-  }
-
-  if (underperformers.length > 0) {
-    const worst = underperformers[0]
-    if (worst.winRate < 50) {
-      const heavilyPlayedButLosing = underperformers.filter(a => a.playRate >= 3 && a.winRate < 49)
-      if (heavilyPlayedButLosing.length > 0) {
-        paragraphs.push(
-          `Despite meaningful play, ${joinEnglish(listNames(heavilyPlayedButLosing))} ` +
-          `${heavilyPlayedButLosing.length === 1 ? 'is' : 'are'} underperforming, sitting below 49% win rate ` +
-          `(${joinEnglish(heavilyPlayedButLosing.map(a => `${a.name} at ${pct(a.winRate)}`))}).`
-        )
-      }
+      blocks.push(listBlock('Right behind it:', others.map(a => `${a.name} — ${pct(a.winRate)} win rate`)))
     }
   }
 
-  const topColorPair = (stats?.colorPairs ?? [])
-    .filter(cp => cp.colors?.length === 2)
-    .sort((a, b) => (b.firstPlayerWinRate ?? 0) - (a.firstPlayerWinRate ?? 0))[0]
+  const heavilyPlayedButLosing = underperformers.filter(a => a.playRate >= 3 && a.winRate < 49)
+  if (heavilyPlayedButLosing.length > 0) {
+    blocks.push(listBlock(
+      'Despite meaningful play, these decks are underperforming (below 49% win rate):',
+      heavilyPlayedButLosing.map(a => `${a.name} — ${pct(a.winRate)} win rate`)
+    ))
+  }
+
+  // Require a real sample before calling out a first-player edge — a color
+  // pair with only a handful of games can show a misleading 100% swing.
+  const reliableColorPairs = (stats?.colorPairs ?? [])
+    .filter(cp => cp.colors?.length === 2 && cp.games >= winRateSampleFloor(stats))
+  const topColorPair = reliableColorPairs.sort((a, b) => (b.firstPlayerWinRate ?? 0) - (a.firstPlayerWinRate ?? 0))[0]
   if (topColorPair?.firstPlayerWinRate != null) {
-    paragraphs.push(
+    blocks.push(textBlock(
       `Going first remains a significant edge — ${topColorPair.colors.join('/')} decks win ${pct(topColorPair.firstPlayerWinRate)} of games when they're on the play.`
-    )
+    ))
   }
 
   let focusMatchups = null
   let focusCards = []
+  let focusWorstCards = []
   const focus = focusArchetypeKey ? aggregateArchetypes(stats.profiles).find(a => a.key === focusArchetypeKey) : null
   if (focus) {
     focusMatchups = archetypeMatchupSummary(stats, focusArchetypeKey)
     focusCards = topSignatureCards(stats, focusArchetypeKey, { resolveName: resolveCardName })
+    focusWorstCards = worstSignatureCards(stats, focusArchetypeKey, { resolveName: resolveCardName })
 
-    if (focusMatchups && (focusMatchups.best || focusMatchups.worst)) {
-      const bits = []
+    if (focusMatchups && (focusMatchups.best || focusMatchups.worst || focusMatchups.mirror)) {
+      const items = []
       if (focusMatchups.best) {
-        bits.push(`its best matchup is ${focusMatchups.best.name} at ${pct(focusMatchups.best.winRate)} win rate (${focusMatchups.best.games.toLocaleString()} games)`)
+        items.push(`Best matchup — ${focusMatchups.best.name} at ${pct(focusMatchups.best.winRate)} win rate (${focusMatchups.best.games.toLocaleString()} games)`)
       }
       if (focusMatchups.worst && focusMatchups.worst.key !== focusMatchups.best?.key) {
-        bits.push(`its toughest is ${focusMatchups.worst.name} at ${pct(focusMatchups.worst.winRate)}`)
+        items.push(`Toughest matchup — ${focusMatchups.worst.name} at ${pct(focusMatchups.worst.winRate)} win rate`)
       }
-      let sentence = `Playing ${focus.name}? ${bits.join('; ')}.`
       if (focusMatchups.mirror) {
-        sentence += ` The mirror runs ${pct(focusMatchups.mirror.winRate)}.`
+        items.push(`Mirror match — ${pct(focusMatchups.mirror.winRate)} win rate`)
       }
-      paragraphs.push(sentence)
+      blocks.push(listBlock(`Playing ${focus.name}?`, items))
     }
 
     if (focusCards.length > 0) {
-      paragraphs.push(
-        `Its biggest signature cards are ${joinEnglish(focusCards.map(c => `${c.name} (${pct(c.winRateWith)} win rate when included)`))}.`
-      )
+      blocks.push(listBlock('Its biggest signature cards:', focusCards.map(c => `${c.name} — ${pct(c.winRateWith)} win rate when included`)))
+    }
+
+    if (focusWorstCards.length > 0) {
+      blocks.push(listBlock('Its weakest cards (lowest win rate when included):', focusWorstCards.map(c => `${c.name} — ${pct(c.winRateWith)} win rate when included`)))
     }
   }
 
-  return { paragraphs, topPlayed, topWinRate, underperformers, focusMatchups, focusCards }
+  return { blocks, topPlayed, topWinRate, underperformers, focusMatchups, focusCards, focusWorstCards }
 }
 
 // Diffs archetype play-rate share between two stats responses over the same
 // queue — used both for the rank-band comparison and the week-over-week
 // trend, which only differ in which two `/api/stats/meta` calls they diff
-// and how the result reads in prose.
+// and how the result reads.
 function diffArchetypeShares(aStats, bStats, minDelta) {
   const aTotal = aStats?.activity?.totalGames ?? 0
   const bTotal = bStats?.activity?.totalGames ?? 0
@@ -312,54 +331,59 @@ function diffArchetypeShares(aStats, bStats, minDelta) {
   }
 
   return {
-    risers: deltas.filter(d => d.delta >= minDelta).sort((x, y) => y.delta - x.delta).slice(0, 3),
-    fallers: deltas.filter(d => d.delta <= -minDelta).sort((x, y) => x.delta - y.delta).slice(0, 3),
+    risers: deltas.filter(d => d.delta >= minDelta).sort((x, y) => y.delta - x.delta).slice(0, 5),
+    fallers: deltas.filter(d => d.delta <= -minDelta).sort((x, y) => x.delta - y.delta).slice(0, 5),
   }
+}
+
+function shareShiftBlocks({ risers, fallers }, { risersIntro, fallersIntro }) {
+  const blocks = []
+  if (risers.length > 0) {
+    blocks.push(listBlock(risersIntro, risers.map(r => `${r.name} — ${pct(r.aPlayRate)} (up from ${pct(r.bPlayRate)})`)))
+  }
+  if (fallers.length > 0) {
+    blocks.push(listBlock(fallersIntro, fallers.map(f => `${f.name} — ${pct(f.aPlayRate)} (down from ${pct(f.bPlayRate)})`)))
+  }
+  return blocks
 }
 
 // Compares the same queue/period across two rank bands (e.g. the user's
 // selected band vs everyone below it) to surface what shifts with MMR.
-// `upperLabel`/`lowerLabel` describe the two bands in the returned paragraph.
-export function compareRankBands(upperStats, lowerStats, { upperLabel, lowerLabel, minDelta = 3 } = {}) {
+// `upperLabel`/`lowerLabel` describe the two bands in the returned blocks.
+export function compareRankBands(upperStats, lowerStats, { upperLabel, lowerLabel, minDelta = 2 } = {}) {
   const diff = diffArchetypeShares(upperStats, lowerStats, minDelta)
-  if (!diff) return { risers: [], fallers: [], paragraph: null }
+  if (!diff) return { risers: [], fallers: [], blocks: [] }
   const { risers, fallers } = diff
+  if (risers.length === 0 && fallers.length === 0) return { risers, fallers, blocks: [] }
 
-  let paragraph = null
-  if (risers.length > 0 || fallers.length > 0) {
-    const parts = []
-    if (risers.length > 0) {
-      parts.push(`more common at ${upperLabel} than ${lowerLabel}: ${joinEnglish(risers.map(r => `${r.name} (${pct(r.aPlayRate)} vs ${pct(r.bPlayRate)})`))}`)
-    }
-    if (fallers.length > 0) {
-      parts.push(`more common at ${lowerLabel}: ${joinEnglish(fallers.map(f => `${f.name} (${pct(f.bPlayRate)} vs ${pct(f.aPlayRate)})`))}`)
-    }
-    paragraph = `The meta shifts with rank — ${parts.join('; ')}.`
-  }
+  const blocks = [
+    textBlock('The meta shifts with rank —'),
+    ...shareShiftBlocks({ risers, fallers }, {
+      risersIntro: `More common at ${upperLabel} than at ${lowerLabel}:`,
+      fallersIntro: `More common at ${lowerLabel} than at ${upperLabel}:`,
+    }),
+  ]
 
-  return { risers, fallers, paragraph }
+  return { risers, fallers, blocks }
 }
 
 // Compares the current period's stats against the immediately preceding
 // week's, to surface week-over-week movement — the meta shifts fast, so
 // "what's different from last week" is often more useful than a static
-// snapshot. `thisLabel`/`lastLabel` describe the two periods in the prose.
-export function compareWeeks(thisWeekStats, lastWeekStats, { thisLabel = 'this week', lastLabel = 'last week', minDelta = 3 } = {}) {
+// snapshot. `thisLabel`/`lastLabel` describe the two periods in the blocks.
+export function compareWeeks(thisWeekStats, lastWeekStats, { thisLabel = 'this week', lastLabel = 'last week', minDelta = 2 } = {}) {
   const diff = diffArchetypeShares(thisWeekStats, lastWeekStats, minDelta)
-  if (!diff) return { risers: [], fallers: [], paragraph: null }
+  if (!diff) return { risers: [], fallers: [], blocks: [] }
   const { risers, fallers } = diff
+  if (risers.length === 0 && fallers.length === 0) return { risers, fallers, blocks: [] }
 
-  let paragraph = null
-  if (risers.length > 0 || fallers.length > 0) {
-    const parts = []
-    if (risers.length > 0) {
-      parts.push(`gaining ground: ${joinEnglish(risers.map(r => `${r.name} (${pct(r.aPlayRate)}, up from ${pct(r.bPlayRate)})`))}`)
-    }
-    if (fallers.length > 0) {
-      parts.push(`losing ground: ${joinEnglish(fallers.map(f => `${f.name} (${pct(f.aPlayRate)}, down from ${pct(f.bPlayRate)})`))}`)
-    }
-    paragraph = `From ${lastLabel} to ${thisLabel}, the meta is moving — ${parts.join('; ')}.`
-  }
+  const blocks = [
+    textBlock(`From ${lastLabel} to ${thisLabel}, the meta is moving —`),
+    ...shareShiftBlocks({ risers, fallers }, {
+      risersIntro: 'Gaining ground:',
+      fallersIntro: 'Losing ground:',
+    }),
+  ]
 
-  return { risers, fallers, paragraph }
+  return { risers, fallers, blocks }
 }

@@ -7,10 +7,17 @@ import {
   listReliableArchetypes,
   archetypeMatchupSummary,
   topSignatureCards,
+  worstSignatureCards,
   buildSynthesis,
   compareRankBands,
   compareWeeks,
 } from '../metaSynthesis'
+
+// Flattens a block list (see metaSynthesis.js's textBlock/listBlock) into
+// plain strings for easy substring assertions in tests.
+function flattenBlocks(blocks) {
+  return blocks.flatMap(b => b.type === 'list' ? [b.intro, ...b.items] : [b.text])
+}
 
 const profiles = [
   // Two build variants of the same archetype — should aggregate together.
@@ -27,8 +34,11 @@ const stats = {
   activity: { totalGames: 1450, uniquePlayers: 500 },
   profiles,
   colorPairs: [
-    { colors: ['amber', 'amethyst'], winRate: 52, firstPlayerWinRate: 58 },
-    { colors: ['amber', 'emerald'], winRate: 51, firstPlayerWinRate: 55 },
+    { colors: ['amber', 'amethyst'], winRate: 52, firstPlayerWinRate: 58, games: 1000 },
+    { colors: ['amber', 'emerald'], winRate: 51, firstPlayerWinRate: 55, games: 300 },
+    // Tiny sample with a misleadingly extreme first-player win rate —
+    // should never be picked as "the" going-first callout.
+    { colors: ['amethyst', 'sapphire'], winRate: 60, firstPlayerWinRate: 100, games: 4 },
   ],
 }
 
@@ -77,22 +87,39 @@ describe('topWinRateArchetypes / bottomWinRateArchetypes', () => {
 })
 
 describe('buildSynthesis', () => {
-  it('produces paragraphs referencing the most-played and best-win-rate archetypes', () => {
-    const { paragraphs, topPlayed, topWinRate } = buildSynthesis(stats, {
+  it('produces blocks referencing the most-played and best-win-rate archetypes', () => {
+    const { blocks, topPlayed, topWinRate } = buildSynthesis(stats, {
       queueLabel: 'Core BO1',
       periodLabel: 'the latest week',
       bandLabel: 'all players',
     })
-    expect(paragraphs.length).toBeGreaterThan(0)
-    expect(paragraphs[0]).toContain('1,450 games')
+    const text = flattenBlocks(blocks)
+    expect(blocks.length).toBeGreaterThan(0)
+    expect(text[0]).toContain('1,450 games')
     expect(topPlayed[0].archetypeName).toBe('Midrange')
     expect(topWinRate[0].archetypeName).toBe('Princess Aggro')
-    expect(paragraphs.some(p => p.includes('Midrange'))).toBe(true)
+    expect(text.some(t => t.includes('Midrange'))).toBe(true)
+  })
+
+  it('picks the going-first callout only from color pairs with a real sample', () => {
+    const { blocks } = buildSynthesis(stats, {})
+    const text = flattenBlocks(blocks).join(' ')
+    // amethyst/sapphire has a 100% first-player win rate but only 4 games —
+    // amber/amethyst (58%, 1000 games) should win the callout instead.
+    expect(text).toContain('amber/amethyst decks win 58.0%')
+    expect(text).not.toContain('amethyst/sapphire')
+  })
+
+  it('omits the going-first callout entirely when no color pair has enough games', () => {
+    const smallSample = { ...stats, colorPairs: stats.colorPairs.map(cp => ({ ...cp, games: 4 })) }
+    const { blocks } = buildSynthesis(smallSample, {})
+    const text = flattenBlocks(blocks).join(' ')
+    expect(text).not.toContain('Going first')
   })
 
   it('handles zero games gracefully', () => {
     const result = buildSynthesis({ activity: { totalGames: 0 }, profiles: [] }, {})
-    expect(result.paragraphs).toHaveLength(1)
+    expect(result.blocks).toHaveLength(1)
     expect(result.topPlayed).toEqual([])
   })
 })
@@ -135,6 +162,7 @@ const profilesWithLift = profiles.map(p => p.id === 'a1'
       { cardId: '10-1', lift: 2.5, winRateWith: 58, presence: 0.2 },
       { cardId: '10-2', lift: -1, winRateWith: 40, presence: 0.1 },
       { cardId: '10-3', lift: 1.2, winRateWith: 55, presence: 0.15 },
+      { cardId: '10-4', lift: -2.3, winRateWith: 35, presence: 0.08 },
     ],
   }
   : p)
@@ -149,8 +177,28 @@ describe('topSignatureCards', () => {
     expect(cards[0].name).toBe('Card 10-1')
   })
 
+  it('defaults to up to 5 cards', () => {
+    const cards = topSignatureCards(statsWithLift, midrangeKey, { resolveName: id => `Card ${id}` })
+    expect(cards).toHaveLength(2) // only 2 positive-lift entries in the fixture
+  })
+
   it('returns [] for an unknown archetype', () => {
     expect(topSignatureCards(statsWithLift, 'nope')).toEqual([])
+  })
+})
+
+describe('worstSignatureCards', () => {
+  const statsWithLift = { ...stats, profiles: profilesWithLift }
+  const midrangeKey = aggregateArchetypes(profilesWithLift).find(a => a.archetypeName === 'Midrange').key
+
+  it('returns the most negative-lift cards, worst first', () => {
+    const cards = worstSignatureCards(statsWithLift, midrangeKey, { resolveName: id => `Card ${id}` })
+    expect(cards.map(c => c.cardId)).toEqual(['10-4', '10-2'])
+    expect(cards[0].winRateWith).toBe(35)
+  })
+
+  it('returns [] for an unknown archetype', () => {
+    expect(worstSignatureCards(statsWithLift, 'nope')).toEqual([])
   })
 })
 
@@ -158,21 +206,25 @@ describe('buildSynthesis with a focus archetype', () => {
   const combined = { ...stats, profiles: profilesWithLift, archetypeMatchups }
   const midrangeKey = aggregateArchetypes(profilesWithLift).find(a => a.archetypeName === 'Midrange').key
 
-  it('adds matchup and signature-card paragraphs when a focus archetype is given', () => {
-    const { focusMatchups, focusCards, paragraphs } = buildSynthesis(combined, {
+  it('adds matchup, signature-card, and weakest-card blocks when a focus archetype is given', () => {
+    const { focusMatchups, focusCards, focusWorstCards, blocks } = buildSynthesis(combined, {
       focusArchetypeKey: midrangeKey,
       resolveCardName: id => `Card ${id}`,
     })
+    const text = flattenBlocks(blocks)
     expect(focusMatchups.best).toBeTruthy()
     expect(focusCards.length).toBeGreaterThan(0)
-    expect(paragraphs.some(p => p.startsWith('Playing Amber/Amethyst Midrange?'))).toBe(true)
-    expect(paragraphs.some(p => p.includes('signature cards'))).toBe(true)
+    expect(focusWorstCards.length).toBeGreaterThan(0)
+    expect(text.some(t => t === 'Playing Amber/Amethyst Midrange?')).toBe(true)
+    expect(text.some(t => t.includes('signature cards'))).toBe(true)
+    expect(text.some(t => t.includes('weakest cards'))).toBe(true)
   })
 
-  it('omits focus paragraphs when no focus archetype is given', () => {
-    const { focusMatchups, focusCards } = buildSynthesis(combined, {})
+  it('omits focus blocks when no focus archetype is given', () => {
+    const { focusMatchups, focusCards, focusWorstCards } = buildSynthesis(combined, {})
     expect(focusMatchups).toBeNull()
     expect(focusCards).toEqual([])
+    expect(focusWorstCards).toEqual([])
   })
 })
 
@@ -192,16 +244,19 @@ describe('compareWeeks', () => {
     ],
   }
 
-  it('flags archetypes gaining or losing ground week over week', () => {
-    const { risers, fallers, paragraph } = compareWeeks(thisWeek, lastWeek, {})
+  it('flags archetypes gaining or losing ground week over week as separate lists', () => {
+    const { risers, fallers, blocks } = compareWeeks(thisWeek, lastWeek, {})
     expect(risers.map(r => r.name)).toContain('Amber/Amethyst Midrange')
     expect(fallers.map(f => f.name)).toContain('Amber/Emerald Princess Aggro')
-    expect(paragraph).toContain('meta is moving')
+    const text = flattenBlocks(blocks)
+    expect(text.some(t => t.includes('meta is moving'))).toBe(true)
+    expect(text.some(t => t === 'Gaining ground:')).toBe(true)
+    expect(text.some(t => t === 'Losing ground:')).toBe(true)
   })
 
-  it('returns no paragraph when either week has no games', () => {
+  it('returns no blocks when either week has no games', () => {
     const result = compareWeeks({ activity: { totalGames: 0 }, profiles: [] }, lastWeek, {})
-    expect(result.paragraph).toBeNull()
+    expect(result.blocks).toEqual([])
   })
 })
 
@@ -221,17 +276,20 @@ describe('compareRankBands', () => {
     ],
   }
 
-  it('flags archetypes that shift meaningfully between bands', () => {
-    const { risers, fallers, paragraph } = compareRankBands(upper, lower, {
+  it('flags archetypes that shift meaningfully between bands as separate lists', () => {
+    const { risers, fallers, blocks } = compareRankBands(upper, lower, {
       upperLabel: 'Epic+', lowerLabel: 'lower ranks',
     })
     expect(risers.map(r => r.name)).toContain('Amber/Amethyst Midrange')
     expect(fallers.map(f => f.name)).toContain('Amber/Emerald Princess Aggro')
-    expect(paragraph).toContain('shifts with rank')
+    const text = flattenBlocks(blocks)
+    expect(text.some(t => t.includes('shifts with rank'))).toBe(true)
+    expect(text.some(t => t.includes('More common at Epic+ than at lower ranks'))).toBe(true)
+    expect(text.some(t => t.includes('More common at lower ranks than at Epic+'))).toBe(true)
   })
 
-  it('returns no paragraph when either band has no games', () => {
+  it('returns no blocks when either band has no games', () => {
     const result = compareRankBands({ activity: { totalGames: 0 }, profiles: [] }, lower, {})
-    expect(result.paragraph).toBeNull()
+    expect(result.blocks).toEqual([])
   })
 })

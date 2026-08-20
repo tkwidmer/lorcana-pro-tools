@@ -27,6 +27,21 @@ function queueId(format, mode) {
   return `${format}-${mode}`
 }
 
+// Renders a synthesis block sequence — plain paragraphs and labeled bullet
+// lists — from metaSynthesis.js's { type: 'text' | 'list', ... } shape.
+function Blocks({ blocks }) {
+  return blocks.map((b, i) => b.type === 'list' ? (
+    <div key={i}>
+      <p className="text-gray-800 leading-relaxed mb-1">{b.intro}</p>
+      <ul className="list-disc list-inside space-y-0.5 text-gray-800 pl-1">
+        {b.items.map((item, j) => <li key={j}>{item}</li>)}
+      </ul>
+    </div>
+  ) : (
+    <p key={i} className="text-gray-800 leading-relaxed">{b.text}</p>
+  ))
+}
+
 // Builds the `period` query value duels.ink expects: `all_time`, a single
 // `week:<date>`, or a multi-week `weeks:<date>,<date>,...` when more than
 // one week is selected (see the "Last 2/4 Weeks" presets below).
@@ -361,15 +376,9 @@ export function MetaSynthesisPage() {
       {!loading && !error && synthesis && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <div className="border border-gray-200 rounded-lg p-5 space-y-3">
-            {synthesis.paragraphs.map((p, i) => (
-              <p key={i} className="text-gray-800 leading-relaxed">{p}</p>
-            ))}
-            {comparison?.paragraph && (
-              <p className="text-gray-800 leading-relaxed">{comparison.paragraph}</p>
-            )}
-            {weekTrend?.paragraph && (
-              <p className="text-gray-800 leading-relaxed">{weekTrend.paragraph}</p>
-            )}
+            <Blocks blocks={synthesis.blocks} />
+            {comparison?.blocks?.length > 0 && <Blocks blocks={comparison.blocks} />}
+            {weekTrend?.blocks?.length > 0 && <Blocks blocks={weekTrend.blocks} />}
           </div>
 
           <div className="space-y-6">
@@ -458,6 +467,34 @@ export function MetaSynthesisPage() {
                   </thead>
                   <tbody>
                     {synthesis.focusCards.map(c => (
+                      <tr key={c.cardId} className="border-t border-gray-100">
+                        <td className="px-4 py-2">{c.name}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{c.winRateWith.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
+                          {(c.presence * 100).toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {synthesis.focusWorstCards.length > 0 && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Weakest Cards — {deckOptions.find(a => a.key === focusArchetypeKey)?.name ?? 'Selected Deck'}
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase tracking-wide text-gray-400">
+                    <tr>
+                      <th className="text-left px-4 py-2">Card</th>
+                      <th className="text-right px-4 py-2">Win Rate With</th>
+                      <th className="text-right px-4 py-2 hidden sm:table-cell">Presence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {synthesis.focusWorstCards.map(c => (
                       <tr key={c.cardId} className="border-t border-gray-100">
                         <td className="px-4 py-2">{c.name}</td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums">{c.winRateWith.toFixed(1)}%</td>

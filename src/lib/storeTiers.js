@@ -72,26 +72,37 @@ export function computeTierProgress(events, uniqueFanCount, requirements = LEGEN
 // set release dates, but RPH's own rule — "run Prerelease Events for all
 // available sets" — means a store's own Prerelease event history functionally
 // *is* its set-season boundaries: each new set season begins when a store
-// runs that set's Prerelease. A store sometimes runs more than one Prerelease
-// session for the same set (e.g. a Saturday sealed pod and a Wednesday
-// makeup pod a few days later), so nearby Prerelease events within
-// `mergeWindowDays` are treated as the same season rather than two.
-const DEFAULT_SEASON_MERGE_WINDOW_DAYS = 30
+// runs that set's Prerelease.
+//
+// A store often runs more than one Prerelease session for the same set
+// (a Saturday sealed pod and a Wednesday makeup pod, sometimes weeks apart),
+// so this can't just merge anchors within a fixed day window — a store could
+// legitimately space sessions for one set further apart than the gap between
+// two different sets' Prereleases. Instead, walk the full reported event
+// history in order and treat each *run* of consecutive Prerelease-named
+// events as one season anchor: a season only ends once a normal (non-
+// Prerelease) event — a regular league night — appears, meaning play has
+// returned to normal for that set. The next Prerelease-named event after
+// that starts a new season.
+export function deriveSeasons(events) {
+  const reported = (events ?? [])
+    .filter(isReportedEvent)
+    .slice()
+    .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime())
 
-export function deriveSeasons(events, mergeWindowDays = DEFAULT_SEASON_MERGE_WINDOW_DAYS) {
-  const prereleases = (events ?? [])
-    .filter((event) => isReportedEvent(event) && isPrereleaseEvent(event.name))
-    .map((event) => ({ name: event.name, start: event.start_datetime }))
-    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-
-  const mergeWindowMs = mergeWindowDays * 24 * 60 * 60 * 1000
   const anchors = []
-  for (const prerelease of prereleases) {
-    const last = anchors[anchors.length - 1]
-    if (last && new Date(prerelease.start).getTime() - new Date(last.start).getTime() <= mergeWindowMs) {
-      continue // same set season as the previous Prerelease anchor
+  let inPrereleaseCluster = false
+
+  for (const event of reported) {
+    if (isPrereleaseEvent(event.name)) {
+      if (!inPrereleaseCluster) {
+        anchors.push({ name: event.name, start: event.start_datetime })
+        inPrereleaseCluster = true
+      }
+      // else: still the same cluster (same season) — not a new anchor
+    } else {
+      inPrereleaseCluster = false
     }
-    anchors.push(prerelease)
   }
 
   // end: null means the season is still ongoing (runs through now).

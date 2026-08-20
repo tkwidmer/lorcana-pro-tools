@@ -134,12 +134,14 @@ describe('computeTierProgress', () => {
 })
 
 describe('deriveSeasons', () => {
-  it('anchors one season per Prerelease, in chronological order', () => {
+  it('anchors one season per Prerelease cluster, in chronological order', () => {
     const events = [
       makeEvent({ id: 1, name: 'Weekly Play', start_datetime: '2026-01-10T00:00:00Z' }),
       makeEvent({ id: 2, name: 'WinterSpell Prerelease', start_datetime: '2026-02-19T00:00:00Z' }),
-      makeEvent({ id: 3, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-05-09T00:00:00Z' }),
-      makeEvent({ id: 4, name: 'Hyperia City Prerelease', start_datetime: '2026-07-18T00:00:00Z' }),
+      makeEvent({ id: 3, name: 'Weekly Play', start_datetime: '2026-03-01T00:00:00Z' }),
+      makeEvent({ id: 4, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-05-09T00:00:00Z' }),
+      makeEvent({ id: 5, name: 'Weekly Play', start_datetime: '2026-05-20T00:00:00Z' }),
+      makeEvent({ id: 6, name: 'Hyperia City Prerelease', start_datetime: '2026-07-18T00:00:00Z' }),
     ]
     const seasons = deriveSeasons(events)
     expect(seasons.map((s) => s.name)).toEqual([
@@ -151,12 +153,28 @@ describe('deriveSeasons', () => {
     expect(seasons[2].end).toBeNull() // most recent season is ongoing
   })
 
-  it('merges Prerelease events run close together into a single season', () => {
+  it('merges consecutive Prerelease events into a single season regardless of gap size', () => {
+    // No non-Prerelease event appears between them, so this is one cluster —
+    // even though the gap (6 weeks) would have exceeded a fixed day-window
+    // heuristic. Stores legitimately stagger Prerelease sessions for one set
+    // by more than that (e.g. a weekend pod, then a weekday makeup pod).
     const events = [
       makeEvent({ id: 1, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-05-09T00:00:00Z' }),
-      makeEvent({ id: 2, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-05-14T00:00:00Z' }), // 5 days later
+      makeEvent({ id: 2, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-06-20T00:00:00Z' }),
     ]
     expect(deriveSeasons(events)).toHaveLength(1)
+  })
+
+  it('starts a new season once a normal league night breaks the Prerelease cluster', () => {
+    const events = [
+      makeEvent({ id: 1, name: 'Wilds Unknown Prerelease (Sealed)', start_datetime: '2026-05-09T00:00:00Z' }),
+      makeEvent({ id: 2, name: 'Weekly Play', start_datetime: '2026-05-16T00:00:00Z' }),
+      // Even a Prerelease just a few days after a normal league night is a
+      // new season — the gap alone doesn't decide it, the event type does.
+      makeEvent({ id: 3, name: 'Hyperia City Prerelease', start_datetime: '2026-05-20T00:00:00Z' }),
+    ]
+    const seasons = deriveSeasons(events)
+    expect(seasons.map((s) => s.name)).toEqual(['Wilds Unknown Prerelease (Sealed)', 'Hyperia City Prerelease'])
   })
 
   it('ignores unreported (upcoming/in-progress) Prerelease events', () => {
@@ -165,13 +183,15 @@ describe('deriveSeasons', () => {
   })
 
   it('picks up a hyphenated "Pre-release" anchor (regression: Victory Point Cafe)', () => {
-    // A real store ran "Winterspell...", then "Wilds Unknown Pre-release!!",
-    // then "...Prerelease Sealed" for the next set. The hyphenated middle
-    // event used to be missed entirely, leaving only the most recent
-    // Prerelease as an anchor and collapsing the standing window to ~3 weeks.
+    // A real store ran "Wilds Unknown Pre-release!!", several weeks of normal
+    // league nights, then "...Prerelease Sealed" for the next set. The
+    // hyphenated Prerelease event used to be missed entirely, leaving only
+    // the most recent Prerelease as an anchor and collapsing the standing
+    // window to ~3 weeks instead of ~3 months.
     const events = [
       makeEvent({ id: 1, name: 'Wilds Unknown Pre-release!!', start_datetime: '2026-05-10T00:00:00Z' }),
-      makeEvent({ id: 2, name: 'ATTACK OF THE VINE! Prerelease Sealed', start_datetime: '2026-07-24T00:00:00Z' }),
+      makeEvent({ id: 2, name: 'Wilds Unknown Core 2', start_datetime: '2026-05-29T00:00:00Z' }),
+      makeEvent({ id: 3, name: 'ATTACK OF THE VINE! Prerelease Sealed', start_datetime: '2026-07-24T00:00:00Z' }),
     ]
     const seasons = deriveSeasons(events)
     expect(seasons).toHaveLength(2)

@@ -296,7 +296,7 @@ export function MetaSynthesisPage() {
           return
         }
 
-        const series = trackedKeys.map(key => {
+        const playRateSeries = trackedKeys.map(key => {
           let name = key
           const values = weekStats.map(ws => {
             const totalGames = ws?.activity?.totalGames ?? 0
@@ -307,7 +307,24 @@ export function MetaSynthesisPage() {
           return { key, name, values }
         })
 
-        setTrendData({ weeks: recentWeeks, series })
+        // A week where the archetype barely got played has a noisy win
+        // rate — carry the last-known value forward instead of dropping to
+        // 0%, which would misleadingly read as "lost every game that week".
+        const winRateSeries = trackedKeys.map(key => {
+          let name = key
+          let lastKnown = null
+          const values = weekStats.map(ws => {
+            const found = aggregateArchetypes(ws?.profiles).find(a => a.key === key)
+            if (found) {
+              name = found.name
+              lastKnown = found.winRate
+            }
+            return lastKnown ?? 50
+          })
+          return { key, name, values }
+        })
+
+        setTrendData({ weeks: recentWeeks, playRateSeries, winRateSeries })
       } catch {
         if (!cancelled) setTrendData(null)
       }
@@ -513,7 +530,23 @@ export function MetaSynthesisPage() {
                   Play Rate Trend
                 </div>
                 <div className="p-4">
-                  <MetaTrendChart weeks={trendData.weeks} series={trendData.series} />
+                  <MetaTrendChart weeks={trendData.weeks} series={trendData.playRateSeries} />
+                </div>
+              </div>
+            )}
+
+            {trendData && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Win Rate Trend
+                </div>
+                <div className="p-4">
+                  <MetaTrendChart
+                    weeks={trendData.weeks}
+                    series={trendData.winRateSeries}
+                    metricLabel="win rate"
+                    scaleFromZero={false}
+                  />
                 </div>
               </div>
             )}

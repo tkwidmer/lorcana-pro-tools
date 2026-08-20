@@ -25,6 +25,7 @@ const TITLES = {
   '/gamelog': 'Gamelog Viewer',
   '/analytics': 'Analytics',
   '/winrate-matrix': 'Winrate Matrix',
+  '/meta-synthesis': 'Meta Synthesis',
   '/practice-plan': 'Practice Plan',
   '/leaderboard': 'Leaderboard',
   '/tournament-lookup': 'Tournament Lookup',
@@ -65,6 +66,7 @@ const DESCRIPTIONS = {
   '/rules': 'Browse the official Disney Lorcana comprehensive rules and recent rules changes.',
   '/deck-comparison': 'Paste two Disney Lorcana decklists side by side to highlight the differences between them.',
   '/winrate-matrix': 'A color-pair matchup matrix showing head-to-head Disney Lorcana win rates and first-player advantage.',
+  '/meta-synthesis': 'A plain-language summary of the current Disney Lorcana meta — most-played and highest-winrate archetypes, centered on your own rank.',
   '/leaderboard': "See duels.ink's top 50 ranked Disney Lorcana players by queue, with MMR distribution.",
   '/lore-tracker': 'A mobile-friendly lore counter for tracking Disney Lorcana games in person, with tap controls and an audit log.',
 }

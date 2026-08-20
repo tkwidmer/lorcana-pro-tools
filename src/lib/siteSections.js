@@ -79,6 +79,11 @@ export const SECTIONS = [
         description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
       },
       {
+        path: '/meta-synthesis',
+        name: 'Meta Synthesis',
+        description: 'A plain-language read on what\'s happening in the meta right now — most-played and highest-winrate archetypes, centered on your own rank and defaulting to the latest week.',
+      },
+      {
         path: '/leaderboard',
         name: 'Leaderboard',
         description: 'See the top 50 ranked duels.ink players for each queue, plus MMR distribution and current season info.',

@@ -26,6 +26,7 @@ import { MatchHistoryPage } from './pages/MatchHistoryPage'
 import { GamelogViewerPage } from './pages/GamelogViewerPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { WinrateMatrixPage } from './pages/WinrateMatrixPage'
+import { MetaSynthesisPage } from './pages/MetaSynthesisPage'
 import { PracticePlanPage } from './pages/PracticePlanPage'
 import { LeaderboardPage } from './pages/LeaderboardPage'
 import { TournamentLookupPage } from './pages/TournamentLookupPage'
@@ -85,6 +86,7 @@ function RoutedContent() {
         <Route path="/team-analytics" element={<Navigate to="/analytics" replace />} />
         <Route path="/analytics" element={<SupporterRoute><AnalyticsPage /></SupporterRoute>} />
         <Route path="/winrate-matrix" element={<WinrateMatrixPage />} />
+        <Route path="/meta-synthesis" element={<MetaSynthesisPage />} />
         <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />

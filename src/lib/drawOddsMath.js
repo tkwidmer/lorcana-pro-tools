@@ -15,8 +15,11 @@ export function logBinom(n, k) {
 
 // P(see at least 1 copy of a K-of card) through sequential draw stages:
 //   1) Initial 7-card opening draw from N-card deck
-//   2) M mulligan replacement draws (cards go back, deck reshuffled to N-7+M)
-//   3) g additional gameplay draws from the N-7 card remaining deck
+//   2) M mulligan replacement draws, drawn from the N-7 undrawn deck only — the cards put
+//      back can't be part of their own replacement draw
+//   3) g additional gameplay draws from the N-7 card remaining deck (the M cards put back
+//      have been reshuffled in by now, but since stage 2 only runs in the "missed" branch,
+//      none of them were targets, so the deck's K targets are still all sitting in this pool)
 // Each stage is only included if you missed in the prior stage.
 //
 // This is exact, and deliberately models NO scry. Scry can't be expressed in closed form
@@ -29,7 +32,7 @@ export function drawOdds(N, K, M, g) {
   const safeG = Math.min(g, Math.max(0, N - 7))
   let logPMiss = logBinom(N - K, 7) - logBinom(N, 7)
   if (M > 0) {
-    const pool = N - 7 + M
+    const pool = N - 7
     logPMiss += logBinom(pool - K, M) - logBinom(pool, M)
   }
   if (safeG > 0) {

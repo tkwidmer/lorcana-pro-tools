@@ -132,7 +132,11 @@ function drawsOnTurn(turn, goingFirst, additionalDraws) {
 // Mulligan: cards are sent back only when the opener didn't already satisfy the goal.
 // `isKeep` cards are never sent back (group "always keep", or a scry source set to Keep);
 // `scryForceMulligan` cards are always sent back even if some other rule would keep them.
-function evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, rngPool) {
+//
+// Replacements are drawn from the still-undrawn deck only — a card just sent back can't be
+// part of its own replacement draw. It rejoins the deck (shuffled in, since the deck is
+// reshuffled before turn 1) for subsequent turns, so it's fair game again from then on.
+function evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, sentBuf, rngPool) {
   const { isTarget, isKeep, scryLookAt, scryKeep, scryCost, scryForceMulligan } = d
   let handN = 0
   let count = 0
@@ -149,8 +153,13 @@ function evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, or
   let dp = 7
 
   if (!found && M > 0) {
-    let pi = 0
-    for (let i = 7; i < N; i++) pool[pi++] = order[i]
+    const poolSize = N - 7
+    for (let i = 0; i < poolSize; i++) pool[i] = order[7 + i]
+    for (let i = poolSize - 1; i > 0; i--) {
+      const j = (rngPool() * (i + 1)) | 0
+      const t = pool[i]; pool[i] = pool[j]; pool[j] = t
+    }
+
     let sent = 0
     let kept = 0
     for (let i = 0; i < handN; i++) {
@@ -158,24 +167,30 @@ function evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, or
       // need>1 keeps partial progress; scryForceMulligan overrides every keep rule.
       let keepThis = isKeep[c] || (need > 1 && isTarget[c])
       if (scryForceMulligan[c]) keepThis = false
-      if (!keepThis && sent < M) { pool[pi++] = c; sent++ }
+      if (!keepThis && sent < M) { sentBuf[sent++] = c }
       else hand[kept++] = c
     }
     handN = kept
-    const poolSize = pi
-    for (let i = poolSize - 1; i > 0; i--) {
-      const j = (rngPool() * (i + 1)) | 0
-      const t = pool[i]; pool[i] = pool[j]; pool[j] = t
-    }
+
+    // Replacements: the first `sent` cards of the shuffled undrawn deck.
     for (let i = 0; i < sent; i++) {
       const c = pool[i]
       hand[handN++] = c
       if (isTarget[c]) count++
     }
     found = count >= need
+
+    // The sent-back cards rejoin the deck, shuffled together with what's still undrawn.
+    const remaining = poolSize - sent
+    for (let i = 0; i < remaining; i++) pool[i] = pool[sent + i]
+    for (let i = 0; i < sent; i++) pool[remaining + i] = sentBuf[i]
+    for (let i = poolSize - 1; i > 0; i--) {
+      const j = (rngPool() * (i + 1)) | 0
+      const t = pool[i]; pool[i] = pool[j]; pool[j] = t
+    }
     deck = pool
     deckLen = poolSize
-    dp = sent
+    dp = 0
   }
 
   for (let turn = 1; turn <= targetTurn && !found; turn++) {
@@ -244,10 +259,11 @@ export function mcSim({
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   const hand = new Int32Array(N)
+  const sentBuf = new Int32Array(7)
   let hits = 0
   for (let iter = 0; iter < iters; iter++) {
     shuffleDeck(order, N, rngDeck)
-    if (evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, rngPool)) hits++
+    if (evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, sentBuf, rngPool)) hits++
   }
   return hits / iters
 }
@@ -268,11 +284,12 @@ export function mcSimMulliganRange({
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   const hand = new Int32Array(N)
+  const sentBuf = new Int32Array(7)
   const hits = new Int32Array(maxM + 1)
   for (let iter = 0; iter < iters; iter++) {
     shuffleDeck(order, N, rngDeck)
     for (let M = 0; M <= maxM; M++) {
-      if (evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, rngPool)) hits[M]++
+      if (evaluateDeal(d, N, M, need, targetTurn, goingFirst, additionalDraws, order, pool, hand, sentBuf, rngPool)) hits[M]++
     }
   }
   return Array.from(hits, (h, M) => ({ m: M, p: h / iters }))
@@ -283,8 +300,10 @@ export function mcSimMulliganRange({
 // a scry-revealed card matches at most one group; if more useful cards are revealed than
 // `scryKeep` allows, only the first `scryKeep` (in reveal order) are kept and the rest are
 // bottomed. Scratch buffers cnt/found are reused across calls and reset here.
+// Replacements are drawn from the still-undrawn deck only — see evaluateDeal for why. Sent-back
+// cards rejoin the deck (shuffled in) for subsequent turns.
 function evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDraws,
-                           order, pool, hand, cnt, found, rngPool) {
+                           order, pool, hand, sentBuf, cnt, found, rngPool) {
   const { targets, keeps, scryLookAt, scryKeep, scryCost, scryForceMulligan } = d
   const G = targets.length
   const lastTurn = Math.max(...targetTurns)
@@ -307,8 +326,13 @@ function evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDr
   let dp = 7
 
   if (!allFound && M > 0) {
-    let pi = 0
-    for (let i = 7; i < N; i++) pool[pi++] = order[i]
+    const poolSize = N - 7
+    for (let i = 0; i < poolSize; i++) pool[i] = order[7 + i]
+    for (let i = poolSize - 1; i > 0; i--) {
+      const j = (rngPool() * (i + 1)) | 0
+      const t = pool[i]; pool[i] = pool[j]; pool[j] = t
+    }
+
     let sent = 0
     let kept = 0
     for (let i = 0; i < handN; i++) {
@@ -318,15 +342,12 @@ function evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDr
         if (keeps[gi][c] || (needs[gi] > 1 && cnt[gi] < needs[gi] && targets[gi][c])) { keepThis = true; break }
       }
       if (scryForceMulligan[c]) keepThis = false
-      if (!keepThis && sent < M) { pool[pi++] = c; sent++ }
+      if (!keepThis && sent < M) { sentBuf[sent++] = c }
       else hand[kept++] = c
     }
     handN = kept
-    const poolSize = pi
-    for (let i = poolSize - 1; i > 0; i--) {
-      const j = (rngPool() * (i + 1)) | 0
-      const t = pool[i]; pool[i] = pool[j]; pool[j] = t
-    }
+
+    // Replacements: the first `sent` cards of the shuffled undrawn deck.
     for (let i = 0; i < sent; i++) {
       const c = pool[i]
       hand[handN++] = c
@@ -336,9 +357,18 @@ function evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDr
     }
     allFound = true
     for (let gi = 0; gi < G; gi++) if (!found[gi]) allFound = false
+
+    // The sent-back cards rejoin the deck, shuffled together with what's still undrawn.
+    const remaining = poolSize - sent
+    for (let i = 0; i < remaining; i++) pool[i] = pool[sent + i]
+    for (let i = 0; i < sent; i++) pool[remaining + i] = sentBuf[i]
+    for (let i = poolSize - 1; i > 0; i--) {
+      const j = (rngPool() * (i + 1)) | 0
+      const t = pool[i]; pool[i] = pool[j]; pool[j] = t
+    }
     deck = pool
     deckLen = poolSize
-    dp = sent
+    dp = 0
   }
 
   for (let turn = 1; turn <= lastTurn && !allFound; turn++) {
@@ -396,13 +426,14 @@ export function mcJointSimN({
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   const hand = new Int32Array(N)
+  const sentBuf = new Int32Array(7)
   const cnt = new Int32Array(targets.length)
   const found = new Uint8Array(targets.length)
   let hits = 0
   for (let iter = 0; iter < iters; iter++) {
     shuffleDeck(order, N, rngDeck)
     if (evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDraws,
-                          order, pool, hand, cnt, found, rngPool)) hits++
+                          order, pool, hand, sentBuf, cnt, found, rngPool)) hits++
   }
   return hits / iters
 }
@@ -419,6 +450,7 @@ export function mcJointSimMulliganRange({
   const order = new Int32Array(N)
   const pool = new Int32Array(N)
   const hand = new Int32Array(N)
+  const sentBuf = new Int32Array(7)
   const cnt = new Int32Array(targets.length)
   const found = new Uint8Array(targets.length)
   const hits = new Int32Array(maxM + 1)
@@ -426,7 +458,7 @@ export function mcJointSimMulliganRange({
     shuffleDeck(order, N, rngDeck)
     for (let M = 0; M <= maxM; M++) {
       if (evaluateJointDeal(d, N, M, needs, targetTurns, goingFirst, additionalDraws,
-                            order, pool, hand, cnt, found, rngPool)) hits[M]++
+                            order, pool, hand, sentBuf, cnt, found, rngPool)) hits[M]++
     }
   }
   return Array.from(hits, (h, M) => ({ m: M, p: h / iters }))
@@ -478,23 +510,36 @@ export function curveProbMC(deckCosts, N, maxMulligan, goingFirst, additionalDra
         continue
       }
 
-      // Send back min(maxMulligan, 7) non-playable hand cards, pool = undrawn + sent
+      // Send back min(maxMulligan, 7) non-playable hand cards (all hand cards are
+      // non-playable here). Replacements are drawn from the still-undrawn deck only —
+      // a card just sent back can't be its own replacement. It rejoins the deck
+      // (shuffled in, since the deck is reshuffled before turn 1) for the extraDraws
+      // that follow, so it's fair game again from then on.
       const toSend = Math.min(maxMulligan, 7)
-      let pi = 0
-      for (let i = 7; i < N; i++) pool[pi++] = order[i]
-      for (let i = 0; i < toSend; i++) pool[pi++] = order[i] // all hand cards are non-playable here
-
-      // Shuffle pool
-      for (let i = pi - 1; i > 0; i--) {
+      const poolSize = N - 7
+      for (let i = 0; i < poolSize; i++) pool[i] = order[7 + i]
+      for (let i = poolSize - 1; i > 0; i--) {
         const j = (rng() * (i + 1)) | 0
         const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
       }
 
-      // Draw toSend replacements + extraDraws turn draws from pool
-      const toDraw = toSend + extraDraws
       let found = false
-      for (let i = 0; i < toDraw && i < pi; i++) {
+      for (let i = 0; i < toSend; i++) {
         if (deckCosts[pool[i]] <= T) { found = true; break }
+      }
+
+      if (!found && extraDraws > 0) {
+        // Sent-back cards rejoin the deck, shuffled together with what's still undrawn.
+        const remaining = poolSize - toSend
+        for (let i = 0; i < remaining; i++) pool[i] = pool[toSend + i]
+        for (let i = 0; i < toSend; i++) pool[remaining + i] = order[i]
+        for (let i = poolSize - 1; i > 0; i--) {
+          const j = (rng() * (i + 1)) | 0
+          const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp
+        }
+        for (let i = 0; i < extraDraws && i < poolSize; i++) {
+          if (deckCosts[pool[i]] <= T) { found = true; break }
+        }
       }
       if (found) hits[ti]++
     }
@@ -525,12 +570,14 @@ export function uninkableRiskMC(deckInkable, N, maxMulligan, iterations = 20000)
     if (nonInk < 3) continue
     if (maxMulligan === 0) { hits++; continue }
 
-    // Send back non-inkable cards (up to maxMulligan), pool = undrawn + sent
+    // Send back non-inkable cards (up to maxMulligan); replacements are drawn from the
+    // still-undrawn deck only — a card just sent back can't be its own replacement.
     let pi = 0
     for (let i = 7; i < N; i++) pool[pi++] = order[i]
     let sent = 0
-    for (let i = 0; i < 7 && sent < maxMulligan; i++) {
-      if (!deckInkable[order[i]]) { pool[pi++] = order[i]; sent++ }
+    for (let i = 0; i < 7; i++) {
+      if (sent >= maxMulligan) break
+      if (!deckInkable[order[i]]) sent++
     }
 
     // Shuffle pool
@@ -574,11 +621,11 @@ export function deadDrawRiskMC(deckCosts, N, threshold, maxMulligan, iterations 
     if (hasPlayable) continue
     if (maxMulligan === 0) { misses++; continue }
 
-    // All hand cards are non-playable — send back up to maxMulligan, draw replacements
+    // All hand cards are non-playable — send back up to maxMulligan; replacements are drawn
+    // from the still-undrawn deck only, never from the cards just sent back.
     const toSend = Math.min(maxMulligan, 7)
     let pi = 0
     for (let i = 7; i < N; i++) pool[pi++] = order[i]
-    for (let i = 0; i < toSend; i++) pool[pi++] = order[i]
 
     // Shuffle pool
     for (let i = pi - 1; i > 0; i--) {

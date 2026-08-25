@@ -49,15 +49,17 @@ export function StatTable({ rows, valueKey, emptyText }) {
   )
 }
 
-export function MulliganTable({ rows, emptyText }) {
+export function MulliganTable({ rows, emptyText, metric = 'sentBack' }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
+  const valueKey = metric === 'kept' ? 'keptCount' : 'sentBackCount'
   return (
     <div className="font-mono text-sm space-y-0.5">
       {rows.map(c => {
-        const pct = c.openingHandCount > 0 ? Math.round((c.sentBackCount / c.openingHandCount) * 100) : 100
+        const value = c[valueKey]
+        const pct = c.openingHandCount > 0 ? Math.round((value / c.openingHandCount) * 100) : 100
         return (
           <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
-            <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.sentBackCount}</span>
+            <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{value}</span>
             <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
             <span className="text-xs text-gray-400 flex-shrink-0">{pct}%</span>
           </div>
@@ -188,6 +190,7 @@ export function DeckStats({ filteredGames, subtitle }) {
   const topInked = [...cards].filter(c => c.inkedCount > 0).sort((a, b) => b.inkedCount - a.inkedCount).slice(0, 8)
   const topLore = [...cards].filter(c => c.loreGained > 0).sort((a, b) => b.loreGained - a.loreGained).slice(0, 8)
   const topSentBack = [...mulliganCards].filter(c => c.sentBackCount > 0).sort((a, b) => b.sentBackCount - a.sentBackCount).slice(0, 8)
+  const topKept = [...mulliganCards].filter(c => c.keptCount > 0).sort((a, b) => b.keptCount - a.keptCount).slice(0, 8)
 
   return (
     <Section collapsible defaultOpen title="Card Stats" subtitle={subtitle}>
@@ -201,13 +204,18 @@ export function DeckStats({ filteredGames, subtitle }) {
           <StatTable rows={topInked} valueKey="inkedCount" emptyText="No inks recorded." />
         </div>
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Lore Gained</h3>
-          <StatTable rows={topLore} valueKey="loreGained" emptyText="No quest data in these gamelogs." />
-        </div>
-        <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Mulliganed</h3>
           <p className="text-[10px] text-gray-400 mb-1.5">Games fully mulliganed · % of games card was in opening hand</p>
-          <MulliganTable rows={topSentBack} emptyText="No mulligan data." />
+          <MulliganTable rows={topSentBack} emptyText="No mulligan data." metric="sentBack" />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Kept</h3>
+          <p className="text-[10px] text-gray-400 mb-1.5">Games at least one copy kept · % of games card was in opening hand</p>
+          <MulliganTable rows={topKept} emptyText="No mulligan data." metric="kept" />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Lore Gained</h3>
+          <StatTable rows={topLore} valueKey="loreGained" emptyText="No quest data in these gamelogs." />
         </div>
       </div>
       {filteredGames.length > 1 && (

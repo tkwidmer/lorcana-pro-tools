@@ -112,6 +112,7 @@ describe('aggregateMulliganSentBack', () => {
     const a = result.find(r => r.fullName === 'A')
     expect(a.openingHandCount).toBe(2)
     expect(a.sentBackCount).toBe(1)
+    expect(a.keptCount).toBe(1)
   })
 })
 

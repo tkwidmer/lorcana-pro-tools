@@ -135,9 +135,10 @@ export function aggregateMulliganSentBack(games) {
       sentBackCounts[key] = (sentBackCounts[key] ?? 0) + 1
     }
     for (const [key, { count: inHand }] of Object.entries(handCounts)) {
-      if (!map[key]) map[key] = { fullName: key, sentBackCount: 0, openingHandCount: 0 }
+      if (!map[key]) map[key] = { fullName: key, sentBackCount: 0, keptCount: 0, openingHandCount: 0 }
       map[key].openingHandCount++
       if ((sentBackCounts[key] ?? 0) >= inHand) map[key].sentBackCount++
+      else map[key].keptCount++
     }
   }
   return Object.values(map)

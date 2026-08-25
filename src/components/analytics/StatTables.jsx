@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { aggregateMyCards, aggregateMulliganSentBack } from '../../lib/analyticsAggregation'
+import { aggregateMyCards, aggregateMulliganSentBack, aggregateMultiCopyMulligan } from '../../lib/analyticsAggregation'
 
 // --- Personal analysis components (win rate breakdowns, card/mulligan stats, leaks, single-game drilldown) ---
 
@@ -49,20 +49,57 @@ export function StatTable({ rows, valueKey, emptyText }) {
   )
 }
 
-export function MulliganTable({ rows, emptyText }) {
+export function MulliganTable({ rows, emptyText, metric = 'sentBack' }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
+  const valueKey = metric === 'kept' ? 'keptCount' : 'sentBackCount'
   return (
     <div className="font-mono text-sm space-y-0.5">
       {rows.map(c => {
-        const pct = c.openingHandCount > 0 ? Math.round((c.sentBackCount / c.openingHandCount) * 100) : 100
+        const value = c[valueKey]
+        const pct = c.openingHandCount > 0 ? Math.round((value / c.openingHandCount) * 100) : 100
         return (
           <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
-            <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.sentBackCount}</span>
+            <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{value}</span>
             <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
             <span className="text-xs text-gray-400 flex-shrink-0">{pct}%</span>
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function MultiCopyBucketCell({ count, wins, colorClass }) {
+  if (count === 0) return <span className="text-center text-gray-300">—</span>
+  const winPct = Math.round((wins / count) * 100)
+  return (
+    <span className="text-center">
+      <span className={`font-semibold ${colorClass}`}>{count}</span>
+      <span className="text-[10px] text-gray-400"> ({winPct}% W)</span>
+    </span>
+  )
+}
+
+export function MultiCopyMulliganTable({ rows, emptyText }) {
+  if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
+  return (
+    <div className="text-sm">
+      <div className="grid text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1 gap-2" style={{ gridTemplateColumns: '1fr 5rem 6rem 6rem 6rem' }}>
+        <span>Card</span>
+        <span className="text-center">2+ Copies</span>
+        <span className="text-center text-emerald-500">Kept Both</span>
+        <span className="text-center text-amber-500">Split</span>
+        <span className="text-center text-red-500">Sent Both</span>
+      </div>
+      {rows.map(c => (
+        <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 5rem 6rem 6rem 6rem' }}>
+          <span className="text-gray-700 truncate">{c.fullName}</span>
+          <span className="text-center font-bold text-gray-900">{c.games}</span>
+          <MultiCopyBucketCell count={c.keptAll} wins={c.keptAllWins} colorClass="text-emerald-600" />
+          <MultiCopyBucketCell count={c.split} wins={c.splitWins} colorClass="text-amber-600" />
+          <MultiCopyBucketCell count={c.sentAll} wins={c.sentAllWins} colorClass="text-red-500" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -188,6 +225,8 @@ export function DeckStats({ filteredGames, subtitle }) {
   const topInked = [...cards].filter(c => c.inkedCount > 0).sort((a, b) => b.inkedCount - a.inkedCount).slice(0, 8)
   const topLore = [...cards].filter(c => c.loreGained > 0).sort((a, b) => b.loreGained - a.loreGained).slice(0, 8)
   const topSentBack = [...mulliganCards].filter(c => c.sentBackCount > 0).sort((a, b) => b.sentBackCount - a.sentBackCount).slice(0, 8)
+  const topKept = [...mulliganCards].filter(c => c.keptCount > 0).sort((a, b) => b.keptCount - a.keptCount).slice(0, 8)
+  const multiCopyMulligan = [...aggregateMultiCopyMulligan(filteredGames)].sort((a, b) => b.games - a.games).slice(0, 10)
 
   return (
     <Section collapsible defaultOpen title="Card Stats" subtitle={subtitle}>
@@ -201,15 +240,27 @@ export function DeckStats({ filteredGames, subtitle }) {
           <StatTable rows={topInked} valueKey="inkedCount" emptyText="No inks recorded." />
         </div>
         <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Mulliganed</h3>
+          <p className="text-[10px] text-gray-400 mb-1.5">Games fully mulliganed · % of games card was in opening hand</p>
+          <MulliganTable rows={topSentBack} emptyText="No mulligan data." metric="sentBack" />
+        </div>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Kept</h3>
+          <p className="text-[10px] text-gray-400 mb-1.5">Games at least one copy kept · % of games card was in opening hand</p>
+          <MulliganTable rows={topKept} emptyText="No mulligan data." metric="kept" />
+        </div>
+        <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Lore Gained</h3>
           <StatTable rows={topLore} valueKey="loreGained" emptyText="No quest data in these gamelogs." />
         </div>
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Mulliganed</h3>
-          <p className="text-[10px] text-gray-400 mb-1.5">Games fully mulliganed · % of games card was in opening hand</p>
-          <MulliganTable rows={topSentBack} emptyText="No mulligan data." />
-        </div>
       </div>
+      {multiCopyMulligan.length > 0 && (
+        <div className="mt-6 pt-5 border-t border-gray-100">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Multi-Copy Mulligan</h3>
+          <p className="text-[10px] text-gray-400 mb-2">Games where 2+ copies were in your opening hand — kept both, split (one kept/one sent), or sent both back, with win rate for each</p>
+          <MultiCopyMulliganTable rows={multiCopyMulligan} emptyText="No multi-copy mulligan data." />
+        </div>
+      )}
       {filteredGames.length > 1 && (
         <div className="mt-6 pt-5 border-t border-gray-100">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Card Effects</h3>

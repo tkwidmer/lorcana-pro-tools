@@ -136,6 +136,68 @@ function LoreChart({ loreEvents, turnCount, p1Name, p2Name }) {
   )
 }
 
+function InkwellChart({ turns, turnCount, p1Name, p2Name }) {
+  if (!turns?.length) return null
+
+  const maxTurn = Math.max(turnCount || 0, ...turns.map(t => t.turn))
+  if (!maxTurn) return null
+
+  const p1Ink = new Array(maxTurn + 1).fill(0)
+  const p2Ink = new Array(maxTurn + 1).fill(0)
+
+  for (const seg of turns) {
+    const arr = seg.owner === 1 ? p1Ink : seg.owner === 2 ? p2Ink : null
+    if (arr && seg.turn <= maxTurn) arr[seg.turn] += (seg.inked ?? 0)
+  }
+  // Running totals — carry the cumulative inkwell size forward turn to turn.
+  for (let t = 1; t <= maxTurn; t++) {
+    p1Ink[t] += p1Ink[t - 1]
+    p2Ink[t] += p2Ink[t - 1]
+  }
+
+  const maxInk = Math.max(1, maxTurn, ...p1Ink, ...p2Ink)
+  const W = 480, H = 120, PAD = { top: 8, right: 8, bottom: 20, left: 28 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+  const turnsArr = Array.from({ length: maxTurn + 1 }, (_, i) => i)
+
+  const x = (t) => PAD.left + (t / maxTurn) * chartW
+  const y = (v) => PAD.top + chartH - (v / maxInk) * chartH
+
+  const pathFor = (arr) => arr.map((v, t) => `${t === 0 ? 'M' : 'L'}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const idealPath = `M${x(0)},${y(0)} L${x(maxTurn)},${y(maxTurn)}`
+
+  const gridSteps = [...new Set([0, Math.round(maxInk / 4), Math.round(maxInk / 2), Math.round(3 * maxInk / 4), maxInk])]
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Inkwell Over Time</h3>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 140 }}>
+        {gridSteps.map(v => (
+          <g key={v}>
+            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} stroke="#e5e7eb" strokeWidth="0.5" />
+            <text x={PAD.left - 4} y={y(v) + 3.5} textAnchor="end" fontSize="7" fill="#9ca3af">{v}</text>
+          </g>
+        ))}
+        <path d={idealPath} fill="none" stroke="#9ca3af" strokeWidth="1" strokeDasharray="3,3" opacity="0.6" />
+
+        <path d={pathFor(p2Ink)} fill="none" stroke="#f87171" strokeWidth="2" strokeLinejoin="round" />
+        <path d={pathFor(p1Ink)} fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinejoin="round" />
+
+        {turnsArr.filter(t => t > 0 && t % Math.max(1, Math.floor(maxTurn / 8)) === 0).map(t => (
+          <text key={t} x={x(t)} y={H - 4} textAnchor="middle" fontSize="7" fill="#9ca3af">{t}</text>
+        ))}
+        <text x={PAD.left + chartW / 2} y={H - 4} textAnchor="middle" fontSize="7" fill="#d1d5db">turn</text>
+      </svg>
+      <div className="flex items-center gap-4 mt-1">
+        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-blue-400" />{p1Name}</span>
+        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-red-400" />{p2Name}</span>
+        <span className="flex items-center gap-1 text-xs text-gray-400 ml-auto"><span className="inline-block w-3 h-0.5 border-t border-dashed border-gray-400" />1 ink/turn</span>
+      </div>
+    </div>
+  )
+}
+
 function GameChallengeLog({ challenges, myPlayerNum }) {
   if (!challenges?.length) return null
   return (
@@ -402,7 +464,7 @@ function CardEffectsTimeline({ p1, p2, p1Name, p2Name, turnCount }) {
 }
 
 export function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
-  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, inferredOppDecklist, savedAt, _rawLogs } = gamelog
+  const { p1Name: rawP1Name, p2Name: rawP2Name, winner, turnCount, p1FinalLore, p2FinalLore, p1, p2, victoryReason, wentFirst, loreEvents, challenges, oppDecklist, inferredOppDecklist, savedAt, turns, _rawLogs } = gamelog
   const p1Name = resolveDisplayName(rawP1Name, myPlayerNum === 1, myName)
   const p2Name = resolveDisplayName(rawP2Name, myPlayerNum === 2, myName)
   const p1IsWinner = winner === 1 || winner === '1'
@@ -504,6 +566,13 @@ export function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
             isInferred={!oppDecklist && !!inferredOppDecklist}
             oppCards={oppP?.cards}
           />
+        </div>
+      )}
+
+      {/* Inkwell over time */}
+      {turns?.length > 0 && (
+        <div className="mt-6 border border-gray-100 rounded-lg p-4">
+          <InkwellChart turns={turns} turnCount={turnCount} p1Name={p1Name} p2Name={p2Name} />
         </div>
       )}
     </div>

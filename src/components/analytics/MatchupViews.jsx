@@ -424,6 +424,104 @@ export function MMRTrendView({ games }) {
   )
 }
 
+export function InkwellTrendView({ games }) {
+  const sorted = [...games]
+    .filter(g => g.myPlayerNum != null && g.playedAt != null && g.turnCount > 0)
+    .sort((a, b) => a.playedAt - b.playedAt)
+
+  if (sorted.length < 2) {
+    return <div className="text-sm text-gray-500">Not enough games to show a trend.</div>
+  }
+
+  const inkTotals = sorted.map(g => Object.values(g.myCards ?? {}).reduce((s, c) => s + (c.inkedCount ?? 0), 0))
+  const turnTotals = sorted.map(g => g.turnCount)
+
+  const W = 1000
+  const H = 200
+  const PAD = { top: 16, right: 16, bottom: 32, left: 40 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+
+  const maxVal = Math.max(1, ...inkTotals, ...turnTotals)
+
+  const xPos = (i) => PAD.left + (i / (sorted.length - 1)) * chartW
+  const yPos = (v) => PAD.top + (1 - v / maxVal) * chartH
+
+  const pathFor = (arr) => arr.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xPos(i).toFixed(1)} ${yPos(v).toFixed(1)}`).join(' ')
+
+  const labelIdxs = [...new Set([0, Math.floor((sorted.length - 1) / 2), sorted.length - 1])]
+  const formatDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+  const avgInk = inkTotals.reduce((s, v) => s + v, 0) / inkTotals.length
+  const avgTurns = turnTotals.reduce((s, v) => s + v, 0) / turnTotals.length
+
+  // Grid lines — target ~4 labels max
+  const gridStep = Math.max(1, Math.ceil(maxVal / 4))
+  const gridLines = []
+  for (let v = 0; v <= maxVal; v += gridStep) gridLines.push(v)
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Avg Final Inkwell</div>
+          <div className="text-lg font-bold text-gray-900">{avgInk.toFixed(1)}</div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Avg Turns</div>
+          <div className="text-lg font-bold text-gray-900">{avgTurns.toFixed(1)}</div>
+        </div>
+        <div className={`bg-gray-50 border rounded-lg p-3 ${avgInk > avgTurns ? 'border-amber-200' : 'border-gray-200'}`}>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Ink vs Turns</div>
+          <div className={`text-lg font-bold ${avgInk > avgTurns ? 'text-amber-600' : 'text-gray-900'}`}>
+            {avgInk > avgTurns ? '+' : ''}{(avgInk - avgTurns).toFixed(1)}
+          </div>
+        </div>
+      </div>
+      <div className="text-xs text-gray-400 mb-2">Final inkwell size and turn count at the end of each game — inkwell running above turns suggests overinking</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+        {/* Grid lines */}
+        {gridLines.map(v => (
+          <g key={v}>
+            <line
+              x1={PAD.left} y1={yPos(v)} x2={W - PAD.right} y2={yPos(v)}
+              stroke="#e5e7eb" strokeWidth={1} strokeDasharray="6 3"
+            />
+            <text x={PAD.left - 6} y={yPos(v) + 4} textAnchor="end" fontSize={18} fill="#9ca3af">{v}</text>
+          </g>
+        ))}
+
+        {/* Turns line */}
+        <path d={pathFor(turnTotals)} fill="none" stroke="#3b82f6" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+        {turnTotals.map((v, i) => (
+          <circle key={`turn-${i}`} cx={xPos(i)} cy={yPos(v)} r={4} fill="#3b82f6" />
+        ))}
+
+        {/* Inkwell line */}
+        <path d={pathFor(inkTotals)} fill="none" stroke="#8b5cf6" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+        {inkTotals.map((v, i) => (
+          <circle key={`ink-${i}`} cx={xPos(i)} cy={yPos(v)} r={4} fill="#8b5cf6" />
+        ))}
+
+        {/* X-axis date labels */}
+        {labelIdxs.map(i => (
+          <text
+            key={i} x={xPos(i)} y={H - 4}
+            textAnchor={i === 0 ? 'start' : i === sorted.length - 1 ? 'end' : 'middle'}
+            fontSize={16} fill="#9ca3af"
+          >
+            {formatDate(sorted[i].playedAt)}
+          </text>
+        ))}
+      </svg>
+      <div className="flex items-center gap-4 mt-2">
+        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-blue-500" />Turns played</span>
+        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-purple-500" />Final inkwell</span>
+      </div>
+    </div>
+  )
+}
+
 const MULLIGAN_MIN_SAMPLE = 2
 
 export function CardImpactView({ games, deckSelected, deckVersions, hasToken }) {

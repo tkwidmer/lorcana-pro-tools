@@ -433,7 +433,8 @@ export function InkwellTrendView({ games }) {
     return <div className="text-sm text-gray-500">Not enough games to show a trend.</div>
   }
 
-  const inkTotals = sorted.map(g => Object.values(g.myCards ?? {}).reduce((s, c) => s + (c.inkedCount ?? 0), 0))
+  const finalInkwell = (g) => (g.turns ?? []).filter(t => t.owner === g.myPlayerNum).reduce((s, t) => s + (t.inked ?? 0), 0)
+  const inkTotals = sorted.map(finalInkwell)
   const turnTotals = sorted.map(g => g.turnCount)
 
   const W = 1000

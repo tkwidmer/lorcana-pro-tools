@@ -168,3 +168,41 @@ export function aggregateMulliganWinRates(games) {
   return Object.values(map)
 }
 
+// For games where 2+ copies of a card were in the opening hand, breaks down what
+// happened to them: kept all, split (kept some/sent some), or sent all back — each
+// with its own win count, so multi-copy mulligan decisions can be compared by outcome.
+export function aggregateMultiCopyMulligan(games) {
+  const map = {}
+  for (const game of games) {
+    const openingHand = game.mulligan?.openingHand ?? []
+    const sentBack = game.mulligan?.sentBack ?? []
+    const handCounts = {}
+    for (const card of openingHand) {
+      const key = card.fullName || card.name
+      handCounts[key] = (handCounts[key] ?? 0) + 1
+    }
+    const sentCounts = {}
+    for (const card of sentBack) {
+      const key = card.fullName || card.name
+      sentCounts[key] = (sentCounts[key] ?? 0) + 1
+    }
+    for (const [key, inHand] of Object.entries(handCounts)) {
+      if (inHand < 2) continue
+      if (!map[key]) {
+        map[key] = {
+          fullName: key, games: 0,
+          keptAll: 0, keptAllWins: 0,
+          split: 0, splitWins: 0,
+          sentAll: 0, sentAllWins: 0,
+        }
+      }
+      const sent = sentCounts[key] ?? 0
+      const bucket = sent === 0 ? 'keptAll' : sent === inHand ? 'sentAll' : 'split'
+      map[key].games++
+      map[key][bucket]++
+      if (game.won) map[key][`${bucket}Wins`]++
+    }
+  }
+  return Object.values(map)
+}
+

@@ -6,6 +6,7 @@ import {
   aggregateMyCards,
   aggregateMulliganSentBack,
   aggregateMulliganWinRates,
+  aggregateMultiCopyMulligan,
 } from '../analyticsAggregation'
 
 describe('replayViewerUrl', () => {
@@ -113,6 +114,34 @@ describe('aggregateMulliganSentBack', () => {
     expect(a.openingHandCount).toBe(2)
     expect(a.sentBackCount).toBe(1)
     expect(a.keptCount).toBe(1)
+  })
+})
+
+describe('aggregateMultiCopyMulligan', () => {
+  it('ignores games where fewer than 2 copies were in the opening hand', () => {
+    const games = [
+      { won: true, mulligan: { openingHand: [{ fullName: 'A' }], sentBack: [] } },
+    ]
+    expect(aggregateMultiCopyMulligan(games)).toEqual([])
+  })
+
+  it('buckets multi-copy games as keptAll, split, or sentAll', () => {
+    const games = [
+      // Both copies kept
+      { won: true, mulligan: { openingHand: [{ fullName: 'A' }, { fullName: 'A' }], sentBack: [] } },
+      // One kept, one sent — split
+      { won: false, mulligan: { openingHand: [{ fullName: 'A' }, { fullName: 'A' }], sentBack: [{ fullName: 'A' }] } },
+      // Both sent back
+      { won: true, mulligan: { openingHand: [{ fullName: 'A' }, { fullName: 'A' }], sentBack: [{ fullName: 'A' }, { fullName: 'A' }] } },
+    ]
+    const result = aggregateMultiCopyMulligan(games)
+    const a = result.find(r => r.fullName === 'A')
+    expect(a).toEqual({
+      fullName: 'A', games: 3,
+      keptAll: 1, keptAllWins: 1,
+      split: 1, splitWins: 0,
+      sentAll: 1, sentAllWins: 1,
+    })
   })
 })
 

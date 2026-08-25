@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { InkIcon as InkImg } from '../InkIcons'
 import { buildWinrateMatrixFromGames } from '../../lib/buildWinrateMatrix'
 import { computeCardImpact, computeCardImpactTrend } from '../../lib/cardImpact'
@@ -208,7 +208,28 @@ export function TurnDistributionView({ games }) {
   )
 }
 
+// Measures the rendered pixel width of the chart's own SVG element so the viewBox can be set
+// to match it exactly (1 SVG unit = 1 px) — keeps the chart genuinely full-width without the
+// non-uniform stretching (or letterboxing) that comes from scaling a fixed-aspect-ratio viewBox
+// to fit a container of a different aspect ratio.
+function useChartWidth(defaultWidth) {
+  const ref = useRef(null)
+  const [width, setWidth] = useState(defaultWidth)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect?.width
+      if (w) setWidth(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, width]
+}
+
 export function WinRateTrendView({ games }) {
+  const [chartRef, W] = useChartWidth(1000)
   const sorted = [...games]
     .filter(g => g.myPlayerNum != null && g.playedAt != null)
     .sort((a, b) => a.playedAt - b.playedAt)
@@ -218,8 +239,7 @@ export function WinRateTrendView({ games }) {
   }
 
   const WINDOW = 10
-  const W = 1000
-  const H = 200
+  const H = 180
   const PAD = { top: 16, right: 16, bottom: 32, left: 40 }
   const chartW = W - PAD.left - PAD.right
   const chartH = H - PAD.top - PAD.bottom
@@ -243,7 +263,7 @@ export function WinRateTrendView({ games }) {
   return (
     <div>
       <div className="text-xs text-gray-400 mb-2">Rolling {WINDOW}-game win rate</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+      <svg ref={chartRef} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {/* Grid lines */}
         {[0.25, 0.5, 0.75].map(r => (
           <g key={r}>
@@ -293,6 +313,7 @@ export function WinRateTrendView({ games }) {
 }
 
 export function MMRTrendView({ games }) {
+  const [chartRef, W] = useChartWidth(1000)
   const sorted = [...games]
     .filter(g => g.mmr_delta != null && g.playedAt != null)
     .sort((a, b) => a.playedAt - b.playedAt)
@@ -301,8 +322,7 @@ export function MMRTrendView({ games }) {
     return <div className="text-sm text-gray-500">No imported games with MMR data available. Import games from match history to see MMR trends.</div>
   }
 
-  const W = 1000
-  const H = 200
+  const H = 180
   const PAD = { top: 16, right: 16, bottom: 32, left: 40 }
   const chartW = W - PAD.left - PAD.right
   const chartH = H - PAD.top - PAD.bottom
@@ -374,7 +394,7 @@ export function MMRTrendView({ games }) {
         </div>
       </div>
       <div className="text-xs text-gray-400 mb-2">MMR over time (imported games only)</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+      <svg ref={chartRef} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {/* Grid lines */}
         {gridLines.map(mmr => (
           <g key={mmr}>
@@ -425,6 +445,7 @@ export function MMRTrendView({ games }) {
 }
 
 export function InkwellTrendView({ games }) {
+  const [chartRef, W] = useChartWidth(1000)
   const sorted = [...games]
     .filter(g => g.myPlayerNum != null && g.playedAt != null && g.turnCount > 0)
     .sort((a, b) => a.playedAt - b.playedAt)
@@ -437,8 +458,7 @@ export function InkwellTrendView({ games }) {
   const inkTotals = sorted.map(finalInkwell)
   const turnTotals = sorted.map(g => g.turnCount)
 
-  const W = 1000
-  const H = 200
+  const H = 180
   const PAD = { top: 16, right: 16, bottom: 32, left: 40 }
   const chartW = W - PAD.left - PAD.right
   const chartH = H - PAD.top - PAD.bottom
@@ -480,7 +500,7 @@ export function InkwellTrendView({ games }) {
         </div>
       </div>
       <div className="text-xs text-gray-400 mb-2">Final inkwell size and turn count at the end of each game — inkwell running above turns suggests overinking</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+      <svg ref={chartRef} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {/* Grid lines */}
         {gridLines.map(v => (
           <g key={v}>
@@ -631,7 +651,6 @@ export function CardImpactView({ games, deckSelected, deckVersions, hasToken }) 
 }
 
 const TREND_CHART_W = 1000
-const TREND_CHART_H = 200
 const TREND_PAD = { top: 16, right: 16, bottom: 32, left: 40 }
 
 function formatMonthLabel(bucket) {
@@ -685,8 +704,10 @@ export function CardImpactTrendView({ games, deckVersions }) {
 }
 
 function CardWarTrendChart({ points }) {
-  const chartW = TREND_CHART_W - TREND_PAD.left - TREND_PAD.right
-  const chartH = TREND_CHART_H - TREND_PAD.top - TREND_PAD.bottom
+  const [chartRef, W] = useChartWidth(TREND_CHART_W)
+  const H = 180
+  const chartW = W - TREND_PAD.left - TREND_PAD.right
+  const chartH = H - TREND_PAD.top - TREND_PAD.bottom
 
   const wars = points.map(p => p.war)
   const minWar = Math.min(0, ...wars)
@@ -705,9 +726,9 @@ function CardWarTrendChart({ points }) {
   return (
     <div>
       <div className="text-xs text-gray-400 mb-2">WAR by month (faded points had fewer than 3 games on one side — low confidence)</div>
-      <svg viewBox={`0 0 ${TREND_CHART_W} ${TREND_CHART_H}`} className="w-full" style={{ height: 180 }}>
+      <svg ref={chartRef} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         <line
-          x1={TREND_PAD.left} y1={zeroY} x2={TREND_CHART_W - TREND_PAD.right} y2={zeroY}
+          x1={TREND_PAD.left} y1={zeroY} x2={W - TREND_PAD.right} y2={zeroY}
           stroke="#e5e7eb" strokeWidth={1} strokeDasharray="6 3"
         />
         <text x={TREND_PAD.left - 6} y={zeroY + 4} textAnchor="end" fontSize={18} fill="#9ca3af">0</text>
@@ -726,7 +747,7 @@ function CardWarTrendChart({ points }) {
 
         {points.map((p, i) => (
           <text
-            key={p.bucket} x={xPos(i)} y={TREND_CHART_H - 4}
+            key={p.bucket} x={xPos(i)} y={H - 4}
             textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}
             fontSize={16} fill="#9ca3af"
           >

@@ -137,24 +137,36 @@ channel:
     ignores the broadcast echo of its own change for a short window, so a
     reporting client doesn't double-process its own update.
 
-**Still unresolved — a real payload has not actually been captured.** Live
-test against event `734895` (round 2 `IN_PROGRESS`): stayed connected and
-subscribed for ~5 minutes while a real match on that round completed and
-was scored (`updated_at` moved `18:21:51` → `19:11:10`, `status` flipped to
-`COMPLETE`, `winning_player` populated) — **zero frames arrived** beyond the
-subscription confirmation, despite that match completion being exactly the
-kind of event the `entity` set above should cover
-(`tournamentRoundsMatchesPaginatedList`). Two plausible explanations, not
-yet distinguished: (a) broadcasts are gated to specific higher-level actions
-(e.g. a round being finalized/standings regenerated, which never happened
-in this window — round 2's `standings_status` stayed `NOT_GENERATED`
-throughout) rather than every individual match score entry, or (b)
-something else suppressed the broadcast for this specific event/deploy.
-**Before building anything on this channel, re-test against a moment likely
-to produce a broadcast** — ideally a full round transitioning to
-`COMPLETE`/`standings_status: GENERATED`, or a new registration — and
-capture the actual frame. Don't guess the payload beyond what's confirmed
-above from source.
+**Still unresolved — a real payload has not actually been captured, across
+three separate live tests now.**
+
+1. Event `734895` round 2 `IN_PROGRESS`: stayed connected/subscribed for
+   ~5 minutes while a real match on that round completed and was scored
+   (`updated_at` moved `18:21:51` → `19:11:10`, `status` flipped to
+   `COMPLETE`, `winning_player` populated) — zero frames beyond the
+   subscription confirmation.
+2. Same event, round 3 `IN_PROGRESS`: connected/subscribed at `20:11:15`;
+   match `7329567` on that round completed at `20:14:18` (`status` →
+   `COMPLETE`, `winning_player` populated) — three minutes into an
+   already-live subscription, so no "missed it before connecting"
+   explanation applies here — and again zero frames arrived.
+3. Independently reproduced by the repo owner running the same capture
+   script locally against the same event at the same time, with the same
+   result (nothing beyond the handshake).
+
+Both observed match completions are exactly the kind of event the `entity`
+set above should cover (`tournamentRoundsMatchesPaginatedList`), so this is
+now fairly strong evidence that **individual match completions do not
+trigger a broadcast** on this channel — at least not reliably. The
+remaining untested theory: broadcasts are gated to round-level milestones
+(a round transitioning to `COMPLETE` with `standings_status: GENERATED`)
+rather than each match score. Round 2 reached that state in event `734895`
+between test 1 and test 2 above, but no listener was connected at that
+exact moment to confirm either way — that's still the next thing to catch.
+**Before building anything further on this channel, capture a broadcast
+against a round actually finishing** (or a new registration coming in, an
+`eventsRegistrationsList`-covered action, as an alternative trigger to
+test). Don't guess the payload beyond what's confirmed above from source.
 
 To capture a live payload: connect to the same URL, subscribe to
 `player-event-{eventId}` for a currently-live event, and log every frame.

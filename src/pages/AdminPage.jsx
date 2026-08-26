@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useSupporter } from '../hooks/useSupporter'
 
@@ -129,6 +129,19 @@ export function AdminPage() {
       </div>
 
       <div className="space-y-8 max-w-2xl">
+        <div className="border border-gray-200 rounded-lg p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Tournament history</h2>
+            <p className="text-sm text-gray-500 mt-1">Import major RPH events into the caster history archive.</p>
+          </div>
+          <Link
+            to="/admin/tournament-import"
+            className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded whitespace-nowrap"
+          >
+            Import events
+          </Link>
+        </div>
+
         <div className="border border-gray-200 rounded-lg p-6">
           <h2 className="text-base font-bold text-gray-900 mb-4">Grant or revoke access</h2>
           <form onSubmit={search} className="flex gap-2">

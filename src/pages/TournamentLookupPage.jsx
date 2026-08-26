@@ -9,26 +9,14 @@ import {
   analyzeId,
   analyzeAdvancement,
 } from '../lib/tournamentApi'
-import { VALID_INKS } from '../lib/inkColors'
-import { generateShareImage } from '../lib/tournamentShareImage'
-import { ShareCardModal } from '../components/ShareCardModal'
+import { PlayerMatchHistory } from '../components/PlayerMatchHistory'
+import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
 
-const ANNOTATIONS_KEY = 'lorcana_tournament_match_annotations'
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
 const TEAM_KEY = 'lorcana_tournament_team'
 const RECENTS_KEY = 'lorcana_tournament_recents'
 const MAX_RECENTS = 8
-
-function getAnnotations() {
-  try { return JSON.parse(localStorage.getItem(ANNOTATIONS_KEY) ?? '{}') } catch { return {} }
-}
-
-function saveAnnotation(matchId, patch) {
-  const all = getAnnotations()
-  all[String(matchId)] = { ...all[String(matchId)], ...patch }
-  localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(all))
-}
 
 // Keyed by the Ravensburger player id (stable across events), so a caster's
 // favorites list carries over between tournaments rather than resetting per-event.
@@ -134,31 +122,6 @@ function parseRecord(record) {
   return { w: w || 0, d: d || 0, l: l || 0 }
 }
 
-function ColorPicker({ selected, onChange }) {
-  function toggle(color) {
-    const next = selected.includes(color)
-      ? selected.filter(c => c !== color)
-      : selected.length >= 2 ? [selected[1], color] : [...selected, color]
-    onChange(next)
-  }
-  return (
-    <div className="flex gap-1">
-      {VALID_INKS.map(color => (
-        <button
-          key={color}
-          title={color.charAt(0).toUpperCase() + color.slice(1)}
-          onClick={() => toggle(color)}
-          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-            selected.includes(color) ? 'border-blue-500 scale-110 bg-blue-50' : 'border-transparent opacity-40 hover:opacity-70'
-          }`}
-        >
-          <img src={`/ink/${color}.png`} alt={color} className="w-4 h-4" />
-        </button>
-      ))}
-    </div>
-  )
-}
-
 function formatTime(seconds) {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
@@ -213,27 +176,6 @@ const RECOMMENDATION_STYLES = {
     label: 'Do not ID — you need the win',
     detail: 'You are outside or right at the cut line. An ID likely drops you out.',
   },
-}
-
-function matchResultForPlayer(match, playerId) {
-  if (match.match_is_bye) return { result: 'BYE', score: '', opponent: 'BYE' }
-  if (match.match_is_intentional_draw || match.match_is_unintentional_draw) {
-    const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
-    return { result: 'DRAW', score: '—', opponent: opp?.user_event_status.best_identifier ?? '—' }
-  }
-  const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
-  const oppName = opp?.user_event_status.best_identifier ?? '—'
-  // A round can be reported to the app before every match in it has a
-  // winner — an unfinished match has no winning_player yet, which must not
-  // be read as a loss.
-  if (match.status !== 'COMPLETE' || match.winning_player == null) {
-    return { result: 'IN PROGRESS', score: '—', opponent: oppName }
-  }
-  const won = match.winning_player === playerId
-  const w = match.games_won_by_winner
-  const l = match.games_won_by_loser
-  const score = won ? `${w}-${l}` : `${l}-${w}`
-  return { result: won ? 'WIN' : 'LOSS', score, opponent: oppName }
 }
 
 // Shared by the Favorites and Team tabs — a flat roster of standings entries
@@ -301,7 +243,38 @@ function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, reg
   )
 }
 
-function MatchesTab({ allMatches, matchesLoading }) {
+// A pairing "involves" a search query if either player's name matches, and
+// "involves" a favorites/team filter if either player's id is in that map —
+// used to prune huge rounds (a 2000-player DLC is ~1000 matches/round) down
+// to what a caster is actually looking for.
+function matchInvolvesQuery(match, query) {
+  if (!query) return true
+  const q = query.toLowerCase()
+  return match.player_match_relationships.some((r) =>
+    r.user_event_status?.best_identifier?.toLowerCase().includes(q)
+  )
+}
+
+function matchInvolvesFilter(match, filterMode, favorites, team) {
+  if (filterMode === 'all') return true
+  const map = filterMode === 'favorites' ? favorites : team
+  return match.player_match_relationships.some((r) => map[String(r.player.id)])
+}
+
+const MATCH_FILTER_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'favorites', label: '★ Favorites' },
+  { key: 'team', label: 'My Team' },
+]
+
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team }) {
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
+  // Rounds toggled away from their default expand/collapse state (default:
+  // only the latest round expanded — large events can have 1000+ matches
+  // in a single round, so earlier rounds start collapsed).
+  const [toggledRounds, setToggledRounds] = useState(() => new Set())
+
   if (matchesLoading && !allMatches) {
     return (
       <div className="flex items-center gap-2 text-sm text-gray-500 py-8 justify-center">
@@ -315,224 +288,144 @@ function MatchesTab({ allMatches, matchesLoading }) {
   }
 
   const rounds = [...new Set(allMatches.map((m) => m.round_number))].sort((a, b) => a - b)
+  const latestRound = rounds[rounds.length - 1]
+  const searchActive = searchTerm.trim() !== '' || filterMode !== 'all'
 
-  return (
-    <div className="space-y-6">
-      {rounds.map((roundNum) => {
-        const roundMatches = allMatches.filter((m) => m.round_number === roundNum)
-        const phaseName = roundMatches[0]?.phase_name
-        return (
-          <div key={roundNum} className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-800">Round {roundNum}</span>
-              {phaseName && <span className="text-xs text-gray-400">{phaseName}</span>}
-              <span className="ml-auto text-xs text-gray-400">{roundMatches.length} matches</span>
-            </div>
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-4 py-2 w-10">Tbl</th>
-                  <th className="text-left px-4 py-2">Player 1</th>
-                  <th className="text-center px-4 py-2 w-20">Result</th>
-                  <th className="text-right px-4 py-2">Player 2</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roundMatches.map((match) => {
-                  const [p1, p2] = match.player_match_relationships.sort((a, b) => a.player_order - b.player_order)
-                  const p1Won = match.winning_player === p1?.player.id
-                  const p2Won = match.winning_player === p2?.player.id
-                  const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
-                  const isBye = match.match_is_bye
-                  const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
-                  const w = match.games_won_by_winner
-                  const l = match.games_won_by_loser
-                  return (
-                    <tr key={match.id} className="border-t border-gray-100">
-                      <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
-                          {p1?.user_event_status.best_identifier ?? '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
-                        {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
-                          {p2?.user_event_status.best_identifier ?? '—'}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
-  const playerId = player?.player?.id
-  const [annotations, setAnnotations] = useState(getAnnotations)
-  const [shareCard, setShareCard] = useState(null) // { canvas, imageUrl, filename } | null
-
-  function updateAnnotation(matchId, patch) {
-    saveAnnotation(matchId, patch)
-    setAnnotations(getAnnotations())
+  function toggleRound(roundNum) {
+    setToggledRounds((prev) => {
+      const next = new Set(prev)
+      if (next.has(roundNum)) next.delete(roundNum)
+      else next.add(roundNum)
+      return next
+    })
   }
 
-  if (matchesLoading && !allMatches) {
-    return (
-      <div className="border border-gray-200 rounded-lg p-4 bg-white">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Match History</h3>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span className="inline-block w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          Loading…
+  function isRoundExpanded(roundNum) {
+    if (searchActive) return true
+    const defaultExpanded = roundNum === latestRound
+    return toggledRounds.has(roundNum) ? !defaultExpanded : defaultExpanded
+  }
+
+  const roundsWithMatches = rounds.map((roundNum) => {
+    const roundMatches = allMatches.filter((m) => m.round_number === roundNum)
+    const filteredMatches = roundMatches.filter(
+      (m) => matchInvolvesQuery(m, searchTerm) && matchInvolvesFilter(m, filterMode, favorites, team)
+    )
+    return { roundNum, roundMatches, filteredMatches }
+  })
+  const totalFiltered = roundsWithMatches.reduce((sum, r) => sum + r.filteredMatches.length, 0)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          placeholder="Search by player name…"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+        />
+        <div className="flex gap-1">
+          {MATCH_FILTER_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilterMode(key)}
+              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                filterMode === key
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
-    )
-  }
 
-  const playerMatches = (allMatches ?? []).filter((m) => m.players.includes(playerId))
-  if (playerMatches.length === 0) {
-    return (
-      <div className="border border-gray-200 rounded-lg p-4 bg-white">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Match History</h3>
-        <p className="text-sm text-gray-500">
-          No completed match data available for this player yet. The share card becomes available once at least one match result loads.
-        </p>
-      </div>
-    )
-  }
-
-  // Derive overall stats from matches
-  const wins   = playerMatches.filter(m => !m.match_is_bye && m.winning_player === playerId).length
-  const losses = playerMatches.filter(m => !m.match_is_bye && m.status === 'COMPLETE' && m.winning_player !== playerId && !m.match_is_intentional_draw && !m.match_is_unintentional_draw).length
-  const draws  = playerMatches.filter(m => m.match_is_intentional_draw || m.match_is_unintentional_draw).length
-  const played = wins + losses + draws
-  const winPct = played > 0 ? ((wins / played) * 100).toFixed(1) : '0.0'
-
-  async function handleShare() {
-    const rows = playerMatches.map(m => {
-      const { result, score, opponent } = matchResultForPlayer(m, playerId)
-      const ann = annotations[String(m.id)] ?? {}
-      return {
-        round:     m.round_number,
-        result,
-        score,
-        opponent,
-        oppColors: ann.oppColors ?? [],
-        onPlay:    ann.onPlay ?? null,
-      }
-    })
-
-    const canvas = await generateShareImage({
-      playerName:   player?.user_event_status?.best_identifier ?? '—',
-      rank:         player?.rank ?? null,
-      totalPlayers: null,
-      record:       player?.record ?? `${wins}-${losses}-${draws}`,
-      matchPoints:  player?.match_points ?? wins * 3 + draws,
-      winPct,
-      eventName:    structure?.eventName ?? null,
-      rows,
-    })
-
-    const name = (player?.user_event_status?.best_identifier ?? 'player').replace(/\s+/g, '-').toLowerCase()
-    setShareCard({ canvas, imageUrl: canvas.toDataURL('image/jpeg', 0.95), filename: `${name}-tournament.jpg` })
-  }
-
-  return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">Match History</h3>
-        <button
-          onClick={handleShare}
-          className="px-3 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          Share card
-        </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[600px]">
-          <thead className="text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100 bg-gray-50">
-            <tr>
-              <th className="text-left px-4 py-2 w-16">Round</th>
-              <th className="text-left px-4 py-2">Opponent</th>
-              <th className="text-center px-4 py-2 w-16">Result</th>
-              <th className="text-center px-4 py-2 w-14">Score</th>
-              <th className="text-left px-4 py-2">Opp Colors</th>
-              <th className="text-center px-4 py-2 w-24">Play/Draw</th>
-            </tr>
-          </thead>
-          <tbody>
-            {playerMatches.map((match) => {
-              const { result, score, opponent } = matchResultForPlayer(match, playerId)
-              const ann = annotations[String(match.id)] ?? {}
-              const oppColors = ann.oppColors ?? []
-              const onPlay    = ann.onPlay ?? null
-
-              const resultStyle = result === 'WIN'
-                ? 'bg-green-100 text-green-800'
-                : result === 'LOSS'
-                ? 'bg-red-100 text-red-800'
-                : result === 'BYE'
-                ? 'bg-blue-100 text-blue-800'
-                : 'bg-gray-100 text-gray-700'
-
-              const pdStyle = onPlay === true
-                ? 'bg-green-100 text-green-800'
-                : onPlay === false
-                ? 'bg-blue-100 text-blue-800'
-                : 'bg-gray-100 text-gray-500'
-
-              function cycleOnPlay() {
-                const next = onPlay === null ? true : onPlay === true ? false : null
-                updateAnnotation(match.id, { onPlay: next })
-              }
-
-              return (
-                <tr key={match.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2.5 text-gray-500 font-medium">R{match.round_number}</td>
-                  <td className="px-4 py-2.5 text-gray-900 font-medium">{opponent}</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${resultStyle}`}>
-                      {result}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-center font-mono text-gray-500 text-xs">{score}</td>
-                  <td className="px-4 py-2.5">
-                    <ColorPicker
-                      selected={oppColors}
-                      onChange={colors => updateAnnotation(match.id, { oppColors: colors })}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <button
-                      onClick={cycleOnPlay}
-                      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold cursor-pointer transition-colors ${pdStyle}`}
-                      title="Click to cycle: Play → Draw → Unknown"
-                    >
-                      {onPlay === true ? 'Play' : onPlay === false ? 'Draw' : '?'}
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      {shareCard && (
-        <ShareCardModal
-          shareCard={shareCard}
-          onClose={() => setShareCard(null)}
-          title="Share card"
-          altText="Tournament result share card"
-          shareTitle="Tournament Result"
-        />
+      {searchActive && totalFiltered === 0 ? (
+        <p className="text-sm text-gray-500 py-8 text-center">No matches found.</p>
+      ) : (
+        <div className="space-y-6">
+          {roundsWithMatches.map(({ roundNum, roundMatches, filteredMatches }) => {
+            if (searchActive && filteredMatches.length === 0) return null
+            const phaseName = roundMatches[0]?.phase_name
+            const expanded = isRoundExpanded(roundNum)
+            const displayMatches = searchActive ? filteredMatches : roundMatches
+            return (
+              <div key={roundNum} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div
+                  onClick={() => toggleRound(roundNum)}
+                  className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"
+                >
+                  <span className="text-gray-400 text-xs w-3">{expanded ? '▾' : '▸'}</span>
+                  <span className="text-sm font-semibold text-gray-800">Round {roundNum}</span>
+                  {phaseName && <span className="text-xs text-gray-400">{phaseName}</span>}
+                  <span className="ml-auto text-xs text-gray-400">
+                    {searchActive && filteredMatches.length !== roundMatches.length
+                      ? `${filteredMatches.length} / ${roundMatches.length} matches`
+                      : `${roundMatches.length} matches`}
+                  </span>
+                </div>
+                {expanded && (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left px-4 py-2 w-10">Tbl</th>
+                        <th className="text-left px-4 py-2">Player 1</th>
+                        <th className="text-center px-4 py-2 w-20">Result</th>
+                        <th className="text-right px-4 py-2">Player 2</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayMatches.map((match) => {
+                        const [p1, p2] = match.player_match_relationships.sort((a, b) => a.player_order - b.player_order)
+                        const p1Won = match.winning_player === p1?.player.id
+                        const p2Won = match.winning_player === p2?.player.id
+                        const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
+                        const isBye = match.match_is_bye
+                        const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
+                        const w = match.games_won_by_winner
+                        const l = match.games_won_by_loser
+                        const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
+                        return (
+                          <tr
+                            key={match.id}
+                            onClick={
+                              clickable
+                                ? () =>
+                                    onSelectPairing({
+                                      p1: { id: p1.player.id, name: p1.user_event_status.best_identifier },
+                                      p2: { id: p2.player.id, name: p2.user_event_status.best_identifier },
+                                    })
+                                : undefined
+                            }
+                            className={`border-t border-gray-100${clickable ? ' hover:bg-blue-50 cursor-pointer' : ''}`}
+                          >
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
+                            <td className="px-4 py-2.5">
+                              <span className={`font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                                {p1?.user_event_status.best_identifier ?? '—'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
+                              {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                                {p2?.user_event_status.best_identifier ?? '—'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
@@ -557,6 +450,7 @@ export function TournamentLookupPage() {
   const [rosterMode, setRosterMode] = useState(false)
   const [recents, setRecents] = useState(getRecents)
   const [currentEventId, setCurrentEventId] = useState(null)
+  const [selectedPairing, setSelectedPairing] = useState(null) // { p1: {id, name}, p2: {id, name} } | null
   const [lastLiveUpdateAt, setLastLiveUpdateAt] = useState(null)
 
   useEffect(() => {
@@ -1117,7 +1011,13 @@ export function TournamentLookupPage() {
 
       {/* Matches tab */}
       {allStandings && !player && activeTab === 'matches' && (
-        <MatchesTab allMatches={allMatches} matchesLoading={matchesLoading} />
+        <MatchesTab
+          allMatches={allMatches}
+          matchesLoading={matchesLoading}
+          onSelectPairing={setSelectedPairing}
+          favorites={favorites}
+          team={team}
+        />
       )}
 
       {/* Roster tab (pre-tournament — no standings yet) */}
@@ -1343,6 +1243,15 @@ export function TournamentLookupPage() {
           {/* Player match history */}
           <PlayerMatchHistory player={player} allMatches={allMatches} matchesLoading={matchesLoading} structure={structure} />
         </div>
+      )}
+
+      {selectedPairing && (
+        <PairingHistoryPanel
+          pairing={selectedPairing}
+          onClose={() => setSelectedPairing(null)}
+          allMatches={allMatches}
+          structure={structure}
+        />
       )}
     </div>
   )

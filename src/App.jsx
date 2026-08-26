@@ -35,6 +35,7 @@ import { LoreTrackerPage } from './pages/LoreTrackerPage'
 import { LoginPage } from './pages/LoginPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { AdminPage } from './pages/AdminPage'
+import { AdminTournamentImportPage } from './pages/AdminTournamentImportPage'
 import { SupporterRoute } from './components/SupporterRoute'
 
 function RoutedContent() {
@@ -94,6 +95,7 @@ function RoutedContent() {
         <Route path="/store-lookup" element={<SupporterRoute><StoreLookupPage /></SupporterRoute>} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/tournament-import" element={<AdminTournamentImportPage />} />
         {/* Redirects from old routes */}
         <Route path="/game-library" element={<Navigate to="/analytics" replace />} />
         <Route path="/shared" element={<Navigate to="/library" replace />} />

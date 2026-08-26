@@ -37,7 +37,7 @@ When creating a pull request:
 
 ## Stack
 
-React 19 + React Router 7 + Tailwind CSS 4 + Vite 8, deployed on Vercel. Serverless API routes live in `/api/*.ts` (TypeScript). Authentication via Supabase + Google OAuth. All game data is stored client-side in IndexedDB or localStorage. Supabase stores only the auth session plus a small `profiles` table that records each user's supporter tier (`supporter`/`admin`) — no game data is stored server-side.
+React 19 + React Router 7 + Tailwind CSS 4 + Vite 8, deployed on Vercel. Serverless API routes live in `/api/*.ts` (TypeScript). Authentication via Supabase + Google OAuth. All of *your own* game data is stored client-side in IndexedDB or localStorage. Supabase stores the auth session, a small `profiles` table that records each user's supporter tier (`supporter`/`admin`), and — as of the Tournament History archive — admin-imported major-tournament standings/matches (see "Tournament History Archive" below), the first server-side store of real domain data rather than just auth/tier metadata.
 
 ## Environment Variables
 
@@ -101,9 +101,10 @@ Defined in `src/App.jsx`:
 | `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
 | `/leaderboard` | `LeaderboardPage.jsx` | duels.ink top 50 players by queue, MMR distribution |
-| `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis |
+| `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis; clicking a pairing in the Matches tab opens cross-event history + head-to-head from the Tournament History archive (see below) |
 | `/lore-tracker` | `LoreTrackerPage.jsx` | Mobile in-game lore counter with tap controls and audit log |
-| `/admin` | `AdminPage.jsx` | Admin-only — search users by email and grant/revoke supporter access |
+| `/admin` | `AdminPage.jsx` | Admin-only — search users by email and grant/revoke supporter access; links to the tournament import page |
+| `/admin/tournament-import` | `AdminTournamentImportPage.jsx` | Admin-only — paste a completed RPH event URL to import its final standings/matches into the Tournament History archive |
 
 **Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
 
@@ -133,6 +134,9 @@ In `src/components/`:
 | `HandPredictor.jsx` | Bayesian hand inference display — shows top 12 cards with P(≥1 in hand) given observed deck + player profile |
 | `SearchBar.jsx` | Fuzzy card search dropdown with quantity selector (×1–×4); used by proxy generator |
 | `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts |
+| `ShareCardModal.jsx` | Modal shell for sharing a canvas-rendered image (native share / clipboard copy / download); used by `TournamentLookupPage`'s and `PlayerMatchHistory`'s share-card buttons |
+| `PlayerMatchHistory.jsx` | Round-by-round match history table for one player within a single loaded tournament event (opponent, result, score, user-annotated opp colors/play-draw, share card). Used by `TournamentLookupPage`'s player detail view and reused by `PairingHistoryPanel` for either side of a clicked pairing |
+| `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below |
 
 Ink color images are rendered inline in each page — there is no shared `InkIcons` component. `MatchHistoryPage` defines a local `InkIcons` function; `AnalyticsPage` defines a local `InkImg` function. Both render `<img src={/ink/${inkName}.png} />`.
 
@@ -180,6 +184,7 @@ In `src/lib/`:
 | `metaSnapshots.js` | IndexedDB CRUD for daily meta-matchup snapshots (`lorcana_pro_tools` DB, `metaSnapshots` store, keyed by `id`) — `saveSnapshotIfNew()` captures one snapshot per queue/period/ranks config per day from `WinrateMatrixPage`'s `fetchStats` result; `getSnapshotsForConfig()` reads them back for the Meta Drift comparison |
 | `metaDrift.js` | `computeMetaDrift()` — diffs two saved meta snapshots' matchups (win rate, games) for `WinrateMatrixPage`'s Meta Drift view |
 | `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
+| `tournamentHistoryApi.js` | Client for `/api/tournament-history` — `fetchPlayerTournamentHistory()`, `fetchHeadToHead()`, `searchTournamentPlayers()`, `fetchRecentTournamentImports()`, `importTournamentEvent()`. See "Tournament History Archive" below |
 | `gameExport.js` | Serialize game records for sharing (used by `AnalyticsPage`) |
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
@@ -214,9 +219,9 @@ A deliberate, narrow exception to the "no game data server-side" ethos above —
 
 ### API Routes
 
-Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies with error handling and caching headers. No server-side auth on those — tokens are forwarded from the client.
+Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies with error handling and caching headers, and have no server-side auth on those — tokens are forwarded from the client. `/api/tournament-history` is the exception: it reads/writes project-owned Supabase data rather than proxying an external API, so it does verify the caller's Supabase session server-side (and, for its import endpoint, an admin tier check) — see "Tournament History Archive" below.
 
-**Function budget — read before adding a route.** Vercel's Hobby plan caps a deployment at **12 serverless functions**, counted as files in `api/` (`api/_lib/` is excluded). The count is currently **11**. Going over fails the deploy, so the established fix is to consolidate related endpoints into one function dispatched by a query param — see `/api/duels` (`?endpoint=`).
+**Function budget — read before adding a route.** Vercel's Hobby plan caps a deployment at **12 serverless functions**, counted as files in `api/` (`api/_lib/` is excluded). The count is currently **12** (the cap). Going over fails the deploy, so the established fix is to consolidate related endpoints into one function dispatched by a query param — see `/api/duels` and `/api/tournament-history` (`?endpoint=`).
 
 ⚠️ **Use flat `api/<name>.ts` files only.** A nested dynamic route (`api/patreon/[action].ts`) was tried and **silently did not deploy** — the build went green, but every request to it fell through to the `/(.*)` → `/index.html` catch-all in `vercel.json` and returned the SPA shell instead of the function. That took the Patreon integration down in production (PR #175, reverted in #176). A green Vercel build is **not** evidence that a function exists; verify a new route by curling it after deploy and confirming a JSON/expected response rather than `text/html`.
 
@@ -224,6 +229,7 @@ Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies wit
 |---|---|---|---|
 | `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`, `leaderboard`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `gamelog-bulk`, `replay`, `deck`, `stats`, `leaderboard`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. |
 | `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`; handles pagination |
+| `/api/tournament-history` | Supabase (`tournament_history_*` tables) | Bearer Supabase access token — `import` requires admin tier, the read endpoints require any signed-in session | Single consolidated route for the caster history archive, dispatched by `?endpoint=` — `import` (admin-only, fetches an RPH event's final standings + matches server-side and upserts them), `player-history`, `head-to-head`, `search-players`, `recent-imports`. See "Tournament History Archive" below. |
 | `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's commands (Decode Deck QR, `/tournament`, `/favorite`, `/unfavorite`, `/favorites`) directly. See `discord-bot/README.md`. |
 | `/api/subscribe-substack` | Substack's undocumented `/api/v1/free` embed-form endpoint | Bearer Supabase access token | Called by `AuthProvider.jsx` once per session on sign-in. See "Substack Signup Sync" above. |
 | `/api/discord-tournament-tick` | None (internal) | Shared secret (`CRON_SECRET`) | Called every 30 min by `.github/workflows/tournament-tracker-tick.yml`; posts an update to Discord for any favorited player whose rank/record changed, and auto-deactivates favorites once an event ends. |
@@ -263,9 +269,10 @@ Three surfaces keep `supporter_tier` in sync with Patreon, all funneling through
 | localStorage (various) | — | Form state for `DrawOddsPage`, filter state, lore tracker (`lorcana_lore_tracker`), etc. |
 | `chrome.storage.local` | `lorcana_active_games` | Active game states captured by the Chrome extension (2-hour TTL) |
 | Supabase `auth` | session | Google OAuth user session |
-| Supabase `profiles` table | row per user | Supporter tier metadata only (see Access Control); no game data stored server-side |
+| Supabase `profiles` table | row per user | Supporter tier metadata (see Access Control) |
 | Supabase `duels_api_tokens` table | row per token | Logged-in users' duels.ink API tokens, encrypted at rest (pgcrypto) — replaces the old browser-only `localStorage` tokens so they carry over across devices. Managed via `/api/duels-tokens`; see `src/lib/duelsApi.js` |
 | Supabase `patreon_links` table | row per user | Patreon user ID ↔ Supabase user_id, pledge status, OAuth tokens encrypted at rest (pgcrypto). Managed via `api/patreon-callback.ts`, `api/patreon-webhook.ts`, `api/patreon-status.ts`, `api/patreon-reconcile-tick.ts` |
+| Supabase `tournament_history_events`/`_standings`/`_matches` tables | row per imported event / per-player standing / per match | Admin-imported major RPH tournament archive powering the caster history tool — the first server-side store of real tournament/game domain data (see "Tournament History Archive"). Managed via `/api/tournament-history`; see `src/lib/tournamentHistoryApi.js` |
 
 ### External APIs
 
@@ -354,6 +361,18 @@ Key fields on game objects from the duels.ink API:
 - `fetchAllRegistrations` → all registered players (paginated loop)
 - `analyzeId` → ID safety analysis: compares player's points buffer vs cut line, counts players who could pass them if everyone wins
 - `analyzeAdvancement` → status (secured/possible/eliminated) toward the next phase cutoff
+
+### Tournament History Archive
+
+The caster-facing tool for surfacing a player's history across multiple imported RPH major events, and any prior head-to-head between two players in a pairing. This is the first feature to store real domain data in Supabase rather than only auth/tier metadata (see "Stack" above).
+
+**Import (admin-only, one-shot, re-runnable):** `AdminTournamentImportPage.jsx` (`/admin/tournament-import`, linked from `AdminPage.jsx`) posts an event URL to `POST /api/tournament-history?endpoint=import`. That route (`requireAdmin()` in `api/_lib/requireAdmin.ts`) fetches the event's details, final-round standings, and all completed rounds' matches directly from `RAVEN_BASE`/`HYDRA_BASE` (`api/_lib/tournamentImport.ts` — a server-side port of `tournamentApi.js`'s fetch/pagination logic, since this runs in a Vercel function rather than the browser and can't go through the client-only `/api/tournament` proxy), then upserts them via `api/_lib/tournamentHistorySupabase.ts`. Re-running the import for the same event is idempotent — it always re-derives and upserts, so importing again after more rounds complete updates standings/ranks rather than duplicating rows.
+
+**Schema** (`supabase/migrations/008_tournament_history.sql`): `tournament_history_events`, `tournament_history_standings`, `tournament_history_matches` — zero RLS policies, service-role-only access, same pattern as `discord_favorite_players`/`duels_api_tokens`/`patreon_links`. Player identity is joined by RPH's own stable `player.id` (`rph_player_id`), the same id `TournamentLookupPage.jsx`'s cross-event favorites/team-tag localStorage already keys by — never by name, which is stored only for display/search (trigram-indexed for fuzzy search). "Made top cut" is precomputed at import time (`has_elimination AND rank <= top_cut_size`) rather than needing a separate accomplishments table. Head-to-head lookups use a generated `player_pair` column on `tournament_history_matches` for an O(1) equality lookup instead of an OR'd scan.
+
+**Caster UI:** clicking a non-bye pairing row in `TournamentLookupPage`'s Matches tab (`MatchesTab`'s `onSelectPairing`) opens `PairingHistoryPanel.jsx` — a modal showing a head-to-head banner (prior meetings across imported majors, or "first meeting") plus each player's cross-event summary (events played, top cuts made) alongside their `PlayerMatchHistory` for the currently loaded event. The panel's cross-event data and the loaded event's `PlayerMatchHistory` are two independent data sources shown side by side — this feature does not merge with `/players/:name`'s separate scouted-game/gamelog opponent-profile system (see "Unified Opponent Profiles" above); they remain unrelated.
+
+**API** (`api/tournament-history.ts`, `?endpoint=` dispatch, folded into one function per the function budget above): `import` (admin-only), `player-history`, `head-to-head`, `search-players`, `recent-imports` (all requiring a valid Supabase session — this route reads/writes project-owned data rather than proxying an external API, so unlike most `/api/*` proxies it does check auth server-side).
 
 ### Ink Color Icons
 

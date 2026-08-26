@@ -11,6 +11,7 @@ import {
 } from '../lib/tournamentApi'
 import { PlayerMatchHistory } from '../components/PlayerMatchHistory'
 import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
+import { EliminationBracket } from '../components/EliminationBracket'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
 
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
@@ -918,6 +919,18 @@ export function TournamentLookupPage() {
                   <span className="text-xs text-gray-400 font-normal">({allMatches.length})</span>
                 )}
               </button>
+              {structure?.eliminationPhaseName && allMatches?.some((m) => m.phase_name === structure.eliminationPhaseName) && (
+                <button
+                  onClick={() => setActiveTab('bracket')}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                    activeTab === 'bracket'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Bracket
+                </button>
+              )}
             </>
           )}
           <button
@@ -1037,6 +1050,15 @@ export function TournamentLookupPage() {
           onSelectPairing={setSelectedPairing}
           favorites={favorites}
           team={team}
+        />
+      )}
+
+      {/* Bracket tab (elimination phase, visualized as a bracket) */}
+      {allStandings && !player && activeTab === 'bracket' && (
+        <EliminationBracket
+          allMatches={allMatches}
+          phaseName={structure?.eliminationPhaseName}
+          onSelectPairing={setSelectedPairing}
         />
       )}
 

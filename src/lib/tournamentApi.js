@@ -181,6 +181,11 @@ export function getTournamentStructure(eventDetails) {
     currentRoundNumber,
     currentPhaseType,
     currentPhaseName,
+    // The elimination phase's own phase_name, present whenever the event has
+    // a top-cut bracket at all — regardless of whether Swiss or the bracket
+    // is the *currently* displayed phase. Used to pick out bracket matches
+    // from the flat `allMatches` list (each match carries `phase_name`).
+    eliminationPhaseName: eliminationPhase?.phase_name ?? null,
     isElimination,
     swissRoundsRemaining,
     advancementRequirement,

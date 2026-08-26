@@ -29,7 +29,12 @@ function TopCutList({ events }) {
   )
 }
 
-function PlayerHistoryColumn({ label, playerStub, history, loading, error, allMatches, structure }) {
+// Row 1 of the panel: cross-event summary card only. Kept separate from the
+// match-history table (rendered in its own grid below) so a taller card on
+// one side — more top-cut lines, wrapped event names — can't push only that
+// column's "Match History" table down; each grid row sizes to its tallest
+// cell independently.
+function PlayerSummaryCard({ label, history, loading, error }) {
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-bold text-gray-900">{label}</h3>
@@ -55,13 +60,6 @@ function PlayerHistoryColumn({ label, playerStub, history, loading, error, allMa
           </>
         )}
       </div>
-
-      <PlayerMatchHistory
-        player={playerStub}
-        allMatches={allMatches}
-        matchesLoading={false}
-        structure={structure}
-      />
     </div>
   )
 }
@@ -96,7 +94,7 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure })
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
       <div
-        className="bg-white w-full sm:max-w-3xl rounded-t-2xl sm:rounded-xl border border-gray-200 max-h-[90vh] flex flex-col"
+        className="bg-white w-full sm:max-w-5xl rounded-t-2xl sm:rounded-xl border border-gray-200 max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
@@ -136,24 +134,38 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure })
             </div>
           )}
 
-          {/* Two columns */}
+          {/* Row 1: cross-event summary cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <PlayerHistoryColumn
+            <PlayerSummaryCard
               label={p1.name}
-              playerStub={toStubPlayer(p1)}
               history={historyA}
               loading={!historyA && !errorA}
               error={errorA}
-              allMatches={allMatches}
-              structure={structure}
             />
-            <PlayerHistoryColumn
+            <PlayerSummaryCard
               label={p2.name}
-              playerStub={toStubPlayer(p2)}
               history={historyB}
               loading={!historyB && !errorB}
               error={errorB}
+            />
+          </div>
+
+          {/* Row 2: match history tables — a separate grid so both columns'
+              tables start at the same height regardless of how tall each
+              summary card above happened to be. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <PlayerMatchHistory
+              compact
+              player={toStubPlayer(p1)}
               allMatches={allMatches}
+              matchesLoading={false}
+              structure={structure}
+            />
+            <PlayerMatchHistory
+              compact
+              player={toStubPlayer(p2)}
+              allMatches={allMatches}
+              matchesLoading={false}
               structure={structure}
             />
           </div>

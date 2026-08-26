@@ -168,6 +168,63 @@ against a round actually finishing** (or a new registration coming in, an
 `eventsRegistrationsList`-covered action, as an alternative trigger to
 test). Don't guess the payload beyond what's confirmed above from source.
 
+### The real primary mechanism is refetch-on-focus, not Pusher
+
+Reading the same JS bundle further turned up the actual explanation for why
+the site feels live regardless of whether Pusher ever fires. Two things,
+both confirmed from source:
+
+1. **The queries themselves are configured to refetch aggressively on tab
+   focus**, independent of any push. E.g. the matches-list query:
+   ```js
+   useQuery({
+     ...matchesQueryOptions,
+     staleTime: 0,
+     gcTime: 0,
+     refetchOnWindowFocus: true,
+     refetchOnMount: false,
+     refetchOnReconnect: true,
+   })
+   ```
+   and the "my match" query: `staleTime: 100, gcTime: 500,
+   refetchOnWindowFocus: true, refetchOnReconnect: true`. With `staleTime`
+   at or near zero, React Query treats the data as stale immediately, and
+   `refetchOnWindowFocus`/`refetchOnReconnect` mean **every time the browser
+   tab regains focus or the network reconnects, it refetches** — no
+   WebSocket needed. In real usage (someone glancing at their phone, then
+   back to the tournament tab) this alone produces a "live-feeling" page.
+2. **The client that actually submits a result updates itself directly**,
+   not via Pusher:
+   ```js
+   useMutation({
+     ...tournamentMatchesUpdateStatusCreateMutation,
+     onSuccess: async () => {
+       toast.success('matchResultsSubmitted')
+       await Promise.all([
+         invalidateQueries({ queryKey: [{ _id: 'event' }] }),
+         invalidateQueries({ predicate: e => e.queryKey[0]?._id === 'tournamentRoundsMyMatchRetrieve' }),
+         invalidateQueries({ predicate: e => e.queryKey[0]?._id === 'tournamentRoundsMatchesPaginatedList' }),
+       ])
+     },
+   })
+   ```
+   The reporter's own view updates from this local `onSuccess` handler, not
+   from a round-trip through Pusher. This is also *why* the self-write
+   debounce logic on the Pusher side exists — Pusher's actual job is
+   narrower than "notify everyone of every change": it's specifically for
+   notifying *other* connected clients (spectators, other players) who
+   aren't the one who made the change, and the reporter needs to ignore the
+   echo of its own action so it doesn't double-invalidate.
+
+Net effect: Pusher may be a secondary/best-effort layer for third-party
+viewers, while focus-based refetch + local-mutation-success invalidation
+are doing the real work of keeping the acting user's own view current. This
+is a much better-supported theory than either "unused" or "just needs more
+patience" — and it's directly actionable even without ever capturing a
+Pusher payload: `TournamentLookupPage`'s live-updates integration (below)
+now also refetches on `visibilitychange` becoming `'visible'`, mirroring
+the upstream site's actual behavior rather than depending solely on Pusher.
+
 To capture a live payload: connect to the same URL, subscribe to
 `player-event-{eventId}` for a currently-live event, and log every frame.
 Node 22's built-in `WebSocket` global is enough — no `ws` package needed:
@@ -204,6 +261,13 @@ strip while `pusher.connection.state === 'connected'`, with a ticking
 (blocked network, Pusher outage, etc.) the badge simply never appears and
 the page behaves exactly as before — this is a pure enhancement, never a
 required dependency for the page to work.
+
+`TournamentLookupPage` also refetches on `visibilitychange` becoming
+`'visible'` (a plain `document.addEventListener`, no library needed) —
+mirroring the refetch-on-focus behavior confirmed above as the site's real
+primary live-update mechanism. This one is guaranteed to work in every
+browser (no proxy/network caveats like Pusher) and needs no payload to be
+useful, so it's the more load-bearing of the two mechanisms in practice.
 
 **Sandbox note:** this channel could not be verified end-to-end from
 Playwright inside the agent sandbox — a raw `new WebSocket('wss://ws-us2.pusher.com/...')`

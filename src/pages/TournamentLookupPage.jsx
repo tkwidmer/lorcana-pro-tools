@@ -686,6 +686,26 @@ export function TournamentLookupPage() {
   // section of the ravensburger-tournament-api skill for what's confirmed.
   const liveStatus = useTournamentLiveUpdates(currentEventId, refreshLiveData)
 
+  // The upstream site itself refetches on tab focus (staleTime ~0,
+  // refetchOnWindowFocus: true — confirmed from its own JS bundle) rather
+  // than relying on Pusher pushes to reach every viewer. Mirror that here:
+  // it's a reliable, dependency-free complement to the (still only
+  // partially confirmed) Pusher subscription above — a user switching back
+  // to this tab is as good a "go check for changes" signal as any push.
+  useEffect(() => {
+    if (!currentEventId) return
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') refreshLiveData()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+    // refreshLiveData is intentionally excluded — it's recreated every
+    // render but only currentEventId should re-subscribe the listener;
+    // refreshLiveData reads other state via functional setState updaters,
+    // so it doesn't need a fresh closure to stay correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentEventId])
+
   return (
     <div className="w-full px-6 py-8">
       <div className="mb-8">

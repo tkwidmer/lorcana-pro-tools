@@ -218,7 +218,38 @@ function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, reg
   )
 }
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing }) {
+// A pairing "involves" a search query if either player's name matches, and
+// "involves" a favorites/team filter if either player's id is in that map —
+// used to prune huge rounds (a 2000-player DLC is ~1000 matches/round) down
+// to what a caster is actually looking for.
+function matchInvolvesQuery(match, query) {
+  if (!query) return true
+  const q = query.toLowerCase()
+  return match.player_match_relationships.some((r) =>
+    r.user_event_status?.best_identifier?.toLowerCase().includes(q)
+  )
+}
+
+function matchInvolvesFilter(match, filterMode, favorites, team) {
+  if (filterMode === 'all') return true
+  const map = filterMode === 'favorites' ? favorites : team
+  return match.player_match_relationships.some((r) => map[String(r.player.id)])
+}
+
+const MATCH_FILTER_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'favorites', label: '★ Favorites' },
+  { key: 'team', label: 'My Team' },
+]
+
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team }) {
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
+  // Rounds toggled away from their default expand/collapse state (default:
+  // only the latest round expanded — large events can have 1000+ matches
+  // in a single round, so earlier rounds start collapsed).
+  const [toggledRounds, setToggledRounds] = useState(() => new Set())
+
   if (matchesLoading && !allMatches) {
     return (
       <div className="flex items-center gap-2 text-sm text-gray-500 py-8 justify-center">
@@ -232,75 +263,145 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing }) {
   }
 
   const rounds = [...new Set(allMatches.map((m) => m.round_number))].sort((a, b) => a - b)
+  const latestRound = rounds[rounds.length - 1]
+  const searchActive = searchTerm.trim() !== '' || filterMode !== 'all'
+
+  function toggleRound(roundNum) {
+    setToggledRounds((prev) => {
+      const next = new Set(prev)
+      if (next.has(roundNum)) next.delete(roundNum)
+      else next.add(roundNum)
+      return next
+    })
+  }
+
+  function isRoundExpanded(roundNum) {
+    if (searchActive) return true
+    const defaultExpanded = roundNum === latestRound
+    return toggledRounds.has(roundNum) ? !defaultExpanded : defaultExpanded
+  }
+
+  const roundsWithMatches = rounds.map((roundNum) => {
+    const roundMatches = allMatches.filter((m) => m.round_number === roundNum)
+    const filteredMatches = roundMatches.filter(
+      (m) => matchInvolvesQuery(m, searchTerm) && matchInvolvesFilter(m, filterMode, favorites, team)
+    )
+    return { roundNum, roundMatches, filteredMatches }
+  })
+  const totalFiltered = roundsWithMatches.reduce((sum, r) => sum + r.filteredMatches.length, 0)
 
   return (
-    <div className="space-y-6">
-      {rounds.map((roundNum) => {
-        const roundMatches = allMatches.filter((m) => m.round_number === roundNum)
-        const phaseName = roundMatches[0]?.phase_name
-        return (
-          <div key={roundNum} className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-800">Round {roundNum}</span>
-              {phaseName && <span className="text-xs text-gray-400">{phaseName}</span>}
-              <span className="ml-auto text-xs text-gray-400">{roundMatches.length} matches</span>
-            </div>
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-4 py-2 w-10">Tbl</th>
-                  <th className="text-left px-4 py-2">Player 1</th>
-                  <th className="text-center px-4 py-2 w-20">Result</th>
-                  <th className="text-right px-4 py-2">Player 2</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roundMatches.map((match) => {
-                  const [p1, p2] = match.player_match_relationships.sort((a, b) => a.player_order - b.player_order)
-                  const p1Won = match.winning_player === p1?.player.id
-                  const p2Won = match.winning_player === p2?.player.id
-                  const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
-                  const isBye = match.match_is_bye
-                  const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
-                  const w = match.games_won_by_winner
-                  const l = match.games_won_by_loser
-                  const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
-                  return (
-                    <tr
-                      key={match.id}
-                      onClick={
-                        clickable
-                          ? () =>
-                              onSelectPairing({
-                                p1: { id: p1.player.id, name: p1.user_event_status.best_identifier },
-                                p2: { id: p2.player.id, name: p2.user_event_status.best_identifier },
-                              })
-                          : undefined
-                      }
-                      className={`border-t border-gray-100${clickable ? ' hover:bg-blue-50 cursor-pointer' : ''}`}
-                    >
-                      <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
-                          {p1?.user_event_status.best_identifier ?? '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
-                        {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
-                          {p2?.user_event_status.best_identifier ?? '—'}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )
-      })}
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          placeholder="Search by player name…"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+        />
+        <div className="flex gap-1">
+          {MATCH_FILTER_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilterMode(key)}
+              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                filterMode === key
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {searchActive && totalFiltered === 0 ? (
+        <p className="text-sm text-gray-500 py-8 text-center">No matches found.</p>
+      ) : (
+        <div className="space-y-6">
+          {roundsWithMatches.map(({ roundNum, roundMatches, filteredMatches }) => {
+            if (searchActive && filteredMatches.length === 0) return null
+            const phaseName = roundMatches[0]?.phase_name
+            const expanded = isRoundExpanded(roundNum)
+            const displayMatches = searchActive ? filteredMatches : roundMatches
+            return (
+              <div key={roundNum} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div
+                  onClick={() => toggleRound(roundNum)}
+                  className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"
+                >
+                  <span className="text-gray-400 text-xs w-3">{expanded ? '▾' : '▸'}</span>
+                  <span className="text-sm font-semibold text-gray-800">Round {roundNum}</span>
+                  {phaseName && <span className="text-xs text-gray-400">{phaseName}</span>}
+                  <span className="ml-auto text-xs text-gray-400">
+                    {searchActive && filteredMatches.length !== roundMatches.length
+                      ? `${filteredMatches.length} / ${roundMatches.length} matches`
+                      : `${roundMatches.length} matches`}
+                  </span>
+                </div>
+                {expanded && (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left px-4 py-2 w-10">Tbl</th>
+                        <th className="text-left px-4 py-2">Player 1</th>
+                        <th className="text-center px-4 py-2 w-20">Result</th>
+                        <th className="text-right px-4 py-2">Player 2</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayMatches.map((match) => {
+                        const [p1, p2] = match.player_match_relationships.sort((a, b) => a.player_order - b.player_order)
+                        const p1Won = match.winning_player === p1?.player.id
+                        const p2Won = match.winning_player === p2?.player.id
+                        const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
+                        const isBye = match.match_is_bye
+                        const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
+                        const w = match.games_won_by_winner
+                        const l = match.games_won_by_loser
+                        const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
+                        return (
+                          <tr
+                            key={match.id}
+                            onClick={
+                              clickable
+                                ? () =>
+                                    onSelectPairing({
+                                      p1: { id: p1.player.id, name: p1.user_event_status.best_identifier },
+                                      p2: { id: p2.player.id, name: p2.user_event_status.best_identifier },
+                                    })
+                                : undefined
+                            }
+                            className={`border-t border-gray-100${clickable ? ' hover:bg-blue-50 cursor-pointer' : ''}`}
+                          >
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
+                            <td className="px-4 py-2.5">
+                              <span className={`font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                                {p1?.user_event_status.best_identifier ?? '—'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
+                              {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                                {p2?.user_event_status.best_identifier ?? '—'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -817,7 +918,13 @@ export function TournamentLookupPage() {
 
       {/* Matches tab */}
       {allStandings && !player && activeTab === 'matches' && (
-        <MatchesTab allMatches={allMatches} matchesLoading={matchesLoading} onSelectPairing={setSelectedPairing} />
+        <MatchesTab
+          allMatches={allMatches}
+          matchesLoading={matchesLoading}
+          onSelectPairing={setSelectedPairing}
+          favorites={favorites}
+          team={team}
+        />
       )}
 
       {/* Roster tab (pre-tournament — no standings yet) */}

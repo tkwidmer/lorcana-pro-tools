@@ -12,6 +12,7 @@ import {
 import { VALID_INKS } from '../lib/inkColors'
 import { generateShareImage } from '../lib/tournamentShareImage'
 import { ShareCardModal } from '../components/ShareCardModal'
+import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
 
 const ANNOTATIONS_KEY = 'lorcana_tournament_match_annotations'
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
@@ -164,6 +165,30 @@ function formatTime(seconds) {
   const s = seconds % 60
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function formatAgo(at) {
+  const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000))
+  return seconds < 5 ? 'just now' : seconds < 60 ? `${seconds}s ago` : `${Math.floor(seconds / 60)}m ago`
+}
+
+// Ticks its own "Xs ago" text every second, so the parent doesn't need a
+// page-wide re-render just to keep this one label current.
+function LastLiveUpdate({ at }) {
+  const [label, setLabel] = useState(null)
+  useEffect(() => {
+    if (!at) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLabel(null)
+      return
+    }
+    setLabel(formatAgo(at))
+    const id = setInterval(() => setLabel(formatAgo(at)), 1000)
+    return () => clearInterval(id)
+  }, [at])
+
+  if (!label) return null
+  return <span className="text-gray-400 text-xs">Updated {label}</span>
 }
 
 const RECOMMENDATION_STYLES = {
@@ -532,6 +557,7 @@ export function TournamentLookupPage() {
   const [rosterMode, setRosterMode] = useState(false)
   const [recents, setRecents] = useState(getRecents)
   const [currentEventId, setCurrentEventId] = useState(null)
+  const [lastLiveUpdateAt, setLastLiveUpdateAt] = useState(null)
 
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
@@ -577,6 +603,24 @@ export function TournamentLookupPage() {
 
   function removeRecentTournament(eventId) {
     setRecents(removeRecent(eventId))
+  }
+
+  // Fetches every page of standings for a round and normalizes match_points
+  // to the current total — the standings snapshot field is stale mid-event.
+  async function fetchAllStandingsPages(roundId) {
+    const allResults = []
+    let page = 1
+    let hasMore = true
+    while (hasMore) {
+      const data = await fetchTournamentStandings(roundId, page, 50)
+      allResults.push(...data.results)
+      hasMore = data.next_page_number !== null
+      page = data.next_page_number || page + 1
+    }
+    return allResults.map((entry) => ({
+      ...entry,
+      match_points: entry.user_event_status?.total_match_points ?? entry.match_points,
+    }))
   }
 
   async function loadStandings(url) {
@@ -629,23 +673,7 @@ export function TournamentLookupPage() {
       setRosterMode(false)
       setActiveTab('standings')
 
-      // Fetch all pages of standings
-      const allResults = []
-      let page = 1
-      let hasMore = true
-
-      while (hasMore) {
-        const data = await fetchTournamentStandings(tournamentStructure.currentRoundId, page, 50)
-        allResults.push(...data.results)
-        hasMore = data.next_page_number !== null
-        page = data.next_page_number || page + 1
-      }
-
-      // Normalize match_points to current total — the standings snapshot field is stale mid-event
-      const normalized = allResults.map((entry) => ({
-        ...entry,
-        match_points: entry.user_event_status?.total_match_points ?? entry.match_points,
-      }))
+      const normalized = await fetchAllStandingsPages(tournamentStructure.currentRoundId)
       setAllStandings(normalized)
 
       // Fetch registrations best-effort (non-blocking); key by user.id for reliable lookup
@@ -663,6 +691,54 @@ export function TournamentLookupPage() {
       setError(err.message || 'Failed to fetch tournament data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Called on live-update pushes — re-fetches in the background without
+  // resetting the UI (selected player, active tab, search term stay put).
+  async function refreshLiveData() {
+    if (!currentEventId) return
+    try {
+      const eventDetails = await fetchEventDetails(currentEventId)
+      const tournamentStructure = getTournamentStructure(eventDetails)
+      setStructure(tournamentStructure)
+
+      if (!tournamentStructure?.currentRoundId) {
+        // Still pre-tournament — just refresh the roster (new registrations).
+        const regs = await fetchAllRegistrations(currentEventId)
+        setRoster(registrationsToRosterEntries(regs))
+        setLastLiveUpdateAt(Date.now())
+        return
+      }
+
+      const normalized = await fetchAllStandingsPages(tournamentStructure.currentRoundId)
+      setAllStandings(normalized)
+
+      // The event just started (or standings just generated for the first
+      // time) while the roster fallback was showing — switch over to it.
+      setRosterMode((wasRosterMode) => {
+        if (wasRosterMode) {
+          setRoster(null)
+          setActiveTab('standings')
+        }
+        return false
+      })
+
+      // Keep an open player-detail view's numbers current without kicking
+      // the user back to the list.
+      setPlayer((prev) => (prev ? normalized.find((e) => e.player.id === prev.player.id) ?? prev : prev))
+
+      fetchAllRegistrations(currentEventId)
+        .then((regs) => setRegistrationMap(new Map(regs.map((r) => [r.user.id, r.registration_status]))))
+        .catch(() => {})
+
+      fetchAllRoundMatches(currentEventId, eventDetails)
+        .then((matches) => setAllMatches(matches))
+        .catch(() => {})
+
+      setLastLiveUpdateAt(Date.now())
+    } catch {
+      // Best-effort — a failed background refresh shouldn't disrupt the page.
     }
   }
 
@@ -710,6 +786,11 @@ export function TournamentLookupPage() {
   const tiebreakers = player ? formatTiebreakers(player, structure?.tiebreakers) : null
   const idAnalysis = player && structure ? analyzeId(player, allStandings, structure) : null
   const advancementAnalysis = player && structure ? analyzeAdvancement(player, structure) : null
+
+  // Live push notifications from Ravensburger's own Pusher channel trigger a
+  // silent background refresh — see tournamentLive.js and the "Live updates"
+  // section of the ravensburger-tournament-api skill for what's confirmed.
+  const liveStatus = useTournamentLiveUpdates(currentEventId, refreshLiveData)
 
   return (
     <div className="w-full px-6 py-8">
@@ -814,6 +895,18 @@ export function TournamentLookupPage() {
                 <span className="text-gray-400"> / {structure.startingPlayerCount}</span>
               )}
               {' '}players
+            </span>
+          )}
+          {liveStatus === 'connected' && (
+            <span className="ml-auto flex items-center gap-2">
+              <span className="flex items-center gap-1.5 text-green-700 font-medium" title="Standings/matches refresh automatically as they change">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+                Live
+              </span>
+              <LastLiveUpdate at={lastLiveUpdateAt} />
             </span>
           )}
           {timeRemaining !== null && (

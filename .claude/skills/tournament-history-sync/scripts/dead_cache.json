@@ -1,0 +1,56 @@
+{
+  "204980": {
+    "label": "CCQ",
+    "name": "Preparatorio al CCQ El Baúl De Pirus",
+    "reason": "no completed round with generated standings on Ravensburger Play Hub",
+    "checked_at": "2026-08-26T00:00:00Z"
+  },
+  "239003": {
+    "label": "CCQ",
+    "name": "Pre-CCQ Barcelona",
+    "reason": "no completed round with generated standings on Ravensburger Play Hub",
+    "checked_at": "2026-08-26T00:00:00Z"
+  },
+  "213196": {
+    "label": "CCQ",
+    "name": "Disney Lorcana - Arena Porto - Road to Barcelona CCQ",
+    "reason": "tournament phases still UPCOMING despite display_status=complete",
+    "checked_at": "2026-08-26T00:00:00Z"
+  },
+  "208903": {
+    "label": "CCQ",
+    "name": "Musas X CCQ Barcelona",
+    "reason": "no completed round with generated standings on Ravensburger Play Hub",
+    "checked_at": "2026-08-26T00:00:00Z"
+  },
+  "211450": {
+    "label": "CCQ",
+    "name": "PREPARATORIO CCQ BARCELONA",
+    "reason": "no completed round with generated standings on Ravensburger Play Hub",
+    "checked_at": "2026-08-26T00:00:00Z"
+  },
+  "245434": {
+    "label": "CCQ",
+    "name": "Disney Lorcana Road to Barcelona CCQ",
+    "reason": "no completed round with generated standings on Ravensburger Play Hub",
+    "checked_at": "2026-08-26T00:00:00Z"
+  },
+  "248844": {
+    "label": "CCQ",
+    "name": "GAMERIA TORNEO CCQ CLASIFICATORIO (Constructed)",
+    "reason": "no completed round with generated standings on Ravensburger Play Hub",
+    "checked_at": "2026-08-26T00:00:00Z"
+  },
+  "264910": {
+    "label": "CCQ",
+    "name": "Lorcana_Road to CCQ Bologna",
+    "reason": "tournament phases still UPCOMING despite display_status=complete",
+    "checked_at": "2026-08-26T00:00:00Z"
+  },
+  "262065": {
+    "label": "CCQ",
+    "name": "Win a ticket CCQ Bologna - Fall League",
+    "reason": "no completed round with generated standings on Ravensburger Play Hub",
+    "checked_at": "2026-08-26T00:00:00Z"
+  }
+}

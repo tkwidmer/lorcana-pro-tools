@@ -46,9 +46,15 @@ function matchResultForPlayer(match, playerId) {
     const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
     return { result: 'DRAW', score: '—', opponent: opp?.user_event_status.best_identifier ?? '—' }
   }
-  const won = match.winning_player === playerId
   const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
   const oppName = opp?.user_event_status.best_identifier ?? '—'
+  // A round can be reported to the app before every match in it has a
+  // winner — an unfinished match has no winning_player yet, which must not
+  // be read as a loss.
+  if (match.status !== 'COMPLETE' || match.winning_player == null) {
+    return { result: 'IN PROGRESS', score: '—', opponent: oppName }
+  }
+  const won = match.winning_player === playerId
   const w = match.games_won_by_winner
   const l = match.games_won_by_loser
   const score = won ? `${w}-${l}` : `${l}-${w}`

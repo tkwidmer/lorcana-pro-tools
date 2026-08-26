@@ -261,6 +261,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing }) {
                   const p2Won = match.winning_player === p2?.player.id
                   const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
                   const isBye = match.match_is_bye
+                  const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
                   const w = match.games_won_by_winner
                   const l = match.games_won_by_loser
                   const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
@@ -285,7 +286,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing }) {
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
-                        {isBye ? 'BYE' : isDraw ? 'DRAW' : `${w}-${l}`}
+                        {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>

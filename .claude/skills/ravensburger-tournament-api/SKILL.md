@@ -173,10 +173,46 @@ ws.addEventListener('message', (ev) => {
 })
 ```
 
-Once a real `"message"`-event payload is captured, update this section with
-it, and only then is it worth evaluating whether `TournamentLookupPage`
-should subscribe for live updates instead of relying on the user re-clicking
-"Load Standings".
+**Now integrated:** `src/lib/tournamentLive.js` (`subscribeToTournamentLive`)
++ `src/hooks/useTournamentLiveUpdates.js` wire `TournamentLookupPage` up to
+this channel via the `pusher-js` package (same client library the upstream
+site itself uses). Given the payload shape is still only partially
+confirmed (see above), the integration deliberately does **not** try to
+parse `type`/`entity`/`payload` or apply anything from the message
+directly — it treats every `"message"` event as a generic "something
+changed, go refetch" signal (debounced ~1.5s) and re-runs the same REST
+calls (`fetchEventDetails`/`fetchTournamentStandings`/`fetchAllRegistrations`/
+`fetchAllRoundMatches`) the manual "Load Standings" button already uses,
+silently, without resetting the open UI state (selected player, active tab,
+search term). This sidesteps the unconfirmed-payload risk entirely — if a
+message arrives with a shape we didn't anticipate, the generic refetch
+still does the right thing. A small pulsing "Live" badge shows in the info
+strip while `pusher.connection.state === 'connected'`, with a ticking
+"Updated Xs ago" label; if the connection never reaches `'connected'`
+(blocked network, Pusher outage, etc.) the badge simply never appears and
+the page behaves exactly as before — this is a pure enhancement, never a
+required dependency for the page to work.
+
+**Sandbox note:** this channel could not be verified end-to-end from
+Playwright inside the agent sandbox — a raw `new WebSocket('wss://ws-us2.pusher.com/...')`
+call from a sandboxed headless Chromium never received a single event
+(`open`/`message`/`error`/`close`) even after 6s, both with and without
+explicitly routing Chromium through the sandbox's `$HTTPS_PROXY`. The
+sandbox's outbound proxy is evidently HTTP(S)-request-shaped and doesn't
+tunnel arbitrary `wss://` WebSocket upgrades for a real Chromium network
+stack, even though the same URL connects fine from a plain Node script in
+the same sandbox (Node's own `WebSocket`/undici networking apparently
+routes differently). This is a sandbox limitation, not a code defect —
+confirmed working from real end-user browsers via two independent HAR
+captures earlier in this investigation. If a future sandboxed session needs
+to browser-verify Pusher connectivity again, expect this same silent
+failure and don't chase it as a bug; verify via the deployed Vercel preview
+in a real browser instead.
+
+Once a real `"message"`-event payload is captured (still an open item —
+see above), come back and either tighten the integration to act on specific
+`entity` keys instead of refetching everything, or confirm the generic
+approach is sufficient and drop this note.
 
 ## Steps
 

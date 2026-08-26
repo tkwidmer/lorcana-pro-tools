@@ -65,7 +65,7 @@ function matchResultForPlayer(match, playerId) {
 // tournament event. Used by TournamentLookupPage's player detail view, and
 // reused by PairingHistoryPanel for either side of a clicked pairing
 // alongside that panel's new cross-event/head-to-head data.
-export function PlayerMatchHistory({ player, allMatches, matchesLoading, structure }) {
+export function PlayerMatchHistory({ player, allMatches, matchesLoading, structure, compact = false }) {
   const playerId = player?.player?.id
   const [annotations, setAnnotations] = useState(getAnnotations)
   const [shareCard, setShareCard] = useState(null) // { canvas, imageUrl, filename } | null
@@ -139,23 +139,29 @@ export function PlayerMatchHistory({ player, allMatches, matchesLoading, structu
     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
       <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900">Match History</h3>
-        <button
-          onClick={handleShare}
-          className="px-3 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          Share card
-        </button>
+        {!compact && (
+          <button
+            onClick={handleShare}
+            className="px-3 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Share card
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[600px]">
+        <table className={`w-full text-sm ${compact ? '' : 'min-w-[600px]'}`}>
           <thead className="text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100 bg-gray-50">
             <tr>
               <th className="text-left px-4 py-2 w-16">Round</th>
               <th className="text-left px-4 py-2">Opponent</th>
               <th className="text-center px-4 py-2 w-16">Result</th>
               <th className="text-center px-4 py-2 w-14">Score</th>
-              <th className="text-left px-4 py-2">Opp Colors</th>
-              <th className="text-center px-4 py-2 w-24">Play/Draw</th>
+              {!compact && (
+                <>
+                  <th className="text-left px-4 py-2">Opp Colors</th>
+                  <th className="text-center px-4 py-2 w-24">Play/Draw</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -194,21 +200,25 @@ export function PlayerMatchHistory({ player, allMatches, matchesLoading, structu
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-center font-mono text-gray-500 text-xs">{score}</td>
-                  <td className="px-4 py-2.5">
-                    <ColorPicker
-                      selected={oppColors}
-                      onChange={colors => updateAnnotation(match.id, { oppColors: colors })}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <button
-                      onClick={cycleOnPlay}
-                      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold cursor-pointer transition-colors ${pdStyle}`}
-                      title="Click to cycle: Play → Draw → Unknown"
-                    >
-                      {onPlay === true ? 'Play' : onPlay === false ? 'Draw' : '?'}
-                    </button>
-                  </td>
+                  {!compact && (
+                    <>
+                      <td className="px-4 py-2.5">
+                        <ColorPicker
+                          selected={oppColors}
+                          onChange={colors => updateAnnotation(match.id, { oppColors: colors })}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <button
+                          onClick={cycleOnPlay}
+                          className={`inline-block px-2 py-0.5 rounded text-xs font-semibold cursor-pointer transition-colors ${pdStyle}`}
+                          title="Click to cycle: Play → Draw → Unknown"
+                        >
+                          {onPlay === true ? 'Play' : onPlay === false ? 'Draw' : '?'}
+                        </button>
+                      </td>
+                    </>
+                  )}
                 </tr>
               )
             })}

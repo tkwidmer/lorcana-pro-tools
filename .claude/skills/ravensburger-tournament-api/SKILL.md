@@ -137,24 +137,93 @@ channel:
     ignores the broadcast echo of its own change for a short window, so a
     reporting client doesn't double-process its own update.
 
-**Still unresolved — a real payload has not actually been captured.** Live
-test against event `734895` (round 2 `IN_PROGRESS`): stayed connected and
-subscribed for ~5 minutes while a real match on that round completed and
-was scored (`updated_at` moved `18:21:51` → `19:11:10`, `status` flipped to
-`COMPLETE`, `winning_player` populated) — **zero frames arrived** beyond the
-subscription confirmation, despite that match completion being exactly the
-kind of event the `entity` set above should cover
-(`tournamentRoundsMatchesPaginatedList`). Two plausible explanations, not
-yet distinguished: (a) broadcasts are gated to specific higher-level actions
-(e.g. a round being finalized/standings regenerated, which never happened
-in this window — round 2's `standings_status` stayed `NOT_GENERATED`
-throughout) rather than every individual match score entry, or (b)
-something else suppressed the broadcast for this specific event/deploy.
-**Before building anything on this channel, re-test against a moment likely
-to produce a broadcast** — ideally a full round transitioning to
-`COMPLETE`/`standings_status: GENERATED`, or a new registration — and
-capture the actual frame. Don't guess the payload beyond what's confirmed
-above from source.
+**Still unresolved — a real payload has not actually been captured, across
+three separate live tests now.**
+
+1. Event `734895` round 2 `IN_PROGRESS`: stayed connected/subscribed for
+   ~5 minutes while a real match on that round completed and was scored
+   (`updated_at` moved `18:21:51` → `19:11:10`, `status` flipped to
+   `COMPLETE`, `winning_player` populated) — zero frames beyond the
+   subscription confirmation.
+2. Same event, round 3 `IN_PROGRESS`: connected/subscribed at `20:11:15`;
+   match `7329567` on that round completed at `20:14:18` (`status` →
+   `COMPLETE`, `winning_player` populated) — three minutes into an
+   already-live subscription, so no "missed it before connecting"
+   explanation applies here — and again zero frames arrived.
+3. Independently reproduced by the repo owner running the same capture
+   script locally against the same event at the same time, with the same
+   result (nothing beyond the handshake).
+
+Both observed match completions are exactly the kind of event the `entity`
+set above should cover (`tournamentRoundsMatchesPaginatedList`), so this is
+now fairly strong evidence that **individual match completions do not
+trigger a broadcast** on this channel — at least not reliably. The
+remaining untested theory: broadcasts are gated to round-level milestones
+(a round transitioning to `COMPLETE` with `standings_status: GENERATED`)
+rather than each match score. Round 2 reached that state in event `734895`
+between test 1 and test 2 above, but no listener was connected at that
+exact moment to confirm either way — that's still the next thing to catch.
+**Before building anything further on this channel, capture a broadcast
+against a round actually finishing** (or a new registration coming in, an
+`eventsRegistrationsList`-covered action, as an alternative trigger to
+test). Don't guess the payload beyond what's confirmed above from source.
+
+### The real primary mechanism is refetch-on-focus, not Pusher
+
+Reading the same JS bundle further turned up the actual explanation for why
+the site feels live regardless of whether Pusher ever fires. Two things,
+both confirmed from source:
+
+1. **The queries themselves are configured to refetch aggressively on tab
+   focus**, independent of any push. E.g. the matches-list query:
+   ```js
+   useQuery({
+     ...matchesQueryOptions,
+     staleTime: 0,
+     gcTime: 0,
+     refetchOnWindowFocus: true,
+     refetchOnMount: false,
+     refetchOnReconnect: true,
+   })
+   ```
+   and the "my match" query: `staleTime: 100, gcTime: 500,
+   refetchOnWindowFocus: true, refetchOnReconnect: true`. With `staleTime`
+   at or near zero, React Query treats the data as stale immediately, and
+   `refetchOnWindowFocus`/`refetchOnReconnect` mean **every time the browser
+   tab regains focus or the network reconnects, it refetches** — no
+   WebSocket needed. In real usage (someone glancing at their phone, then
+   back to the tournament tab) this alone produces a "live-feeling" page.
+2. **The client that actually submits a result updates itself directly**,
+   not via Pusher:
+   ```js
+   useMutation({
+     ...tournamentMatchesUpdateStatusCreateMutation,
+     onSuccess: async () => {
+       toast.success('matchResultsSubmitted')
+       await Promise.all([
+         invalidateQueries({ queryKey: [{ _id: 'event' }] }),
+         invalidateQueries({ predicate: e => e.queryKey[0]?._id === 'tournamentRoundsMyMatchRetrieve' }),
+         invalidateQueries({ predicate: e => e.queryKey[0]?._id === 'tournamentRoundsMatchesPaginatedList' }),
+       ])
+     },
+   })
+   ```
+   The reporter's own view updates from this local `onSuccess` handler, not
+   from a round-trip through Pusher. This is also *why* the self-write
+   debounce logic on the Pusher side exists — Pusher's actual job is
+   narrower than "notify everyone of every change": it's specifically for
+   notifying *other* connected clients (spectators, other players) who
+   aren't the one who made the change, and the reporter needs to ignore the
+   echo of its own action so it doesn't double-invalidate.
+
+Net effect: Pusher may be a secondary/best-effort layer for third-party
+viewers, while focus-based refetch + local-mutation-success invalidation
+are doing the real work of keeping the acting user's own view current. This
+is a much better-supported theory than either "unused" or "just needs more
+patience" — and it's directly actionable even without ever capturing a
+Pusher payload: `TournamentLookupPage`'s live-updates integration (below)
+now also refetches on `visibilitychange` becoming `'visible'`, mirroring
+the upstream site's actual behavior rather than depending solely on Pusher.
 
 To capture a live payload: connect to the same URL, subscribe to
 `player-event-{eventId}` for a currently-live event, and log every frame.
@@ -192,6 +261,13 @@ strip while `pusher.connection.state === 'connected'`, with a ticking
 (blocked network, Pusher outage, etc.) the badge simply never appears and
 the page behaves exactly as before — this is a pure enhancement, never a
 required dependency for the page to work.
+
+`TournamentLookupPage` also refetches on `visibilitychange` becoming
+`'visible'` (a plain `document.addEventListener`, no library needed) —
+mirroring the refetch-on-focus behavior confirmed above as the site's real
+primary live-update mechanism. This one is guaranteed to work in every
+browser (no proxy/network caveats like Pusher) and needs no payload to be
+useful, so it's the more load-bearing of the two mechanisms in practice.
 
 **Sandbox note:** this channel could not be verified end-to-end from
 Playwright inside the agent sandbox — a raw `new WebSocket('wss://ws-us2.pusher.com/...')`

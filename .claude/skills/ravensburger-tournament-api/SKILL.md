@@ -90,10 +90,9 @@ before assuming the data isn't available at all.
   Bracket"). This is inherently fragile; if a phase name format changes
   upstream, this regex needs updating.
 
-## Live updates: a Pusher WebSocket exists, but is undocumented and unused
+## Live updates: a real Pusher-backed cache-invalidation channel (mechanism confirmed from source; a live payload capture is still open)
 
-HAR captures of `tcg.ravensburgerplay.com/events/{id}` show the site opening
-a Pusher WebSocket for live updates, instead of (or alongside) polling:
+The site opens a Pusher WebSocket and subscribes to a per-event channel:
 
 ```
 wss://ws-us2.pusher.com/app/09b48f339d5acd1ffeb6?protocol=7&client=js&version=8.4.0&flash=false
@@ -101,22 +100,64 @@ wss://ws-us2.pusher.com/app/09b48f339d5acd1ffeb6?protocol=7&client=js&version=8.
 → server replies: {"event":"pusher_internal:subscription_succeeded","data":"{}","channel":"player-event-{eventId}"}
 ```
 
-The app key (`09b48f339d5acd1ffeb6`) is public (visible in the connection
-URL) and the channel is subscribed with an **empty `auth` token**, so this
-looks like a public, unauthenticated Pusher channel — no session or secret
-needed to listen.
+The app key (`09b48f339d5acd1ffeb6`, cluster `us2`) is public and the channel
+subscribes with an **empty `auth` token** — a public, unauthenticated
+channel, no session/secret needed to listen.
 
-**Not yet integrated anywhere in this repo**, and the only frames captured
-so far are the connection handshake — no captures exist of what event
-name(s)/payload shape(s) get pushed when something actually changes
-(a round completing, standings regenerating, the timer starting). Two HAR
-captures against not-yet-started events (`886050`, `886069`) confirmed the
-handshake but had nothing happen tournament-side during the recording, so
-there was nothing to observe past `pusher_internal:subscription_succeeded`.
+**This is a real, deliberate live-update mechanism** — confirmed by reading
+the site's own JS bundle (fetched directly, e.g.
+`https://tcg.ravensburgerplay.com/_next/static/chunks/{hash}.js`; the
+relevant one exports `usePusherSubscription`/`EventClientProvider` — hashes
+are per-deploy so grep the current bundle set for `player-event` rather than
+trusting a specific filename). `player-event-{id}` is the **only** Pusher
+subscription anywhere in the app (confirmed — no other `channelName:` call
+site exists). It's wired into React Query as a cache-invalidation/patch
+channel:
 
-To capture real payloads: connect to the same URL and subscribe to
-`player-event-{eventId}` for an event that's **currently live** (a round
-actually in progress, players actively reporting), and log every frame.
+- The client binds a custom Pusher event named **`"message"`** on the
+  channel (not the Pusher-protocol-level `pusher:*` events).
+- Payload shape: `{ type: "INVALIDATE" | "UPDATE" | "EVENT", entity: [...queryKey], id?, payload? }`.
+  - `"INVALIDATE"` → calls `queryClient.invalidateQueries({queryKey: entity})`,
+    forcing a refetch via the normal REST endpoints — no data in the push
+    itself.
+  - `"UPDATE"` → **patches the query cache directly with `payload`**
+    (`setQueriesData`, matching by `payload.id`) — genuine pushed data, no
+    refetch needed. Falls back to invalidating everything if `id` is
+    missing/null.
+  - `"EVENT"` → dispatched to a named handler in an `eventHandlers` map
+    passed to the hook; the one call site in this app passes `{}` (no
+    named-event handlers registered), so `"EVENT"` messages are inert here
+    even if the server sends them.
+  - The `entity` (query key) values observed in the `Set` gating which
+    `INVALIDATE`s are acted on: `tournamentRoundsMyMatchRetrieve`,
+    `tournamentRoundsMatchesPaginatedList`, `eventsRegistrationsList`,
+    `userEventStatusesEventRetrieve`, `tournamentRoundsStandingsRetrieve` —
+    i.e. exactly matches, registrations, user status, and standings.
+  - There's self-write debouncing: a client that just performed a mutation
+    ignores the broadcast echo of its own change for a short window, so a
+    reporting client doesn't double-process its own update.
+
+**Still unresolved — a real payload has not actually been captured.** Live
+test against event `734895` (round 2 `IN_PROGRESS`): stayed connected and
+subscribed for ~5 minutes while a real match on that round completed and
+was scored (`updated_at` moved `18:21:51` → `19:11:10`, `status` flipped to
+`COMPLETE`, `winning_player` populated) — **zero frames arrived** beyond the
+subscription confirmation, despite that match completion being exactly the
+kind of event the `entity` set above should cover
+(`tournamentRoundsMatchesPaginatedList`). Two plausible explanations, not
+yet distinguished: (a) broadcasts are gated to specific higher-level actions
+(e.g. a round being finalized/standings regenerated, which never happened
+in this window — round 2's `standings_status` stayed `NOT_GENERATED`
+throughout) rather than every individual match score entry, or (b)
+something else suppressed the broadcast for this specific event/deploy.
+**Before building anything on this channel, re-test against a moment likely
+to produce a broadcast** — ideally a full round transitioning to
+`COMPLETE`/`standings_status: GENERATED`, or a new registration — and
+capture the actual frame. Don't guess the payload beyond what's confirmed
+above from source.
+
+To capture a live payload: connect to the same URL, subscribe to
+`player-event-{eventId}` for a currently-live event, and log every frame.
 Node 22's built-in `WebSocket` global is enough — no `ws` package needed:
 
 ```js
@@ -132,12 +173,10 @@ ws.addEventListener('message', (ev) => {
 })
 ```
 
-Once real event names/payloads are captured, this section should be updated
-with them, and it becomes worth evaluating whether `TournamentLookupPage`
-should subscribe for live standings/round-change updates instead of relying
-on the user re-clicking "Load Standings" — but don't build against this
-until payloads are actually observed; don't guess event names from the
-handshake alone.
+Once a real `"message"`-event payload is captured, update this section with
+it, and only then is it worth evaluating whether `TournamentLookupPage`
+should subscribe for live updates instead of relying on the user re-clicking
+"Load Standings".
 
 ## Steps
 

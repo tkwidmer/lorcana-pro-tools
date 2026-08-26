@@ -196,9 +196,15 @@ function matchResultForPlayer(match, playerId) {
     const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
     return { result: 'DRAW', score: '—', opponent: opp?.user_event_status.best_identifier ?? '—' }
   }
-  const won = match.winning_player === playerId
   const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
   const oppName = opp?.user_event_status.best_identifier ?? '—'
+  // A round can be reported to the app before every match in it has a
+  // winner — an unfinished match has no winning_player yet, which must not
+  // be read as a loss.
+  if (match.status !== 'COMPLETE' || match.winning_player == null) {
+    return { result: 'IN PROGRESS', score: '—', opponent: oppName }
+  }
+  const won = match.winning_player === playerId
   const w = match.games_won_by_winner
   const l = match.games_won_by_loser
   const score = won ? `${w}-${l}` : `${l}-${w}`
@@ -313,6 +319,7 @@ function MatchesTab({ allMatches, matchesLoading }) {
                   const p2Won = match.winning_player === p2?.player.id
                   const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
                   const isBye = match.match_is_bye
+                  const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
                   const w = match.games_won_by_winner
                   const l = match.games_won_by_loser
                   return (
@@ -324,7 +331,7 @@ function MatchesTab({ allMatches, matchesLoading }) {
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
-                        {isBye ? 'BYE' : isDraw ? 'DRAW' : `${w}-${l}`}
+                        {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>

@@ -235,7 +235,10 @@ export async function fetchAllRoundMatches(eventId, eventDetails) {
   for (const phase of eventDetails.tournament_phases) {
     if (!phase.rounds) continue
     for (const round of phase.rounds) {
-      if (round.status !== 'COMPLETE') continue
+      // Skip only rounds that haven't started — an IN_PROGRESS round can
+      // already have reported/partial match results worth showing, even
+      // before its standings are regenerated.
+      if (round.status === 'UPCOMING') continue
       rounds.push({ roundId: round.id, roundNumber: round.round_number, phaseName: phase.phase_name })
     }
   }

@@ -90,6 +90,55 @@ before assuming the data isn't available at all.
   Bracket"). This is inherently fragile; if a phase name format changes
   upstream, this regex needs updating.
 
+## Live updates: a Pusher WebSocket exists, but is undocumented and unused
+
+HAR captures of `tcg.ravensburgerplay.com/events/{id}` show the site opening
+a Pusher WebSocket for live updates, instead of (or alongside) polling:
+
+```
+wss://ws-us2.pusher.com/app/09b48f339d5acd1ffeb6?protocol=7&client=js&version=8.4.0&flash=false
+→ client sends: {"event":"pusher:subscribe","data":{"auth":"","channel":"player-event-{eventId}"}}
+→ server replies: {"event":"pusher_internal:subscription_succeeded","data":"{}","channel":"player-event-{eventId}"}
+```
+
+The app key (`09b48f339d5acd1ffeb6`) is public (visible in the connection
+URL) and the channel is subscribed with an **empty `auth` token**, so this
+looks like a public, unauthenticated Pusher channel — no session or secret
+needed to listen.
+
+**Not yet integrated anywhere in this repo**, and the only frames captured
+so far are the connection handshake — no captures exist of what event
+name(s)/payload shape(s) get pushed when something actually changes
+(a round completing, standings regenerating, the timer starting). Two HAR
+captures against not-yet-started events (`886050`, `886069`) confirmed the
+handshake but had nothing happen tournament-side during the recording, so
+there was nothing to observe past `pusher_internal:subscription_succeeded`.
+
+To capture real payloads: connect to the same URL and subscribe to
+`player-event-{eventId}` for an event that's **currently live** (a round
+actually in progress, players actively reporting), and log every frame.
+Node 22's built-in `WebSocket` global is enough — no `ws` package needed:
+
+```js
+const ws = new WebSocket(
+  'wss://ws-us2.pusher.com/app/09b48f339d5acd1ffeb6?protocol=7&client=js&version=8.4.0&flash=false'
+)
+ws.addEventListener('message', (ev) => {
+  console.log(ev.data)
+  const msg = JSON.parse(ev.data)
+  if (msg.event === 'pusher:connection_established') {
+    ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `player-event-${eventId}` } }))
+  }
+})
+```
+
+Once real event names/payloads are captured, this section should be updated
+with them, and it becomes worth evaluating whether `TournamentLookupPage`
+should subscribe for live standings/round-change updates instead of relying
+on the user re-clicking "Load Standings" — but don't build against this
+until payloads are actually observed; don't guess event names from the
+handshake alone.
+
 ## Steps
 
 1. Check `src/lib/tournamentApi.js` and `api/tournament.ts` first — they're

@@ -16,7 +16,8 @@ import { ShareCardModal } from '../components/ShareCardModal'
 const ANNOTATIONS_KEY = 'lorcana_tournament_match_annotations'
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
 const TEAM_KEY = 'lorcana_tournament_team'
-const LAST_URL_KEY = 'lorcana_tournament_last_url'
+const RECENTS_KEY = 'lorcana_tournament_recents'
+const MAX_RECENTS = 8
 
 function getAnnotations() {
   try { return JSON.parse(localStorage.getItem(ANNOTATIONS_KEY) ?? '{}') } catch { return {} }
@@ -74,6 +75,41 @@ function toggleTeamStorage(playerId, name) {
   }
   localStorage.setItem(TEAM_KEY, JSON.stringify(all))
   return all
+}
+
+// Minimal per-tournament bookmarks — enough to reload standings and show a
+// label, without persisting the (large, ever-changing) standings/roster data
+// itself. Most-recently-viewed first, capped at MAX_RECENTS.
+function getRecents() {
+  try { return JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]') } catch { return [] }
+}
+
+function saveRecent(entry) {
+  const next = [entry, ...getRecents().filter((t) => t.eventId !== entry.eventId)].slice(0, MAX_RECENTS)
+  localStorage.setItem(RECENTS_KEY, JSON.stringify(next))
+  return next
+}
+
+function removeRecent(eventId) {
+  const next = getRecents().filter((t) => t.eventId !== eventId)
+  localStorage.setItem(RECENTS_KEY, JSON.stringify(next))
+  return next
+}
+
+// Normalizes /registrations/ entries (available pre-tournament, before any
+// round has generated standings) into the same entry shape standings rows
+// use, so RosterTable/FavoriteStar/TeamBadge can be reused as-is.
+function registrationsToRosterEntries(regs) {
+  return regs
+    .map((r) => ({
+      id: r.id,
+      player: { id: r.user.id, best_identifier: r.user.best_identifier },
+      user_event_status: { best_identifier: r.best_identifier },
+      rank: null,
+      record: `${r.matches_won ?? 0}-${r.matches_drawn ?? 0}-${r.matches_lost ?? 0}`,
+      match_points: r.total_match_points ?? 0,
+    }))
+    .sort((a, b) => a.user_event_status.best_identifier.localeCompare(b.user_event_status.best_identifier))
 }
 
 function TeamBadge({ active, onToggle, className = '' }) {
@@ -171,7 +207,7 @@ function matchResultForPlayer(match, playerId) {
 
 // Shared by the Favorites and Team tabs — a flat roster of standings entries
 // with the same favorite/team toggles and click-through as the main Standings table.
-function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, registrationMap, onSelectPlayer, emptyMessage }) {
+function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, registrationMap, onSelectPlayer, emptyMessage, disableSelect = false }) {
   if (entries.length === 0) {
     return <p className="text-sm text-gray-500 py-8 text-center px-4">{emptyMessage}</p>
   }
@@ -196,8 +232,8 @@ function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, reg
             return (
               <tr
                 key={entry.id}
-                onClick={() => onSelectPlayer(entry)}
-                className={`border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors${dropped ? ' opacity-50' : ''}${isFavorite || onTeam ? ' bg-yellow-50' : ''}`}
+                onClick={disableSelect ? undefined : () => onSelectPlayer(entry)}
+                className={`border-t border-gray-100 transition-colors${disableSelect ? '' : ' hover:bg-blue-50 cursor-pointer'}${dropped ? ' opacity-50' : ''}${isFavorite || onTeam ? ' bg-yellow-50' : ''}`}
               >
                 <td className="px-2 py-2.5">
                   <div className="flex items-center justify-center gap-1">
@@ -211,7 +247,7 @@ function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, reg
                     />
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank}</td>
+                <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank ?? '—'}</td>
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-gray-900">
@@ -485,6 +521,10 @@ export function TournamentLookupPage() {
   const [activeTab, setActiveTab] = useState('standings')
   const [favorites, setFavorites] = useState(getFavorites)
   const [team, setTeam] = useState(getTeam)
+  const [roster, setRoster] = useState(null)
+  const [rosterMode, setRosterMode] = useState(false)
+  const [recents, setRecents] = useState(getRecents)
+  const [currentEventId, setCurrentEventId] = useState(null)
 
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
@@ -500,13 +540,12 @@ export function TournamentLookupPage() {
     return () => clearInterval(id)
   }, [structure?.timerEndDatetime, structure?.timerIsRunning])
 
-  // Restore the last-loaded tournament on refresh so it doesn't need repasting.
+  // Restore the most recently viewed tournament on refresh so it doesn't need repasting.
   useEffect(() => {
-    const saved = localStorage.getItem(LAST_URL_KEY)
-    if (saved) {
+    if (recents.length > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setEventUrl(saved)
-      loadStandings(saved)
+      setEventUrl(recents[0].url)
+      loadStandings(recents[0].url)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -522,6 +561,15 @@ export function TournamentLookupPage() {
 
   function toggleTeam(playerId, name) {
     setTeam(toggleTeamStorage(playerId, name))
+  }
+
+  function selectRecent(recent) {
+    setEventUrl(recent.url)
+    loadStandings(recent.url)
+  }
+
+  function removeRecentTournament(eventId) {
+    setRecents(removeRecent(eventId))
   }
 
   async function loadStandings(url) {
@@ -540,22 +588,39 @@ export function TournamentLookupPage() {
     setError(null)
     setPlayer(null)
     setAllStandings(null)
+    setRoster(null)
+    setRosterMode(false)
     setSearchTerm('')
     setRegistrationMap(null)
     setAllMatches(null)
-    setActiveTab('standings')
+    setCurrentEventId(null)
 
     try {
       const eventDetails = await fetchEventDetails(eventId)
       const tournamentStructure = getTournamentStructure(eventDetails)
 
+      setStructure(tournamentStructure)
+      setCurrentEventId(eventId)
+      setRecents(saveRecent({
+        eventId,
+        url,
+        eventName: tournamentStructure?.eventName ?? null,
+        lastViewedAt: Date.now(),
+      }))
+
       if (!tournamentStructure?.currentRoundId) {
-        setError('Could not find active tournament round')
+        // No round has generated standings yet (tournament hasn't started, or
+        // pairings for round 1 aren't posted) — fall back to the registered
+        // roster so users can start favoriting/team-tagging players early.
+        const regs = await fetchAllRegistrations(eventId)
+        setRoster(registrationsToRosterEntries(regs))
+        setRosterMode(true)
+        setActiveTab('roster')
         return
       }
 
-      setStructure(tournamentStructure)
-      localStorage.setItem(LAST_URL_KEY, url)
+      setRosterMode(false)
+      setActiveTab('standings')
 
       // Fetch all pages of standings
       const allResults = []
@@ -603,22 +668,35 @@ export function TournamentLookupPage() {
     )
   })
 
-  const favoritedEntries = (allStandings ?? [])
-    .filter((entry) => favorites[String(entry.player.id)])
-    .sort((a, b) => a.rank - b.rank)
+  const filteredRoster = roster?.filter((entry) => {
+    if (!searchTerm) return true
+    const q = searchTerm.toLowerCase()
+    return (
+      entry.player.best_identifier.toLowerCase().includes(q) ||
+      entry.user_event_status.best_identifier.toLowerCase().includes(q)
+    )
+  })
 
-  const teamEntries = (allStandings ?? [])
+  const rosterOrStandings = allStandings ?? roster ?? []
+
+  const favoritedEntries = rosterOrStandings
+    .filter((entry) => favorites[String(entry.player.id)])
+    .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0))
+
+  const teamEntries = rosterOrStandings
     .filter((entry) => team[String(entry.player.id)])
-    .sort((a, b) => a.rank - b.rank)
+    .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0))
 
   const teamSummary = teamEntries.length > 0 ? teamEntries.reduce((acc, entry) => {
     const { w, d, l } = parseRecord(entry.record)
     acc.wins += w
     acc.draws += d
     acc.losses += l
-    acc.bestRank = Math.min(acc.bestRank, entry.rank)
-    acc.worstRank = Math.max(acc.worstRank, entry.rank)
-    if (structure?.topCutSize && entry.rank <= structure.topCutSize) acc.inCut += 1
+    if (entry.rank != null) {
+      acc.bestRank = Math.min(acc.bestRank, entry.rank)
+      acc.worstRank = Math.max(acc.worstRank, entry.rank)
+      if (structure?.topCutSize && entry.rank <= structure.topCutSize) acc.inCut += 1
+    }
     return acc
   }, { wins: 0, draws: 0, losses: 0, bestRank: Infinity, worstRank: -Infinity, inCut: 0 }) : null
 
@@ -654,6 +732,39 @@ export function TournamentLookupPage() {
         </button>
       </form>
 
+      {recents.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Recent</span>
+          {recents.map((t) => (
+            <div
+              key={t.eventId}
+              className={`flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full border text-xs transition-colors ${
+                t.eventId === currentEventId
+                  ? 'border-blue-300 bg-blue-50 text-blue-700'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => selectRecent(t)}
+                title={t.eventName ?? `Event ${t.eventId}`}
+                className="font-medium truncate max-w-[12rem]"
+              >
+                {t.eventName || `Event ${t.eventId}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => removeRecentTournament(t.eventId)}
+                title="Remove from recents"
+                className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-100 leading-none"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-lg p-4 mb-6">
           {error}
@@ -663,7 +774,10 @@ export function TournamentLookupPage() {
       {/* Tournament info strip */}
       {structure && (
         <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
-          {structure.isElimination ? (
+          {!structure.currentRoundId && (
+            <span className="text-amber-700 font-medium">Not started yet</span>
+          )}
+          {structure.currentRoundId && (structure.isElimination ? (
             <span>
               <strong className="text-gray-900">{structure.currentPhaseName || 'Elimination'}</strong>{' '}
               · Round {structure.currentRoundNumber}
@@ -674,8 +788,8 @@ export function TournamentLookupPage() {
               {structure.currentRoundNumber}
               {structure.totalSwissRounds > 0 && ` of ${structure.totalSwissRounds}`}
             </span>
-          )}
-          {!structure.isElimination && structure.swissRoundsRemaining > 0 && (
+          ))}
+          {structure.currentRoundId && !structure.isElimination && structure.swissRoundsRemaining > 0 && (
             <span>
               <strong className="text-gray-900">{structure.swissRoundsRemaining}</strong> round{structure.swissRoundsRemaining !== 1 ? 's' : ''} remaining
             </span>
@@ -685,10 +799,10 @@ export function TournamentLookupPage() {
               Top <strong className="text-gray-900">{structure.topCutSize}</strong> cut
             </span>
           )}
-          {allStandings && (
+          {(allStandings || roster) && (
             <span>
-              <strong className="text-gray-900">{allStandings.length}</strong>
-              {structure.startingPlayerCount && structure.startingPlayerCount !== allStandings.length && (
+              <strong className="text-gray-900">{(allStandings ?? roster).length}</strong>
+              {structure.startingPlayerCount && structure.startingPlayerCount !== (allStandings ?? roster).length && (
                 <span className="text-gray-400"> / {structure.startingPlayerCount}</span>
               )}
               {' '}players
@@ -748,34 +862,49 @@ export function TournamentLookupPage() {
       )}
 
       {/* Tab switcher */}
-      {allStandings && !player && (
+      {(allStandings || roster) && !player && (
         <div className="flex gap-1 mb-4 border-b border-gray-200 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('standings')}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-              activeTab === 'standings'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Standings
-          </button>
-          <button
-            onClick={() => setActiveTab('matches')}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'matches'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Matches
-            {matchesLoading && (
-              <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60" />
-            )}
-            {!matchesLoading && allMatches && (
-              <span className="text-xs text-gray-400 font-normal">({allMatches.length})</span>
-            )}
-          </button>
+          {rosterMode ? (
+            <button
+              onClick={() => setActiveTab('roster')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                activeTab === 'roster'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Roster
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => setActiveTab('standings')}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                  activeTab === 'standings'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Standings
+              </button>
+              <button
+                onClick={() => setActiveTab('matches')}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'matches'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Matches
+                {matchesLoading && (
+                  <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60" />
+                )}
+                {!matchesLoading && allMatches && (
+                  <span className="text-xs text-gray-400 font-normal">({allMatches.length})</span>
+                )}
+              </button>
+            </>
+          )}
           <button
             onClick={() => setActiveTab('favorites')}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
@@ -890,8 +1019,40 @@ export function TournamentLookupPage() {
         <MatchesTab allMatches={allMatches} matchesLoading={matchesLoading} />
       )}
 
+      {/* Roster tab (pre-tournament — no standings yet) */}
+      {rosterMode && roster && !player && activeTab === 'roster' && (
+        <div className="space-y-3">
+          <div className="text-sm text-blue-800 border border-blue-200 bg-blue-50 rounded-lg p-4">
+            No active round yet — standings aren't published for this event. Here's the registered
+            roster so you can favorite or team-tag players ahead of round 1.
+          </div>
+          <input
+            type="text"
+            placeholder="Search by name…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="max-h-[32rem] overflow-y-auto">
+              <RosterTable
+                entries={filteredRoster ?? []}
+                favorites={favorites}
+                team={team}
+                toggleFavorite={toggleFavorite}
+                toggleTeam={toggleTeam}
+                registrationMap={registrationMap}
+                onSelectPlayer={() => {}}
+                disableSelect
+                emptyMessage="No registered players found."
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Favorites tab */}
-      {allStandings && !player && activeTab === 'favorites' && (
+      {(allStandings || roster) && !player && activeTab === 'favorites' && (
         <div className="border border-gray-200 rounded-lg overflow-hidden">
           <RosterTable
             entries={favoritedEntries}
@@ -900,14 +1061,15 @@ export function TournamentLookupPage() {
             toggleFavorite={toggleFavorite}
             toggleTeam={toggleTeam}
             registrationMap={registrationMap}
-            onSelectPlayer={setPlayer}
-            emptyMessage="No favorited players yet. Tap the star next to a player in the Standings tab to track them here."
+            onSelectPlayer={rosterMode ? () => {} : setPlayer}
+            disableSelect={rosterMode}
+            emptyMessage="No favorited players yet. Tap the star next to a player in the Standings/Roster tab to track them here."
           />
         </div>
       )}
 
       {/* Team tab */}
-      {allStandings && !player && activeTab === 'team' && (
+      {(allStandings || roster) && !player && activeTab === 'team' && (
         <div className="space-y-3">
           {teamSummary && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -916,7 +1078,9 @@ export function TournamentLookupPage() {
                 <div className="text-xs text-gray-500">Combined W-D-L</div>
               </div>
               <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-                <div className="font-bold text-gray-900">#{teamSummary.bestRank}–#{teamSummary.worstRank}</div>
+                <div className="font-bold text-gray-900">
+                  {teamSummary.bestRank === Infinity ? '—' : `#${teamSummary.bestRank}–#${teamSummary.worstRank}`}
+                </div>
                 <div className="text-xs text-gray-500">Rank spread</div>
               </div>
               <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
@@ -939,8 +1103,9 @@ export function TournamentLookupPage() {
               toggleFavorite={toggleFavorite}
               toggleTeam={toggleTeam}
               registrationMap={registrationMap}
-              onSelectPlayer={setPlayer}
-              emptyMessage="No team members yet. Tap the T badge next to a player in the Standings tab to add them to your team."
+              onSelectPlayer={rosterMode ? () => {} : setPlayer}
+              disableSelect={rosterMode}
+              emptyMessage="No team members yet. Tap the T badge next to a player in the Standings/Roster tab to add them to your team."
             />
           </div>
         </div>

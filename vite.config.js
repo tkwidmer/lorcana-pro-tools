@@ -27,7 +27,7 @@ export default defineConfig({
           const pageSize = url.searchParams.get('pageSize') || '10'
 
           switch (type) {
-            case 'event':        return `/api/v2/events/${eventId}`
+            case 'event':        return `/api/v2/events/${eventId}/`
             case 'registrations': return `/api/v2/events/${eventId}/registrations/?page=${page}&page_size=${pageSize}`
             case 'standings':    return `/api/v2/tournament-rounds/${roundId}/standings/paginated/?page=${page}&page_size=${pageSize}`
             case 'matches':      return `/api/v2/tournament-rounds/${roundId}/matches/`

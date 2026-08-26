@@ -733,35 +733,36 @@ export function TournamentLookupPage() {
       </form>
 
       {recents.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-6">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Recent</span>
-          {recents.map((t) => (
-            <div
-              key={t.eventId}
-              className={`flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full border text-xs transition-colors ${
-                t.eventId === currentEventId
-                  ? 'border-blue-300 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => selectRecent(t)}
-                title={t.eventName ?? `Event ${t.eventId}`}
-                className="font-medium truncate max-w-[12rem]"
+        <div className="mb-6">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Recent</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {recents.map((t) => (
+              <div
+                key={t.eventId}
+                className={`flex items-start justify-between gap-2 pl-3 pr-2 py-2 rounded-lg border text-sm transition-colors ${
+                  t.eventId === currentEventId
+                    ? 'border-blue-300 bg-blue-50 text-blue-800'
+                    : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
+                }`}
               >
-                {t.eventName || `Event ${t.eventId}`}
-              </button>
-              <button
-                type="button"
-                onClick={() => removeRecentTournament(t.eventId)}
-                title="Remove from recents"
-                className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-100 leading-none"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => selectRecent(t)}
+                  className="font-medium text-left leading-snug"
+                >
+                  {t.eventName || `Event ${t.eventId}`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeRecentTournament(t.eventId)}
+                  title="Remove from recents"
+                  className="w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-100 leading-none"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

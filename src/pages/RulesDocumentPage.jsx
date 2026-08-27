@@ -258,6 +258,14 @@ function DocumentVersionView({ doc, docSlug, versionId, versions, chapterSlug, s
 
       {activeChapter && (
         <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8">
+          <details className="md:hidden border border-gray-200 rounded-lg p-4">
+            <summary className="text-sm font-semibold text-gray-900 cursor-pointer">
+              {activeChapter.id} {activeChapter.title} — Jump to section
+            </summary>
+            <div className="mt-3">
+              <ChapterSidebar doc={doc} version={version} chapters={chapters} activeChapter={activeChapter} />
+            </div>
+          </details>
           <div className="hidden md:block">
             <ChapterSidebar doc={doc} version={version} chapters={chapters} activeChapter={activeChapter} />
           </div>

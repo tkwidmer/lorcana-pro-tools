@@ -323,9 +323,6 @@ export function MMRTrendView({ games }) {
   }
 
   const H = 180
-  const PAD = { top: 16, right: 16, bottom: 32, left: 40 }
-  const chartW = W - PAD.left - PAD.right
-  const chartH = H - PAD.top - PAD.bottom
 
   // Build actual MMR points: start with mmr_before of first game, then mmr_after of each game
   const startMMR = sorted[0].mmr_before ?? (sorted[0].mmr_after != null ? sorted[0].mmr_after - sorted[0].mmr_delta : 0)
@@ -341,6 +338,16 @@ export function MMRTrendView({ games }) {
   const paddedMin = minMMR - (range * 0.1 || 10)
   const paddedMax = maxMMR + (range * 0.1 || 10)
   const paddedRange = paddedMax - paddedMin
+
+  // MMR is typically 4 digits (unlike the 2-3 digit values other trend charts
+  // plot), so the fixed 40px left pad those charts use isn't wide enough —
+  // the leading digit renders off the left edge of the SVG viewBox and gets
+  // clipped, silently turning e.g. "1400" into "400". Size it to the widest
+  // label actually being drawn instead.
+  const maxLabelChars = Math.max(String(Math.round(paddedMin)).length, String(Math.round(paddedMax)).length)
+  const PAD = { top: 16, right: 16, bottom: 32, left: 16 + maxLabelChars * 11 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
 
   // x positions: index 0 = start point (before first game), index 1..n = after each game
   const totalPoints = points.length + 1

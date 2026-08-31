@@ -40,6 +40,10 @@ export async function fetchRecentTournamentImports() {
   return apiFetch('?endpoint=recent-imports')
 }
 
+export async function fetchSuggestedTournamentImports() {
+  return apiFetch('?endpoint=suggested-imports')
+}
+
 export async function importTournamentEvent(eventUrl) {
   return apiFetch('?endpoint=import', {
     method: 'POST',

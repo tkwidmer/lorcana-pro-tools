@@ -14,7 +14,9 @@ import {
   getHeadToHead,
   searchPlayers,
   listRecentImports,
+  getAllImportedEventIds,
 } from './_lib/tournamentHistorySupabase.js'
+import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournamentDiscovery.js'
 
 // Single consolidated route for the caster-history archive of imported RPH
 // major events (see supabase/migrations/008_tournament_history.sql), folded
@@ -247,6 +249,36 @@ async function handleRecentImports(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+async function handleSuggestedImports(req: VercelRequest, res: VercelResponse) {
+  const userId = await requireAdmin(req, res)
+  if (!userId) return
+
+  try {
+    const [candidates, importedIds] = await Promise.all([discoverCandidateEvents(), getAllImportedEventIds()])
+
+    const suggestions = filterRealCandidates(candidates)
+      .filter((e) => !importedIds.has(String(e.id)))
+      .sort((a, b) => new Date(b.start_datetime ?? 0).getTime() - new Date(a.start_datetime ?? 0).getTime())
+      .slice(0, 30)
+      .map((e) => ({
+        eventId: String(e.id),
+        eventName: e.name,
+        eventUrl: `https://tcg.ravensburgerplay.com/events/${e.id}`,
+        storeName: e.store?.name ?? null,
+        startDatetime: e.start_datetime,
+        startingPlayerCount: e.starting_player_count,
+      }))
+
+    // Cached briefly at the edge — this fans out to ~18 Ravensburger requests
+    // per call, no need to re-run that on every page focus.
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900')
+    return res.status(200).json({ suggestions })
+  } catch (err) {
+    console.error('tournament-history suggested-imports failed:', err instanceof Error ? err.message : err)
+    return res.status(502).json({ error: 'Failed to discover suggested events from Ravensburger Play Hub' })
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const endpoint = str(req.query.endpoint)
 
@@ -272,6 +304,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleSearchPlayers(req, res)
     case 'recent-imports':
       return handleRecentImports(req, res)
+    case 'suggested-imports':
+      return handleSuggestedImports(req, res)
     default:
       return res.status(400).json({ error: 'Missing or invalid endpoint param' })
   }

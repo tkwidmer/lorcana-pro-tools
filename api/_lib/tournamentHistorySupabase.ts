@@ -184,6 +184,16 @@ export async function searchPlayers(query: string, limit = 20) {
   return Array.from(seen.values())
 }
 
+// All rph_event_ids already in the archive — used to filter suggested
+// discovery candidates down to ones actually worth showing. There are only
+// ~100-200 rows here, so a single unfiltered select is fine.
+export async function getAllImportedEventIds(): Promise<Set<string>> {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase.from('tournament_history_events').select('rph_event_id')
+  if (error) throw error
+  return new Set((data ?? []).map((r) => r.rph_event_id))
+}
+
 export async function listRecentImports(limit = 20) {
   const supabase = getSupabaseServiceClient()
   const { data, error } = await supabase

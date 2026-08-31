@@ -134,6 +134,13 @@ is an offline discovery script rather than a browser-facing feature.
   event history and noticing the naming pattern; if another regional
   qualifier brand turns up the same way, add it here rather than assuming
   CCQ/ACQ are exhaustive.
+- **Full-name CCQ** (`discover_ccq_full_name()`): filter by
+  `name=Challenge Championship Qualifier` — the term spelled out in full,
+  no "CCQ" abbreviation. Turned up during a real-attendance crawl (see
+  "Finding major events by attendance" below) at UK Games Expo, GenCon,
+  Millennium Games, and LDXP Tacoma — none of which matched the plain
+  "CCQ" substring search. Labeled `CCQ` in output (same category, just a
+  different discovery path).
 - **Big-money events** (`discover_prize_events()`): same `name=` contains-match
   trick, run once per term in `PRIZE_SEARCH_TERMS` (`5K`/`10K`/`15K`/`20K`/
   `25K`/`50K` and comma-formatted `5,000`/`10,000`/etc., since a store might

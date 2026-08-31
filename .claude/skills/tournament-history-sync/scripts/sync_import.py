@@ -130,6 +130,15 @@ def discover_acq():
     return paginate_events({"game_slug": GAME_SLUG, "name": "Asia Championship Qualifier"})
 
 
+def discover_ccq_full_name():
+    # "Challenge Championship Qualifier" (spelled out in full, no "CCQ"
+    # abbreviation in the name) turned up during a real-attendance crawl at
+    # UK Games Expo, GenCon, Millennium Games, and LDXP Tacoma — none of
+    # which matched the "CCQ" substring search. Same independently-run,
+    # no-shared-template shape as CCQ/ACQ.
+    return paginate_events({"game_slug": GAME_SLUG, "name": "Challenge Championship Qualifier"})
+
+
 # Independently-run big-money events (no CCQ affiliation, no shared template)
 # are only discoverable by searching every prize-pool spelling a store might
 # use in its event name. "name=" is case-insensitive contains-match, so "5K"
@@ -211,6 +220,10 @@ def main():
     acq_events = discover_acq()
     print(f"  found {len(acq_events)} total name-matched ACQ events", file=sys.stderr)
 
+    print("Discovering full-name 'Challenge Championship Qualifier' events...", file=sys.stderr)
+    ccq_full_events = discover_ccq_full_name()
+    print(f"  found {len(ccq_full_events)} total name-matched events", file=sys.stderr)
+
     print("Discovering independently-run big-money events...", file=sys.stderr)
     prize_events = discover_prize_events()
     print(f"  found {len(prize_events)} total name-matched prize-pool events", file=sys.stderr)
@@ -224,6 +237,8 @@ def main():
         all_events.setdefault(e["id"], ("CCQ", e))
     for e in acq_events:
         all_events.setdefault(e["id"], ("ACQ", e))
+    for e in ccq_full_events:
+        all_events.setdefault(e["id"], ("CCQ", e))
     for e in prize_events:
         # same precedence rule: DLC/CCQ/ACQ label wins if a big-money event
         # also happens to match one of those name searches

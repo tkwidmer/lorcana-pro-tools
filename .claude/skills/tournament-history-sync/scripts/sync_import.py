@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Discovers Disney Lorcana Challenge (DLC) and Challenge Championship
-Qualifier (CCQ) events on the Ravensburger Play Hub and imports any that
-aren't already in this repo's Tournament History archive, via
-POST /api/tournament-history?endpoint=import.
+Discovers Disney Lorcana Challenge (DLC), Challenge Championship Qualifier
+(CCQ), and independently-run big-money ($5K-$50K) events on the
+Ravensburger Play Hub, and imports any that aren't already in this repo's
+Tournament History archive, via POST /api/tournament-history?endpoint=import.
 
 Why this exists: the admin import page (/admin/tournament-import) only
 imports one event URL at a time, and there's no upstream "list of DLCs and
-CCQs" endpoint — CCQs in particular are independently named by each store,
-not tagged by a shared template, so discovery has to search by name. See
-SKILL.md in this directory for the full write-up of how this was reverse
-engineered.
+CCQs" endpoint — CCQs and big-money events in particular are independently
+named by each store, not tagged by a shared template, so discovery has to
+search by name. See SKILL.md in this directory for the full write-up of how
+this was reverse engineered.
 
 State is cached in two JSON files next to this script:
   - imported_cache.json: events successfully imported before. Completed
@@ -102,6 +102,28 @@ def discover_ccq():
     return paginate_events({"game_slug": GAME_SLUG, "name": "CCQ"})
 
 
+# Independently-run big-money events (no CCQ affiliation, no shared template)
+# are only discoverable by searching every prize-pool spelling a store might
+# use in its event name. "name=" is case-insensitive contains-match, so "5K"
+# also catches "5k"; comma-formatted amounts ("$25,000 Weekend") need their
+# own search term since "25K" won't match them. This list was built by
+# checking each term individually against the live API — extend it if a
+# user reports a known big event that isn't turning up (e.g. a new prize
+# tier, or a spelled-out "five thousand").
+PRIZE_SEARCH_TERMS = [
+    "5K", "10K", "15K", "20K", "25K", "50K",
+    "5,000", "10,000", "15,000", "20,000", "25,000", "50,000",
+]
+
+
+def discover_prize_events():
+    seen = {}
+    for term in PRIZE_SEARCH_TERMS:
+        for e in paginate_events({"game_slug": GAME_SLUG, "name": term}):
+            seen[e["id"]] = e
+    return list(seen.values())
+
+
 def load_cache(path):
     if path.exists():
         return json.loads(path.read_text())
@@ -157,6 +179,10 @@ def main():
     ccq_events = discover_ccq()
     print(f"  found {len(ccq_events)} total name-matched CCQ events", file=sys.stderr)
 
+    print("Discovering independently-run big-money events...", file=sys.stderr)
+    prize_events = discover_prize_events()
+    print(f"  found {len(prize_events)} total name-matched prize-pool events", file=sys.stderr)
+
     all_events = {}
     for e in dlc_events:
         all_events[e["id"]] = ("DLC", e)
@@ -164,6 +190,10 @@ def main():
         # a CCQ template event could theoretically also match the DLC template;
         # DLC label wins if so, since dict insertion order already set it above
         all_events.setdefault(e["id"], ("CCQ", e))
+    for e in prize_events:
+        # same precedence rule: DLC/CCQ label wins if a big-money event also
+        # happens to have "CCQ" in its name (many do)
+        all_events.setdefault(e["id"], ("PRIZE", e))
 
     candidates = []
     skipped_not_complete = 0

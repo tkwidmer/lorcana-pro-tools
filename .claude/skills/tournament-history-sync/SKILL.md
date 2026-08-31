@@ -1,22 +1,25 @@
 ---
 name: tournament-history-sync
-description: Run this to discover new Disney Lorcana Challenge (DLC) and Challenge Championship Qualifier (CCQ) events on the Ravensburger Play Hub and import any that aren't yet in the Tournament History archive, via /admin/tournament-import's underlying API. Use when the user asks to "sync tournament history", "pick up new DLCs/CCQs", "import events that haven't been imported yet", or similar recurring-import requests.
+description: Run this to discover new Disney Lorcana Challenge (DLC), Challenge Championship Qualifier (CCQ), and independently-run big-money ($5K-$50K) events on the Ravensburger Play Hub and import any that aren't yet in the Tournament History archive, via /admin/tournament-import's underlying API. Use when the user asks to "sync tournament history", "pick up new DLCs/CCQs", "find major events we haven't imported", "import events that haven't been imported yet", or similar recurring-import/discovery requests.
 ---
 
-# Tournament History Sync (DLC + CCQ)
+# Tournament History Sync (DLC + CCQ + big-money events)
 
-Discovers and bulk-imports Disney Lorcana Challenge (DLC) and Challenge
-Championship Qualifier (CCQ) events from the Ravensburger Play Hub into this
-app's Tournament History archive (`tournament_history_events`/`_standings`/
-`_matches` tables, see CLAUDE.md's "Tournament History Archive" section).
+Discovers and bulk-imports Disney Lorcana Challenge (DLC), Challenge
+Championship Qualifier (CCQ), and independently-run big-money events (named
+things like "$5K", "10k Weekend", "$25,000 Cash Tournament") from the
+Ravensburger Play Hub into this app's Tournament History archive
+(`tournament_history_events`/`_standings`/`_matches` tables, see CLAUDE.md's
+"Tournament History Archive" section).
 
 The admin import page (`/admin/tournament-import`) only takes one event URL
-at a time. There is no upstream "list all DLCs/CCQs" endpoint — DLCs share a
-real event-configuration-template, but CCQs are independently named by each
-store with no shared tag, so CCQ discovery works by a name search instead.
-Both discovery mechanisms were reverse-engineered from the Play Hub's own
-frontend bundle; see the "How discovery works" section below before
-changing anything.
+at a time. There is no upstream "list all DLCs/CCQs/big events" endpoint —
+DLCs share a real event-configuration-template, but CCQs and big-money
+events are independently named by each store with no shared tag, so both
+work by a name search instead. All three discovery mechanisms were
+reverse-engineered from the Play Hub's own frontend bundle and by
+empirically probing its query params; see the "How discovery works" section
+below before changing anything.
 
 ## How to run this
 
@@ -72,7 +75,7 @@ only touches genuinely new events.
 
 ## How discovery works
 
-Both use `GET https://api.ravensburgerplay.com/api/v2/events/` (the
+All three use `GET https://api.ravensburgerplay.com/api/v2/events/` (the
 `RAVEN_BASE` host — see the `ravensburger-tournament-api` skill), which is
 the same public endpoint `api/tournament.ts` proxies for the `event`/
 `registrations`/`standings` types, but hit directly here since this is an
@@ -94,6 +97,20 @@ offline discovery script rather than a browser-facing feature.
   something else entirely (no "CCQ" substring) will not be found this way.
   If the user reports a known CCQ missing from the archive, check its name
   first before assuming a script bug.
+- **Big-money events** (`discover_prize_events()`): same `name=` contains-match
+  trick, run once per term in `PRIZE_SEARCH_TERMS` (`5K`/`10K`/`15K`/`20K`/
+  `25K`/`50K` and comma-formatted `5,000`/`10,000`/etc., since a store might
+  spell a prize pool either way — "$25,000 Weekend" won't match "25K" and
+  vice versa). Case-insensitive (`5K` also matches lowercase "5k" in event
+  names — confirmed empirically). Results across all terms are deduped by
+  event ID before diffing against the caches. This is inherently a
+  best-effort net: it only catches events whose *name* mentions the prize
+  amount — a big-money event with an unrelated name (e.g. just a store's own
+  branded event name) won't surface here, only through a manual event URL
+  import. If a user reports a known big event missing, extend
+  `PRIZE_SEARCH_TERMS` with whatever spelling it uses (e.g. "1K" for smaller
+  cash tournaments, or a spelled-out amount) rather than assuming the script
+  is broken.
 - Other params that look like they should work but don't (silently
   ignored, not filtered): `ordering`/`sort`/`order_by` (no-op — the
   response is unsorted by anything you pass), `event_type` (no-op — always
@@ -104,6 +121,10 @@ offline discovery script rather than a browser-facing feature.
 - Only events with `display_status == "complete"` are considered import
   candidates — an event still `upcoming` naturally gets picked up on some
   future run once it actually happens, no special handling needed.
+- Precedence when an event matches more than one category (e.g. a CCQ whose
+  name also contains "10K"): DLC wins over CCQ wins over PRIZE, purely for
+  the `[label]` shown in output — it's cosmetic, the import behavior is
+  identical either way.
 
 ## Why some events can never be imported
 

@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """
 Discovers Disney Lorcana Challenge (DLC), Challenge Championship Qualifier
-(CCQ), and independently-run big-money ($5K-$50K) events on the
-Ravensburger Play Hub, and imports any that aren't already in this repo's
-Tournament History archive, via POST /api/tournament-history?endpoint=import.
+(CCQ), Asia Championship Qualifier (ACQ), and independently-run big-money
+($5K-$50K) events on the Ravensburger Play Hub, and imports any that aren't
+already in this repo's Tournament History archive, via
+POST /api/tournament-history?endpoint=import.
 
 Why this exists: the admin import page (/admin/tournament-import) only
 imports one event URL at a time, and there's no upstream "list of DLCs and
-CCQs" endpoint — CCQs and big-money events in particular are independently
-named by each store, not tagged by a shared template, so discovery has to
-search by name. See SKILL.md in this directory for the full write-up of how
-this was reverse engineered.
+CCQs" endpoint — CCQs, ACQs, and big-money events in particular are
+independently named by each store, not tagged by a shared template, so
+discovery has to search by name. Even the DLC template tag isn't fully
+reliable — some stores mistag their DLC's parent event with a generic
+template (confirmed for Melbourne and Taipei), so DLC discovery also needs
+a name-search backstop. See SKILL.md in this directory for the full
+write-up of how this was reverse engineered.
 
 State is cached in two JSON files next to this script:
   - imported_cache.json: events successfully imported before. Completed
@@ -33,6 +37,7 @@ import json
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -40,6 +45,12 @@ RAVEN_BASE = "https://api.ravensburgerplay.com/api/v2"
 GAME_SLUG = "disney-lorcana"
 DLC_TEMPLATE_ID = "a1b77361-c19e-4942-8741-f6b96bb24a80"  # "Disney Lorcana Challenge" event-configuration-template
 APP_BASE = "https://lorcana-pro-tools.vercel.app"
+
+# Verified against every one of the game's official templates via
+# GET /api/v2/event-configuration-templates/?game_slug=disney-lorcana — but
+# some stores mistag their DLC parent event with a generic template like
+# this instead, so the DLC discovery below also runs a name search as a
+# backstop (see discover_dlc()).
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 IMPORTED_CACHE_PATH = SCRIPT_DIR / "imported_cache.json"
@@ -80,7 +91,7 @@ def paginate_events(query_params, page_size=100):
     results = []
     page = 1
     while True:
-        qs = "&".join(f"{k}={v}" for k, v in query_params.items())
+        qs = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in query_params.items())
         url = f"{RAVEN_BASE}/events/?{qs}&page_size={page_size}&page={page}"
         d = http_get_json(url)
         results.extend(d.get("results", []))
@@ -92,7 +103,16 @@ def paginate_events(query_params, page_size=100):
 
 
 def discover_dlc():
-    return paginate_events({"game_slug": GAME_SLUG, "event_configuration_template_id": DLC_TEMPLATE_ID})
+    seen = {}
+    for e in paginate_events({"game_slug": GAME_SLUG, "event_configuration_template_id": DLC_TEMPLATE_ID}):
+        seen[e["id"]] = e
+    # backstop: some stores mistag their DLC's parent event with the wrong
+    # template (confirmed for Melbourne id 402587 and Taipei id 448653, both
+    # tagged "Weekly Play (Constructed)" instead of the real DLC template) —
+    # a name search catches what the template filter misses.
+    for e in paginate_events({"game_slug": GAME_SLUG, "name": "Disney Lorcana Challenge"}):
+        seen.setdefault(e["id"], e)
+    return list(seen.values())
 
 
 def discover_ccq():
@@ -100,6 +120,14 @@ def discover_ccq():
     # (confirmed empirically) — it's the only working text-search filter
     # found on this endpoint.
     return paginate_events({"game_slug": GAME_SLUG, "name": "CCQ"})
+
+
+def discover_acq():
+    # Asia Championship Qualifier: a regional series (Singapore, Philippines,
+    # Thailand, Malaysia, Hong Kong, ...) run by the Saka Saka network, same
+    # shape as a CCQ but never caught by the "CCQ" name search since it's
+    # branded "ACQ" instead. No shared template either.
+    return paginate_events({"game_slug": GAME_SLUG, "name": "Asia Championship Qualifier"})
 
 
 # Independently-run big-money events (no CCQ affiliation, no shared template)
@@ -179,6 +207,10 @@ def main():
     ccq_events = discover_ccq()
     print(f"  found {len(ccq_events)} total name-matched CCQ events", file=sys.stderr)
 
+    print("Discovering ACQ (Asia Championship Qualifier) events...", file=sys.stderr)
+    acq_events = discover_acq()
+    print(f"  found {len(acq_events)} total name-matched ACQ events", file=sys.stderr)
+
     print("Discovering independently-run big-money events...", file=sys.stderr)
     prize_events = discover_prize_events()
     print(f"  found {len(prize_events)} total name-matched prize-pool events", file=sys.stderr)
@@ -190,9 +222,11 @@ def main():
         # a CCQ template event could theoretically also match the DLC template;
         # DLC label wins if so, since dict insertion order already set it above
         all_events.setdefault(e["id"], ("CCQ", e))
+    for e in acq_events:
+        all_events.setdefault(e["id"], ("ACQ", e))
     for e in prize_events:
-        # same precedence rule: DLC/CCQ label wins if a big-money event also
-        # happens to have "CCQ" in its name (many do)
+        # same precedence rule: DLC/CCQ/ACQ label wins if a big-money event
+        # also happens to match one of those name searches
         all_events.setdefault(e["id"], ("PRIZE", e))
 
     candidates = []

@@ -95,8 +95,8 @@ export function AdminTournamentImportPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8 items-start">
-        <div className="space-y-8 max-w-2xl">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <div className="space-y-8">
           <div className="border border-gray-200 rounded-lg p-6">
             <h2 className="text-base font-bold text-gray-900 mb-4">Import an event</h2>
             <form onSubmit={handleImport} className="flex gap-2">

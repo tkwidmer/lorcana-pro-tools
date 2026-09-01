@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { pairKeyOf } from '../lib/tournamentHistoryApi'
 
 // RPH's match data has no explicit "advances to" link between rounds — the
 // bracket is reconstructed purely from round_number + table_number, sorted
@@ -16,7 +17,7 @@ function roundLabel(matchCount, roundNum, phaseName) {
   }
 }
 
-function BracketMatch({ match, onSelectPairing }) {
+function BracketMatch({ match, onSelectPairing, badges }) {
   const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
   const isBye = match.match_is_bye
   const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
@@ -24,6 +25,10 @@ function BracketMatch({ match, onSelectPairing }) {
   const p2Won = match.winning_player === p2?.player.id
   const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
   const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
+
+  const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id))
+  const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
+  const p2HasPedigree = p2 && !isBye && badges?.hasPedigree(p2.player.id)
 
   return (
     <div
@@ -41,7 +46,8 @@ function BracketMatch({ match, onSelectPairing }) {
       }`}
     >
       <div className={`px-2.5 py-1.5 flex items-center justify-between gap-2 ${p1Won ? 'bg-green-50' : ''}`}>
-        <span className={`font-medium truncate ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-500'}`}>
+        <span className={`font-medium truncate flex items-center gap-1 ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-500'}`}>
+          {p1HasPedigree && <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>}
           {p1?.user_event_status.best_identifier ?? '—'}
         </span>
         {!isBye && match.games_won_by_winner != null && (
@@ -49,13 +55,19 @@ function BracketMatch({ match, onSelectPairing }) {
         )}
       </div>
       <div className={`px-2.5 py-1.5 flex items-center justify-between gap-2 border-t border-gray-100 ${p2Won ? 'bg-green-50' : ''}`}>
-        <span className={`font-medium truncate ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-500'}`}>
+        <span className={`font-medium truncate flex items-center gap-1 ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-500'}`}>
+          {p2HasPedigree && <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>}
           {isBye ? 'BYE' : p2?.user_event_status.best_identifier ?? '—'}
         </span>
         {!isBye && match.games_won_by_loser != null && (
           <span className="font-mono text-gray-400 shrink-0">{p2Won ? match.games_won_by_winner : match.games_won_by_loser}</span>
         )}
       </div>
+      {isRivalry && (
+        <div className="px-2.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-semibold text-center" title="These players have met before">
+          🔁 Rivalry
+        </div>
+      )}
       {inProgress && (
         <div className="px-2.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-semibold text-center">In Progress</div>
       )}
@@ -66,7 +78,7 @@ function BracketMatch({ match, onSelectPairing }) {
 // Renders the RANKED_SINGLE_ELIMINATION phase of an event as a left-to-right
 // bracket instead of a flat matches list. Clicking a completed pairing opens
 // the same PairingHistoryPanel as the Matches tab (via onSelectPairing).
-export function EliminationBracket({ allMatches, phaseName, onSelectPairing }) {
+export function EliminationBracket({ allMatches, phaseName, onSelectPairing, badges }) {
   const rounds = useMemo(() => {
     const bracketMatches = (allMatches ?? []).filter((m) => m.phase_name === phaseName)
     const roundNumbers = [...new Set(bracketMatches.map((m) => m.round_number))].sort((a, b) => a - b)
@@ -77,6 +89,25 @@ export function EliminationBracket({ allMatches, phaseName, onSelectPairing }) {
       return { roundNum, matches: roundMatches }
     })
   }, [allMatches, phaseName])
+
+  // The bracket has few rounds and no collapse/expand interaction (unlike
+  // MatchesTab), so badges are fetched for the whole thing up front rather
+  // than lazily per round.
+  useEffect(() => {
+    if (!badges) return
+    const playerIds = []
+    const pairKeys = []
+    for (const { matches } of rounds) {
+      for (const match of matches) {
+        if (match.match_is_bye) continue
+        const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
+        if (!p1 || !p2) continue
+        playerIds.push(p1.player.id, p2.player.id)
+        pairKeys.push(pairKeyOf(p1.player.id, p2.player.id))
+      }
+    }
+    badges.ensureBadges(playerIds, pairKeys)
+  }, [rounds, badges])
 
   if (rounds.length === 0) {
     return <p className="text-sm text-gray-500 py-8 text-center">Bracket hasn't started yet.</p>
@@ -97,7 +128,7 @@ export function EliminationBracket({ allMatches, phaseName, onSelectPairing }) {
                 // — the classic bracket "funnel" without needing explicit
                 // connector lines between columns.
                 <div key={match.id} style={{ flexGrow: 2 ** roundIndex }} className="flex items-center">
-                  <BracketMatch match={match} onSelectPairing={onSelectPairing} />
+                  <BracketMatch match={match} onSelectPairing={onSelectPairing} badges={badges} />
                 </div>
               ))}
             </div>

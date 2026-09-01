@@ -18,6 +18,8 @@ export interface EventUpsertInput {
   eventDate: string | null
   rawEventDetails: unknown
   importedBy: string
+  eventConfigurationTemplate: string | null
+  eventTier: string | null
 }
 
 export async function upsertEvent(input: EventUpsertInput): Promise<string> {
@@ -38,6 +40,8 @@ export async function upsertEvent(input: EventUpsertInput): Promise<string> {
         event_date: input.eventDate,
         raw_event_details: input.rawEventDetails,
         imported_by: input.importedBy,
+        event_configuration_template: input.eventConfigurationTemplate,
+        event_tier: input.eventTier,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'rph_event_id' }
@@ -192,6 +196,44 @@ export async function getAllImportedEventIds(): Promise<Set<string>> {
   const { data, error } = await supabase.from('tournament_history_events').select('rph_event_id')
   if (error) throw error
   return new Set((data ?? []).map((r) => r.rph_event_id))
+}
+
+// Tiers that badge the pedigree signal — Continental/National-level
+// ("challenge_championship") and DLC/regional-level ("challenge") events.
+// Deliberately excludes 'lcq' (Last Chance Qualifier) — common enough to
+// make the badge meaningless once the archive fills up.
+// TODO(worlds): add 'worlds' once its UUID is known.
+export const NOTABLE_EVENT_TIERS = ['challenge_championship', 'challenge']
+
+// Batched lookup for "Notable Pairing Badges": which of the given players
+// have made top cut at a notable-tier event (pedigree), and which of the
+// given pairs have met before in any imported event (rivalry). Response is
+// sparse — callers should treat a missing key as false.
+export async function getPairingBadges(playerIds: string[], pairKeys: string[]) {
+  const supabase = getSupabaseServiceClient()
+  const [pedigreeResult, rivalryResult] = await Promise.all([
+    playerIds.length === 0
+      ? Promise.resolve({ data: [], error: null })
+      : supabase
+          .from('tournament_history_standings')
+          .select('rph_player_id, event:tournament_history_events!inner(event_tier)')
+          .in('rph_player_id', playerIds)
+          .eq('made_top_cut', true)
+          .in('event.event_tier', NOTABLE_EVENT_TIERS),
+    pairKeys.length === 0
+      ? Promise.resolve({ data: [], error: null })
+      : supabase.from('tournament_history_matches').select('player_pair').in('player_pair', pairKeys),
+  ])
+  if (pedigreeResult.error) throw pedigreeResult.error
+  if (rivalryResult.error) throw rivalryResult.error
+
+  const pedigree: Record<string, true> = {}
+  for (const row of pedigreeResult.data ?? []) pedigree[(row as any).rph_player_id] = true
+  const rivalry: Record<string, true> = {}
+  for (const row of rivalryResult.data ?? []) {
+    if ((row as any).player_pair) rivalry[(row as any).player_pair] = true
+  }
+  return { pedigree, rivalry }
 }
 
 export async function listRecentImports(limit = 20) {

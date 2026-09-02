@@ -12,6 +12,8 @@ import {
 import { PlayerMatchHistory } from '../components/PlayerMatchHistory'
 import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
 import { EliminationBracket } from '../components/EliminationBracket'
+import { usePairingBadges } from '../hooks/usePairingBadges'
+import { pairKeyOf } from '../lib/tournamentHistoryApi'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
 
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
@@ -268,13 +270,41 @@ const MATCH_FILTER_OPTIONS = [
   { key: 'team', label: 'My Team' },
 ]
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team }) {
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
   // only the latest round expanded — large events can have 1000+ matches
   // in a single round, so earlier rounds start collapsed).
   const [toggledRounds, setToggledRounds] = useState(() => new Set())
+
+  // Badge data is fetched lazily, per expanded round — a caster only pays
+  // the query cost for rounds they've actually opened (mirrors the
+  // collapse-by-default UI), keeping batches to at most ~500 pairs even for
+  // a huge event.
+  useEffect(() => {
+    if (!badges || !allMatches) return
+    const roundsSeen = [...new Set(allMatches.map((m) => m.round_number))].sort((a, b) => a - b)
+    const latestRoundSeen = roundsSeen[roundsSeen.length - 1]
+    const searchActiveNow = searchTerm.trim() !== '' || filterMode !== 'all'
+    const expandedRounds = new Set(
+      roundsSeen.filter((r) => {
+        if (searchActiveNow) return true
+        const defaultExpanded = r === latestRoundSeen
+        return toggledRounds.has(r) ? !defaultExpanded : defaultExpanded
+      })
+    )
+    const playerIds = []
+    const pairKeys = []
+    for (const match of allMatches) {
+      if (!expandedRounds.has(match.round_number) || match.match_is_bye) continue
+      const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
+      if (!p1 || !p2) continue
+      playerIds.push(p1.player.id, p2.player.id)
+      pairKeys.push(pairKeyOf(p1.player.id, p2.player.id))
+    }
+    badges.ensureBadges(playerIds, pairKeys)
+  }, [allMatches, toggledRounds, searchTerm, filterMode, badges])
 
   if (matchesLoading && !allMatches) {
     return (
@@ -389,6 +419,9 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                         const w = match.games_won_by_winner
                         const l = match.games_won_by_loser
                         const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
+                        const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id))
+                        const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
+                        const p2HasPedigree = p2 && !isBye && badges?.hasPedigree(p2.player.id)
                         return (
                           <tr
                             key={match.id}
@@ -406,13 +439,22 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                             <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
                             <td className="px-4 py-2.5">
                               <span className={`font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                                {p1HasPedigree && (
+                                  <span title="Made top cut at a Challenge or Challenge Championship" className="mr-1">🏆</span>
+                                )}
                                 {p1?.user_event_status.best_identifier ?? '—'}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
+                              {isRivalry && (
+                                <span title="These players have met before" className="mr-1">🔁</span>
+                              )}
                               {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
                             </td>
                             <td className="px-4 py-2.5 text-right">
+                              {p2HasPedigree && (
+                                <span title="Made top cut at a Challenge or Challenge Championship" className="ml-1">🏆</span>
+                              )}
                               <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
                                 {p2?.user_event_status.best_identifier ?? '—'}
                               </span>
@@ -453,6 +495,10 @@ export function TournamentLookupPage() {
   const [currentEventId, setCurrentEventId] = useState(null)
   const [selectedPairing, setSelectedPairing] = useState(null) // { p1: {id, name}, p2: {id, name} } | null
   const [lastLiveUpdateAt, setLastLiveUpdateAt] = useState(null)
+  // Instantiated once so MatchesTab and EliminationBracket share one badge
+  // cache — elimination matches also appear in allMatches, so there's real
+  // overlap to save on when switching tabs.
+  const pairingBadges = usePairingBadges()
 
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
@@ -1050,6 +1096,7 @@ export function TournamentLookupPage() {
           onSelectPairing={setSelectedPairing}
           favorites={favorites}
           team={team}
+          badges={pairingBadges}
         />
       )}
 
@@ -1059,6 +1106,7 @@ export function TournamentLookupPage() {
           allMatches={allMatches}
           phaseName={structure?.eliminationPhaseName}
           onSelectPairing={setSelectedPairing}
+          badges={pairingBadges}
         />
       )}
 

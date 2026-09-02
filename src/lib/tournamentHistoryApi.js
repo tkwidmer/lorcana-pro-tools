@@ -51,3 +51,19 @@ export async function importTournamentEvent(eventUrl) {
     body: JSON.stringify({ eventUrl }),
   })
 }
+
+// Matches the server's generated `player_pair` column format (LEAST:GREATEST)
+// so client-computed pair keys always agree with the DB's — see
+// supabase/migrations/008_tournament_history.sql.
+export function pairKeyOf(idA, idB) {
+  return [String(idA), String(idB)].sort().join(':')
+}
+
+// Batched "Notable Pairing Badges" lookup — sparse response, a missing key
+// means false. Used by usePairingBadges.js.
+export async function fetchPairingBadges(playerIds, pairKeys) {
+  const params = new URLSearchParams({ endpoint: 'pairing-badges' })
+  if (playerIds.length > 0) params.set('playerIds', playerIds.join(','))
+  if (pairKeys.length > 0) params.set('pairKeys', pairKeys.join(','))
+  return apiFetch(`?${params.toString()}`)
+}

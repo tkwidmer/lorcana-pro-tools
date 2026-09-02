@@ -14,6 +14,48 @@
 const RAVEN_BASE = 'https://api.ravensburgerplay.com/api/v2'
 const HYDRA_BASE = 'https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2'
 
+// RPH event_configuration_template UUID -> tier key. Confirmed against the
+// full official list via GET /api/v2/event-configuration-templates/?game_slug=
+// disney-lorcana (see the tournament-history-sync skill), and against real
+// events including the NA Championship (886104 =
+// b8c2e34b-2ff2-45b6-b725-18528c56a7cc = "Challenge Championship", RPH's
+// name for a Continental/National-level event — one tier up from a regular
+// "Challenge", which is the DLC/regional-level event, i.e. "Disney Lorcana
+// Challenge" in RPH's own template name).
+//
+// Deliberately does NOT include CCQs (Challenge Championship Qualifiers) —
+// per the tournament-history-sync skill, CCQs have no shared official
+// template; they're independently run by third-party organizers, each under
+// their own store-specific one-off configuration UUID (confirmed: two CCQ
+// events in this archive, 217488 and 351064, each have a distinct
+// unofficial UUID not in this map). Any UUID missing from this map falls
+// through to tier: null, which the pedigree query already treats as "not
+// notable" — the correct fail-safe outcome for a CCQ.
+//
+// TODO(worlds): Disney Lorcana Championship (Worlds) had not been scheduled
+// on RPH as of 2026-09-01, so its UUID is unknown. Once a Worlds event
+// appears, fetch its event_configuration_template and add it here as
+// 'worlds', then add 'worlds' to NOTABLE_EVENT_TIERS in
+// tournamentHistorySupabase.ts.
+export const EVENT_CONFIGURATION_TEMPLATES: Record<string, string> = {
+  'b8c2e34b-2ff2-45b6-b725-18528c56a7cc': 'challenge_championship',
+  'a1b77361-c19e-4942-8741-f6b96bb24a80': 'challenge',
+  '4881658d-a6ef-4f98-9c2a-1baf9ef12b82': 'lcq',
+  '810d4ea0-3ea8-4c67-9381-4c4840330cf8': 'weekly_constructed',
+  '7cd013ab-7eb6-4adc-9563-ce2a073628e8': 'weekly_draft',
+  '4a011d41-38f2-4860-90e4-62843c2ec2dd': 'weekly_sealed',
+  '5597eb4b-aafa-45ef-b69c-06d745201ebe': 'ink_sprint',
+  'ea5a8924-6b4e-473c-bbee-597c7408c7c4': 'side_events',
+  'fa6de20e-925d-4700-9d58-e0cd4e2e286b': 'unstructured',
+  '36363a54-a90a-4cf2-89bb-de4669a26f58': 'format_coconut',
+  '868b0085-5853-4e1b-a294-e9bc30002afa': 'collection_quest',
+}
+
+export function deriveEventTier(eventDetails: any): { templateId: string | null; tier: string | null } {
+  const templateId: string | null = eventDetails?.event_configuration_template ?? null
+  return { templateId, tier: templateId ? (EVENT_CONFIGURATION_TEMPLATES[templateId] ?? null) : null }
+}
+
 export interface TournamentStructureLite {
   topCutSize: number | null
   totalSwissRounds: number

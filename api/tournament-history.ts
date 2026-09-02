@@ -3,6 +3,7 @@ import { requireAdmin, requireSession } from './_lib/requireAdmin.js'
 import {
   fetchEventDetailsServer,
   deriveTournamentStructure,
+  deriveEventTier,
   fetchFinalStandings,
   fetchAllRoundMatchesServer,
 } from './_lib/tournamentImport.js'
@@ -15,6 +16,7 @@ import {
   searchPlayers,
   listRecentImports,
   getAllImportedEventIds,
+  getPairingBadges,
 } from './_lib/tournamentHistorySupabase.js'
 import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournamentDiscovery.js'
 
@@ -62,6 +64,7 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
   if (!structure.finalRoundId) {
     return res.status(400).json({ error: 'This event has no completed round with generated standings yet' })
   }
+  const { templateId, tier } = deriveEventTier(eventDetails)
 
   try {
     const [standingsRaw, matches] = await Promise.all([
@@ -82,6 +85,8 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
       eventDate: eventDetails?.start_date ?? eventDetails?.event_date ?? null,
       rawEventDetails: eventDetails,
       importedBy: userId,
+      eventConfigurationTemplate: templateId,
+      eventTier: tier,
     })
 
     const standingsImported = await upsertStandings(
@@ -127,6 +132,7 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
       ok: true,
       eventId,
       eventName: structure.eventName,
+      eventTier: tier,
       standingsImported,
       matchesImported,
       roundsImported: new Set(matches.map((m: any) => m.round_number)).size,
@@ -249,6 +255,39 @@ async function handleRecentImports(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+const MAX_BADGE_LIST_SIZE = 500
+
+function parseCsv(v: string | undefined): string[] {
+  if (!v) return []
+  return v
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
+async function handlePairingBadges(req: VercelRequest, res: VercelResponse) {
+  const userId = await requireSession(req, res)
+  if (!userId) return
+
+  const playerIds = [...new Set(parseCsv(str(req.query.playerIds)))]
+  const pairKeys = [...new Set(parseCsv(str(req.query.pairKeys)))]
+
+  if (playerIds.length === 0 && pairKeys.length === 0) {
+    return res.status(400).json({ error: 'playerIds or pairKeys is required' })
+  }
+  if (playerIds.length > MAX_BADGE_LIST_SIZE || pairKeys.length > MAX_BADGE_LIST_SIZE) {
+    return res.status(400).json({ error: `Too many ids/keys — max ${MAX_BADGE_LIST_SIZE} each` })
+  }
+
+  try {
+    const badges = await getPairingBadges(playerIds, pairKeys)
+    return res.status(200).json(badges)
+  } catch (err) {
+    console.error('tournament-history pairing-badges failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to load pairing badges' })
+  }
+}
+
 async function handleSuggestedImports(req: VercelRequest, res: VercelResponse) {
   const userId = await requireAdmin(req, res)
   if (!userId) return
@@ -304,6 +343,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleSearchPlayers(req, res)
     case 'recent-imports':
       return handleRecentImports(req, res)
+    case 'pairing-badges':
+      return handlePairingBadges(req, res)
     case 'suggested-imports':
       return handleSuggestedImports(req, res)
     default:

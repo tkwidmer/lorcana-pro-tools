@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   fetchEventDetails,
@@ -252,6 +252,37 @@ const MATCH_FILTER_OPTIONS = [
   { key: 'favorites', label: '★ Favorites' },
   { key: 'team', label: 'My Team' },
 ]
+
+// A match counts as "settled" once it has a result worth announcing in the
+// tracked-players ticker — a bye has nothing to report, and an in-progress
+// match (no winner yet, not a draw) hasn't resolved.
+function isMatchSettled(match) {
+  if (match.match_is_bye) return false
+  if (match.match_is_intentional_draw || match.match_is_unintentional_draw) return true
+  return match.status === 'COMPLETE' && match.winning_player != null
+}
+
+// Human-readable one-liner for the "Tracked Player Activity" ticker, or null
+// if neither player in the match is favorited/team-tagged.
+function describeTrackedMatch(match, favorites, team) {
+  const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
+  if (!p1 || !p2) return null
+  const isTracked = (r) => Boolean(favorites[String(r.player.id)] || team[String(r.player.id)])
+  if (!isTracked(p1) && !isTracked(p2)) return null
+
+  const p1Name = p1.user_event_status.best_identifier
+  const p2Name = p2.user_event_status.best_identifier
+  if (match.match_is_intentional_draw || match.match_is_unintentional_draw) {
+    return `${p1Name} drew ${p2Name} — Round ${match.round_number}`
+  }
+  const p1Won = match.winning_player === p1.player.id
+  const winnerName = p1Won ? p1Name : p2Name
+  const loserName = p1Won ? p2Name : p1Name
+  const w = match.games_won_by_winner
+  const l = match.games_won_by_loser
+  const score = w != null && l != null ? ` (${w}-${l})` : ''
+  return `${winnerName} beat ${loserName}${score} — Round ${match.round_number}`
+}
 
 function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam, searchTerm, onSearchChange }) {
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
@@ -512,6 +543,58 @@ export function TournamentLookupPage() {
   // overlap to save on when switching tabs.
   const pairingBadges = usePairingBadges()
 
+  // "Tracked Player Activity" ticker — a running, session-only feed of
+  // completed matches involving a favorited/team-tagged player, newest
+  // first. Session-only and reset per event on purpose: it's about what's
+  // happening live while the page is open, not a permanent log.
+  const [tickerEvents, setTickerEvents] = useState([])
+  const [tickerCollapsed, setTickerCollapsed] = useState(false)
+  // Previous allMatches snapshot + the set of match ids already announced,
+  // so the ticker only fires on a *transition* into "settled" (a fresh live
+  // update completing a round) rather than on every re-render, and the
+  // very first fetch for an event doesn't flood the feed with matches that
+  // were already finished before the page even loaded.
+  const previousMatchesRef = useRef(null)
+  const seenSettledMatchIds = useRef(new Set())
+
+  useEffect(() => {
+    if (!allMatches) return
+    const prevMatches = previousMatchesRef.current
+    if (prevMatches) {
+      const prevById = new Map(prevMatches.map((m) => [m.id, m]))
+      const newEvents = []
+      for (const match of allMatches) {
+        if (!isMatchSettled(match) || seenSettledMatchIds.current.has(match.id)) continue
+        seenSettledMatchIds.current.add(match.id)
+        const prevMatch = prevById.get(match.id)
+        if (prevMatch && isMatchSettled(prevMatch)) continue // already settled last time we looked
+        const text = describeTrackedMatch(match, favorites, team)
+        if (text) newEvents.push({ id: `${match.id}-${match.round_number}`, text, at: Date.now() })
+      }
+      if (newEvents.length > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTickerEvents((prev) => [...newEvents.reverse(), ...prev].slice(0, 20))
+      }
+    } else {
+      // First population for this event — seed the "seen" set so already-
+      // finished matches don't get announced as if they just happened.
+      for (const match of allMatches) {
+        if (isMatchSettled(match)) seenSettledMatchIds.current.add(match.id)
+      }
+    }
+    previousMatchesRef.current = allMatches
+  }, [allMatches, favorites, team])
+
+  // Forces a re-render periodically so each ticker row's "Xm ago" label
+  // stays roughly current without a per-row timer (coarser than
+  // LastLiveUpdate's 1s tick — fine for a list of relative timestamps).
+  const [, forceTickerRerender] = useState(0)
+  useEffect(() => {
+    if (tickerEvents.length === 0) return
+    const id = setInterval(() => forceTickerRerender((v) => v + 1), 15000)
+    return () => clearInterval(id)
+  }, [tickerEvents.length])
+
   // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
   // share the current URL and it reloads straight into the same event/tab/
   // search instead of a blank page. Only the *initial* read matters: after
@@ -647,6 +730,9 @@ export function TournamentLookupPage() {
     setRegistrationMap(null)
     setAllMatches(null)
     setCurrentEventId(null)
+    setTickerEvents([])
+    previousMatchesRef.current = null
+    seenSettledMatchIds.current = new Set()
 
     try {
       const eventDetails = await fetchEventDetails(eventId)
@@ -1066,6 +1152,30 @@ export function TournamentLookupPage() {
               <span className="text-xs text-gray-400 font-normal">({teamEntries.length})</span>
             )}
           </button>
+        </div>
+      )}
+
+      {/* Tracked Player Activity ticker — persistent across tabs, session-only */}
+      {allStandings && !player && tickerEvents.length > 0 && (
+        <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
+          <div
+            onClick={() => setTickerCollapsed((v) => !v)}
+            className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"
+          >
+            <span className="text-gray-400 text-xs w-3">{tickerCollapsed ? '▸' : '▾'}</span>
+            <span className="text-sm font-semibold text-gray-800">📡 Tracked Player Activity</span>
+            <span className="ml-auto text-xs text-gray-400">{tickerEvents.length}</span>
+          </div>
+          {!tickerCollapsed && (
+            <ul className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+              {tickerEvents.map((event) => (
+                <li key={event.id} className="px-4 py-2 text-sm text-gray-700 flex items-center justify-between gap-2">
+                  <span>{event.text}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{formatAgo(event.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, Fragment } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   fetchEventDetails,
   getTournamentStructure,
@@ -12,6 +13,7 @@ import {
 import { PlayerMatchHistory } from '../components/PlayerMatchHistory'
 import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
 import { EliminationBracket } from '../components/EliminationBracket'
+import { FavoriteStar, TeamBadge } from '../components/PlayerTags'
 import { usePairingBadges } from '../hooks/usePairingBadges'
 import { pairKeyOf } from '../lib/tournamentHistoryApi'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
@@ -37,19 +39,6 @@ function toggleFavoriteStorage(playerId, name) {
   }
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(all))
   return all
-}
-
-function FavoriteStar({ active, onToggle, className = '' }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onToggle() }}
-      title={active ? 'Unfavorite' : 'Favorite'}
-      className={`text-lg leading-none transition-colors ${active ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 hover:text-gray-400'} ${className}`}
-    >
-      {active ? '★' : '☆'}
-    </button>
-  )
 }
 
 // Single "my team" tag, keyed the same way as favorites — global across events.
@@ -102,21 +91,6 @@ function registrationsToRosterEntries(regs) {
       match_points: r.total_match_points ?? 0,
     }))
     .sort((a, b) => a.user_event_status.best_identifier.localeCompare(b.user_event_status.best_identifier))
-}
-
-function TeamBadge({ active, onToggle, className = '' }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onToggle() }}
-      title={active ? 'Remove from my team' : 'Add to my team'}
-      className={`w-5 h-5 rounded-full text-[10px] font-bold leading-none flex items-center justify-center transition-colors ${
-        active ? 'bg-purple-500 text-white hover:bg-purple-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-300'
-      } ${className}`}
-    >
-      T
-    </button>
-  )
 }
 
 // Parses a "W-D-L" record string into integer parts, defaulting missing/malformed segments to 0.
@@ -279,8 +253,7 @@ const MATCH_FILTER_OPTIONS = [
   { key: 'team', label: 'My Team' },
 ]
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam }) {
-  const [searchTerm, setSearchTerm] = useState('')
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam, searchTerm, onSearchChange }) {
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
   // only the latest round expanded — large events can have 1000+ matches
@@ -362,7 +335,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
           type="text"
           placeholder="Search by player name…"
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
         <div className="flex gap-1">
@@ -539,6 +512,18 @@ export function TournamentLookupPage() {
   // overlap to save on when switching tabs.
   const pairingBadges = usePairingBadges()
 
+  // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
+  // share the current URL and it reloads straight into the same event/tab/
+  // search instead of a blank page. Only the *initial* read matters: after
+  // mount, state flows one-way into the URL via the sync effects below, so
+  // we never re-read params and fight the user's own navigation.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [initialParams] = useState(() => ({
+    event: searchParams.get('event'),
+    tab: searchParams.get('tab'),
+    q: searchParams.get('q'),
+  }))
+
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -553,15 +538,52 @@ export function TournamentLookupPage() {
     return () => clearInterval(id)
   }, [structure?.timerEndDatetime, structure?.timerIsRunning])
 
-  // Restore the most recently viewed tournament on refresh so it doesn't need repasting.
+  // A shared deep link takes priority over the localStorage "last viewed"
+  // restore below — otherwise a caster following someone else's link would
+  // just get bounced to whatever tournament they personally looked at last.
   useEffect(() => {
-    if (recents.length > 0) {
+    const VALID_TABS = ['standings', 'matches', 'bracket', 'favorites', 'team', 'roster']
+    if (initialParams.event) {
+      const url = `https://tcg.ravensburgerplay.com/events/${initialParams.event}`
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEventUrl(url)
+      loadStandings(url).then(() => {
+        if (initialParams.tab && VALID_TABS.includes(initialParams.tab)) setActiveTab(initialParams.tab)
+        if (initialParams.q) setSearchTerm(initialParams.q)
+      })
+    } else if (recents.length > 0) {
       setEventUrl(recents[0].url)
       loadStandings(recents[0].url)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // One-way sync of the loaded event/tab/search back into the URL so the
+  // current browser URL is always a valid share link for what's on screen.
+  useEffect(() => {
+    if (!currentEventId) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('event', currentEventId)
+        next.set('tab', activeTab)
+        if (searchTerm) next.set('q', searchTerm)
+        else next.delete('q')
+        return next
+      },
+      { replace: true }
+    )
+  }, [currentEventId, activeTab, searchTerm, setSearchParams])
+
+  // Pedigree badges for the whole Standings list (not just Matches/Bracket)
+  // so a caster scanning standings can spot a notable player without
+  // switching tabs. usePairingBadges chunks this internally, so a huge
+  // DLC's full player list is safe to request in one call.
+  useEffect(() => {
+    if (!allStandings) return
+    pairingBadges.ensureBadges(allStandings.map((entry) => entry.player.id), [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allStandings])
 
   function extractEventId(url) {
     const match = url.match(/\/events\/(\d+)/)
@@ -1105,6 +1127,9 @@ export function TournamentLookupPage() {
                           <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank}</td>
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-2">
+                              {pairingBadges.hasPedigree(entry.player.id) && (
+                                <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
+                              )}
                               <span className="font-medium text-gray-900">
                                 {entry.user_event_status.best_identifier}
                               </span>
@@ -1138,6 +1163,8 @@ export function TournamentLookupPage() {
           badges={pairingBadges}
           toggleFavorite={toggleFavorite}
           toggleTeam={toggleTeam}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
         />
       )}
 
@@ -1148,6 +1175,10 @@ export function TournamentLookupPage() {
           phaseName={structure?.eliminationPhaseName}
           onSelectPairing={setSelectedPairing}
           badges={pairingBadges}
+          favorites={favorites}
+          team={team}
+          toggleFavorite={toggleFavorite}
+          toggleTeam={toggleTeam}
         />
       )}
 

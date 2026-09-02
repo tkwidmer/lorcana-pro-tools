@@ -264,13 +264,22 @@ function matchInvolvesFilter(match, filterMode, favorites, team) {
   return match.player_match_relationships.some((r) => map[String(r.player.id)])
 }
 
+// Bubbles matches involving a tagged player to the top of a round's table so
+// a caster doesn't have to scan hundreds of rows to find them — team tags
+// outrank plain favorites since "my team" is the more deliberate signal.
+function matchPriority(match, favorites, team) {
+  if (match.player_match_relationships.some((r) => team[String(r.player.id)])) return 0
+  if (match.player_match_relationships.some((r) => favorites[String(r.player.id)])) return 1
+  return 2
+}
+
 const MATCH_FILTER_OPTIONS = [
   { key: 'all', label: 'All' },
   { key: 'favorites', label: '★ Favorites' },
   { key: 'team', label: 'My Team' },
 ]
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges }) {
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
@@ -382,7 +391,9 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
             if (searchActive && filteredMatches.length === 0) return null
             const phaseName = roundMatches[0]?.phase_name
             const expanded = isRoundExpanded(roundNum)
-            const displayMatches = searchActive ? filteredMatches : roundMatches
+            const displayMatches = [...(searchActive ? filteredMatches : roundMatches)].sort(
+              (a, b) => matchPriority(a, favorites, team) - matchPriority(b, favorites, team)
+            )
             return (
               <div key={roundNum} className="border border-gray-200 rounded-lg overflow-hidden">
                 <div
@@ -422,6 +433,10 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                         const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id))
                         const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
                         const p2HasPedigree = p2 && !isBye && badges?.hasPedigree(p2.player.id)
+                        const p1IsFavorite = p1 && Boolean(favorites[String(p1.player.id)])
+                        const p1OnTeam = p1 && Boolean(team[String(p1.player.id)])
+                        const p2IsFavorite = p2 && !isBye && Boolean(favorites[String(p2.player.id)])
+                        const p2OnTeam = p2 && !isBye && Boolean(team[String(p2.player.id)])
                         return (
                           <tr
                             key={match.id}
@@ -438,9 +453,21 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                           >
                             <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
                             <td className="px-4 py-2.5">
-                              <span className={`font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                              <span className={`inline-flex items-center gap-1 font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                                {p1 && toggleFavorite && (
+                                  <FavoriteStar
+                                    active={p1IsFavorite}
+                                    onToggle={() => toggleFavorite(p1.player.id, p1.user_event_status.best_identifier)}
+                                  />
+                                )}
+                                {p1 && toggleTeam && (
+                                  <TeamBadge
+                                    active={p1OnTeam}
+                                    onToggle={() => toggleTeam(p1.player.id, p1.user_event_status.best_identifier)}
+                                  />
+                                )}
                                 {p1HasPedigree && (
-                                  <span title="Made top cut at a Challenge or Challenge Championship" className="mr-1">🏆</span>
+                                  <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
                                 )}
                                 {p1?.user_event_status.best_identifier ?? '—'}
                               </span>
@@ -452,11 +479,23 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                               {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
                             </td>
                             <td className="px-4 py-2.5 text-right">
-                              {p2HasPedigree && (
-                                <span title="Made top cut at a Challenge or Challenge Championship" className="ml-1">🏆</span>
-                              )}
-                              <span className={`font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                              <span className={`inline-flex items-center justify-end gap-1 font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
                                 {p2?.user_event_status.best_identifier ?? '—'}
+                                {p2HasPedigree && (
+                                  <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
+                                )}
+                                {p2 && !isBye && toggleTeam && (
+                                  <TeamBadge
+                                    active={p2OnTeam}
+                                    onToggle={() => toggleTeam(p2.player.id, p2.user_event_status.best_identifier)}
+                                  />
+                                )}
+                                {p2 && !isBye && toggleFavorite && (
+                                  <FavoriteStar
+                                    active={p2IsFavorite}
+                                    onToggle={() => toggleFavorite(p2.player.id, p2.user_event_status.best_identifier)}
+                                  />
+                                )}
                               </span>
                             </td>
                           </tr>
@@ -1097,6 +1136,8 @@ export function TournamentLookupPage() {
           favorites={favorites}
           team={team}
           badges={pairingBadges}
+          toggleFavorite={toggleFavorite}
+          toggleTeam={toggleTeam}
         />
       )}
 

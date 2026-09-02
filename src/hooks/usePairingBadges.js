@@ -10,6 +10,18 @@ import { fetchPairingBadges } from '../lib/tournamentHistoryApi'
 // cached too (a player with no pedigree must not be re-requested every
 // render), and a small counter in state is bumped once per resolved batch
 // purely to force the one re-render that actually needs the new data.
+// The server caps each of playerIds/pairKeys at 500 per request (see
+// MAX_BADGE_LIST_SIZE in api/tournament-history.ts) — a big DLC's Standings
+// tab can have ~2000 players, so a single ensureBadges call there needs to
+// be split into multiple requests rather than exceeding the cap.
+const CHUNK_SIZE = 500
+
+function chunk(arr, size) {
+  const out = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
 export function usePairingBadges() {
   const pedigreeCache = useRef(new Map()) // playerId -> bool
   const rivalryCache = useRef(new Map()) // pairKey -> bool
@@ -21,23 +33,31 @@ export function usePairingBadges() {
     const missingPairKeys = [...new Set(pairKeys)].filter((key) => !rivalryCache.current.has(key))
     if (missingPlayerIds.length === 0 && missingPairKeys.length === 0) return
 
-    const signature = `${missingPlayerIds.join(',')}|${missingPairKeys.join(',')}`
-    if (inFlight.current.has(signature)) return
-    inFlight.current.add(signature)
+    const playerIdChunks = missingPlayerIds.length > 0 ? chunk(missingPlayerIds, CHUNK_SIZE) : []
+    const pairKeyChunks = missingPairKeys.length > 0 ? chunk(missingPairKeys, CHUNK_SIZE) : []
+    const batchCount = Math.max(playerIdChunks.length, pairKeyChunks.length)
 
-    fetchPairingBadges(missingPlayerIds, missingPairKeys)
-      .then(({ pedigree = {}, rivalry = {} }) => {
-        for (const id of missingPlayerIds) pedigreeCache.current.set(id, Boolean(pedigree[id]))
-        for (const key of missingPairKeys) rivalryCache.current.set(key, Boolean(rivalry[key]))
-        setVersion((v) => v + 1)
-      })
-      .catch((err) => {
-        // Badge data is best-effort — never block or crash row rendering.
-        console.error('Failed to load pairing badges:', err)
-      })
-      .finally(() => {
-        inFlight.current.delete(signature)
-      })
+    for (let i = 0; i < batchCount; i++) {
+      const idsBatch = playerIdChunks[i] ?? []
+      const keysBatch = pairKeyChunks[i] ?? []
+      const signature = `${idsBatch.join(',')}|${keysBatch.join(',')}`
+      if (inFlight.current.has(signature)) continue
+      inFlight.current.add(signature)
+
+      fetchPairingBadges(idsBatch, keysBatch)
+        .then(({ pedigree = {}, rivalry = {} }) => {
+          for (const id of idsBatch) pedigreeCache.current.set(id, Boolean(pedigree[id]))
+          for (const key of keysBatch) rivalryCache.current.set(key, Boolean(rivalry[key]))
+          setVersion((v) => v + 1)
+        })
+        .catch((err) => {
+          // Badge data is best-effort — never block or crash row rendering.
+          console.error('Failed to load pairing badges:', err)
+        })
+        .finally(() => {
+          inFlight.current.delete(signature)
+        })
+    }
   }, [])
 
   const hasPedigree = useCallback((playerId) => pedigreeCache.current.get(playerId) === true, [])

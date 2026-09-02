@@ -1,4 +1,5 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   fetchEventDetails,
   getTournamentStructure,
@@ -12,6 +13,7 @@ import {
 import { PlayerMatchHistory } from '../components/PlayerMatchHistory'
 import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
 import { EliminationBracket } from '../components/EliminationBracket'
+import { FavoriteStar, TeamBadge } from '../components/PlayerTags'
 import { usePairingBadges } from '../hooks/usePairingBadges'
 import { pairKeyOf } from '../lib/tournamentHistoryApi'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
@@ -37,19 +39,6 @@ function toggleFavoriteStorage(playerId, name) {
   }
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(all))
   return all
-}
-
-function FavoriteStar({ active, onToggle, className = '' }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onToggle() }}
-      title={active ? 'Unfavorite' : 'Favorite'}
-      className={`text-lg leading-none transition-colors ${active ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 hover:text-gray-400'} ${className}`}
-    >
-      {active ? '★' : '☆'}
-    </button>
-  )
 }
 
 // Single "my team" tag, keyed the same way as favorites — global across events.
@@ -102,21 +91,6 @@ function registrationsToRosterEntries(regs) {
       match_points: r.total_match_points ?? 0,
     }))
     .sort((a, b) => a.user_event_status.best_identifier.localeCompare(b.user_event_status.best_identifier))
-}
-
-function TeamBadge({ active, onToggle, className = '' }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onToggle() }}
-      title={active ? 'Remove from my team' : 'Add to my team'}
-      className={`w-5 h-5 rounded-full text-[10px] font-bold leading-none flex items-center justify-center transition-colors ${
-        active ? 'bg-purple-500 text-white hover:bg-purple-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-300'
-      } ${className}`}
-    >
-      T
-    </button>
-  )
 }
 
 // Parses a "W-D-L" record string into integer parts, defaulting missing/malformed segments to 0.
@@ -279,8 +253,38 @@ const MATCH_FILTER_OPTIONS = [
   { key: 'team', label: 'My Team' },
 ]
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam }) {
-  const [searchTerm, setSearchTerm] = useState('')
+// A match counts as "settled" once it has a result worth announcing in the
+// tracked-players ticker — a bye has nothing to report, and an in-progress
+// match (no winner yet, not a draw) hasn't resolved.
+function isMatchSettled(match) {
+  if (match.match_is_bye) return false
+  if (match.match_is_intentional_draw || match.match_is_unintentional_draw) return true
+  return match.status === 'COMPLETE' && match.winning_player != null
+}
+
+// Human-readable one-liner for the "Tracked Player Activity" ticker, or null
+// if neither player in the match is favorited/team-tagged.
+function describeTrackedMatch(match, favorites, team) {
+  const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
+  if (!p1 || !p2) return null
+  const isTracked = (r) => Boolean(favorites[String(r.player.id)] || team[String(r.player.id)])
+  if (!isTracked(p1) && !isTracked(p2)) return null
+
+  const p1Name = p1.user_event_status.best_identifier
+  const p2Name = p2.user_event_status.best_identifier
+  if (match.match_is_intentional_draw || match.match_is_unintentional_draw) {
+    return `${p1Name} drew ${p2Name} — Round ${match.round_number}`
+  }
+  const p1Won = match.winning_player === p1.player.id
+  const winnerName = p1Won ? p1Name : p2Name
+  const loserName = p1Won ? p2Name : p1Name
+  const w = match.games_won_by_winner
+  const l = match.games_won_by_loser
+  const score = w != null && l != null ? ` (${w}-${l})` : ''
+  return `${winnerName} beat ${loserName}${score} — Round ${match.round_number}`
+}
+
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam, searchTerm, onSearchChange }) {
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
   // only the latest round expanded — large events can have 1000+ matches
@@ -362,7 +366,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
           type="text"
           placeholder="Search by player name…"
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
         <div className="flex gap-1">
@@ -539,6 +543,70 @@ export function TournamentLookupPage() {
   // overlap to save on when switching tabs.
   const pairingBadges = usePairingBadges()
 
+  // "Tracked Player Activity" ticker — a running, session-only feed of
+  // completed matches involving a favorited/team-tagged player, newest
+  // first. Session-only and reset per event on purpose: it's about what's
+  // happening live while the page is open, not a permanent log.
+  const [tickerEvents, setTickerEvents] = useState([])
+  const [tickerCollapsed, setTickerCollapsed] = useState(false)
+  // Previous allMatches snapshot + the set of match ids already announced,
+  // so the ticker only fires on a *transition* into "settled" (a fresh live
+  // update completing a round) rather than on every re-render, and the
+  // very first fetch for an event doesn't flood the feed with matches that
+  // were already finished before the page even loaded.
+  const previousMatchesRef = useRef(null)
+  const seenSettledMatchIds = useRef(new Set())
+
+  useEffect(() => {
+    if (!allMatches) return
+    const prevMatches = previousMatchesRef.current
+    if (prevMatches) {
+      const prevById = new Map(prevMatches.map((m) => [m.id, m]))
+      const newEvents = []
+      for (const match of allMatches) {
+        if (!isMatchSettled(match) || seenSettledMatchIds.current.has(match.id)) continue
+        seenSettledMatchIds.current.add(match.id)
+        const prevMatch = prevById.get(match.id)
+        if (prevMatch && isMatchSettled(prevMatch)) continue // already settled last time we looked
+        const text = describeTrackedMatch(match, favorites, team)
+        if (text) newEvents.push({ id: `${match.id}-${match.round_number}`, text, at: Date.now() })
+      }
+      if (newEvents.length > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTickerEvents((prev) => [...newEvents.reverse(), ...prev].slice(0, 20))
+      }
+    } else {
+      // First population for this event — seed the "seen" set so already-
+      // finished matches don't get announced as if they just happened.
+      for (const match of allMatches) {
+        if (isMatchSettled(match)) seenSettledMatchIds.current.add(match.id)
+      }
+    }
+    previousMatchesRef.current = allMatches
+  }, [allMatches, favorites, team])
+
+  // Forces a re-render periodically so each ticker row's "Xm ago" label
+  // stays roughly current without a per-row timer (coarser than
+  // LastLiveUpdate's 1s tick — fine for a list of relative timestamps).
+  const [, forceTickerRerender] = useState(0)
+  useEffect(() => {
+    if (tickerEvents.length === 0) return
+    const id = setInterval(() => forceTickerRerender((v) => v + 1), 15000)
+    return () => clearInterval(id)
+  }, [tickerEvents.length])
+
+  // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
+  // share the current URL and it reloads straight into the same event/tab/
+  // search instead of a blank page. Only the *initial* read matters: after
+  // mount, state flows one-way into the URL via the sync effects below, so
+  // we never re-read params and fight the user's own navigation.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [initialParams] = useState(() => ({
+    event: searchParams.get('event'),
+    tab: searchParams.get('tab'),
+    q: searchParams.get('q'),
+  }))
+
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -553,15 +621,52 @@ export function TournamentLookupPage() {
     return () => clearInterval(id)
   }, [structure?.timerEndDatetime, structure?.timerIsRunning])
 
-  // Restore the most recently viewed tournament on refresh so it doesn't need repasting.
+  // A shared deep link takes priority over the localStorage "last viewed"
+  // restore below — otherwise a caster following someone else's link would
+  // just get bounced to whatever tournament they personally looked at last.
   useEffect(() => {
-    if (recents.length > 0) {
+    const VALID_TABS = ['standings', 'matches', 'bracket', 'favorites', 'team', 'roster']
+    if (initialParams.event) {
+      const url = `https://tcg.ravensburgerplay.com/events/${initialParams.event}`
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEventUrl(url)
+      loadStandings(url).then(() => {
+        if (initialParams.tab && VALID_TABS.includes(initialParams.tab)) setActiveTab(initialParams.tab)
+        if (initialParams.q) setSearchTerm(initialParams.q)
+      })
+    } else if (recents.length > 0) {
       setEventUrl(recents[0].url)
       loadStandings(recents[0].url)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // One-way sync of the loaded event/tab/search back into the URL so the
+  // current browser URL is always a valid share link for what's on screen.
+  useEffect(() => {
+    if (!currentEventId) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('event', currentEventId)
+        next.set('tab', activeTab)
+        if (searchTerm) next.set('q', searchTerm)
+        else next.delete('q')
+        return next
+      },
+      { replace: true }
+    )
+  }, [currentEventId, activeTab, searchTerm, setSearchParams])
+
+  // Pedigree badges for the whole Standings list (not just Matches/Bracket)
+  // so a caster scanning standings can spot a notable player without
+  // switching tabs. usePairingBadges chunks this internally, so a huge
+  // DLC's full player list is safe to request in one call.
+  useEffect(() => {
+    if (!allStandings) return
+    pairingBadges.ensureBadges(allStandings.map((entry) => entry.player.id), [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allStandings])
 
   function extractEventId(url) {
     const match = url.match(/\/events\/(\d+)/)
@@ -625,6 +730,9 @@ export function TournamentLookupPage() {
     setRegistrationMap(null)
     setAllMatches(null)
     setCurrentEventId(null)
+    setTickerEvents([])
+    previousMatchesRef.current = null
+    seenSettledMatchIds.current = new Set()
 
     try {
       const eventDetails = await fetchEventDetails(eventId)
@@ -1047,6 +1155,30 @@ export function TournamentLookupPage() {
         </div>
       )}
 
+      {/* Tracked Player Activity ticker — persistent across tabs, session-only */}
+      {allStandings && !player && tickerEvents.length > 0 && (
+        <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
+          <div
+            onClick={() => setTickerCollapsed((v) => !v)}
+            className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"
+          >
+            <span className="text-gray-400 text-xs w-3">{tickerCollapsed ? '▸' : '▾'}</span>
+            <span className="text-sm font-semibold text-gray-800">📡 Tracked Player Activity</span>
+            <span className="ml-auto text-xs text-gray-400">{tickerEvents.length}</span>
+          </div>
+          {!tickerCollapsed && (
+            <ul className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+              {tickerEvents.map((event) => (
+                <li key={event.id} className="px-4 py-2 text-sm text-gray-700 flex items-center justify-between gap-2">
+                  <span>{event.text}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{formatAgo(event.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {/* Standings table */}
       {allStandings && !player && activeTab === 'standings' && (
         <div className="space-y-3">
@@ -1105,6 +1237,9 @@ export function TournamentLookupPage() {
                           <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank}</td>
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-2">
+                              {pairingBadges.hasPedigree(entry.player.id) && (
+                                <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
+                              )}
                               <span className="font-medium text-gray-900">
                                 {entry.user_event_status.best_identifier}
                               </span>
@@ -1138,6 +1273,8 @@ export function TournamentLookupPage() {
           badges={pairingBadges}
           toggleFavorite={toggleFavorite}
           toggleTeam={toggleTeam}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
         />
       )}
 
@@ -1148,6 +1285,10 @@ export function TournamentLookupPage() {
           phaseName={structure?.eliminationPhaseName}
           onSelectPairing={setSelectedPairing}
           badges={pairingBadges}
+          favorites={favorites}
+          team={team}
+          toggleFavorite={toggleFavorite}
+          toggleTeam={toggleTeam}
         />
       )}
 

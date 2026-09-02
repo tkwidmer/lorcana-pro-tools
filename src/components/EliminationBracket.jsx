@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { pairKeyOf } from '../lib/tournamentHistoryApi'
+import { FavoriteStar, TeamBadge } from './PlayerTags'
 
 // RPH's match data has no explicit "advances to" link between rounds — the
 // bracket is reconstructed purely from round_number + table_number, sorted
@@ -17,7 +18,7 @@ function roundLabel(matchCount, roundNum, phaseName) {
   }
 }
 
-function BracketMatch({ match, onSelectPairing, badges }) {
+function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleFavorite, toggleTeam }) {
   const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
   const isBye = match.match_is_bye
   const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
@@ -29,6 +30,11 @@ function BracketMatch({ match, onSelectPairing, badges }) {
   const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id))
   const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
   const p2HasPedigree = p2 && !isBye && badges?.hasPedigree(p2.player.id)
+  const p1IsFavorite = p1 && Boolean(favorites?.[String(p1.player.id)])
+  const p1OnTeam = p1 && Boolean(team?.[String(p1.player.id)])
+  const p2IsFavorite = p2 && !isBye && Boolean(favorites?.[String(p2.player.id)])
+  const p2OnTeam = p2 && !isBye && Boolean(team?.[String(p2.player.id)])
+  const isTagged = p1IsFavorite || p1OnTeam || p2IsFavorite || p2OnTeam
 
   return (
     <div
@@ -41,12 +47,18 @@ function BracketMatch({ match, onSelectPairing, badges }) {
               })
           : undefined
       }
-      className={`border border-gray-200 rounded-lg bg-white text-xs overflow-hidden w-48 shrink-0 ${
-        clickable ? 'cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all' : ''
-      }`}
+      className={`border rounded-lg bg-white text-xs overflow-hidden w-48 shrink-0 ${
+        isTagged ? 'border-yellow-300' : 'border-gray-200'
+      } ${clickable ? 'cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all' : ''}`}
     >
-      <div className={`px-2.5 py-1.5 flex items-center justify-between gap-2 ${p1Won ? 'bg-green-50' : ''}`}>
+      <div className={`px-2.5 py-1.5 flex items-center justify-between gap-2 ${p1Won ? 'bg-green-50' : isTagged ? 'bg-yellow-50' : ''}`}>
         <span className={`font-medium truncate flex items-center gap-1 ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-500'}`}>
+          {p1 && toggleFavorite && (
+            <FavoriteStar active={p1IsFavorite} onToggle={() => toggleFavorite(p1.player.id, p1.user_event_status.best_identifier)} />
+          )}
+          {p1 && toggleTeam && (
+            <TeamBadge active={p1OnTeam} onToggle={() => toggleTeam(p1.player.id, p1.user_event_status.best_identifier)} />
+          )}
           {p1HasPedigree && <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>}
           {p1?.user_event_status.best_identifier ?? '—'}
         </span>
@@ -54,10 +66,16 @@ function BracketMatch({ match, onSelectPairing, badges }) {
           <span className="font-mono text-gray-400 shrink-0">{p1Won ? match.games_won_by_winner : match.games_won_by_loser}</span>
         )}
       </div>
-      <div className={`px-2.5 py-1.5 flex items-center justify-between gap-2 border-t border-gray-100 ${p2Won ? 'bg-green-50' : ''}`}>
+      <div className={`px-2.5 py-1.5 flex items-center justify-between gap-2 border-t border-gray-100 ${p2Won ? 'bg-green-50' : isTagged ? 'bg-yellow-50' : ''}`}>
         <span className={`font-medium truncate flex items-center gap-1 ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-500'}`}>
           {p2HasPedigree && <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>}
           {isBye ? 'BYE' : p2?.user_event_status.best_identifier ?? '—'}
+          {p2 && !isBye && toggleTeam && (
+            <TeamBadge active={p2OnTeam} onToggle={() => toggleTeam(p2.player.id, p2.user_event_status.best_identifier)} />
+          )}
+          {p2 && !isBye && toggleFavorite && (
+            <FavoriteStar active={p2IsFavorite} onToggle={() => toggleFavorite(p2.player.id, p2.user_event_status.best_identifier)} />
+          )}
         </span>
         {!isBye && match.games_won_by_loser != null && (
           <span className="font-mono text-gray-400 shrink-0">{p2Won ? match.games_won_by_winner : match.games_won_by_loser}</span>
@@ -78,7 +96,7 @@ function BracketMatch({ match, onSelectPairing, badges }) {
 // Renders the RANKED_SINGLE_ELIMINATION phase of an event as a left-to-right
 // bracket instead of a flat matches list. Clicking a completed pairing opens
 // the same PairingHistoryPanel as the Matches tab (via onSelectPairing).
-export function EliminationBracket({ allMatches, phaseName, onSelectPairing, badges }) {
+export function EliminationBracket({ allMatches, phaseName, onSelectPairing, badges, favorites, team, toggleFavorite, toggleTeam }) {
   const rounds = useMemo(() => {
     const bracketMatches = (allMatches ?? []).filter((m) => m.phase_name === phaseName)
     const roundNumbers = [...new Set(bracketMatches.map((m) => m.round_number))].sort((a, b) => a - b)
@@ -128,7 +146,15 @@ export function EliminationBracket({ allMatches, phaseName, onSelectPairing, bad
                 // — the classic bracket "funnel" without needing explicit
                 // connector lines between columns.
                 <div key={match.id} style={{ flexGrow: 2 ** roundIndex }} className="flex items-center">
-                  <BracketMatch match={match} onSelectPairing={onSelectPairing} badges={badges} />
+                  <BracketMatch
+                    match={match}
+                    onSelectPairing={onSelectPairing}
+                    badges={badges}
+                    favorites={favorites}
+                    team={team}
+                    toggleFavorite={toggleFavorite}
+                    toggleTeam={toggleTeam}
+                  />
                 </div>
               ))}
             </div>

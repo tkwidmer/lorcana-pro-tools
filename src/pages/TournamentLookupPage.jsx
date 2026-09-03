@@ -1523,6 +1523,7 @@ export function TournamentLookupPage() {
           onClose={() => setSelectedPairing(null)}
           allMatches={allMatches}
           structure={structure}
+          currentEventId={currentEventId}
         />
       )}
     </div>

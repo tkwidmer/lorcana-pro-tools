@@ -64,7 +64,12 @@ function PlayerSummaryCard({ label, history, loading, error }) {
   )
 }
 
-export function PairingHistoryPanel({ pairing, onClose, allMatches, structure }) {
+// Below this many prior meetings (in *other* events — the currently loaded
+// event's own matches are excluded, see below) a "rivalry" banner isn't
+// interesting enough to show.
+const MIN_RIVALRY_MEETINGS = 2
+
+export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, currentEventId }) {
   const { p1, p2 } = pairing
   const [historyA, setHistoryA] = useState(null)
   const [historyB, setHistoryB] = useState(null)
@@ -91,6 +96,25 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure })
     return () => { cancelled = true }
   }, [p1.id, p2.id])
 
+  // Matches from the event currently loaded in TournamentLookupPage are
+  // already visible in the round-by-round tables below, so they'd be
+  // confusing double-counted as "prior history" (e.g. a later-round
+  // rematch showing up while browsing an earlier round of the same event).
+  const priorMatches = headToHead
+    ? headToHead.matches.filter((m) => String(m.eventId) !== String(currentEventId))
+    : null
+  const priorMetRecord = priorMatches
+    ? priorMatches.reduce(
+        (acc, m) => {
+          if (m.isDraw || !m.winnerId) acc.draws += 1
+          else if (String(m.winnerId) === String(p1.id)) acc.playerAWins += 1
+          else if (String(m.winnerId) === String(p2.id)) acc.playerBWins += 1
+          return acc
+        },
+        { playerAWins: 0, playerBWins: 0, draws: 0 }
+      )
+    : null
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
       <div
@@ -112,18 +136,18 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure })
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-400">
               Checking head-to-head record…
             </div>
-          ) : headToHead.matches.length === 0 ? (
+          ) : priorMatches.length === 0 ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-800">
               First meeting — no prior matches found in imported majors.
             </div>
-          ) : (
+          ) : priorMatches.length >= MIN_RIVALRY_MEETINGS ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-sm font-bold text-amber-900 mb-2">
-                Met {headToHead.matches.length}x previously — {p1.name} {headToHead.metRecord.playerAWins}-{headToHead.metRecord.playerBWins}
-                {headToHead.metRecord.draws > 0 ? `-${headToHead.metRecord.draws}` : ''} {p2.name}
+                Met {priorMatches.length}x previously — {p1.name} {priorMetRecord.playerAWins}-{priorMetRecord.playerBWins}
+                {priorMetRecord.draws > 0 ? `-${priorMetRecord.draws}` : ''} {p2.name}
               </p>
               <ul className="space-y-1">
-                {headToHead.matches.map((m, i) => (
+                {priorMatches.map((m, i) => (
                   <li key={i} className="text-xs text-amber-800">
                     <span className="font-medium">{m.eventName}</span> · Round {m.roundNumber} —{' '}
                     {m.isDraw ? 'Draw' : String(m.winnerId) === String(p1.id) ? `${p1.name} won` : `${p2.name} won`}
@@ -132,7 +156,7 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure })
                 ))}
               </ul>
             </div>
-          )}
+          ) : null}
 
           {/* Row 1: cross-event summary cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

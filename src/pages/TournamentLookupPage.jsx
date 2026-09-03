@@ -284,7 +284,7 @@ function describeTrackedMatch(match, favorites, team) {
   return `${winnerName} beat ${loserName}${score} — Round ${match.round_number}`
 }
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam, searchTerm, onSearchChange }) {
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam, searchTerm, onSearchChange, currentEventId }) {
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
   // only the latest round expanded — large events can have 1000+ matches
@@ -316,8 +316,8 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
       playerIds.push(p1.player.id, p2.player.id)
       pairKeys.push(pairKeyOf(p1.player.id, p2.player.id))
     }
-    badges.ensureBadges(playerIds, pairKeys)
-  }, [allMatches, toggledRounds, searchTerm, filterMode, badges])
+    badges.ensureBadges(playerIds, pairKeys, currentEventId)
+  }, [allMatches, toggledRounds, searchTerm, filterMode, badges, currentEventId])
 
   if (matchesLoading && !allMatches) {
     return (
@@ -434,7 +434,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                         const w = match.games_won_by_winner
                         const l = match.games_won_by_loser
                         const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
-                        const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id))
+                        const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id), currentEventId)
                         const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
                         const p2HasPedigree = p2 && !isBye && badges?.hasPedigree(p2.player.id)
                         const p1IsFavorite = p1 && Boolean(favorites[String(p1.player.id)])
@@ -1275,6 +1275,7 @@ export function TournamentLookupPage() {
           toggleTeam={toggleTeam}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
+          currentEventId={currentEventId}
         />
       )}
 
@@ -1289,6 +1290,7 @@ export function TournamentLookupPage() {
           team={team}
           toggleFavorite={toggleFavorite}
           toggleTeam={toggleTeam}
+          currentEventId={currentEventId}
         />
       )}
 

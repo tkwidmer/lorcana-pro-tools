@@ -61,9 +61,10 @@ export function pairKeyOf(idA, idB) {
 
 // Batched "Notable Pairing Badges" lookup — sparse response, a missing key
 // means false. Used by usePairingBadges.js.
-export async function fetchPairingBadges(playerIds, pairKeys) {
+export async function fetchPairingBadges(playerIds, pairKeys, excludeEventId) {
   const params = new URLSearchParams({ endpoint: 'pairing-badges' })
   if (playerIds.length > 0) params.set('playerIds', playerIds.join(','))
   if (pairKeys.length > 0) params.set('pairKeys', pairKeys.join(','))
+  if (excludeEventId) params.set('excludeEventId', excludeEventId)
   return apiFetch(`?${params.toString()}`)
 }

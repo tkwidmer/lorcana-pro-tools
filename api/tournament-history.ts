@@ -271,6 +271,7 @@ async function handlePairingBadges(req: VercelRequest, res: VercelResponse) {
 
   const playerIds = [...new Set(parseCsv(str(req.query.playerIds)))]
   const pairKeys = [...new Set(parseCsv(str(req.query.pairKeys)))]
+  const excludeEventId = str(req.query.excludeEventId) || undefined
 
   if (playerIds.length === 0 && pairKeys.length === 0) {
     return res.status(400).json({ error: 'playerIds or pairKeys is required' })
@@ -280,7 +281,7 @@ async function handlePairingBadges(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const badges = await getPairingBadges(playerIds, pairKeys)
+    const badges = await getPairingBadges(playerIds, pairKeys, excludeEventId)
     return res.status(200).json(badges)
   } catch (err) {
     console.error('tournament-history pairing-badges failed:', err instanceof Error ? err.message : err)

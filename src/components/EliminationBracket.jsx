@@ -18,7 +18,7 @@ function roundLabel(matchCount, roundNum, phaseName) {
   }
 }
 
-function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleFavorite, toggleTeam }) {
+function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleFavorite, toggleTeam, currentEventId }) {
   const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
   const isBye = match.match_is_bye
   const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
@@ -27,7 +27,7 @@ function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleF
   const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
   const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
 
-  const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id))
+  const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id), currentEventId)
   const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
   const p2HasPedigree = p2 && !isBye && badges?.hasPedigree(p2.player.id)
   const p1IsFavorite = p1 && Boolean(favorites?.[String(p1.player.id)])
@@ -96,7 +96,7 @@ function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleF
 // Renders the RANKED_SINGLE_ELIMINATION phase of an event as a left-to-right
 // bracket instead of a flat matches list. Clicking a completed pairing opens
 // the same PairingHistoryPanel as the Matches tab (via onSelectPairing).
-export function EliminationBracket({ allMatches, phaseName, onSelectPairing, badges, favorites, team, toggleFavorite, toggleTeam }) {
+export function EliminationBracket({ allMatches, phaseName, onSelectPairing, badges, favorites, team, toggleFavorite, toggleTeam, currentEventId }) {
   const rounds = useMemo(() => {
     const bracketMatches = (allMatches ?? []).filter((m) => m.phase_name === phaseName)
     const roundNumbers = [...new Set(bracketMatches.map((m) => m.round_number))].sort((a, b) => a - b)
@@ -124,8 +124,8 @@ export function EliminationBracket({ allMatches, phaseName, onSelectPairing, bad
         pairKeys.push(pairKeyOf(p1.player.id, p2.player.id))
       }
     }
-    badges.ensureBadges(playerIds, pairKeys)
-  }, [rounds, badges])
+    badges.ensureBadges(playerIds, pairKeys, currentEventId)
+  }, [rounds, badges, currentEventId])
 
   if (rounds.length === 0) {
     return <p className="text-sm text-gray-500 py-8 text-center">Bracket hasn't started yet.</p>
@@ -154,6 +154,7 @@ export function EliminationBracket({ allMatches, phaseName, onSelectPairing, bad
                     team={team}
                     toggleFavorite={toggleFavorite}
                     toggleTeam={toggleTeam}
+                    currentEventId={currentEventId}
                   />
                 </div>
               ))}

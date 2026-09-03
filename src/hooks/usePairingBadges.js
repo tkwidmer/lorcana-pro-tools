@@ -22,15 +22,25 @@ function chunk(arr, size) {
   return out
 }
 
+// Rivalry answers depend on which event is currently excluded (see
+// getPairingBadges's excludeRphEventId), so the cache key folds that in —
+// otherwise switching to a different loaded tournament would keep serving
+// rivalry answers computed against the previous one.
+function rivalryCacheKey(excludeEventId, pairKey) {
+  return `${excludeEventId ?? ''}|${pairKey}`
+}
+
 export function usePairingBadges() {
   const pedigreeCache = useRef(new Map()) // playerId -> bool
-  const rivalryCache = useRef(new Map()) // pairKey -> bool
+  const rivalryCache = useRef(new Map()) // "excludeEventId|pairKey" -> bool
   const inFlight = useRef(new Set()) // signatures of in-flight requests
   const [, setVersion] = useState(0)
 
-  const ensureBadges = useCallback((playerIds = [], pairKeys = []) => {
+  const ensureBadges = useCallback((playerIds = [], pairKeys = [], excludeEventId = null) => {
     const missingPlayerIds = [...new Set(playerIds)].filter((id) => !pedigreeCache.current.has(id))
-    const missingPairKeys = [...new Set(pairKeys)].filter((key) => !rivalryCache.current.has(key))
+    const missingPairKeys = [...new Set(pairKeys)].filter(
+      (key) => !rivalryCache.current.has(rivalryCacheKey(excludeEventId, key))
+    )
     if (missingPlayerIds.length === 0 && missingPairKeys.length === 0) return
 
     const playerIdChunks = missingPlayerIds.length > 0 ? chunk(missingPlayerIds, CHUNK_SIZE) : []
@@ -40,14 +50,14 @@ export function usePairingBadges() {
     for (let i = 0; i < batchCount; i++) {
       const idsBatch = playerIdChunks[i] ?? []
       const keysBatch = pairKeyChunks[i] ?? []
-      const signature = `${idsBatch.join(',')}|${keysBatch.join(',')}`
+      const signature = `${excludeEventId ?? ''}|${idsBatch.join(',')}|${keysBatch.join(',')}`
       if (inFlight.current.has(signature)) continue
       inFlight.current.add(signature)
 
-      fetchPairingBadges(idsBatch, keysBatch)
+      fetchPairingBadges(idsBatch, keysBatch, excludeEventId)
         .then(({ pedigree = {}, rivalry = {} }) => {
           for (const id of idsBatch) pedigreeCache.current.set(id, Boolean(pedigree[id]))
-          for (const key of keysBatch) rivalryCache.current.set(key, Boolean(rivalry[key]))
+          for (const key of keysBatch) rivalryCache.current.set(rivalryCacheKey(excludeEventId, key), Boolean(rivalry[key]))
           setVersion((v) => v + 1)
         })
         .catch((err) => {
@@ -61,7 +71,10 @@ export function usePairingBadges() {
   }, [])
 
   const hasPedigree = useCallback((playerId) => pedigreeCache.current.get(playerId) === true, [])
-  const hasRivalry = useCallback((pairKey) => rivalryCache.current.get(pairKey) === true, [])
+  const hasRivalry = useCallback(
+    (pairKey, excludeEventId = null) => rivalryCache.current.get(rivalryCacheKey(excludeEventId, pairKey)) === true,
+    []
+  )
 
   return { ensureBadges, hasPedigree, hasRivalry }
 }

@@ -209,8 +209,19 @@ export const NOTABLE_EVENT_TIERS = ['challenge_championship', 'challenge']
 // have made top cut at a notable-tier event (pedigree), and which of the
 // given pairs have met before in any imported event (rivalry). Response is
 // sparse — callers should treat a missing key as false.
-export async function getPairingBadges(playerIds: string[], pairKeys: string[]) {
+//
+// `excludeRphEventId` excludes matches from the tournament currently being
+// browsed — otherwise every pairing in an already-imported (e.g. completed)
+// event would trivially show as a "rivalry" against itself, since that
+// pairing's own match row already exists in the archive.
+export async function getPairingBadges(playerIds: string[], pairKeys: string[], excludeRphEventId?: string) {
   const supabase = getSupabaseServiceClient()
+  let rivalryQuery = supabase
+    .from('tournament_history_matches')
+    .select('player_pair, event:tournament_history_events!inner(rph_event_id)')
+    .in('player_pair', pairKeys)
+  if (excludeRphEventId) rivalryQuery = rivalryQuery.neq('event.rph_event_id', excludeRphEventId)
+
   const [pedigreeResult, rivalryResult] = await Promise.all([
     playerIds.length === 0
       ? Promise.resolve({ data: [], error: null })
@@ -220,9 +231,7 @@ export async function getPairingBadges(playerIds: string[], pairKeys: string[]) 
           .in('rph_player_id', playerIds)
           .eq('made_top_cut', true)
           .in('event.event_tier', NOTABLE_EVENT_TIERS),
-    pairKeys.length === 0
-      ? Promise.resolve({ data: [], error: null })
-      : supabase.from('tournament_history_matches').select('player_pair').in('player_pair', pairKeys),
+    pairKeys.length === 0 ? Promise.resolve({ data: [], error: null }) : rivalryQuery,
   ])
   if (pedigreeResult.error) throw pedigreeResult.error
   if (rivalryResult.error) throw rivalryResult.error

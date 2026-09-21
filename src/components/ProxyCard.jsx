@@ -90,38 +90,62 @@ const removeButtonStyle = {
 // background, so `brightness(0)` prints it black without filling the hollow
 // centre the cost number sits in. Carrying inkability here is what lets the
 // stats bar drop its "Inkable / Non-inkable" label.
-const EMBLEM_SIZE = '24pt'
+//
+// Lorcana draws the same hexagon on every card and wraps the inkable one in
+// the ring, so the HEXAGON is what has to stay constant between the two — not
+// the image. Scaling both images to one box instead gets this backwards: the
+// ring eats most of the inkable image, leaving its hexagon 64% smaller than
+// the bare one, so the same cost reads cramped on one card and lost on the
+// other. Each emblem is therefore scaled from its own hollow, measured off the
+// art below, which makes the ringed emblem the larger overall — as on a real
+// card.
+const HEX_WIDTH = 14 // pt, the hollow hexagon the cost number sits in
+
+const EMBLEMS = {
+  inkable: { src: '/ink-cost/inkable.png', hollow: 116 / 256, aspect: 256 / 218 },
+  uninkable: { src: '/ink-cost/uninkable.png', hollow: 190 / 220, aspect: 220 / 256 },
+}
+
+function emblemSize({ hollow, aspect }) {
+  const width = HEX_WIDTH / hollow
+  return { width, height: width / aspect }
+}
+
+// The badge reserves the ringed emblem's footprint — the larger of the two —
+// so the header's name block doesn't shift between inkable and uninkable cards.
+const BADGE = emblemSize(EMBLEMS.inkable)
 
 function CostBadge({ cost, inkwell }) {
+  const emblem = inkwell ? EMBLEMS.inkable : EMBLEMS.uninkable
+  const { width, height } = emblemSize(emblem)
+
   return (
     <div style={{
       position: 'relative',
-      width: EMBLEM_SIZE,
-      height: EMBLEM_SIZE,
-      minWidth: EMBLEM_SIZE,
+      width: `${BADGE.width}pt`,
+      height: `${BADGE.height}pt`,
+      minWidth: `${BADGE.width}pt`,
       flexShrink: 0,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
     }}>
+      {/* Both emblems' hollows are centred in their own art, so centring the
+          image in the badge centres the hexagon the number sits in. Offsets
+          rather than a transform keep this in normal flow for print. */}
       <img
-        src={inkwell ? '/ink-cost/inkable.png' : '/ink-cost/uninkable.png'}
+        src={emblem.src}
         alt={inkwell ? 'Inkable' : 'Not inkable'}
         style={{
           position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
+          top: `${(BADGE.height - height) / 2}pt`,
+          left: `${(BADGE.width - width) / 2}pt`,
+          width: `${width}pt`,
+          height: `${height}pt`,
           filter: 'brightness(0)',
         }}
       />
-      {/* The inkable ring's hollow is the tighter of the two at 45% of the
-          emblem's width, which is what sets EMBLEM_SIZE: small enough and a
-          two-digit cost collides with the ring.
-
-          Centring the span centres its line box, not the digits inside it:
+      {/* Centring the span centres its line box, not the digits inside it:
           digits are cap-height ink sitting on the baseline, so the descender
           space the line box reserves below them leaves the number visibly
           high. `top` nudges the ink itself onto the emblem's centre — measured

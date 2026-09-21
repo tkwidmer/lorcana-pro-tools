@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useCards } from '../hooks/useCards'
 import { COCONUT_CARDS, getCoconutCard, coconutCardImageUrl } from '../lib/coconutCards'
+import { CoconutArtCredit } from '../components/CoconutArtCredit'
 import { getCardLimit, isCardInkLegal, validateDeck, MIN_DECK_SIZE, MAX_INKS } from '../lib/coconutFormat'
 import { VALID_INKS, resolveColors } from '../lib/inkColors'
 import { saveDeck, getDeck, getAllDecks, deleteDeck } from '../lib/coconutDecks'
@@ -105,6 +106,7 @@ function DeckListView({ decks, loading, cardsLoading, onNew, onOpen, onDelete })
           <p className="text-sm text-gray-500 mt-1">
             Build singleton decks for [Format Coconut] — pick a Coconut card, lock in your inks, and build a {MIN_DECK_SIZE}+ card deck around it. Saved locally in your browser only.
           </p>
+          <CoconutArtCredit className="mt-1" />
         </div>
         <button
           onClick={onNew}
@@ -177,6 +179,7 @@ function PickCoconutCardView({ onPick, onCancel }) {
           <p className="text-sm text-gray-500 mt-1">
             Your deck is built around this card's alternate ability — you can run up to 4 copies of it.
           </p>
+          <CoconutArtCredit className="mt-1" />
         </div>
         <button onClick={onCancel} className="text-sm text-gray-400 hover:text-gray-700 underline whitespace-nowrap">
           Cancel

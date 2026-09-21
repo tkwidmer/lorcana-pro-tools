@@ -10,6 +10,12 @@
 //
 // `inks` is the base card's own ink(s): one for most, two for the duo cards
 // the newer wave is built on. A deck must lock every one of them.
+//
+// `duelsId` is duels.ink's own id for the card, which its decklist format
+// declares with a `Coconut: <id>` header. Numbering follows the order the
+// cards appear on the official print sheet. The duo cards have no `duelsId`
+// because duels.ink doesn't carry them yet — its catalog stops at
+// coconut-018 — so a duo deck exports without that header.
 
 export const COCONUT_CARDS = [
   {
@@ -18,6 +24,7 @@ export const COCONUT_CARDS = [
     version: 'Spectacular Singer',
     baseFullName: 'Ariel - Spectacular Singer',
     inks: ['amber'],
+    duelsId: 'coconut-002',
     ability: 'Whenever a Princess character of yours sings a song, gain lore equal to her ◇.',
   },
   {
@@ -26,6 +33,7 @@ export const COCONUT_CARDS = [
     version: 'Peacekeeper',
     baseFullName: 'Pocahontas - Peacekeeper',
     inks: ['amber'],
+    duelsId: 'coconut-017',
     ability: "Once during your turn, you may choose a character. Until the start of your next turn, they get +1 ◇ and can't challenge and must quest if able.",
   },
   {
@@ -34,6 +42,7 @@ export const COCONUT_CARDS = [
     version: 'Rock Star',
     baseFullName: 'Stitch - Rock Star',
     inks: ['amber'],
+    duelsId: 'coconut-004',
     ability: 'Once during your turn, you may play a character with cost 2 or less for free. If that character was named Lilo or Stitch, chosen character gets +1 ◇ this turn.',
   },
   {
@@ -42,6 +51,7 @@ export const COCONUT_CARDS = [
     version: 'Ninth Wonder of the Universe',
     baseFullName: 'Dumbo - Ninth Wonder of the Universe',
     inks: ['amethyst'],
+    duelsId: 'coconut-018',
     ability: "You may use abilities that require exerting your characters the turn they're played.",
   },
   {
@@ -50,6 +60,7 @@ export const COCONUT_CARDS = [
     version: 'Merry as the Morning',
     baseFullName: 'Snow White - Merry as the Morning',
     inks: ['amethyst'],
+    duelsId: 'coconut-009',
     ability: 'Once per game during your turn, you may reveal your hand. If you have a Snow White and 7 or more Seven Dwarfs character cards with different names among the cards in your hand, in your discard, and in play, your characters get +2 ◇ for the rest of the game.',
   },
   {
@@ -58,6 +69,7 @@ export const COCONUT_CARDS = [
     version: 'Hunny Wizard',
     baseFullName: 'Winnie the Pooh - Hunny Wizard',
     inks: ['amethyst'],
+    duelsId: 'coconut-003',
     ability: 'Whenever you play a character without an ability, you may pay 1 ink to draw a card.',
   },
   {
@@ -66,6 +78,7 @@ export const COCONUT_CARDS = [
     version: 'Fred Honeywell',
     baseFullName: 'Donald Duck - Fred Honeywell',
     inks: ['emerald'],
+    duelsId: 'coconut-010',
     ability: 'You pay 1 ink less to use Boost abilities and to play characters or locations with Boost.',
   },
   {
@@ -74,6 +87,7 @@ export const COCONUT_CARDS = [
     version: 'Sneaky Sleuth',
     baseFullName: 'Robin Hood - Sneaky Sleuth',
     inks: ['emerald'],
+    duelsId: 'coconut-014',
     ability: "At the start of your first turn, you may play an item card named Robin's Bow from your collection for free. Whenever you play a character named Robin Hood, deal 1 damage to chosen opposing character or location.",
   },
   {
@@ -82,6 +96,7 @@ export const COCONUT_CARDS = [
     version: 'Deceiver of All',
     baseFullName: 'Ursula - Deceiver of All',
     inks: ['emerald'],
+    duelsId: 'coconut-005',
     ability: 'Your characters count as having +1 cost for singing songs. Your characters named Ursula count as having +2 cost instead.',
   },
   {
@@ -90,6 +105,7 @@ export const COCONUT_CARDS = [
     version: 'Brave Little Tailor',
     baseFullName: 'Mickey Mouse - Brave Little Tailor',
     inks: ['ruby'],
+    duelsId: 'coconut-006',
     ability: 'Mickey Mouse character cards in your hand, deck, and discard gain Shift 2.',
   },
   {
@@ -98,6 +114,7 @@ export const COCONUT_CARDS = [
     version: 'Super Strong',
     baseFullName: 'Mr. Incredible - Super Strong',
     inks: ['ruby'],
+    duelsId: 'coconut-011',
     ability: 'Whenever you play a Super character, they gain Rush this turn and you may exert chosen opposing character with less strength than them.',
   },
   {
@@ -106,6 +123,7 @@ export const COCONUT_CARDS = [
     version: 'Emboldened Warrior',
     baseFullName: 'Sisu - Emboldened Warrior',
     inks: ['ruby'],
+    duelsId: 'coconut-016',
     ability: "All characters with more strength than each opposing character can quest the turn they're played.",
   },
   {
@@ -114,6 +132,7 @@ export const COCONUT_CARDS = [
     version: 'Curious Explorer',
     baseFullName: 'Moana - Curious Explorer',
     inks: ['sapphire'],
+    duelsId: 'coconut-012',
     ability: 'During your turn, if you have a Moana, Heihei, or Pua character in play, you may ink an additional card.',
   },
   {
@@ -122,6 +141,7 @@ export const COCONUT_CARDS = [
     version: 'Ruler of Pride Rock',
     baseFullName: 'Mufasa - Ruler of Pride Rock',
     inks: ['sapphire'],
+    duelsId: 'coconut-007',
     ability: 'Once during your turn, you may pay 5 ink to put the top 2 cards of your deck into your inkwell facedown and exerted.',
   },
   {
@@ -130,6 +150,7 @@ export const COCONUT_CARDS = [
     version: 'Wily Fox',
     baseFullName: 'Nick Wilde - Wily Fox',
     inks: ['sapphire'],
+    duelsId: 'coconut-008',
     ability: 'Once during your turn, you may banish 4 of your items. If you do, gain 4 lore.',
     extraCopy: { name: 'Pawpsicle', maxCopies: 4 },
   },
@@ -139,6 +160,7 @@ export const COCONUT_CARDS = [
     version: 'Greedy Treasure Seeker',
     baseFullName: 'John Silver - Greedy Treasure Seeker',
     inks: ['steel'],
+    duelsId: 'coconut-013',
     ability: 'Each of your locations gains Resist +1 for each character there.',
   },
   {
@@ -147,6 +169,7 @@ export const COCONUT_CARDS = [
     version: 'Finally King',
     baseFullName: 'Scar - Finally King',
     inks: ['steel'],
+    duelsId: 'coconut-001',
     ability: 'During your turn, you pay 1 ink less for the first Ally character you play.',
   },
   {
@@ -155,6 +178,7 @@ export const COCONUT_CARDS = [
     version: 'Giant Fairy',
     baseFullName: 'Tinker Bell - Giant Fairy',
     inks: ['steel'],
+    duelsId: 'coconut-015',
     ability: 'Whenever one of your other abilities or actions deals damage to an opposing character, deal 1 damage to that character.',
   },
 

@@ -3,6 +3,7 @@ import { useCards } from '../hooks/useCards'
 import { SearchBar } from '../components/SearchBar'
 import { ProxyCard } from '../components/ProxyCard'
 import { COCONUT_CARDS, coconutCardImageUrl } from '../lib/coconutCards'
+import { CoconutArtCredit } from '../components/CoconutArtCredit'
 
 const CARDS_PER_SHEET = 9
 
@@ -81,10 +82,11 @@ function CoconutPicker({ onAdd }) {
           Add all {COCONUT_CARDS.length}
         </button>
       </div>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-xs text-gray-500 mb-1">
         Click a card to add one copy. These print as their full-color card face, not
         as a B&amp;W text proxy.
       </p>
+      <CoconutArtCredit className="mb-4" />
 
       <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10 gap-3">
         {COCONUT_CARDS.map(cc => (

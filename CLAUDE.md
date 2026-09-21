@@ -164,7 +164,7 @@ In `src/lib/`:
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
 | `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
 | `scoutedGames.js` | IndexedDB CRUD for scraped game snapshots (`lorcana_pro_tools` DB, `games` store, keyed by `uuid`) — powers the Scouting Library |
-| `coconutCards.js` | Static data for the [Format Coconut] cards — `COCONUT_CARDS` (the 18 single-ink, deck-builder-selectable ones: ink, associated base card `fullName`, ability text, Nick Wilde → Pawpsicle extra-copy exception), `COCONUT_DUAL_INK_CARDS` (7 newer dual-ink cards, print-only — see below), `ALL_COCONUT_CARDS`, and `coconutCardImageUrl()` |
+| `coconutCards.js` | Static data for all 25 [Format Coconut] cards — `id` (also the art filename), `name`/`version`, `baseFullName`, `inks` (one ink, or two for the duo cards), ability text, and the Nick Wilde → Pawpsicle extra-copy exception. Also exports `getCoconutCard()` and `coconutCardImageUrl()` |
 | `coconutFormat.js` | [Format Coconut] deck rules — `getCardLimit()` (1, or 4 for the Coconut card/its extra-copy exception), ink legality, and `validateDeck()` (60+ cards, singleton, ink) |
 | `coconutDecks.js` | IndexedDB CRUD for saved Coconut decks (`lorcana_pro_tools` DB, `coconutDecks` store, keyed by `id`) |
 | `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
@@ -390,11 +390,11 @@ PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapp
 
 ### [Format Coconut] Deck Builder
 
-`CoconutDeckBuilderPage` walks through: pick one of the 18 beta Coconut cards (`coconutCards.js`) → lock in up to 3 ink types, one of which must match the Coconut card's ink → build a 60+ card singleton deck around it. Each Coconut card reuses its associated Disney Lorcana card's real stats (matched by `fullName` against the live `useCards()` data) rather than being a distinct printed card — the base card's ability is replaced on screen with the Coconut card's alternate ability text (`coconutCards.js`'s `ability` field), since we don't have separate art or a separate database entry for the Coconut variant.
+`CoconutDeckBuilderPage` walks through: pick one of the 25 beta Coconut cards (`coconutCards.js`) → lock in up to 3 ink types, which must include **every** one of that Coconut card's `inks` → build a 60+ card singleton deck around it. Most Coconut cards have a single ink and leave two free slots; the newer wave is built on Lorcana's dual-ink duo cards, so those lock two inks and leave one. Each Coconut card reuses its associated Disney Lorcana card's real stats (matched by `fullName` against the live `useCards()` data) rather than being a distinct printed card — the base card's ability is replaced on screen with the Coconut card's alternate ability text (`coconutCards.js`'s `ability` field), since we don't have separate art or a separate database entry for the Coconut variant.
 
 `coconutFormat.js` enforces the format's deck-building rules:
 - 1 copy max per card, except up to 4 copies of the card matching the chosen Coconut card's `baseFullName`, and (Nick Wilde – "Wily Fox" only) up to 4 copies of an item named Pawpsicle, via the `extraCopy` field on that Coconut card entry.
-- Every card must be within the deck's locked ink colors (`isCardInkLegal`, using `resolveColors()` from `inkColors.js`).
+- Every card must be within the deck's locked ink colors (`isCardInkLegal`, using `resolveColors()` from `inkColors.js`) — a dual-ink card needs *both* its inks locked, which is why a duo Coconut card locks both of its own.
 - At least 60 total cards (`MIN_DECK_SIZE`).
 
 Decks are saved to IndexedDB via `coconutDecks.js` (autosaved with a short debounce as the user edits, consistent with the "no server-side game data" ethos — decks never leave the browser).
@@ -408,15 +408,16 @@ what `coconutCardImageUrl(id)` builds. Both `CoconutDeckBuilderPage` and the
 Proxy Generator read them through that helper; nothing fetches them remotely.
 
 The Proxy Generator's "+ Coconut cards" panel lists every face from
-`ALL_COCONUT_CARDS` (click one to add a copy, or "Add all 25" to print one of
+`COCONUT_CARDS` (click one to add a copy, or "Add all 25" to print one of
 each). These go onto the sheet as `{ imageSrc, name, version }` rather than a
 LorcanaJSON card object, which is what makes `ProxyCard` print the image
 instead of the B&W text layout — so a Coconut sheet prints in full color.
 
-`COCONUT_DUAL_INK_CARDS` (Aladdin & Genie, Belle & Beast, Darkwing Duck &
-Launchpad, Peter Pan & Tinker Bell, The Madrigal Family, The Vine, Woody & Buzz
-Lightyear) are deliberately **not** in `COCONUT_CARDS`: they carry an `inks`
-array, and `coconutFormat.js` locks a deck's inks against a single `ink` string.
-They're printable today but can't yet be chosen as a deck's Coconut card —
-wiring them into the deck builder means teaching the format rules about dual-ink
-Coconut cards first.
+Every Coconut card is an alternate-ability variant of a real printed Lorcana
+card (`baseFullName`), including the newer duo-card wave — Aladdin & Genie,
+Belle & Beast, Darkwing Duck & Launchpad, Peter Pan & Tinker Bell, The Madrigal
+Family, The Vine and Woody & Buzz Lightyear are all real cards, so they're
+selectable in the deck builder and grant the same "4 copies of your Coconut
+card" exception as the rest. Their only structural difference is `inks`: the
+duo cards are dual-ink, so a deck built on one locks both and has a single free
+ink slot left. (`The Vine` is in that wave but is single-ink Steel.)

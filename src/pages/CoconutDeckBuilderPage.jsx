@@ -160,8 +160,11 @@ function PickCoconutCardView({ onPick, onCancel }) {
   const groups = useMemo(() => {
     const byInk = {}
     for (const c of COCONUT_CARDS) {
-      byInk[c.ink] = byInk[c.ink] ?? []
-      byInk[c.ink].push(c)
+      // A duo card locks two inks, so it's offered under each of them.
+      for (const ink of c.inks) {
+        byInk[ink] = byInk[ink] ?? []
+        byInk[ink].push(c)
+      }
     }
     return byInk
   }, [])
@@ -200,7 +203,10 @@ function PickCoconutCardView({ onPick, onCancel }) {
                       <img src={imageUrl} alt="" className="w-16 aspect-[2.5/3.5] object-cover rounded flex-shrink-0" />
                     )}
                     <div className="min-w-0">
-                      <h3 className="text-sm font-bold text-gray-900">{cc.name}</h3>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-sm font-bold text-gray-900">{cc.name}</h3>
+                        {cc.inks.map(i => <InkIcon key={i} ink={i} size={14} />)}
+                      </div>
                       <p className="text-xs text-gray-500 italic mb-2">"{cc.version}"</p>
                       <p className="text-xs text-gray-600 whitespace-pre-line">{cc.ability}</p>
                     </div>
@@ -218,10 +224,10 @@ function PickCoconutCardView({ onPick, onCancel }) {
 // ---------- Step 2: pick inks ----------
 
 function PickInksView({ coconutCard, onConfirm, onCancel }) {
-  const [inks, setInks] = useState([coconutCard.ink])
+  const [inks, setInks] = useState(coconutCard.inks)
 
   const toggleInk = (ink) => {
-    if (ink === coconutCard.ink) return
+    if (coconutCard.inks.includes(ink)) return
     setInks(prev => {
       if (prev.includes(ink)) return prev.filter(i => i !== ink)
       if (prev.length >= MAX_INKS) return prev
@@ -234,14 +240,17 @@ function PickInksView({ coconutCard, onConfirm, onCancel }) {
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Choose your inks</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Pick up to {MAX_INKS} ink types. {coconutCard.name}'s ink ({INK_LABELS[coconutCard.ink]}) is locked in.
+          Pick up to {MAX_INKS} ink types. {coconutCard.name}'s{' '}
+          {coconutCard.inks.length > 1 ? 'inks' : 'ink'}{' '}
+          ({coconutCard.inks.map(i => INK_LABELS[i]).join(' and ')}){' '}
+          {coconutCard.inks.length > 1 ? 'are' : 'is'} locked in.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-8">
         {VALID_INKS.map(ink => {
           const active = inks.includes(ink)
-          const locked = ink === coconutCard.ink
+          const locked = coconutCard.inks.includes(ink)
           const disabled = !active && inks.length >= MAX_INKS
           return (
             <button

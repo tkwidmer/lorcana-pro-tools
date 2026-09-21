@@ -88,7 +88,7 @@ export function parseCoconutDecklist(text, cardsByFullName, getEffectiveType) {
 
   // No "Coconut Card:" header (e.g. a plain list from another tool) — fall
   // back to the same heuristic other Coconut-aware tools use: the card at 4
-  // copies that matches one of the 18 known Coconut base cards. Ambiguous
+  // copies that matches one of the known Coconut base cards. Ambiguous
   // for a Nick Wilde/Pawpsicle list, but there's nothing better to go on.
   if (!coconutCard) {
     const candidate = entries.find(e => e.qty >= 4 && COCONUT_CARDS.some(c => c.baseFullName.toLowerCase() === e.fullName.toLowerCase()))
@@ -108,7 +108,9 @@ export function parseCoconutDecklist(text, cardsByFullName, getEffectiveType) {
     }
     inks = Array.from(fromCards)
   }
-  if (coconutCard) inks = [coconutCard.ink, ...inks.filter(i => i !== coconutCard.ink)]
+  // The Coconut card's own inks go first so the MAX_INKS cap below can never
+  // drop one of them — a duo card contributes two.
+  if (coconutCard) inks = [...coconutCard.inks, ...inks.filter(i => !coconutCard.inks.includes(i))]
   inks = inks.slice(0, MAX_INKS)
 
   return { deckName, coconutCard, inks, entries, unmatchedNames }

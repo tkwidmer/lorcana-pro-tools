@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useCards } from '../hooks/useCards'
 import { SearchBar } from '../components/SearchBar'
 import { ProxyCard } from '../components/ProxyCard'
-import { ALL_COCONUT_CARDS, coconutCardImageUrl } from '../lib/coconutCards'
+import { COCONUT_CARDS, coconutCardImageUrl } from '../lib/coconutCards'
 
 const CARDS_PER_SHEET = 9
 
@@ -75,10 +75,10 @@ function CoconutPicker({ onAdd }) {
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-sm font-semibold text-gray-800">[Format Coconut] cards</h2>
         <button
-          onClick={() => ALL_COCONUT_CARDS.forEach(cc => onAdd(coconutProxyCard(cc)))}
+          onClick={() => COCONUT_CARDS.forEach(cc => onAdd(coconutProxyCard(cc)))}
           className="text-sm px-3 py-1.5 rounded bg-gray-900 text-white hover:bg-gray-800 whitespace-nowrap"
         >
-          Add all {ALL_COCONUT_CARDS.length}
+          Add all {COCONUT_CARDS.length}
         </button>
       </div>
       <p className="text-xs text-gray-500 mb-4">
@@ -87,7 +87,7 @@ function CoconutPicker({ onAdd }) {
       </p>
 
       <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-        {ALL_COCONUT_CARDS.map(cc => (
+        {COCONUT_CARDS.map(cc => (
           <button
             key={cc.id}
             onClick={() => onAdd(coconutProxyCard(cc))}

@@ -1,15 +1,23 @@
 import { describe, it, expect } from 'vitest'
 import { getCardLimit, isCardInkLegal, isValidInkSelection, validateDeck, MIN_DECK_SIZE, MAX_INKS } from '../coconutFormat'
+import { COCONUT_CARDS } from '../coconutCards'
+import { VALID_INKS } from '../inkColors'
 
 const nickWilde = {
-  ink: 'amber',
+  inks: ['amber'],
   baseFullName: 'Nick Wilde - Wily Fox',
   extraCopy: { name: 'Pawpsicle', maxCopies: 4 },
 }
 
 const plainCoconut = {
-  ink: 'ruby',
+  inks: ['ruby'],
   baseFullName: 'Some Card - Subtitle',
+}
+
+// The newer wave is built on Lorcana's dual-ink duo cards.
+const belleAndBeast = {
+  inks: ['ruby', 'sapphire'],
+  baseFullName: 'Belle & Beast - Certain as the Sun',
 }
 
 describe('getCardLimit', () => {
@@ -80,6 +88,22 @@ describe('isValidInkSelection', () => {
     expect(isValidInkSelection(['amber', 'ruby'], nickWilde)).toBe(true)
   })
 
+  it('requires BOTH inks of a dual-ink coconut card', () => {
+    expect(isValidInkSelection(['ruby'], belleAndBeast)).toBe(false)
+    expect(isValidInkSelection(['sapphire'], belleAndBeast)).toBe(false)
+    expect(isValidInkSelection(['ruby', 'amber'], belleAndBeast)).toBe(false)
+    expect(isValidInkSelection(['ruby', 'sapphire'], belleAndBeast)).toBe(true)
+  })
+
+  it('leaves a dual-ink coconut card exactly one free ink slot', () => {
+    expect(isValidInkSelection(['ruby', 'sapphire', 'amber'], belleAndBeast)).toBe(true)
+    expect(isValidInkSelection(['ruby', 'sapphire', 'amber', 'steel'], belleAndBeast)).toBe(false)
+  })
+
+  it('grants 4 copies of a dual-ink coconut card\'s base card', () => {
+    expect(getCardLimit({ fullName: 'Belle & Beast - Certain as the Sun', name: 'Belle & Beast' }, belleAndBeast)).toBe(4)
+  })
+
   it('rejects an unknown ink name', () => {
     expect(isValidInkSelection(['amber', 'not-an-ink'], nickWilde)).toBe(false)
   })
@@ -137,5 +161,24 @@ describe('validateDeck', () => {
     expect(result.totalCount).toBe(60)
     expect(result.isValid).toBe(true)
     expect(result.issues).toEqual([])
+  })
+})
+
+// Guards the data itself: every Coconut card must name a base card and carry a
+// non-empty `inks` array, since the deck builder locks inks and seeds 4 copies
+// of the base card from exactly those two fields.
+describe('COCONUT_CARDS data', () => {
+  it('gives every card a baseFullName and at least one ink', () => {
+    expect(COCONUT_CARDS.length).toBe(25)
+    for (const c of COCONUT_CARDS) {
+      expect(c.baseFullName, `${c.id} baseFullName`).toBeTruthy()
+      expect(Array.isArray(c.inks) && c.inks.length > 0, `${c.id} inks`).toBe(true)
+      expect(c.inks.every(i => VALID_INKS.includes(i)), `${c.id} ink names`).toBe(true)
+      expect(c.inks.length, `${c.id} ink count`).toBeLessThanOrEqual(MAX_INKS)
+    }
+  })
+
+  it('uses unique ids, which the card art filenames are keyed by', () => {
+    expect(new Set(COCONUT_CARDS.map(c => c.id)).size).toBe(COCONUT_CARDS.length)
   })
 })

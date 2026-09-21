@@ -25,11 +25,12 @@ export function isCardInkLegal(card, lockedInks) {
   return cardInks.every(ink => lockedInks.includes(ink))
 }
 
-// A deck's ink selection must include the Coconut card's own ink, plus up to
-// two more, from the 6 canonical inks.
+// A deck's ink selection must include every one of the Coconut card's own inks
+// — one for most, two for the duo cards — plus any remaining slots filled
+// from the 6 canonical inks, up to MAX_INKS.
 export function isValidInkSelection(lockedInks, coconutCard) {
   if (!Array.isArray(lockedInks) || lockedInks.length === 0 || lockedInks.length > MAX_INKS) return false
-  if (coconutCard && !lockedInks.includes(coconutCard.ink)) return false
+  if (coconutCard && !coconutCard.inks.every(ink => lockedInks.includes(ink))) return false
   return lockedInks.every(ink => VALID_INKS.includes(ink))
 }
 

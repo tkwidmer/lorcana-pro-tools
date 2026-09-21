@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { useCards } from '../hooks/useCards'
 import { SearchBar } from '../components/SearchBar'
 import { ProxyCard } from '../components/ProxyCard'
+import { COCONUT_CARDS, coconutCardImageUrl } from '../lib/coconutCards'
 
 const CARDS_PER_SHEET = 9
 
@@ -56,6 +57,58 @@ function buildCustomCardObject(fields) {
     number: '',
     rarity: '',
   }
+}
+
+// Coconut cards have their own printed face, so they go onto the sheet as the
+// card image rather than through the text layout the search results use.
+function coconutProxyCard(coconutCard) {
+  return {
+    imageSrc: coconutCardImageUrl(coconutCard.id),
+    name: coconutCard.name,
+    version: coconutCard.version,
+  }
+}
+
+function CoconutPicker({ onAdd }) {
+  return (
+    <div className="border border-gray-200 rounded-lg bg-white p-5 mb-6">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <h2 className="text-sm font-semibold text-gray-800">[Format Coconut] cards</h2>
+        <button
+          onClick={() => COCONUT_CARDS.forEach(cc => onAdd(coconutProxyCard(cc)))}
+          className="text-sm px-3 py-1.5 rounded bg-gray-900 text-white hover:bg-gray-800 whitespace-nowrap"
+        >
+          Add all {COCONUT_CARDS.length}
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">
+        Click a card to add one copy. These print as their full-color card face, not
+        as a B&amp;W text proxy.
+      </p>
+
+      <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+        {COCONUT_CARDS.map(cc => (
+          <button
+            key={cc.id}
+            onClick={() => onAdd(coconutProxyCard(cc))}
+            title={`Add ${cc.name} - ${cc.version}`}
+            className="group text-left focus:outline-none focus:ring-2 focus:ring-gray-900 rounded"
+          >
+            <img
+              src={coconutCardImageUrl(cc.id)}
+              alt={`${cc.name} - ${cc.version}`}
+              loading="lazy"
+              className="w-full rounded border border-gray-200 group-hover:border-gray-900 transition-colors"
+              style={{ aspectRatio: '5 / 7', objectFit: 'cover' }}
+            />
+            <div className="text-[10px] leading-tight text-gray-600 mt-1 group-hover:text-gray-900">
+              {cc.name}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function CustomCardForm({ onAdd }) {
@@ -238,6 +291,7 @@ export function ProxyGeneratorPage() {
   const { cards, loading, error } = useCards()
   const [selected, setSelected] = useState([])
   const [showCustomForm, setShowCustomForm] = useState(false)
+  const [showCoconuts, setShowCoconuts] = useState(false)
 
   const addCard = useCallback((card) => {
     setSelected(prev => [...prev, { instanceId: crypto.randomUUID(), card }])
@@ -282,6 +336,13 @@ export function ProxyGeneratorPage() {
             )}
 
             <button
+              onClick={() => setShowCoconuts(v => !v)}
+              className={`text-sm px-3 py-2 rounded border whitespace-nowrap ${showCoconuts ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'}`}
+            >
+              + Coconut cards
+            </button>
+
+            <button
               onClick={() => setShowCustomForm(v => !v)}
               className={`text-sm px-3 py-2 rounded border whitespace-nowrap ${showCustomForm ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'}`}
             >
@@ -309,13 +370,18 @@ export function ProxyGeneratorPage() {
             )}
           </div>
 
+          {showCoconuts && (
+            <CoconutPicker onAdd={addCard} />
+          )}
+
           {showCustomForm && (
             <CustomCardForm onAdd={addCard} />
           )}
 
-          {selected.length === 0 && !showCustomForm ? (
+          {selected.length === 0 && !showCustomForm && !showCoconuts ? (
             <div className="text-center text-gray-400 text-sm py-24 border-2 border-dashed border-gray-200 rounded-lg">
-              Search for a card above to get started, or create a custom card.
+              Search for a card above to get started, add [Format Coconut] cards, or
+              create a custom card.
             </div>
           ) : selected.length > 0 ? (
             <div>

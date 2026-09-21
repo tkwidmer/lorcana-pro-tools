@@ -88,7 +88,10 @@ function CoconutPicker({ onAdd }) {
       </p>
       <CoconutArtCredit className="mb-4" />
 
-      <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+      {/* items-start: a grid item stretches to the row height by default, and a
+          <button> centers its own content — so a card whose name wraps to two
+          lines left every other card in that row sitting a few px lower. */}
+      <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10 gap-3 items-start">
         {COCONUT_CARDS.map(cc => (
           <button
             key={cc.id}

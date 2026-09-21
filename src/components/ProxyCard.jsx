@@ -119,9 +119,18 @@ function CostBadge({ cost, inkwell }) {
       />
       {/* The inkable ring's hollow is the tighter of the two at 45% of the
           emblem's width, which is what sets EMBLEM_SIZE: small enough and a
-          two-digit cost collides with the ring. */}
+          two-digit cost collides with the ring.
+
+          Centring the span centres its line box, not the digits inside it:
+          digits are cap-height ink sitting on the baseline, so the descender
+          space the line box reserves below them leaves the number visibly
+          high. `top` nudges the ink itself onto the emblem's centre — measured
+          rather than derived, since Chrome's line box doesn't land where the
+          font metrics alone predict. Anything in 0.16–0.17em measures the
+          same, so it doesn't turn on an exact value. */}
       <span style={{
         position: 'relative',
+        top: '0.16em',
         fontSize: '8.5pt',
         fontWeight: 'bold',
         fontFamily: 'Arial, sans-serif',

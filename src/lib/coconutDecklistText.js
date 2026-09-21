@@ -2,16 +2,21 @@ import { COCONUT_CARDS } from './coconutCards'
 import { MAX_INKS } from './coconutFormat'
 import { resolveInkName, resolveColors } from './inkColors'
 
-// There's no established community standard for a Format Coconut decklist
-// yet, so this is deliberately simple and easy to revise: the card lines are
-// the exact "<qty> <full card name>" format Lorcana decklists already use
-// everywhere, plus a small header identifying the two things that format
-// alone can't always recover — which card is the Coconut card, and which
-// inks are locked. (A card list can't always answer either on its own: e.g.
-// a Nick Wilde deck has *two* cards at 4 copies — Nick Wilde and Pawpsicle —
-// so "whichever card is at 4x" is ambiguous, and locked inks can include one
-// with zero cards currently in the list.)
+// Matches the decklist format duels.ink accepts, so a list pasted there
+// imports as a real Coconut deck. Its parser reads a `Coconut: <id>` header
+// naming duels.ink's own card id, takes card lines as "<qty> <card name>",
+// and skips blank lines and anything prefixed with `#` or `//` — but treats
+// every *other* unrecognized line as a bad card entry. So our own metadata
+// (deck name, locked inks, and the Coconut card by base card name) rides
+// along as `#` comments: duels.ink ignores them, and parseCoconutDecklist
+// below reads them back for a lossless round trip here.
+//
+// The base-card comment is what identifies the Coconut card on re-import,
+// since a card list alone can't always answer it (a Nick Wilde deck has *two*
+// cards at 4 copies — Nick Wilde and Pawpsicle). Locked inks need recording
+// for the same reason: one can have zero cards in the list so far.
 const FORMAT_MARKER = '[Format Coconut]'
+const COMMENT = '#'
 
 function formatInkLabel(ink) {
   return ink.charAt(0).toUpperCase() + ink.slice(1)
@@ -20,13 +25,15 @@ function formatInkLabel(ink) {
 export function generateCoconutDecklistText(deck, coconutCard) {
   const sorted = [...deck.cards].sort((a, b) => (a.cost - b.cost) || a.fullName.localeCompare(b.fullName))
   const lines = [
-    FORMAT_MARKER,
-    `Deck: ${deck.name}`,
-    `Coconut Card: ${coconutCard.baseFullName}`,
-    `Inks: ${deck.inks.map(formatInkLabel).join('/')}`,
-    '',
-    ...sorted.map(e => `${e.qty} ${e.fullName}`),
+    `${COMMENT} ${FORMAT_MARKER}`,
+    `${COMMENT} Deck: ${deck.name}`,
+    `${COMMENT} Coconut Card: ${coconutCard.baseFullName}`,
+    `${COMMENT} Inks: ${deck.inks.map(formatInkLabel).join('/')}`,
   ]
+  // The machine-readable header duels.ink actually reads. Absent for the duo
+  // cards, which its catalog doesn't carry yet.
+  if (coconutCard.duelsId) lines.push(`Coconut: ${coconutCard.duelsId}`)
+  lines.push('', ...sorted.map(e => `${e.qty} ${e.fullName}`))
   return lines.join('\n')
 }
 
@@ -36,11 +43,14 @@ export function generateCoconutDecklistText(deck, coconutCard) {
 export function parseCoconutDecklist(text, cardsByFullName, getEffectiveType) {
   let deckName = null
   let coconutBaseFullName = null
+  let coconutDuelsId = null
   let inksLine = null
   const cardLines = []
 
   for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim()
+    // Our own metadata rides as `#` comments so duels.ink skips it; strip the
+    // marker back off (it accepts `//` too) before reading the line.
+    const line = rawLine.trim().replace(/^(?:#|\/\/)\s*/, '').trim()
     if (!line || line === FORMAT_MARKER) continue
 
     const deckMatch = line.match(/^deck:\s*(.+)$/i)
@@ -49,13 +59,20 @@ export function parseCoconutDecklist(text, cardsByFullName, getEffectiveType) {
     const coconutMatch = line.match(/^coconut card:\s*(.+)$/i)
     if (coconutMatch) { coconutBaseFullName = coconutMatch[1].trim(); continue }
 
+    // duels.ink's own header, so a list copied straight off that site imports.
+    const duelsMatch = line.match(/^coconut:\s*(\S+)$/i)
+    if (duelsMatch) { coconutDuelsId = duelsMatch[1].trim().toLowerCase(); continue }
+
     const inksMatch = line.match(/^inks:\s*(.+)$/i)
     if (inksMatch) { inksLine = inksMatch[1].trim(); continue }
 
     // Accepts both "4 Card Name" (the standard) and "4x Card Name".
     const cardMatch = line.match(/^(\d+)x?\s+(.+)$/i)
     if (cardMatch) {
-      cardLines.push({ qty: parseInt(cardMatch[1], 10), name: cardMatch[2].trim() })
+      // duels.ink suffixes each line with its own card id, e.g.
+      // "4 Scar - Finally King (1-145)" — drop it and match on the name.
+      const name = cardMatch[2].trim().replace(/\s*\([^)]*\)\s*$/, '').trim()
+      cardLines.push({ qty: parseInt(cardMatch[1], 10), name })
     }
   }
 
@@ -85,6 +102,10 @@ export function parseCoconutDecklist(text, cardsByFullName, getEffectiveType) {
   let coconutCard = coconutBaseFullName
     ? COCONUT_CARDS.find(c => c.baseFullName.toLowerCase() === coconutBaseFullName.toLowerCase()) ?? null
     : null
+
+  if (!coconutCard && coconutDuelsId) {
+    coconutCard = COCONUT_CARDS.find(c => c.duelsId === coconutDuelsId) ?? null
+  }
 
   // No "Coconut Card:" header (e.g. a plain list from another tool) — fall
   // back to the same heuristic other Coconut-aware tools use: the card at 4

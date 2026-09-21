@@ -18,6 +18,40 @@ const cardsByFullName = new Map([
 ])
 const getEffectiveType = c => c.type
 
+describe('generateCoconutDecklistText (duels.ink format)', () => {
+  const deck = {
+    name: 'Duo Test',
+    inks: ['ruby', 'sapphire'],
+    cards: [{ fullName: 'Belle & Beast - Certain as the Sun', qty: 4, cost: 8 }],
+  }
+
+  it("comments every metadata line so duels.ink's parser skips it", () => {
+    // Its parser skips blank, `#`, `//` and `Coconut:` lines, and treats any
+    // other unrecognized line as a bad card entry.
+    const lines = generateCoconutDecklistText(deck, nick).split('\n')
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const isComment = line.startsWith('#')
+      const isCoconutHeader = /^coconut:\s*\S+$/i.test(line)
+      const isCardLine = /^\d+x?\s+.+$/.test(line)
+      expect(isComment || isCoconutHeader || isCardLine, `unparseable line: ${line}`).toBe(true)
+    }
+  })
+
+  it("emits duels.ink's Coconut header for a card it carries", () => {
+    const text = generateCoconutDecklistText({ ...deck, cards: [] }, nick)
+    expect(text).toContain(`Coconut: ${nick.duelsId}`)
+  })
+
+  it('omits the header for a duo card duels.ink has no id for', () => {
+    expect(belle.duelsId).toBeUndefined()
+    const text = generateCoconutDecklistText(deck, belle)
+    expect(text).not.toMatch(/^Coconut:/m)
+    // The base-card comment still identifies it for our own re-import.
+    expect(text).toContain(`# Coconut Card: ${belle.baseFullName}`)
+  })
+})
+
 describe('parseCoconutDecklist', () => {
   it('identifies a duo Coconut card from the header', () => {
     const text = [
@@ -72,5 +106,35 @@ describe('parseCoconutDecklist', () => {
     expect(result.coconutCard?.id).toBe(belle.id)
     expect(result.inks).toEqual(['ruby', 'sapphire'])
     expect(result.entries[0].qty).toBe(4)
+  })
+})
+
+describe('duels.ink interop', () => {
+  it('imports a list copied straight off duels.ink', () => {
+    // duels.ink's own serializer: a `Coconut: <id>` header and card lines
+    // suffixed with its card id, e.g. "4 Scar - Finally King (1-145)".
+    const text = [
+      'Coconut: coconut-008',
+      '4 Nick Wilde - Wily Fox (3-89)',
+    ].join('\n')
+    const result = parseCoconutDecklist(text, cardsByFullName, getEffectiveType)
+    expect(result.coconutCard?.id).toBe(nick.id)
+    expect(result.entries[0].fullName).toBe('Nick Wilde - Wily Fox')
+    expect(result.entries[0].qty).toBe(4)
+    expect(result.unmatchedNames).toEqual([])
+  })
+
+  it('accepts the // comment marker duels.ink also skips', () => {
+    const text = ['// Deck: Commented', 'Coconut: coconut-008', '4 Nick Wilde - Wily Fox'].join('\n')
+    const result = parseCoconutDecklist(text, cardsByFullName, getEffectiveType)
+    expect(result.deckName).toBe('Commented')
+    expect(result.coconutCard?.id).toBe(nick.id)
+  })
+
+  it('gives every duels.ink-carried card a distinct coconut-NNN id', () => {
+    const ids = COCONUT_CARDS.map(c => c.duelsId).filter(Boolean)
+    expect(ids.length).toBe(18)
+    expect(new Set(ids).size).toBe(18)
+    for (const id of ids) expect(id).toMatch(/^coconut-\d{3}$/)
   })
 })

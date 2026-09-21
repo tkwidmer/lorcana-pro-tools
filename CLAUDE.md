@@ -164,7 +164,7 @@ In `src/lib/`:
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
 | `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
 | `scoutedGames.js` | IndexedDB CRUD for scraped game snapshots (`lorcana_pro_tools` DB, `games` store, keyed by `uuid`) — powers the Scouting Library |
-| `coconutCards.js` | Static data for all 25 [Format Coconut] cards — `id` (also the art filename), `name`/`version`, `baseFullName`, `inks` (one ink, or two for the duo cards), ability text, and the Nick Wilde → Pawpsicle extra-copy exception. Also exports `getCoconutCard()` and `coconutCardImageUrl()` |
+| `coconutCards.js` | Static data for all 25 [Format Coconut] cards — `id` (also the art filename), `name`/`version`, `baseFullName`, `inks` (one ink, or two for the duo cards), `duelsId` (duels.ink's own id, the 18 it carries only), ability text, and the Nick Wilde → Pawpsicle extra-copy exception. Also exports `getCoconutCard()` and `coconutCardImageUrl()` |
 | `coconutFormat.js` | [Format Coconut] deck rules — `getCardLimit()` (1, or 4 for the Coconut card/its extra-copy exception), ink legality, and `validateDeck()` (60+ cards, singleton, ink) |
 | `coconutDecks.js` | IndexedDB CRUD for saved Coconut decks (`lorcana_pro_tools` DB, `coconutDecks` store, keyed by `id`) |
 | `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
@@ -399,7 +399,44 @@ PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapp
 
 Decks are saved to IndexedDB via `coconutDecks.js` (autosaved with a short debounce as the user edits, consistent with the "no server-side game data" ethos — decks never leave the browser).
 
+### Coconut Decklist Text (duels.ink interop)
+
+`coconutDecklistText.js` generates and parses the Copy/Import List text in the
+deck builder. The format is the one **duels.ink** accepts, since that's where
+these decks actually get tested. Its parser (verified against duels.ink's own
+client bundle) skips blank lines and anything prefixed with `#` or `//`, reads a
+`Coconut: <id>` header naming its own card id, takes card lines as
+`<qty> <card name>` with an optional trailing `(setCode-number)` — and treats
+every **other** unrecognized line as a bad card entry that fails the import.
+
+So our own metadata rides along as `#` comments, which duels.ink ignores and
+`parseCoconutDecklist` reads back for a lossless round trip here:
+
+```
+# [Format Coconut]
+# Deck: Wily Items
+# Coconut Card: Nick Wilde - Wily Fox
+# Inks: Sapphire/Amber
+Coconut: coconut-008
+
+4 Pawpsicle
+4 Nick Wilde - Wily Fox
+```
+
+Don't add an uncommented header line — it breaks the paste into duels.ink.
+
+The `Coconut:` header is emitted only when the card has a `duelsId`. duels.ink's
+catalog stops at `coconut-018`, so the seven duo cards export without it; the
+`# Coconut Card:` comment still identifies them on re-import here. The parser
+also accepts a list copied straight off duels.ink (its `Coconut: <id>` header
+and its `(1-145)` card-id suffixes).
+
 ### Coconut Card Faces
+
+The full-art Coconut card faces are Nathan Trippe's work
+(https://x.com/NathanTrippe). Both surfaces that show them — the deck builder
+and the Proxy Generator — carry the credit via `components/CoconutArtCredit.jsx`;
+keep it on any new surface that displays the art.
 
 Coconut cards have their own printed face rather than reusing the base card's
 LorcanaJSON art, so all 25 are bundled as local assets at

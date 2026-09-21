@@ -84,23 +84,84 @@ const removeButtonStyle = {
   lineHeight: 1,
 }
 
-function CostBadge({ cost }) {
+// The game's own inkwell cost emblem, shared with the decklist inspector: the
+// hexagon wrapped in the aperture-blade ring for inkable cards, the bare
+// hexagon for uninkable ones. The source art is gold on a fully transparent
+// background, so `brightness(0)` prints it black without filling the hollow
+// centre the cost number sits in. Carrying inkability here is what lets the
+// stats bar drop its "Inkable / Non-inkable" label.
+//
+// Lorcana draws the same hexagon on every card and wraps the inkable one in
+// the ring, so the HEXAGON is what has to stay constant between the two — not
+// the image. Scaling both images to one box instead gets this backwards: the
+// ring eats most of the inkable image, leaving its hexagon 64% smaller than
+// the bare one, so the same cost reads cramped on one card and lost on the
+// other. Each emblem is therefore scaled from its own hollow, measured off the
+// art below, which makes the ringed emblem the larger overall — as on a real
+// card.
+const HEX_WIDTH = 14 // pt, the hollow hexagon the cost number sits in
+
+const EMBLEMS = {
+  inkable: { src: '/ink-cost/inkable.png', hollow: 116 / 256, aspect: 256 / 218 },
+  uninkable: { src: '/ink-cost/uninkable.png', hollow: 190 / 220, aspect: 220 / 256 },
+}
+
+function emblemSize({ hollow, aspect }) {
+  const width = HEX_WIDTH / hollow
+  return { width, height: width / aspect }
+}
+
+// The badge reserves the ringed emblem's footprint — the larger of the two —
+// so the header's name block doesn't shift between inkable and uninkable cards.
+const BADGE = emblemSize(EMBLEMS.inkable)
+
+function CostBadge({ cost, inkwell }) {
+  const emblem = inkwell ? EMBLEMS.inkable : EMBLEMS.uninkable
+  const { width, height } = emblemSize(emblem)
+
   return (
     <div style={{
-      border: '2px solid black',
-      borderRadius: '50%',
-      width: '20pt',
-      height: '20pt',
-      minWidth: '20pt',
+      position: 'relative',
+      width: `${BADGE.width}pt`,
+      height: `${BADGE.height}pt`,
+      minWidth: `${BADGE.width}pt`,
+      flexShrink: 0,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '10pt',
-      fontWeight: 'bold',
-      fontFamily: 'Arial, sans-serif',
-      lineHeight: 1,
     }}>
-      {cost}
+      {/* Both emblems' hollows are centred in their own art, so centring the
+          image in the badge centres the hexagon the number sits in. Offsets
+          rather than a transform keep this in normal flow for print. */}
+      <img
+        src={emblem.src}
+        alt={inkwell ? 'Inkable' : 'Not inkable'}
+        style={{
+          position: 'absolute',
+          top: `${(BADGE.height - height) / 2}pt`,
+          left: `${(BADGE.width - width) / 2}pt`,
+          width: `${width}pt`,
+          height: `${height}pt`,
+          filter: 'brightness(0)',
+        }}
+      />
+      {/* Centring the span centres its line box, not the digits inside it:
+          digits are cap-height ink sitting on the baseline, so the descender
+          space the line box reserves below them leaves the number visibly
+          high. `top` nudges the ink itself onto the emblem's centre — measured
+          rather than derived, since Chrome's line box doesn't land where the
+          font metrics alone predict. Anything in 0.16–0.17em measures the
+          same, so it doesn't turn on an exact value. */}
+      <span style={{
+        position: 'relative',
+        top: '0.16em',
+        fontSize: '8.5pt',
+        fontWeight: 'bold',
+        fontFamily: 'Arial, sans-serif',
+        lineHeight: 1,
+      }}>
+        {cost}
+      </span>
     </div>
   )
 }
@@ -134,18 +195,36 @@ function StatsBar({ card: c }) {
         <span style={{ fontStyle: 'italic' }}>{c.color}</span>
         {showStats && <span>{stats}</span>}
       </div>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        fontSize: '7pt',
-      }}>
-        <span>{c.subtypes?.join(', ')}</span>
-        <span style={{ fontStyle: 'italic', color: c.inkwell ? 'black' : '#888' }}>
-          {c.inkwell ? 'Inkable' : 'Non-inkable'}
-        </span>
+      {/* Inkability is carried by the cost emblem, not spelled out here. */}
+      <div style={{ fontSize: '7pt' }}>
+        {c.subtypes?.join(', ')}
       </div>
     </div>
+  )
+}
+
+// A keyword ability arrives as one printed string — "Ward (Opponents can't
+// choose this character except to challenge.)" — with the real card's own line
+// breaks baked in. Split it at the reminder text's opening bracket so the
+// keyword can be set bold like a named ability, and flatten the breaks so the
+// reminder rewraps to the proxy's narrower column. Keywords without reminder
+// text (Evasive, Shift 2) are all label and split to an empty reminder.
+function splitKeyword(fullText) {
+  const flat = fullText.replace(/\s+/g, ' ').trim()
+  const bracket = flat.indexOf('(')
+  if (bracket === -1) return { label: flat, reminder: '' }
+  return { label: flat.slice(0, bracket).trim(), reminder: flat.slice(bracket) }
+}
+
+function KeywordText({ fullText }) {
+  const { label, reminder } = splitKeyword(fullText)
+  return (
+    <span>
+      <span style={{ fontWeight: 'bold', fontFamily: 'Arial, sans-serif' }}>
+        {label}{reminder ? ' ' : ''}
+      </span>
+      {reminder && <span style={{ fontStyle: 'italic' }}>{reminder}</span>}
+    </span>
   )
 }
 
@@ -157,7 +236,9 @@ function AbilityText({ ability, first }) {
       {!first && (
         <div style={{ borderTop: '0.5pt solid #bbb', marginBottom: '3pt' }} />
       )}
-      {ability.name
+      {ability.type === 'keyword'
+        ? <KeywordText fullText={ability.fullText} />
+        : ability.name
         ? (
           <span>
             <span style={{ fontWeight: 'bold', fontFamily: 'Arial, sans-serif' }}>
@@ -195,7 +276,7 @@ function CardInner({ c }) {
     <>
       {/* Header: cost · name */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6pt', marginBottom: '4pt', flexShrink: 0 }}>
-        <CostBadge cost={c.cost} />
+        <CostBadge cost={c.cost} inkwell={c.inkwell} />
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
           <div style={{
             fontSize: '12pt',

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useCards } from '../hooks/useCards'
-import { COCONUT_CARDS, getCoconutCard } from '../lib/coconutCards'
+import { COCONUT_CARDS, getCoconutCard, coconutCardImageUrl } from '../lib/coconutCards'
 import { getCardLimit, isCardInkLegal, validateDeck, MIN_DECK_SIZE, MAX_INKS } from '../lib/coconutFormat'
 import { VALID_INKS, resolveColors } from '../lib/inkColors'
 import { saveDeck, getDeck, getAllDecks, deleteDeck } from '../lib/coconutDecks'
@@ -42,12 +42,9 @@ function coconutDisplayName(coconutCard) {
   return `${coconutCard.name} – "${coconutCard.version}"`
 }
 
-// Real beta [Format Coconut] card art, bundled locally (public/coconut-cards/)
-// since these are alternate-ability variants with their own printed card face —
-// not the same image LorcanaJSON serves for the base card.
 function getCoconutCardImageUrl(coconutCard) {
   if (!coconutCard) return null
-  return `/coconut-cards/${coconutCard.id}.jpg`
+  return coconutCardImageUrl(coconutCard.id)
 }
 
 // LorcanaJSON's card image field isn't exercised anywhere else in this repo

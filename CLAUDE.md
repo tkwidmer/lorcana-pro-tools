@@ -84,7 +84,7 @@ Defined in `src/App.jsx`:
 | `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching, Tournament, Scouting sections |
 | `/login` | `LoginPage.jsx` | Google OAuth sign-in via Supabase |
 | `/auth/callback` | `AuthCallbackPage.jsx` | OAuth redirect handler; checks session and redirects |
-| `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, build print sheets (9/page) |
+| `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, add [Format Coconut] cards, build print sheets (9/page) |
 | `/coconut-deck-builder` | `CoconutDeckBuilderPage.jsx` | [Format Coconut] deck builder — pick a Coconut card, lock in up to 3 inks, build a singleton 60+ card deck with the format's copy-count exceptions enforced |
 | `/cut-calculator` | `TournamentCutPage.jsx` | Swiss cut probability calculator using binomial/trinomial models |
 | `/limited-guide` | `LimitedGuidePage.jsx` | Limited format reference — BREAD framework, mana curves, uninkable counts |
@@ -133,7 +133,7 @@ In `src/components/`:
 | `GameView.jsx` | Unified game display — player panels (lore bar, ink meter, field, hand predictor), action log, export button; reused across `GameScraperPage`, `LibraryPage`, `ScoutedGamePage` |
 | `HandPredictor.jsx` | Bayesian hand inference display — shows top 12 cards with P(≥1 in hand) given observed deck + player profile |
 | `SearchBar.jsx` | Fuzzy card search dropdown with quantity selector (×1–×4); used by proxy generator |
-| `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts |
+| `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts. A card carrying `imageSrc` (Coconut cards) is printed as that image filling the 2.5"×3.5" slot instead of through the text layout |
 | `ShareCardModal.jsx` | Modal shell for sharing a canvas-rendered image (native share / clipboard copy / download); used by `TournamentLookupPage`'s and `PlayerMatchHistory`'s share-card buttons |
 | `PlayerMatchHistory.jsx` | Round-by-round match history table for one player within a single loaded tournament event (opponent, result, score, user-annotated opp colors/play-draw, share card). Used by `TournamentLookupPage`'s player detail view and reused by `PairingHistoryPanel` for either side of a clicked pairing |
 | `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below |
@@ -164,7 +164,7 @@ In `src/lib/`:
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
 | `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
 | `scoutedGames.js` | IndexedDB CRUD for scraped game snapshots (`lorcana_pro_tools` DB, `games` store, keyed by `uuid`) — powers the Scouting Library |
-| `coconutCards.js` | Static data for the 18 beta [Format Coconut] cards — ink, associated base card `fullName`, ability text, and the Nick Wilde → Pawpsicle extra-copy exception |
+| `coconutCards.js` | Static data for the [Format Coconut] cards — `COCONUT_CARDS` (the 18 single-ink, deck-builder-selectable ones: ink, associated base card `fullName`, ability text, Nick Wilde → Pawpsicle extra-copy exception), `COCONUT_DUAL_INK_CARDS` (7 newer dual-ink cards, print-only — see below), `ALL_COCONUT_CARDS`, and `coconutCardImageUrl()` |
 | `coconutFormat.js` | [Format Coconut] deck rules — `getCardLimit()` (1, or 4 for the Coconut card/its extra-copy exception), ink legality, and `validateDeck()` (60+ cards, singleton, ink) |
 | `coconutDecks.js` | IndexedDB CRUD for saved Coconut decks (`lorcana_pro_tools` DB, `coconutDecks` store, keyed by `id`) |
 | `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
@@ -398,3 +398,25 @@ PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapp
 - At least 60 total cards (`MIN_DECK_SIZE`).
 
 Decks are saved to IndexedDB via `coconutDecks.js` (autosaved with a short debounce as the user edits, consistent with the "no server-side game data" ethos — decks never leave the browser).
+
+### Coconut Card Faces
+
+Coconut cards have their own printed face rather than reusing the base card's
+LorcanaJSON art, so all 25 are bundled as local assets at
+`public/coconut-cards/<card id>.jpg` — the filename is the card's `id`, which is
+what `coconutCardImageUrl(id)` builds. Both `CoconutDeckBuilderPage` and the
+Proxy Generator read them through that helper; nothing fetches them remotely.
+
+The Proxy Generator's "+ Coconut cards" panel lists every face from
+`ALL_COCONUT_CARDS` (click one to add a copy, or "Add all 25" to print one of
+each). These go onto the sheet as `{ imageSrc, name, version }` rather than a
+LorcanaJSON card object, which is what makes `ProxyCard` print the image
+instead of the B&W text layout — so a Coconut sheet prints in full color.
+
+`COCONUT_DUAL_INK_CARDS` (Aladdin & Genie, Belle & Beast, Darkwing Duck &
+Launchpad, Peter Pan & Tinker Bell, The Madrigal Family, The Vine, Woody & Buzz
+Lightyear) are deliberately **not** in `COCONUT_CARDS`: they carry an `inks`
+array, and `coconutFormat.js` locks a deck's inks against a single `ink` string.
+They're printable today but can't yet be chosen as a deck's Coconut card —
+wiring them into the deck builder means teaching the format rules about dual-ink
+Coconut cards first.

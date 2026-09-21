@@ -31,7 +31,7 @@ export const COCONUT_CARDS = [
     version: 'Rock Star',
     baseFullName: 'Stitch - Rock Star',
     ink: 'amber',
-    ability: 'Once during your turn, you may play a character with cost 2 or less from your hand for free. If you have a character named Stitch in play, you may play a character with cost 2 or less from your discard for free instead.',
+    ability: 'Once during your turn, you may play a character with cost 2 or less for free. If that character was named Lilo or Stitch, chosen character gets +1 ◇ this turn.',
   },
   {
     id: 'dumbo-ninth-wonder-of-the-universe',
@@ -63,7 +63,7 @@ export const COCONUT_CARDS = [
     version: 'Fred Honeywell',
     baseFullName: 'Donald Duck - Fred Honeywell',
     ink: 'emerald',
-    ability: 'You pay 1 ink less to use Boost abilities.',
+    ability: 'You pay 1 ink less to use Boost abilities and to play characters or locations with Boost.',
   },
   {
     id: 'robin-hood-sneaky-sleuth',
@@ -71,7 +71,7 @@ export const COCONUT_CARDS = [
     version: 'Sneaky Sleuth',
     baseFullName: 'Robin Hood - Sneaky Sleuth',
     ink: 'emerald',
-    ability: 'Once per game during your turn, you may deal 1 damage to each opposing character.',
+    ability: "At the start of your first turn, you may play an item card named Robin's Bow from your collection for free. Whenever you play a character named Robin Hood, deal 1 damage to chosen opposing character or location.",
   },
   {
     id: 'ursula-deceiver-of-all',
@@ -119,7 +119,7 @@ export const COCONUT_CARDS = [
     version: 'Ruler of Pride Rock',
     baseFullName: 'Mufasa - Ruler of Pride Rock',
     ink: 'sapphire',
-    ability: 'Once per game during your turn, you may pay 5 ink to put the top 3 cards of your deck into your inkwell facedown and exerted.',
+    ability: 'Once during your turn, you may pay 5 ink to put the top 2 cards of your deck into your inkwell facedown and exerted.',
   },
   {
     id: 'nick-wilde-wily-fox',
@@ -127,7 +127,7 @@ export const COCONUT_CARDS = [
     version: 'Wily Fox',
     baseFullName: 'Nick Wilde - Wily Fox',
     ink: 'sapphire',
-    ability: 'You can have up to 4 copies of an item card named Pawpsicle in your deck.\n\nOnce during your turn, you may banish 4 of your items. If you do, gain 4 lore.',
+    ability: 'Once during your turn, you may banish 4 of your items. If you do, gain 4 lore.',
     extraCopy: { name: 'Pawpsicle', maxCopies: 4 },
   },
   {
@@ -155,6 +155,72 @@ export const COCONUT_CARDS = [
     ability: 'Whenever one of your other abilities or actions deals damage to an opposing character, deal 1 damage to that character.',
   },
 ]
+
+// The newer Coconut wave prints dual-ink cards, which the deck builder can't
+// model yet: `coconutFormat.js` locks inks against a single `ink` string, so
+// these carry `inks` instead and stay out of `COCONUT_CARDS`. They're printable
+// (see the Proxy Generator) but not yet selectable as a deck's Coconut card.
+export const COCONUT_DUAL_INK_CARDS = [
+  {
+    id: 'aladdin-and-genie-mischievous-pals',
+    name: 'Aladdin & Genie',
+    version: 'Mischievous Pals',
+    inks: ['amethyst', 'emerald'],
+    ability: "Whenever you draw a card during your turn, if it's the third card you drew this turn, gain 2 lore.",
+  },
+  {
+    id: 'belle-and-beast-certain-as-the-sun',
+    name: 'Belle & Beast',
+    version: 'Certain as the Sun',
+    inks: ['ruby', 'sapphire'],
+    ability: 'Whenever one of your characters with cost 5 or more readies, draw a card.',
+  },
+  {
+    id: 'darkwing-duck-and-launchpad-st-canards-finest',
+    name: 'Darkwing Duck & Launchpad',
+    version: "St. Canard's Finest",
+    inks: ['sapphire', 'steel'],
+    ability: 'During your turn, whenever an opposing character is banished in a challenge, gain 1 lore. If they were a Villain character, gain 3 lore instead.',
+  },
+  {
+    id: 'peter-pan-and-tinker-bell-fast-friends',
+    name: 'Peter Pan & Tinker Bell',
+    version: 'Fast Friends',
+    inks: ['amethyst', 'ruby'],
+    ability: 'Once during your turn, you may give chosen character Evasive until the start of your next turn. If they already had Evasive, they get +1 \u25c7 until the start of your next turn.',
+  },
+  {
+    id: 'the-madrigal-family-every-generation',
+    name: 'The Madrigal Family',
+    version: 'Every Generation',
+    inks: ['amber', 'sapphire'],
+    ability: "During your turn, whenever you remove 1 or more damage from one of your characters, you may ready them. They can't quest or challenge for the rest of the turn.",
+  },
+  {
+    id: 'the-vine-towering-stalk',
+    name: 'The Vine',
+    version: 'Towering Stalk',
+    inks: ['steel'],
+    ability: 'Once during your turn, for each Floodborn character you have in play, you may pay 1 ink less for the next Floodborn character you play this turn.',
+  },
+  {
+    id: 'woody-and-buzz-lightyear-best-buddies',
+    name: 'Woody & Buzz Lightyear',
+    version: 'Best Buddies',
+    inks: ['amber', 'emerald'],
+    ability: 'Once during your turn, you may pay 1 ink less for the next Toy character you play. If you do and you have a character named Woody and a character named Buzz Lightyear in play, draw a card.',
+  },
+]
+
+// Every printed Coconut card face, in the order they should be offered for print.
+export const ALL_COCONUT_CARDS = [...COCONUT_CARDS, ...COCONUT_DUAL_INK_CARDS]
+
+// Real beta [Format Coconut] card art, bundled locally rather than fetched from
+// LorcanaJSON — these variants have their own printed face, and the Proxy
+// Generator prints them at 2.5×3.5in, so the file has to be a local asset.
+export function coconutCardImageUrl(id) {
+  return `/coconut-cards/${id}.jpg`
+}
 
 export function getCoconutCard(id) {
   return COCONUT_CARDS.find(c => c.id === id) ?? null

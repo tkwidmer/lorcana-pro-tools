@@ -45,6 +45,27 @@ const locationCard = {
   transform: 'translate(-50%, -50%) rotate(90deg)',
 }
 
+// Coconut cards are supplied as a finished 2.5x3.5in card face, so they print
+// as the image itself instead of being rebuilt from the text layout below.
+const imageCard = {
+  width: '2.5in',
+  height: '3.5in',
+  position: 'relative',
+  flexShrink: 0,
+  overflow: 'hidden',
+  boxSizing: 'border-box',
+  backgroundColor: 'white',
+  breakInside: 'avoid',
+  pageBreakInside: 'avoid',
+}
+
+const imageFill = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover',
+  display: 'block',
+}
+
 const removeButtonStyle = {
   position: 'absolute',
   top: '4px',
@@ -264,6 +285,21 @@ function CardInner({ c }) {
 }
 
 export function ProxyCard({ card: c, onRemove }) {
+  if (c.imageSrc) {
+    return (
+      <div style={imageCard}>
+        <img
+          src={c.imageSrc}
+          alt={c.version ? `${c.name} - ${c.version}` : c.name}
+          style={imageFill}
+        />
+        {onRemove && (
+          <button onClick={onRemove} className="no-print" style={removeButtonStyle}>×</button>
+        )}
+      </div>
+    )
+  }
+
   if (c.type === 'Location') {
     return (
       <div style={locationWrapper}>

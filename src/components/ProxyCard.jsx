@@ -84,23 +84,51 @@ const removeButtonStyle = {
   lineHeight: 1,
 }
 
-function CostBadge({ cost }) {
+// The game's own inkwell cost emblem, shared with the decklist inspector: the
+// hexagon wrapped in the aperture-blade ring for inkable cards, the bare
+// hexagon for uninkable ones. The source art is gold on a fully transparent
+// background, so `brightness(0)` prints it black without filling the hollow
+// centre the cost number sits in. Carrying inkability here is what lets the
+// stats bar drop its "Inkable / Non-inkable" label.
+const EMBLEM_SIZE = '24pt'
+
+function CostBadge({ cost, inkwell }) {
   return (
     <div style={{
-      border: '2px solid black',
-      borderRadius: '50%',
-      width: '20pt',
-      height: '20pt',
-      minWidth: '20pt',
+      position: 'relative',
+      width: EMBLEM_SIZE,
+      height: EMBLEM_SIZE,
+      minWidth: EMBLEM_SIZE,
+      flexShrink: 0,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '10pt',
-      fontWeight: 'bold',
-      fontFamily: 'Arial, sans-serif',
-      lineHeight: 1,
     }}>
-      {cost}
+      <img
+        src={inkwell ? '/ink-cost/inkable.png' : '/ink-cost/uninkable.png'}
+        alt={inkwell ? 'Inkable' : 'Not inkable'}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          filter: 'brightness(0)',
+        }}
+      />
+      {/* The inkable ring's hollow is the tighter of the two at 45% of the
+          emblem's width, which is what sets EMBLEM_SIZE: small enough and a
+          two-digit cost collides with the ring. */}
+      <span style={{
+        position: 'relative',
+        fontSize: '8.5pt',
+        fontWeight: 'bold',
+        fontFamily: 'Arial, sans-serif',
+        lineHeight: 1,
+      }}>
+        {cost}
+      </span>
     </div>
   )
 }
@@ -134,18 +162,36 @@ function StatsBar({ card: c }) {
         <span style={{ fontStyle: 'italic' }}>{c.color}</span>
         {showStats && <span>{stats}</span>}
       </div>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        fontSize: '7pt',
-      }}>
-        <span>{c.subtypes?.join(', ')}</span>
-        <span style={{ fontStyle: 'italic', color: c.inkwell ? 'black' : '#888' }}>
-          {c.inkwell ? 'Inkable' : 'Non-inkable'}
-        </span>
+      {/* Inkability is carried by the cost emblem, not spelled out here. */}
+      <div style={{ fontSize: '7pt' }}>
+        {c.subtypes?.join(', ')}
       </div>
     </div>
+  )
+}
+
+// A keyword ability arrives as one printed string — "Ward (Opponents can't
+// choose this character except to challenge.)" — with the real card's own line
+// breaks baked in. Split it at the reminder text's opening bracket so the
+// keyword can be set bold like a named ability, and flatten the breaks so the
+// reminder rewraps to the proxy's narrower column. Keywords without reminder
+// text (Evasive, Shift 2) are all label and split to an empty reminder.
+function splitKeyword(fullText) {
+  const flat = fullText.replace(/\s+/g, ' ').trim()
+  const bracket = flat.indexOf('(')
+  if (bracket === -1) return { label: flat, reminder: '' }
+  return { label: flat.slice(0, bracket).trim(), reminder: flat.slice(bracket) }
+}
+
+function KeywordText({ fullText }) {
+  const { label, reminder } = splitKeyword(fullText)
+  return (
+    <span>
+      <span style={{ fontWeight: 'bold', fontFamily: 'Arial, sans-serif' }}>
+        {label}{reminder ? ' ' : ''}
+      </span>
+      {reminder && <span style={{ fontStyle: 'italic' }}>{reminder}</span>}
+    </span>
   )
 }
 
@@ -157,7 +203,9 @@ function AbilityText({ ability, first }) {
       {!first && (
         <div style={{ borderTop: '0.5pt solid #bbb', marginBottom: '3pt' }} />
       )}
-      {ability.name
+      {ability.type === 'keyword'
+        ? <KeywordText fullText={ability.fullText} />
+        : ability.name
         ? (
           <span>
             <span style={{ fontWeight: 'bold', fontFamily: 'Arial, sans-serif' }}>
@@ -195,7 +243,7 @@ function CardInner({ c }) {
     <>
       {/* Header: cost · name */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6pt', marginBottom: '4pt', flexShrink: 0 }}>
-        <CostBadge cost={c.cost} />
+        <CostBadge cost={c.cost} inkwell={c.inkwell} />
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
           <div style={{
             fontSize: '12pt',

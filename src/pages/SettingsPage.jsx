@@ -348,7 +348,7 @@ export function SettingsPage() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">Connected</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {metafyStatus.hasAccess ? 'Active subscriber' : 'No active subscription'}
+                    {metafyStatus.hasAccess ? 'Active subscriber' : 'No active subscription to the right tier'}
                   </p>
                 </div>
                 <button

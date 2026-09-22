@@ -31,6 +31,18 @@ function callbackRedirectUri(req: VercelRequest): string {
   return `${proto}://${host}/api/metafy?endpoint=callback`
 }
 
+// The community has multiple subscription tiers (e.g. a Metafy-side
+// "Supporter" tier for guides vs. "The Forge" for this app), but only one
+// of them is meant to grant access here. hasAccess/tier_id as stored in
+// metafy_links and returned by ?endpoint=status therefore mean "has the
+// specific tier that unlocks this app", not "is subscribed to the
+// community at all" — there's only ever the one meaning, so a subscriber
+// on the wrong tier correctly shows as not connected-with-access rather
+// than needing a second flag to disambiguate.
+function isSupporterTier(tierId: string | null): boolean {
+  return tierId !== null && tierId === process.env.METAFY_SUPPORTER_TIER_ID
+}
+
 // ---- endpoint=callback ----
 // Metafy redirects the browser here after the user approves the OAuth
 // consent screen. `state` carries the initiating user's Supabase access
@@ -58,6 +70,11 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
     res.redirect(302, '/settings?metafy=error')
     return
   }
+  if (!process.env.METAFY_SUPPORTER_TIER_ID) {
+    console.error('metafy callback: missing METAFY_SUPPORTER_TIER_ID')
+    res.redirect(302, '/settings?metafy=error')
+    return
+  }
 
   try {
     const supabase = getSupabaseServiceClient()
@@ -72,14 +89,15 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
     const tokens = await exchangeCodeForTokens(code, callbackRedirectUri(req))
     const profile = await fetchProfile(tokens.access_token)
     const access = await checkCommunityAccess(tokens.access_token, communityId)
+    const hasAccess = access.hasAccess && isSupporterTier(access.tierId)
 
     await upsertMetafyLink({
       userId,
       metafyUserId: profile.metafyUserId,
-      hasAccess: access.hasAccess,
+      hasAccess,
       tierId: access.tierId,
     })
-    await applyMetafyStateToProfile(userId, access.hasAccess)
+    await applyMetafyStateToProfile(userId, hasAccess)
 
     res.redirect(302, '/settings?metafy=connected')
   } catch (err) {
@@ -174,6 +192,13 @@ async function handleReconcileTick(req: VercelRequest, res: VercelResponse) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
+  if (!process.env.METAFY_SUPPORTER_TIER_ID) {
+    // Fail loudly rather than silently treating every linked account as
+    // tier-mismatched and revoking them all.
+    console.error('metafy reconcile-tick: missing METAFY_SUPPORTER_TIER_ID')
+    res.status(500).json({ error: 'Missing METAFY_SUPPORTER_TIER_ID' })
+    return
+  }
 
   const [links, subscribers] = await Promise.all([listAllLinks(), listActiveSubscribers()])
   const activeByUserId = new Map(subscribers.map((s) => [s.userId, s.tierId]))
@@ -186,8 +211,8 @@ async function handleReconcileTick(req: VercelRequest, res: VercelResponse) {
   await Promise.all(
     links.map(async (link: MetafyLinkRow) => {
       try {
-        const activeTierId = activeByUserId.get(link.metafy_user_id)
-        const hasAccess = activeTierId !== undefined
+        const activeTierId = activeByUserId.get(link.metafy_user_id) ?? null
+        const hasAccess = isSupporterTier(activeTierId)
         if (hasAccess === link.has_access) {
           unchanged += 1
           // Still touch last_synced_at so a stalled tick is visible in the
@@ -197,7 +222,7 @@ async function handleReconcileTick(req: VercelRequest, res: VercelResponse) {
             userId: link.user_id,
             metafyUserId: link.metafy_user_id,
             hasAccess,
-            tierId: activeTierId ?? null,
+            tierId: activeTierId,
           })
           return
         }
@@ -206,7 +231,7 @@ async function handleReconcileTick(req: VercelRequest, res: VercelResponse) {
           userId: link.user_id,
           metafyUserId: link.metafy_user_id,
           hasAccess,
-          tierId: activeTierId ?? null,
+          tierId: activeTierId,
         })
         await applyMetafyStateToProfile(link.user_id, hasAccess)
         if (hasAccess) granted += 1

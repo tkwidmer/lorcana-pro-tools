@@ -26,7 +26,7 @@ The proposals below each cover one of those gaps.
 |---|---|---|---|---|
 | 1 | Matchup Playbook | Turn data into a game plan | M | Supporter |
 | 2 | Game Review Journal | Reflect on decisions | M | Supporter |
-| 3 | Deck Iteration Lab | Measure changes honestly | S–M | Supporter |
+| 3 | Deck Iteration Lab | Measure changes honestly | M | Supporter |
 | 4 | Session & Tilt Insights | Mental game | S | Supporter |
 | 5 | Rules Trainer | Rules knowledge | M | Free |
 
@@ -91,31 +91,100 @@ It has a phone-friendly *Round view* and a print option, like the Lore Tracker.
 
 **Player problem.** Players change 2–3 cards, play 12 games, see 8–4, and decide the change worked. At that sample size the result is mostly noise. Analytics has per-card WAR, but nothing answers the question players actually ask: *"Is version B of my deck better than version A?"*
 
-**What the user sees.** Pick a deck, and it lists every **version** of that deck:
-- the date range it was played,
-- the card diff from the previous version (+2 X, −2 Y),
-- its record and win rate with a 95% interval,
-- matchup splits.
+### What exists today
 
-Pick two versions for a head-to-head. It shows the win-rate difference with an interval and a plain verdict:
-- *"Not distinguishable yet: you'd need about 140 more games to detect a 5-point difference."*
-- *"B is ahead, but the gap is within the noise."*
-- *"B is better with reasonable confidence."*
+The app does **not** track deck versions:
+- **Match History** groups games by `your_deck_id`, falling back to `deckFingerprint(your_decklist)` (`src/pages/MatchHistoryPage.jsx`, `getDeckKey`/`deckStats`). Its only version awareness is an "updated" badge from `isDeckModified()` (`src/lib/deckFingerprint.js`), which compares the newest game's list with the deck's current list on duels.ink. Every edit's games are pooled into one record.
+- **Analytics** filters by deck the same way (`src/pages/AnalyticsPage.jsx`, `filteredGames`). It fetches the undocumented `personal-stats` `deckVersions` (`cardIds` + `timeframes`), but only so Card Impact (`findDeckVersion()` in `src/lib/cardImpact.js`) can tell whether a card was in the 60 for a given game.
 
-It also flags when two versions faced a different meta mix, because a matchup-weighted comparison is fairer than raw win rate.
+The raw data to do better already exists. In the official duels.ink docs (`GET /api/me/match-history`), every game row carries `your_deck_id` and `your_decklist` (`{cardId, count}[]`). Imported gamelogs carry `deck_id`, `yourDecklist` and `playedAt` (`src/lib/parseGamelog.js`). Versions can be worked out in the browser, with no new API route, so the Vercel function budget is untouched.
 
-**How it works.**
-- Version history already exists. `fetchPersonalStats({ deckId })` (`src/lib/duelsApi.js`) returns `deckVersions`, each with its exact card list and `timeframes`.
-- `findDeckVersion()` in `src/lib/cardImpact.js` already maps a game to its version by timestamp. Export it and group games by version.
-- `wilsonInterval()` in `src/lib/practiceSim.js` gives per-version intervals. Add a two-proportion difference interval and a simple sample-size estimate as pure, unit-tested functions.
-- Card diffs: reuse the list-diff logic behind `DeckComparisonPage`.
-- If there's no token or version history, fall back to `deckFingerprint()` buckets, the same fallback Card Impact uses.
+### Step 0: verify the data before building
 
-**New storage.** None.
+The docs call `your_decklist` "your aggregated decklist". That doesn't prove it's the list **as played in that game**; it could be the deck's current list stamped onto every row. The whole design rests on this, so it gets checked against real data first:
+- Add a temporary dev-only `console.table` to Match History's `load()`.
+- For each `your_deck_id`, it prints:
+  - the number of distinct `deckFingerprint(your_decklist)` values,
+  - the first and last `started_at` of each,
+  - how many rows have no list,
+  - the `deckVersions` count and a sample entry from `fetchPersonalStats()`. The sample also shows whether `cardIds` repeats an ID for multiple copies.
+- Run it against an account with a deck that's known to have been edited.
 
-**Risks / open questions.**
-- Games with no matching version timeframe need a clear "unassigned" bucket rather than being silently dropped.
-- Keep the maths honest and simple: a frequentist difference interval plus a sample-size estimate, not p-values.
+**Decision rule:**
+- If the edited deck shows more than one fingerprint, with dates that line up with the `personal-stats` timeframes, the per-game lists are the source of truth.
+- If every row carries the same current list, versions come from `personal-stats` `deckVersions` instead. The adapter shape below hides that difference from everything downstream.
+
+Remove the log afterwards.
+
+### What the user sees
+
+**Definitions:**
+- A **version** is one distinct card-and-count list played under one deck (keyed by `your_deck_id`, falling back to a fingerprint).
+- Versions are ordered by the first game played and labelled **v1…vN**.
+- Switching back to an earlier list counts as the same version, and that version shows every date span it was played.
+- Games with no recorded list go into a visible **Unassigned** bucket rather than being dropped.
+
+**Version timeline:** one row per version, showing:
+- the label and date spans,
+- W–L and win rate with a 95% range (low-sample rows shown faded, as Card Impact already does),
+- the changes from the previous version (*+2 Card X / −2 Card Y*).
+
+**Compare:** pick any two versions to see:
+- the win-rate difference with a 95% range,
+- a plain verdict, for example:
+  - *"Not enough games yet: about 140 more per version needed to detect a 5-point difference."*
+  - *"No clear difference: the gap is within the noise."*
+  - *"v3 is ahead with reasonable confidence."*
+- a side-by-side win rate by opponent colors, so a version that happened to face an easier meta is easy to spot.
+
+It appears in three places, as requested:
+1. **Standalone page `/deck-lab`** (Supporter). A deck picker, then the timeline, the comparison, and each version's full list. `?deck=<key>` deep-links straight to a deck.
+2. **Match History.** The expanded deck panel gets a compact timeline and an *Open in Deck Lab* link. A **version filter** after the deck filter narrows the games table to one version.
+3. **Analytics.** A **version picker** next to the deck filter, so every existing view (Card Impact, mulligan tables, matchups, trends) can be read for a single version.
+
+### How it works
+
+**Shared logic: `src/lib/deckVersions.js`** (pure functions, unit-tested in `src/lib/__tests__/deckVersions.test.js`)
+- **Adapters.** One per data source, both producing `{ id, deckKey, decklist, playedAt, won, oppColors }`:
+  - `fromMatchHistoryRow(row)` uses `your_deck_id`, `your_decklist`, `started_at`, `result` and `opp_deck_colors`.
+  - `fromEnrichedGame(game)` is for Analytics.
+- **`buildDeckVersions(games)`** groups by `deckKey`, then by `deckFingerprint(decklist)`. Each version gets its record, a `wilsonInterval()` (reused from `src/lib/practiceSim.js`), its date spans, and the card changes from the previous version.
+- **`compareVersions(a, b)`** returns:
+  - the win-rate difference with a 95% interval (Newcombe's method, built from two `wilsonInterval()`s),
+  - a verdict: `not-enough-games` / `no-clear-difference` / `a-ahead` / `b-ahead`,
+  - `gamesNeeded`: games per version needed to detect a 5-point difference, from the two-proportion sample-size formula at 80% power,
+  - both versions' win rates by opponent colors.
+- **Card changes.** Move `computeDelta()` out of `src/pages/DeckComparisonPage.jsx` into `src/lib/decklistDelta.js`. The Deck Comparison page and deck versions then share one diff implementation. Card names come from `buildCardIdToName()` (`src/lib/cardIdResolver.js`).
+
+**Shared UI: `src/components/deckVersions/`**
+- `DeckVersionTimeline` and `DeckVersionCompare`, used by all three surfaces.
+
+**Page wiring**
+- **`/deck-lab`**: new `src/pages/DeckLabPage.jsx`.
+  - Add it to `SUPPORTER_PATHS` (`src/lib/access.js`), the Coaching Tools section of `src/lib/siteSections.js`, and `App.jsx`.
+  - It loads the full match history by following `fetchMatchHistory` cursors until `next_cursor` is null. Pages are 500 games each, within duels.ink's limit of 20 requests a minute, and the page shows progress while loading.
+  - Deck names come from the existing `lorcana_deck_names` localStorage key and `fetchDecks()`.
+- **Match History**: add a `filterVersion` step after the `filterDeck` step in `filteredGames`, and put the compact timeline in the expanded deck panel.
+- **Analytics**: add a `filterVersion` step after `filteredGames`. Card Impact keeps using `personal-stats` versions as it does today; switching it over is out of scope.
+
+**New storage.** None. Versions are derived from data each page already loads.
+
+### Build order
+
+Each step can ship as its own PR:
+1. Step 0 evidence check.
+2. `deckVersions.js`, `decklistDelta.js`, and their tests.
+3. The `/deck-lab` page.
+4. The Match History timeline and version filter.
+5. The Analytics version filter.
+
+### Risks / open questions
+
+- **Per-game list reliability.** Step 0 settles this before any feature code is written.
+- **Tiny versions.** A one-game test list makes a noisy row. Show it, faded, rather than hiding it, so the history stays complete.
+- **Long histories.** A heavy player's full history takes several paged requests. Show progress, and reuse what's already loaded when coming from Match History.
+- **Mixed formats.** Core and Infinity games of the same list count as one version. The existing queue filter can split them.
+- **Keep the maths honest and simple.** Use intervals and sample-size estimates, not p-values, and state plainly when the data can't tell the versions apart yet.
 
 ---
 
@@ -174,7 +243,7 @@ Progress is saved with simple spaced repetition: cards you miss come back sooner
 ## Recommended build order
 
 1. **Session & Tilt Insights**: smallest effort (pure functions over data already loaded) and immediately useful to every ladder player.
-2. **Deck Iteration Lab**: small to medium. The data, version matching, and interval maths already exist.
+2. **Deck Iteration Lab**: medium. The data and interval maths already exist. It ships as a standalone `/deck-lab` page plus version views in Match History and Analytics, after the step 0 data check.
 3. **Matchup Playbook**: medium. Mostly combines existing libraries, and it's the most visible "coaching" feature for Supporters.
 4. **Game Review Journal**: medium, and adds a new IndexedDB store. It gets more valuable once the Playbook exists to hold the lessons.
 5. **Rules Trainer**: ship the auto-generated *What changed* mode first, and add hand-written interaction cards over time.

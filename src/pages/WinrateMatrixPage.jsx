@@ -201,6 +201,9 @@ export function WinrateMatrixPage() {
   const curatedArchetypes = getCuratedArchetypes(stats.profiles)
   const profilesById = buildProfilesById(stats.profiles)
   const totalGames = stats.activity?.totalGames ?? 0
+  // In bo3 queues duels.ink counts matchups[].games in finished matches, not
+  // individual games (documented; activity.totalGames still counts games).
+  const matchupUnit = stats.meta.queues.active.find(q => q.id === stats.meta.queueId).gameMode === 'bo3' ? 'matches' : 'games'
   const focusedArchetype = focusedArchetypeId ? profilesById.get(focusedArchetypeId) ?? null : null
   const focusedMatchups = focusedArchetypeId
     ? getArchetypeMatchupsFor(stats.archetypeMatchups, focusedArchetypeId, profilesById)
@@ -367,7 +370,7 @@ export function WinrateMatrixPage() {
                           <th className="py-2 px-3 text-right">{fromDate}</th>
                           <th className="py-2 px-3 text-right">{toDate}</th>
                           <th className="py-2 px-3 text-right">Δ Winrate</th>
-                          <th className="py-2 px-3 text-right">Δ Games</th>
+                          <th className="py-2 px-3 text-right capitalize">Δ {matchupUnit}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -550,7 +553,7 @@ export function WinrateMatrixPage() {
                       <div className="text-xs text-gray-600">{(matchup.games / 1000).toFixed(1)}k</div>
                     </div>
                     <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                      {matchup.games.toLocaleString()} games{isMirror ? ' (1st player)' : ''}
+                      {matchup.games.toLocaleString()} {matchupUnit}{isMirror ? ' (1st player)' : ''}
                     </div>
                   </div>
                 )

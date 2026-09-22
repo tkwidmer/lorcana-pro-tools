@@ -15,7 +15,7 @@ Before implementing or debugging anything involving:
 - `src/lib/duelsApi.js`, `src/lib/leaderboardApi.js`, `src/lib/parseGamelog.js`
 - `api/duels.ts` — the single consolidated serverless proxy for every
   duels.ink endpoint, dispatched by `?endpoint=` (`match-history`, `gamelog`,
-  `gamelog-bulk`, `replay`, `deck`, `stats`, `leaderboard`). Folded into one
+  `deck`, `stats`, `leaderboard`). Folded into one
   function because Vercel's Hobby plan caps a deployment at 12 serverless
   functions — don't split it back into per-endpoint files without checking
   the total function count in `api/*.ts` first.

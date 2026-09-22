@@ -333,7 +333,7 @@ export function MatchHistoryPage() {
     else setLoading(true)
     setError(null)
     try {
-      const data = await fetchMatchHistory({ cursor: cursor ?? undefined, limit: 500 })
+      const data = await fetchMatchHistory({ cursor: cursor ?? undefined, limit: 250 })
       const incoming = data.games ?? []
       setGames(prev => append ? [...prev, ...incoming] : incoming)
       setNextCursor(data.next_cursor ?? null)

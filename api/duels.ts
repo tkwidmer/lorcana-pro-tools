@@ -91,47 +91,6 @@ async function handleGamelog(req: VercelRequest, res: VercelResponse) {
   await proxyBinary(res, `https://duels.ink/g/${id}`, auth, 'gamelog')
 }
 
-async function handleGamelogBulk(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return }
-  const auth = requireBearer(req, res)
-  if (!auth) return
-
-  const MAX_IDS = 500
-  const { ids } = req.body ?? {}
-  if (!Array.isArray(ids) || ids.length === 0) {
-    res.status(400).json({ error: 'ids must be a non-empty array' })
-    return
-  }
-  if (ids.length > MAX_IDS) { res.status(400).json({ error: `Too many ids (max ${MAX_IDS})` }); return }
-  if (!ids.every((id: unknown) => typeof id === 'string')) {
-    res.status(400).json({ error: 'ids must all be strings' })
-    return
-  }
-
-  try {
-    const upstreamRes = await fetch('https://duels.ink/api/me/bulk-gamelogs', {
-      method: 'POST',
-      headers: { Authorization: auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids }),
-    })
-    if (!upstreamRes.ok) {
-      res.status(upstreamRes.status).json({ error: `duels.ink returned ${upstreamRes.status}` })
-      return
-    }
-    res.status(200).json(await upstreamRes.json())
-  } catch (e) {
-    res.status(502).json({ error: 'Failed to fetch gamelog manifest', detail: String(e) })
-  }
-}
-
-async function handleReplay(req: VercelRequest, res: VercelResponse) {
-  const auth = requireBearer(req, res)
-  if (!auth) return
-  const id = param(req, 'id')
-  if (!id) { res.status(400).json({ error: 'Missing replay id' }); return }
-  await proxyBinary(res, `https://duels.ink/r/${id}`, auth, 'replay')
-}
-
 async function handleDeck(req: VercelRequest, res: VercelResponse) {
   const auth = requireBearer(req, res)
   if (!auth) return
@@ -161,7 +120,11 @@ async function handleStats(req: VercelRequest, res: VercelResponse) {
   if (!queue) { res.status(400).json({ error: 'Missing queue parameter' }); return }
   if (!period) { res.status(400).json({ error: 'Missing period parameter' }); return }
 
-  let url = `https://duels.ink/api/stats/meta?queue=${encodeURIComponent(queue)}&period=${encodeURIComponent(period)}&season=current`
+  // `era` is the documented way to scope to one card-set era (keys come from
+  // meta.eras of any response). Omitted only by the client's era-key lookup.
+  let url = `https://duels.ink/api/stats/meta?queue=${encodeURIComponent(queue)}&period=${encodeURIComponent(period)}`
+  const era = param(req, 'era')
+  if (era) url += `&era=${encodeURIComponent(era)}`
   const ranks = param(req, 'ranks')
   if (ranks) url += `&ranks=${encodeURIComponent(ranks)}`
 
@@ -207,8 +170,6 @@ async function handleLeaderboard(req: VercelRequest, res: VercelResponse) {
 const HANDLERS: Record<string, (req: VercelRequest, res: VercelResponse) => Promise<void>> = {
   'match-history': handleMatchHistory,
   'gamelog': handleGamelog,
-  'gamelog-bulk': handleGamelogBulk,
-  'replay': handleReplay,
   'deck': handleDeck,
   'stats': handleStats,
   'leaderboard': handleLeaderboard,

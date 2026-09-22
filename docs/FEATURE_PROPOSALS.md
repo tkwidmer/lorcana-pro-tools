@@ -162,7 +162,7 @@ It appears in three places, as requested:
 **Page wiring**
 - **`/deck-lab`**: new `src/pages/DeckLabPage.jsx`.
   - Add it to `SUPPORTER_PATHS` (`src/lib/access.js`), the Coaching Tools section of `src/lib/siteSections.js`, and `App.jsx`.
-  - It loads the full match history by following `fetchMatchHistory` cursors until `next_cursor` is null. Pages are 500 games each, within duels.ink's limit of 20 requests a minute, and the page shows progress while loading.
+  - It loads the full match history by following `fetchMatchHistory` cursors until `next_cursor` is null. Pages are 250 games each (the documented maximum, the same one Match History uses), within duels.ink's limit of 20 requests a minute, and the page shows progress while loading.
   - Deck names come from the existing `lorcana_deck_names` localStorage key and `fetchDecks()`.
 - **Match History**: add a `filterVersion` step after the `filterDeck` step in `filteredGames`, and put the compact timeline in the expanded deck panel.
 - **Analytics**: add a `filterVersion` step after `filteredGames`. Card Impact keeps using `personal-stats` versions as it does today; switching it over is out of scope.

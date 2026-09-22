@@ -318,41 +318,6 @@ export async function fetchGamelogBuffer(gameId) {
   return res.arrayBuffer()
 }
 
-// Fetch a manifest of signed CDN URLs for multiple gamelog IDs in one request.
-// Returns { files: [{id, filename, url}], missing: string[] }
-export async function fetchGamelogManifest(ids) {
-  const token = getToken()
-  if (!token) throw new Error('No API token configured')
-
-  const res = await fetch('/api/duels?endpoint=gamelog-bulk', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ ids }),
-  })
-
-  if (res.status === 401) throw new Error('Invalid or expired API token')
-  if (!res.ok) throw new Error(`Failed to fetch gamelog manifest: ${res.status}`)
-
-  return res.json()
-}
-
-export async function fetchReplayBuffer(replayId) {
-  const token = getToken()
-  if (!token) throw new Error('No API token configured')
-
-  const res = await fetch(`/api/duels?endpoint=replay&id=${encodeURIComponent(replayId)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (res.status === 401) throw new Error('Invalid or expired API token')
-  if (!res.ok) throw new Error(`Failed to fetch replay: ${res.status}`)
-
-  return res.arrayBuffer()
-}
-
 export async function fetchDeck(id) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
@@ -418,18 +383,37 @@ export async function fetchCurrentMmr(queue) {
   }
 }
 
+async function getStats(params) {
+  const res = await fetch(`/api/duels?${new URLSearchParams({ endpoint: 'stats', ...params })}`)
+  if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status}`)
+  return res.json()
+}
+
+// Current card-set era key per queue (e.g. core-bo1 → "set-13", infinity-bo1 →
+// "set-13-infinity-constructed"), read from the documented meta.eras.currentEra
+// of an unscoped response. Cached per queue for the page session; a failed
+// lookup is evicted so the next call retries.
+const eraKeyByQueue = new Map()
+
+function currentEraKey(queue) {
+  if (!eraKeyByQueue.has(queue)) {
+    const lookup = getStats({ queue, period: 'all_time' }).then(data => {
+      const key = data.meta?.eras?.currentEra?.key
+      if (!key) throw new Error(`duels.ink reported no current era for queue ${queue}`)
+      return key
+    })
+    lookup.catch(() => eraKeyByQueue.delete(queue))
+    eraKeyByQueue.set(queue, lookup)
+  }
+  return eraKeyByQueue.get(queue)
+}
+
+// Community matchup stats, always scoped to the queue's current era.
 export async function fetchStats({ queue, period, ranks }) {
   if (!queue) throw new Error('Queue is required')
   if (!period) throw new Error('Period is required')
 
-  const params = new URLSearchParams({ endpoint: 'stats', queue, period })
-  if (ranks && ranks.length > 0) {
-    params.set('ranks', ranks.join(','))
-  }
-
-  const res = await fetch(`/api/duels?${params}`)
-
-  if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status}`)
-
-  return res.json()
+  const params = { queue, period, era: await currentEraKey(queue) }
+  if (ranks && ranks.length > 0) params.ranks = ranks.join(',')
+  return getStats(params)
 }

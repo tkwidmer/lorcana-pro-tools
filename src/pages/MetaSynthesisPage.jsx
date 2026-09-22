@@ -33,6 +33,13 @@ function bandLabel(band) {
   return band === 'ALL' ? 'All Players' : `${band}+`
 }
 
+// Most recent week duels.ink serves stats for — from the documented
+// meta.availableWeeks rather than the page-internal meta.currentWeek.
+function latestWeekStart(weeks) {
+  if (!weeks?.length) return null
+  return weeks.map(w => w.startDate).sort().at(-1)
+}
+
 function queueId(format, mode) {
   return `${format}-${mode}`
 }
@@ -187,9 +194,8 @@ export function MetaSynthesisPage() {
         // real period — nothing above renders the all-time data.
         if (!bootstrapped) {
           setBootstrapped(true)
-          if (data.meta?.currentWeek?.startDate) {
-            setSelectedWeeks([data.meta.currentWeek.startDate])
-          }
+          const latest = latestWeekStart(data.meta?.availableWeeks)
+          if (latest) setSelectedWeeks([latest])
           setAvailableWeeks(data.meta?.availableWeeks ?? [])
           return
         }
@@ -222,7 +228,7 @@ export function MetaSynthesisPage() {
   }, [queue, bootstrapped, periodMode, weekKey, band])
 
   const queueName = stats?.meta?.queue?.name ?? `${FORMATS.find(f => f.id === format)?.label} ${MODES.find(m => m.id === mode)?.label}`
-  const currentWeekStart = stats?.meta?.currentWeek?.startDate ?? null
+  const currentWeekStart = latestWeekStart(availableWeeks)
 
   const periodLabel = useMemo(() => {
     if (periodMode === 'all_time') return 'all-time'

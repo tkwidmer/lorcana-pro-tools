@@ -88,6 +88,7 @@ export function HomePage() {
           className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-5 border border-gray-200 rounded-lg hover:border-gray-900 transition-colors group"
         >
           <div className="flex items-center gap-3">
+            <img src="/metafy-icon.svg" alt="" className="h-6 w-auto shrink-0" />
             <div>
               <p className="text-sm font-bold text-gray-900">Become a Metafy supporter</p>
               <p className="text-sm text-gray-500 mt-1">

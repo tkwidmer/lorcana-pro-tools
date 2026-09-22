@@ -444,7 +444,10 @@ export function SettingsPage() {
           </div>
 
           <div className="border border-gray-200 rounded-lg p-6">
-            <h2 className="text-base font-bold text-gray-900 mb-1">Metafy</h2>
+            <div className="flex items-center gap-2 mb-1">
+              <img src="/metafy-icon.svg" alt="" className="h-5 w-auto shrink-0" />
+              <h2 className="text-base font-bold text-gray-900">Metafy</h2>
+            </div>
             <p className="text-sm text-gray-500 mb-5">
               Connect your Metafy account — an active subscription to our community automatically grants Supporter access.
             </p>

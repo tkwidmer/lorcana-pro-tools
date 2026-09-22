@@ -1,7 +1,7 @@
 // Server-side Supabase access for the Metafy supporter integration. Reuses
-// the same service-role client as the Discord bot and Patreon integration
-// (getSupabaseServiceClient) since metafy_links has zero client-facing
-// policies. See supabase/migrations/010_metafy_links.sql.
+// the same service-role client as the Discord bot (getSupabaseServiceClient)
+// since metafy_links has zero client-facing policies. See
+// supabase/migrations/010_metafy_links.sql.
 import { getSupabaseServiceClient } from './discordSupabase.js'
 
 export interface MetafyLinkRow {
@@ -56,21 +56,13 @@ export async function deleteLinkForUser(userId: string): Promise<void> {
 }
 
 // The single chokepoint for granting/revoking supporter access based on
-// Metafy community access — mirrors applyPledgeStateToProfile() in
-// patreonSupabase.ts. Called from the OAuth callback and the reconcile
+// Metafy community access. Called from the OAuth callback and the reconcile
 // tick — never write profiles.supporter_tier from anywhere else in the
 // Metafy integration.
 //
 // Revocation only ever touches rows where supporter_source is already
-// 'metafy', so a manually-granted, admin-granted, or Patreon-granted
-// supporter is never clobbered by a Metafy subscription lapsing. (The
-// inverse also holds via patreonSupabase.ts's own guard — the two
-// integrations can't clobber each other, but note that a user active on
-// both sources still only ever occupies the single supporter_source column,
-// so whichever source wrote most recently is the one a later revoke from
-// the *other* source won't touch, while the one that did write it can still
-// revoke it. This is an accepted limitation shared with the existing
-// Patreon/manual/kofi setup, not something new to this integration.)
+// 'metafy', so a manually- or admin-granted supporter (via AdminPage.jsx)
+// is never clobbered by a Metafy subscription lapsing.
 export async function applyMetafyStateToProfile(userId: string, active: boolean): Promise<void> {
   const supabase = getSupabaseServiceClient()
 

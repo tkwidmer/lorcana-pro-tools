@@ -3,12 +3,11 @@
 // METAFY_CLIENT_SECRET and METAFY_API_KEY, which must never reach the
 // browser. Docs: https://dev.metafy.gg/
 //
-// Unlike the Patreon integration, no per-user token is ever persisted: the
-// OAuth callback uses the freshly-issued access token for one immediate
-// access check and discards it, and reconciliation runs entirely off a
-// single owner-scoped API key (METAFY_API_KEY) via the community
-// subscribers list rather than re-polling each user's own token. See
-// api/_lib/metafySupabase.ts.
+// No per-user token is ever persisted: the OAuth callback uses the
+// freshly-issued access token for one immediate access check and discards
+// it, and reconciliation runs entirely off a single owner-scoped API key
+// (METAFY_API_KEY) via the community subscribers list rather than
+// re-polling each user's own token. See api/_lib/metafySupabase.ts.
 
 const TOKEN_URL = 'https://metafy.gg/irk/oauth/token'
 const API_BASE = 'https://metafy.gg/irk/api'

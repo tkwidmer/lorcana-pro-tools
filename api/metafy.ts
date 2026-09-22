@@ -10,15 +10,13 @@ import {
   MetafyLinkRow,
 } from './_lib/metafySupabase.js'
 
-// Consolidated Metafy route, dispatched by ?endpoint= — same reasoning as
-// api/patreon.ts, to stay under Vercel Hobby's 12-function cap (see
-// CLAUDE.md "Function budget").
+// Consolidated Metafy route, dispatched by ?endpoint= to stay under Vercel
+// Hobby's 12-function cap (see CLAUDE.md "Function budget").
 //
-// Unlike Patreon, there's no webhook endpoint here: Metafy's webhooks are
-// Partner-only (https://dev.metafy.gg/api-reference/v1/webhooks), so the
-// reconcile tick is the *primary* revoke path rather than a backup for a
-// missed webhook, and runs every 30 minutes accordingly (see
-// .github/workflows/metafy-reconcile-tick.yml) rather than daily.
+// There's no webhook endpoint here: Metafy's webhooks are Partner-only
+// (https://dev.metafy.gg/api-reference/v1/webhooks), so the reconcile tick
+// is the *only* revoke path and runs every 30 minutes accordingly (see
+// .github/workflows/metafy-reconcile-tick.yml).
 export const config = {
   maxDuration: 60,
 }
@@ -36,7 +34,8 @@ function callbackRedirectUri(req: VercelRequest): string {
 // ---- endpoint=callback ----
 // Metafy redirects the browser here after the user approves the OAuth
 // consent screen. `state` carries the initiating user's Supabase access
-// token (same pattern as api/patreon.ts's callback) since this is a plain
+// token, verified server-side via auth.getUser() (the same pattern
+// api/duels-tokens.ts uses for its Bearer auth), since this is a plain
 // browser redirect with no other way to identify the logged-in user.
 //
 // The freshly-issued access token is used for exactly one call
@@ -92,7 +91,7 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
 // ---- endpoint=status ----
 // Lets SettingsPage read/disconnect the caller's own Metafy link without
 // needing RLS access to metafy_links. Every caller must present their own
-// Supabase session JWT, same pattern as api/patreon.ts's status endpoint.
+// Supabase session JWT, verified the same way as the callback above.
 async function requireUser(req: VercelRequest, res: VercelResponse): Promise<string | null> {
   const auth = req.headers.authorization
   if (!auth?.startsWith('Bearer ')) {
@@ -155,11 +154,10 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
 }
 
 // ---- endpoint=reconcile-tick ----
-// The primary grant/revoke path (Metafy webhooks are Partner-only — see the
+// The only grant/revoke path (Metafy webhooks are Partner-only — see the
 // file-level comment). Runs every 30 minutes via
 // .github/workflows/metafy-reconcile-tick.yml, same CRON_SECRET-gated
-// shared-secret pattern as api/discord-tournament-tick.ts and
-// api/patreon.ts's reconcile-tick.
+// shared-secret pattern as api/discord-tournament-tick.ts.
 //
 // One owner-scoped API call (listActiveSubscribers) replaces re-polling
 // each linked user's own OAuth token — see api/_lib/metafyApi.ts.

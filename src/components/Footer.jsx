@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 
 const SUBSTACK_URL = 'https://inkbornforge.substack.com'
-const PATREON_URL = 'https://www.patreon.com/inkbornforge'
 
 // Site-wide footer — mirrors Nav's border/spacing/link conventions. Hidden on
 // /lore-tracker and the Decklist Inspector's OBS overlay view for the same
@@ -32,15 +31,6 @@ export function Footer() {
           >
             <img src="/substack-icon.svg" alt="" className="h-4 w-4" />
             Substack
-          </a>
-          <a
-            href={PATREON_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
-          >
-            <img src="/patreon-icon.svg" alt="" className="h-4 w-4" />
-            Patreon
           </a>
         </div>
       </div>

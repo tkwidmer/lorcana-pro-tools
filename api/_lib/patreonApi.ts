@@ -1,5 +1,5 @@
 // Thin client for Patreon's OAuth2 + API v2 endpoints, used by
-// api/patreon-callback.ts and api/patreon-reconcile-tick.ts. Standalone (not
+// api/patreon.ts's callback and reconcile-tick endpoints. Standalone (not
 // shared with the client bundle) since it needs PATREON_CLIENT_SECRET, which
 // must never reach the browser.
 //

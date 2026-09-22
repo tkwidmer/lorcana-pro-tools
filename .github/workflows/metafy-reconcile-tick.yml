@@ -1,16 +1,16 @@
-name: Patreon Reconcile Tick
+name: Metafy Reconcile Tick
 
 on:
   schedule:
-    - cron: '0 13 * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch: {}
 
 jobs:
   tick:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Patreon reconciliation tick
+      - name: Trigger Metafy reconciliation tick
         run: |
           curl --fail-with-body -sS -X POST \
-            "https://lorcana-pro-tools.vercel.app/api/patreon?endpoint=reconcile-tick" \
+            "https://lorcana-pro-tools.vercel.app/api/metafy?endpoint=reconcile-tick" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

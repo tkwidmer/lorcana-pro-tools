@@ -18,7 +18,7 @@ async function patreonFetch(method) {
   const { data } = await supabase.auth.getSession()
   const accessToken = data.session?.access_token
   if (!accessToken) throw new Error('Not signed in')
-  const res = await fetch('/api/patreon-status', {
+  const res = await fetch('/api/patreon?endpoint=status', {
     method,
     headers: { Authorization: `Bearer ${accessToken}` },
   })
@@ -59,7 +59,7 @@ async function connectPatreon() {
   const clientId = import.meta.env.VITE_PATREON_CLIENT_ID
   if (!clientId) throw new Error('Patreon integration is not configured yet')
 
-  const redirectUri = `${window.location.origin}/api/patreon-callback`
+  const redirectUri = `${window.location.origin}/api/patreon?endpoint=callback`
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
@@ -68,6 +68,62 @@ async function connectPatreon() {
     state: accessToken,
   })
   window.location.href = `https://www.patreon.com/oauth2/authorize?${params.toString()}`
+}
+
+async function metafyFetch(method) {
+  const { data } = await supabase.auth.getSession()
+  const accessToken = data.session?.access_token
+  if (!accessToken) throw new Error('Not signed in')
+  const res = await fetch('/api/metafy?endpoint=status', {
+    method,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) throw new Error(`Metafy status request failed (${res.status})`)
+  return res.json()
+}
+
+function useMetafyStatus() {
+  const [status, setStatus] = useState(null) // null while loading, else { connected, hasAccess?, lastSyncedAt? }
+  const [error, setError] = useState(null)
+
+  async function refresh() {
+    try {
+      const result = await metafyFetch('GET')
+      setStatus(result)
+      setError(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    metafyFetch('GET')
+      .then(result => { if (!cancelled) { setStatus(result); setError(null) } })
+      .catch(err => { if (!cancelled) setError(err.message) })
+    return () => { cancelled = true }
+  }, [])
+
+  return { status, error, refresh }
+}
+
+async function connectMetafy() {
+  const { data } = await supabase.auth.getSession()
+  const accessToken = data.session?.access_token
+  if (!accessToken) throw new Error('Not signed in')
+
+  const clientId = import.meta.env.VITE_METAFY_CLIENT_ID
+  if (!clientId) throw new Error('Metafy integration is not configured yet')
+
+  const redirectUri = `${window.location.origin}/api/metafy?endpoint=callback`
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: 'profile purchases',
+    state: accessToken,
+  })
+  window.location.href = `https://metafy.gg/auth/authorize?${params.toString()}`
 }
 
 const THEME_CHOICES = [
@@ -153,19 +209,30 @@ export function SettingsPage() {
   const { status: patreonStatus, refresh: refreshPatreon } = usePatreonStatus()
   const [patreonBanner, setPatreonBanner] = useState(null) // null | 'connected' | 'error'
   const [patreonBusy, setPatreonBusy] = useState(false)
+  const { status: metafyStatus, refresh: refreshMetafy } = useMetafyStatus()
+  const [metafyBanner, setMetafyBanner] = useState(null) // null | 'connected' | 'error'
+  const [metafyBusy, setMetafyBusy] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const result = params.get('patreon')
-    if (result === 'connected' || result === 'error') {
-      setPatreonBanner(result)
+    const patreonResult = params.get('patreon')
+    const metafyResult = params.get('metafy')
+    if (patreonResult === 'connected' || patreonResult === 'error') {
+      setPatreonBanner(patreonResult)
       params.delete('patreon')
+    }
+    if (metafyResult === 'connected' || metafyResult === 'error') {
+      setMetafyBanner(metafyResult)
+      params.delete('metafy')
+    }
+    if (patreonResult || metafyResult) {
       const newSearch = params.toString()
       window.history.replaceState({}, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''))
-      if (result === 'connected') refreshPatreon()
+      if (patreonResult === 'connected') refreshPatreon()
+      if (metafyResult === 'connected') refreshMetafy()
     }
-    // Only meant to run once, reading the query param set by the OAuth
-    // redirect on mount — not meant to re-run if refreshPatreon changes.
+    // Only meant to run once, reading the query params set by the OAuth
+    // redirects on mount — not meant to re-run if the refresh fns change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -186,6 +253,26 @@ export function SettingsPage() {
       await refreshPatreon()
     } finally {
       setPatreonBusy(false)
+    }
+  }
+
+  async function handleConnectMetafy() {
+    setMetafyBusy(true)
+    try {
+      await connectMetafy()
+    } catch {
+      setMetafyBanner('error')
+      setMetafyBusy(false)
+    }
+  }
+
+  async function handleDisconnectMetafy() {
+    setMetafyBusy(true)
+    try {
+      await metafyFetch('DELETE')
+      await refreshMetafy()
+    } finally {
+      setMetafyBusy(false)
     }
   }
 
@@ -351,6 +438,54 @@ export function SettingsPage() {
                   className="mt-3 border border-gray-300 text-xs font-medium px-3 py-1.5 text-gray-500 hover:border-red-400 hover:text-red-600 transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {patreonBusy ? 'Disconnecting…' : 'Disconnect'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-6">
+            <h2 className="text-base font-bold text-gray-900 mb-1">Metafy</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              Connect your Metafy account — an active subscription to our community automatically grants Supporter access.
+            </p>
+
+            {metafyBanner === 'connected' && (
+              <p className="text-sm text-green-600 font-medium mb-4">✓ Metafy connected.</p>
+            )}
+            {metafyBanner === 'error' && (
+              <p className="text-sm text-red-600 font-medium mb-4">Something went wrong connecting Metafy. Please try again.</p>
+            )}
+
+            {metafyStatus === null && (
+              <p className="text-sm text-gray-400">Loading Metafy status…</p>
+            )}
+
+            {metafyStatus?.connected === false && (
+              <button
+                type="button"
+                onClick={handleConnectMetafy}
+                disabled={metafyBusy}
+                className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {metafyBusy ? 'Connecting…' : 'Connect Metafy'}
+              </button>
+            )}
+
+            {metafyStatus?.connected === true && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">Connected</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {metafyStatus.hasAccess ? 'Active subscriber' : 'No active subscription'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDisconnectMetafy}
+                  disabled={metafyBusy}
+                  className="mt-3 border border-gray-300 text-xs font-medium px-3 py-1.5 text-gray-500 hover:border-red-400 hover:text-red-600 transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {metafyBusy ? 'Disconnecting…' : 'Disconnect'}
                 </button>
               </div>
             )}

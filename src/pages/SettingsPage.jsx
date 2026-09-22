@@ -60,12 +60,13 @@ async function connectMetafy() {
   if (!clientId) throw new Error('Metafy integration is not configured yet')
 
   // Fixed rather than derived from window.location.origin: this deployment
-  // has several valid aliases (inkbornforge.com, lorcana-pro-tools.vercel.app,
-  // the various *-tkwidmers-projects.vercel.app ones, ...), but Metafy's
-  // OAuth app only accepts the one exact redirect_uri registered in its
-  // dashboard (metafy.gg/account/settings/oauth) — so this must always send
-  // that same one regardless of which alias the visitor happens to be on.
-  const redirectUri = 'https://inkbornforge.com/api/metafy?endpoint=callback'
+  // has several valid aliases (inkbornforge.com, www.inkbornforge.com,
+  // lorcana-pro-tools.vercel.app, the various *-tkwidmers-projects.vercel.app
+  // ones, ...), but Metafy's OAuth app only accepts the one exact
+  // redirect_uri registered in its dashboard
+  // (metafy.gg/account/settings/oauth) — so this must always send that same
+  // one regardless of which alias the visitor happens to be on.
+  const redirectUri = 'https://www.inkbornforge.com/api/metafy?endpoint=callback'
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,

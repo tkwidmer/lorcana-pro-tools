@@ -69,6 +69,15 @@ async function main() {
       // (e.g. a fresh CI/Vercel build image without the browser installed),
       // skip it rather than failing the whole `npm run build`.
       console.warn(`Skipping prerender: could not launch Chromium (${err.message})`)
+      // TEMP DIAGNOSTIC — remove before merge
+      const exe = chromium.executablePath()
+      const { execSync } = await import('child_process')
+      let ldd = ''
+      try { ldd = execSync(`ldd "${exe}" | grep "not found"`, { encoding: 'utf8' }) } catch (e) { ldd = String(e.stdout || e.message) }
+      let cache = ''
+      try { cache = execSync('ls -la ~/.cache/ms-playwright 2>&1; cat /etc/os-release 2>&1 | head -3', { encoding: 'utf8' }) } catch (e) { cache = String(e.message) }
+      fs.writeFileSync(path.join(distDir, 'prerender-diagnostic.txt'),
+        `error: ${err.message}\n\nexe: ${exe}\nexists: ${fs.existsSync(exe)}\n\nldd missing:\n${ldd}\n\ncache/os:\n${cache}\n`)
       return
     }
     const page = await browser.newPage()
@@ -88,6 +97,7 @@ async function main() {
     }
 
     await browser.close()
+    fs.writeFileSync(path.join(distDir, 'prerender-diagnostic.txt'), 'chromium launched OK\n') // TEMP DIAGNOSTIC
   } finally {
     server.kill()
   }

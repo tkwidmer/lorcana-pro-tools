@@ -4,7 +4,8 @@
 // 1. `transform` turns each content/blog/*.md import into a plain JS module
 //    exporting the parsed post ({ slug, title, date, description, html }), so
 //    the markdown is compiled at build time and the client bundle ships only
-//    HTML strings (see src/lib/blog.js).
+//    HTML strings (see src/lib/blog.js). In a production build a draft post
+//    compiles to `null` instead, so its content never reaches the bundle.
 // 2. After the build, writes a real static HTML file for /blog and every
 //    /blog/<slug> — the built index.html shell with per-post <head> tags
 //    (title, description, canonical, Open Graph, BlogPosting JSON-LD) and the
@@ -138,7 +139,8 @@ export function blogPlugin() {
     transform(code, id) {
       if (!id.startsWith(contentDir) || !id.endsWith('.md')) return null
       const post = parsePost(path.basename(id), code)
-      return { code: `export default ${JSON.stringify(post)}`, map: null }
+      const exported = isBuild && post.draft ? null : post
+      return { code: `export default ${JSON.stringify(exported)}`, map: null }
     },
     closeBundle() {
       if (!isBuild) return
@@ -147,6 +149,7 @@ export function blogPlugin() {
         .readdirSync(contentDir)
         .filter(name => name.endsWith('.md'))
         .map(name => parsePost(name, fs.readFileSync(path.join(contentDir, name), 'utf8')))
+        .filter(post => !post.draft)
         .sort((a, b) => b.date.localeCompare(a.date))
 
       const shell = fs.readFileSync(path.join(outDir, 'index.html'), 'utf8')

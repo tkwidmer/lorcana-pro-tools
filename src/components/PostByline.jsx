@@ -5,6 +5,11 @@ import { AUTHOR_LINK_REL, formatPostDate } from '../lib/blogMeta'
 export function PostByline({ post, className = '' }) {
   return (
     <p className={`text-sm text-gray-500 ${className}`}>
+      {post.draft && (
+        <span className="mr-2 text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
+          Draft
+        </span>
+      )}
       By{' '}
       <a
         href={post.authorUrl}

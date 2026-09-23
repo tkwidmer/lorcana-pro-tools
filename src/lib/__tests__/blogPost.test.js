@@ -45,6 +45,12 @@ describe('parsePost', () => {
     expect(() => parsePost('a.md', POST.replace('authorUrl: https://x.com/janedoe\n', ''))).toThrow(/"authorUrl"/)
   })
 
+  it('flags drafts, and rejects any draft value other than true', () => {
+    expect(parsePost('a.md', POST).draft).toBe(false)
+    expect(parsePost('a.md', POST.replace('---\n\n', 'draft: true\n---\n\n')).draft).toBe(true)
+    expect(() => parsePost('a.md', POST.replace('---\n\n', 'draft: yes\n---\n\n'))).toThrow(/draft/)
+  })
+
   it('throws when authorUrl is not an https link', () => {
     expect(() => parsePost('a.md', POST.replace('https://x.com/janedoe', 'x.com/janedoe'))).toThrow(/https/)
   })

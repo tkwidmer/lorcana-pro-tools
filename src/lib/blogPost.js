@@ -16,6 +16,10 @@
 // authorUrl is the author's X/Twitter, Metafy, or other profile link — posts
 // can be guest-written, so every post names and links its own author.
 //
+// An optional `draft: true` line keeps a post out of production builds (see
+// blogPlugin.js) while still showing it in `npm run dev` for previewing.
+// Delete the line to publish.
+//
 //   Markdown body…
 import { marked } from 'marked'
 
@@ -41,6 +45,9 @@ function parseFrontmatter(filename, raw) {
   if (!DATE_PATTERN.test(fields.date)) {
     throw new Error(`${filename}: date must be YYYY-MM-DD, got "${fields.date}"`)
   }
+  if (fields.draft !== undefined && fields.draft !== 'true') {
+    throw new Error(`${filename}: draft must be "true" or omitted, got "${fields.draft}"`)
+  }
   if (!fields.authorUrl.startsWith('https://')) {
     throw new Error(`${filename}: authorUrl must be an https:// link, got "${fields.authorUrl}"`)
   }
@@ -62,6 +69,7 @@ export function parsePost(filename, raw) {
     description: fields.description,
     author: fields.author,
     authorUrl: fields.authorUrl,
+    draft: fields.draft === 'true',
     html: marked.parse(body),
   }
 }

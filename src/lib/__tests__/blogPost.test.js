@@ -7,6 +7,8 @@ const POST = `---
 title: Hello: World
 date: 2026-09-23
 description: A short summary.
+author: Jane Doe
+authorUrl: https://x.com/janedoe
 ---
 
 Some **bold** text.
@@ -20,6 +22,8 @@ describe('parsePost', () => {
       title: 'Hello: World',
       date: '2026-09-23',
       description: 'A short summary.',
+      author: 'Jane Doe',
+      authorUrl: 'https://x.com/janedoe',
     })
     expect(post.html).toContain('<strong>bold</strong>')
   })
@@ -33,7 +37,16 @@ describe('parsePost', () => {
   })
 
   it('throws on a malformed date', () => {
-    expect(() => parsePost('a.md', '---\ntitle: T\ndate: Jan 1\ndescription: D\n---\n')).toThrow(/YYYY-MM-DD/)
+    expect(() => parsePost('a.md', POST.replace('2026-09-23', 'Jan 1'))).toThrow(/YYYY-MM-DD/)
+  })
+
+  it('throws when the author or their link is missing', () => {
+    expect(() => parsePost('a.md', POST.replace('author: Jane Doe\n', ''))).toThrow(/"author"/)
+    expect(() => parsePost('a.md', POST.replace('authorUrl: https://x.com/janedoe\n', ''))).toThrow(/"authorUrl"/)
+  })
+
+  it('throws when authorUrl is not an https link', () => {
+    expect(() => parsePost('a.md', POST.replace('https://x.com/janedoe', 'x.com/janedoe'))).toThrow(/https/)
   })
 
   it('throws on a filename that is not a slug', () => {

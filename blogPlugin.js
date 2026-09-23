@@ -16,7 +16,7 @@
 import fs from 'fs'
 import path from 'path'
 import { parsePost } from './src/lib/blogPost.js'
-import { BLOG_DESCRIPTION, formatPostDate } from './src/lib/blogMeta.js'
+import { AUTHOR_LINK_REL, BLOG_DESCRIPTION, formatPostDate } from './src/lib/blogMeta.js'
 
 const SITE_URL = 'https://lorcana-pro-tools.vercel.app'
 const BLOG_TITLE = 'Blog · InkbornForge'
@@ -67,11 +67,16 @@ export function renderStaticPage(shell, { title, description, urlPath, ogType, j
   return html
 }
 
+function byline(post) {
+  return `<p>By <a href="${escapeHtml(post.authorUrl)}" rel="${AUTHOR_LINK_REL}" target="_blank">${escapeHtml(post.author)}</a> · ` +
+    `<time datetime="${post.date}">${formatPostDate(post.date)}</time></p>`
+}
+
 function indexPage(shell, posts) {
   const items = posts
     .map(
       post => `<li><a href="/blog/${post.slug}"><h2>${escapeHtml(post.title)}</h2></a>` +
-        `<time datetime="${post.date}">${formatPostDate(post.date)}</time>` +
+        byline(post) +
         `<p>${escapeHtml(post.description)}</p></li>`,
     )
     .join('')
@@ -106,14 +111,14 @@ function postPage(shell, post) {
       datePublished: post.date,
       url: `${SITE_URL}/blog/${post.slug}`,
       mainEntityOfPage: `${SITE_URL}/blog/${post.slug}`,
-      author: { '@type': 'Organization', name: 'InkbornForge', url: SITE_URL },
+      author: { '@type': 'Person', name: post.author, url: post.authorUrl },
       publisher: { '@type': 'Organization', name: 'InkbornForge', url: SITE_URL },
     },
     bodyHtml:
       `<main class="w-full px-6 py-8"><article>` +
       `<p><a href="/blog">← All posts</a></p>` +
       `<h1>${escapeHtml(post.title)}</h1>` +
-      `<time datetime="${post.date}">${formatPostDate(post.date)}</time>` +
+      byline(post) +
       `<div class="blog-prose">${post.html}</div>` +
       `</article></main>`,
   })

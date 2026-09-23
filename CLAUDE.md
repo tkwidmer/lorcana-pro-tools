@@ -138,6 +138,7 @@ In `src/components/`:
 | `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts. A card carrying `imageSrc` (Coconut cards) is printed as that image filling the 2.5"×3.5" slot instead of through the text layout |
 | `ShareCardModal.jsx` | Modal shell for sharing a canvas-rendered image (native share / clipboard copy / download); used by `TournamentLookupPage`'s and `PlayerMatchHistory`'s share-card buttons |
 | `PlayerMatchHistory.jsx` | Round-by-round match history table for one player within a single loaded tournament event (opponent, result, score, user-annotated opp colors/play-draw, share card). Used by `TournamentLookupPage`'s player detail view and reused by `PairingHistoryPanel` for either side of a clicked pairing |
+| `PostByline.jsx` | "By <author> · <date>" line for blog posts, author linked to their profile (`authorUrl`). Used by `BlogIndexPage` and `BlogPostPage` |
 | `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below |
 
 Ink color images are rendered inline in each page — there is no shared `InkIcons` component. `MatchHistoryPage` defines a local `InkIcons` function; `AnalyticsPage` defines a local `InkImg` function. Both render `<img src={/ink/${inkName}.png} />`.
@@ -189,7 +190,7 @@ In `src/lib/`:
 | `tournamentHistoryApi.js` | Client for `/api/tournament-history` — `fetchPlayerTournamentHistory()`, `fetchHeadToHead()`, `searchTournamentPlayers()`, `fetchRecentTournamentImports()`, `importTournamentEvent()`. See "Tournament History Archive" below |
 | `blog.js` | Client access to the compiled blog posts — `listPosts()` (newest first), `getPost(slug)`. See "Blog" below |
 | `blogPost.js` | `parsePost()` — frontmatter + markdown → `{ slug, title, date, description, html }`. Build-time only (imports `marked`) |
-| `blogMeta.js` | `BLOG_DESCRIPTION` + `formatPostDate()`, shared by the client and `blogPlugin.js` |
+| `blogMeta.js` | `BLOG_DESCRIPTION`, `AUTHOR_LINK_REL` + `formatPostDate()`, shared by the client and `blogPlugin.js` |
 | `gameExport.js` | Serialize game records for sharing (used by `AnalyticsPage`) |
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
@@ -395,10 +396,14 @@ Posts are markdown files in `content/blog/<slug>.md` — the filename is the URL
 title: My post
 date: 2026-09-23
 description: One sentence — used on the index, as the meta description, and on social cards.
+author: Jane Doe
+authorUrl: https://x.com/janedoe
 ---
 ```
 
-Adding a file is all it takes to publish; there's no registry to update. `parsePost()` (`src/lib/blogPost.js`) throws on a missing field, a non-`YYYY-MM-DD` date, or a non-slug filename, which fails the build rather than shipping a broken post. Links to other pages on the site should be root-relative (`[Cut Calculator](/cut-calculator)`).
+Posts can be guest-written, so every post names its own `author` and links `authorUrl` (their X/Twitter, Metafy, or other profile; must be `https://`). The byline (`components/PostByline.jsx` client-side, mirrored in `blogPlugin.js`'s static HTML) links it with `rel="author"`, and the post's `BlogPosting` JSON-LD carries it as a `Person`.
+
+Adding a file is all it takes to publish; there's no registry to update. `parsePost()` (`src/lib/blogPost.js`) throws on a missing field, a non-`YYYY-MM-DD` date, a non-`https://` `authorUrl`, or a non-slug filename, which fails the build rather than shipping a broken post. Links to other pages on the site should be root-relative (`[Cut Calculator](/cut-calculator)`).
 
 `blogPlugin.js` (a Vite plugin registered in `vite.config.js`) does the work:
 - **Compile at build time.** It transforms each `content/blog/*.md` import into a JS module exporting the parsed post, so `src/lib/blog.js`'s `import.meta.glob` gets plain HTML strings and `marked` never ships to the browser.

@@ -9,12 +9,17 @@
 //   title: My post
 //   date: 2026-09-23
 //   description: One-sentence summary used for the index, meta description, and social cards.
+//   author: Jane Doe
+//   authorUrl: https://x.com/janedoe
 //   ---
+//
+// authorUrl is the author's X/Twitter, Metafy, or other profile link — posts
+// can be guest-written, so every post names and links its own author.
 //
 //   Markdown body…
 import { marked } from 'marked'
 
-const REQUIRED_FIELDS = ['title', 'date', 'description']
+const REQUIRED_FIELDS = ['title', 'date', 'description', 'author', 'authorUrl']
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
@@ -36,6 +41,9 @@ function parseFrontmatter(filename, raw) {
   if (!DATE_PATTERN.test(fields.date)) {
     throw new Error(`${filename}: date must be YYYY-MM-DD, got "${fields.date}"`)
   }
+  if (!fields.authorUrl.startsWith('https://')) {
+    throw new Error(`${filename}: authorUrl must be an https:// link, got "${fields.authorUrl}"`)
+  }
 
   return { fields, body: match[2] }
 }
@@ -52,6 +60,8 @@ export function parsePost(filename, raw) {
     title: fields.title,
     date: fields.date,
     description: fields.description,
+    author: fields.author,
+    authorUrl: fields.authorUrl,
     html: marked.parse(body),
   }
 }

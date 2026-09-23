@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { getPost } from '../lib/blog'
-import { formatPostDate } from '../lib/blogMeta'
+import { PostByline } from '../components/PostByline'
 
 export function BlogPostPage() {
   const { slug } = useParams()
@@ -24,9 +24,7 @@ export function BlogPostPage() {
           ← All posts
         </Link>
         <h1 className="text-3xl font-bold text-gray-900 mt-4">{post.title}</h1>
-        <time dateTime={post.date} className="block text-sm text-gray-500 mt-2 mb-8">
-          {formatPostDate(post.date)}
-        </time>
+        <PostByline post={post} className="mt-2 mb-8" />
         {/* Compiled from the repo's own markdown at build time — trusted content. */}
         <div className="blog-prose" dangerouslySetInnerHTML={{ __html: post.html }} />
       </article>

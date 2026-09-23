@@ -16,6 +16,12 @@ describe('routeTitle', () => {
     expect(routeTitle('/scouting/game/abc-123')).toBe('Scouted Game · InkbornForge')
   })
 
+  it('resolves blog routes, including a post by its slug', () => {
+    expect(routeTitle('/blog')).toBe('Blog · InkbornForge')
+    expect(routeTitle('/blog/welcome-to-the-blog')).toBe('Welcome to the InkbornForge blog · InkbornForge')
+    expect(routeTitle('/blog/no-such-post')).toBe('InkbornForge')
+  })
+
   it('falls back to the bare site name for unknown routes', () => {
     expect(routeTitle('/nope')).toBe('InkbornForge')
   })

@@ -100,6 +100,7 @@ export function Nav() {
             <span className="text-gray-300">/</span>
             <span className="text-sm text-gray-500">
               {pathname === '/sitemap' ? 'Sitemap'
+                : pathname === '/blog' || pathname.startsWith('/blog/') ? 'Blog'
                 : pathname === '/proxy' ? 'Proxy Generator'
                 : pathname === '/cut-calculator' ? 'Cut Calculator'
                 : pathname === '/limited-guide' ? 'Limited Guide'
@@ -140,6 +141,12 @@ export function Nav() {
               {isAdmin ? 'Admin' : 'Supporter'}
             </span>
           )}
+          <Link
+            to="/blog"
+            className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+          >
+            Blog
+          </Link>
           <Link
             to="/settings"
             className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1"

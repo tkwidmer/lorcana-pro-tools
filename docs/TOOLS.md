@@ -133,6 +133,7 @@ Your ranked duels.ink games: result, your deck and colors, opponent and their co
 - **Cascading filters**: date (Today, Last 7 days, This month, Last 30 days, Custom), then queue, your colors, and opponent colors. Each filter only offers options that still exist after the ones before it.
 - **By Deck** groups results per deck. You can name your decks, and names are saved in your browser.
 - **Importing gamelogs** pulls the full gamelogs for the listed games into [Analytics](#analytics).
+- **Sessions & Tilt** groups your games into play sessions (a session ends after 30 minutes without a game). It shows your win rate by game number within a session, after 1, 2, or 3+ losses in a row, by time of day, and by day of week. When the drop after a losing streak is bigger than chance, it suggests a stop-loss, for example "Consider a break after 2 straight losses." It follows the filters above, so you can check one deck or queue at a time.
 
 ### Analytics
 `/analytics` · **Supporter**

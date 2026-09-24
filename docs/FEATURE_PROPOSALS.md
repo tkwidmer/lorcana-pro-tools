@@ -27,7 +27,7 @@ The proposals below each cover one of those gaps.
 | 1 | Matchup Playbook | Turn data into a game plan | M | Supporter |
 | 2 | Game Review Journal | Reflect on decisions | M | Supporter |
 | 3 | Deck Iteration Lab | Measure changes honestly | M | Supporter |
-| 4 | Session & Tilt Insights | Mental game | S | Supporter |
+| 4 | Session & Tilt Insights | Mental game | S | Supporter · **Shipped** |
 | 5 | Rules Trainer | Rules knowledge | M | Free |
 
 ---
@@ -189,6 +189,8 @@ Each step can ship as its own PR:
 ---
 
 ## 4. Session & Tilt Insights
+
+> **Shipped** as the *Sessions & Tilt* section of Match History (`src/lib/sessionStats.js`, `src/components/SessionInsights.jsx`).
 
 **Player problem.** Many ladder players lose MMR not because of their deck but because of *when* and *how long* they play: late-night sessions, the fifth game after two losses, or queueing again straight after a painful game. Match History has every game's timestamp and result, but nothing turns that into advice about the mental game.
 

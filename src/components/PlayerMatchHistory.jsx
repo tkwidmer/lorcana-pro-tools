@@ -30,7 +30,7 @@ function ColorPicker({ selected, onChange }) {
           title={color.charAt(0).toUpperCase() + color.slice(1)}
           onClick={() => toggle(color)}
           className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-            selected.includes(color) ? 'border-blue-500 scale-110 bg-blue-50' : 'border-transparent opacity-40 hover:opacity-70'
+            selected.includes(color) ? 'border-gray-900 scale-110 bg-gray-50' : 'border-transparent opacity-40 hover:opacity-70'
           }`}
         >
           <img src={`/ink/${color}.png`} alt={color} className="w-4 h-4" />
@@ -80,7 +80,7 @@ export function PlayerMatchHistory({ player, allMatches, matchesLoading, structu
       <div className="border border-gray-200 rounded-lg p-4 bg-white">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Match History</h3>
         <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span className="inline-block w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="inline-block w-3 h-3 border-2 border-forge border-t-transparent rounded-full animate-spin" />
           Loading…
         </div>
       </div>

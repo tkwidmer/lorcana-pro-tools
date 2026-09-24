@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Button } from './ui/Button'
 import {
   downloadShareImage,
   copyShareImageToClipboard,
@@ -58,7 +59,7 @@ export function ShareCardModal({ shareCard, onClose, title = 'Share card', altTe
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
-          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+          <h2 className="font-display text-base font-medium uppercase tracking-wide text-gray-900">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
         </div>
         <div className="overflow-y-auto p-4">
@@ -66,27 +67,16 @@ export function ShareCardModal({ shareCard, onClose, title = 'Share card', altTe
         </div>
         <div className="px-4 py-3 border-t border-gray-200 shrink-0 flex flex-wrap gap-2 justify-end">
           {nativeShareAvailable && (
-            <button
-              onClick={handleNativeShare}
-              disabled={status === 'sharing'}
-              className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
+            <Button variant="primary" size="sm" onClick={handleNativeShare} disabled={status === 'sharing'}>
               {status === 'sharing' ? 'Sharing…' : 'Share…'}
-            </button>
+            </Button>
           )}
-          <button
-            onClick={handleCopy}
-            disabled={status === 'copying'}
-            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
+          <Button variant="quiet" size="sm" onClick={handleCopy} disabled={status === 'copying'}>
             {status === 'copying' ? 'Copying…' : status === 'copied' ? '✓ Copied' : status === 'error' ? 'Failed' : 'Copy Image'}
-          </button>
-          <button
-            onClick={handleDownload}
-            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-          >
+          </Button>
+          <Button variant="quiet" size="sm" onClick={handleDownload}>
             Download JPG
-          </button>
+          </Button>
         </div>
       </div>
     </div>

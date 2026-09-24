@@ -13,6 +13,9 @@ import {
   computeStandingTierStatus,
 } from '../lib/storeTiers'
 import { DEFAULT_TRACKED_STORE_URLS } from '../lib/trackedStores'
+import { Button } from '../components/ui/Button'
+import { Textarea } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const LAST_INPUT_KEY = 'lorcana_store_lookup_last_input'
 const DEFAULT_INPUT = DEFAULT_TRACKED_STORE_URLS.join('\n')
@@ -356,33 +359,27 @@ export function StoreLookupPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">
-          Store Lookup
-        </h1>
-        <p className="text-sm text-gray-500">
+      <PageHeader
+        title="Store Lookup"
+        description={<>
           Paste one or more Ravensburger Play store IDs or store URLs (one per line, or separated by commas)
           to look up store details, progress toward provisional Legendary status for the {PRORATE_WINDOW_LABEL}{' '}
           pro-rating window, and steady-state Standard/Legendary standing over the trailing 4 set seasons
           (derived from each store's own Prerelease event history).
-        </p>
-      </div>
+        </>}
+      />
 
       <form onSubmit={loadStores} className="mb-6">
-        <textarea
+        <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="63116552-e809-4e3d-85f0-9ef1f8f3f950"
           rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono mb-3"
+          className="block w-full font-mono mb-3"
         />
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <Button variant="primary" type="submit" disabled={loading}>
           {loading ? 'Loading…' : 'Look Up Stores'}
-        </button>
+        </Button>
       </form>
 
       {results.length > 0 && (

@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react'
 import { StatCard } from '../components/StatCard'
 import { estimateCutlineRange, cutlineLabel } from '../lib/tournamentCut'
+import { Card } from '../components/ui/Card'
+import { Input, Select } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
 
 function Stepper({ label, value, onChange, disabled }) {
   return (
@@ -127,80 +130,67 @@ export function TournamentCutPage() {
   return (
     <div className="w-full px-6 py-8">
       <div className="max-w-lg">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
-          Cut Calculator
-        </h1>
-        <p className="text-gray-500">
-          Know when it's safe to intentional draw.
-        </p>
-      </div>
+      <PageHeader title="Cut Calculator" description="Know when it's safe to intentional draw." />
 
       {/* Tournament Setup */}
-      <div className="border border-gray-200 rounded-lg p-6 mb-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-4">
-          Tournament Setup
-        </h2>
+      <Card className="p-6 mb-4" title="Tournament Setup">
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Players</label>
-            <input
+            <Input
               type="number"
               min="2"
               inputMode="numeric"
               value={players}
               onChange={e => setPlayers(e.target.value)}
               placeholder="32"
-              className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+              className="w-full"
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Swiss Rounds</label>
-            <input
+            <Input
               type="number"
               min="1"
               inputMode="numeric"
               value={rounds}
               onChange={e => setRounds(e.target.value)}
               placeholder="6"
-              className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+              className="w-full"
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Top Cut</label>
-            <select
+            <Select
               value={topCut}
               onChange={e => setTopCut(e.target.value)}
-              className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900 bg-white"
+              className="w-full"
             >
               <option value="4">Top 4</option>
               <option value="8">Top 8</option>
               <option value="16">Top 16</option>
               <option value="32">Top 32</option>
-            </select>
+            </Select>
           </div>
         </div>
         <div className="mt-3">
           <label className="block text-xs text-gray-500 mb-1">
             Players with draws <span className="text-gray-400">(optional — from standings)</span>
           </label>
-          <input
+          <Input
             type="number"
             min="0"
             inputMode="numeric"
             value={fieldDraws}
             onChange={e => setFieldDraws(e.target.value)}
             placeholder="0"
-            className="w-28 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+            className="w-28"
           />
         </div>
-      </div>
+      </Card>
 
       {/* Your Record */}
-      <div className="border border-gray-200 rounded-lg p-6 mb-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-5">
-          Your Record
-        </h2>
+      <Card className="p-6 mb-4" title="Your Record">
         <div className="flex justify-around">
           <Stepper label="Wins"   value={wins}   onChange={setWins}   disabled={!setupValid} />
           <Stepper label="Losses" value={losses} onChange={setLosses} disabled={!setupValid} />
@@ -226,7 +216,7 @@ export function TournamentCutPage() {
             </span>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Analysis */}
       {analysis && (() => {

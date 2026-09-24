@@ -9,3 +9,7 @@ export function Input({ className = '', ...props }) {
 export function Textarea({ className = '', ...props }) {
   return <textarea className={`${FIELD} ${className}`} {...props} />
 }
+
+export function Select({ className = '', ...props }) {
+  return <select className={`${FIELD} ${className}`} {...props} />
+}

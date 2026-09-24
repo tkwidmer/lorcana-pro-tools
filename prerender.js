@@ -11,7 +11,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { spawn } from 'child_process'
+import { preview } from 'vite'
 import { chromium } from '@playwright/test'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -31,75 +31,34 @@ const ROUTES = [
   '/lore-tracker',
 ]
 
-function waitForServer(url, timeoutMs = 15000) {
-  const start = Date.now()
-  return new Promise((resolve, reject) => {
-    const tick = async () => {
-      try {
-        const res = await fetch(url)
-        if (res.ok) return resolve()
-      } catch {
-        // server not up yet
-      }
-      if (Date.now() - start > timeoutMs) return reject(new Error(`Timed out waiting for ${url}`))
-      setTimeout(tick, 250)
-    }
-    tick()
-  })
-}
-
 async function main() {
-  const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], {
-    cwd: __dirname,
-    stdio: 'inherit',
-  })
+  // Vite's JS preview API rather than spawning `npx vite preview`: killing the
+  // npx wrapper left the vite server orphaned and holding the build's stdout.
+  const server = await preview({ preview: { port: PORT, strictPort: true } })
 
   try {
-    await waitForServer(`http://localhost:${PORT}/`)
-
-    let browser
-    try {
-      browser = await chromium.launch({
-        ...(process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {}),
-        args: ['--no-sandbox'],
-      })
-    } catch (err) {
-      // Prerendering is a progressive enhancement on top of the SPA build, not
-      // a hard requirement — if Chromium isn't available in this environment
-      // (e.g. a fresh CI/Vercel build image without the browser installed),
-      // skip it rather than failing the whole `npm run build`.
-      console.warn(`Skipping prerender: could not launch Chromium (${err.message})`)
-      // TEMP DIAGNOSTIC — remove before merge
-      const exe = chromium.executablePath()
-      const { execSync } = await import('child_process')
-      let ldd = ''
-      try { ldd = execSync(`ldd "${exe}" | grep "not found"`, { encoding: 'utf8' }) } catch (e) { ldd = String(e.stdout || e.message) }
-      let cache = ''
-      try { cache = execSync('ls -la ~/.cache/ms-playwright 2>&1; cat /etc/os-release 2>&1 | head -3', { encoding: 'utf8' }) } catch (e) { cache = String(e.message) }
-      fs.writeFileSync(path.join(distDir, 'prerender-diagnostic.txt'),
-        `error: ${err.message}\n\nexe: ${exe}\nexists: ${fs.existsSync(exe)}\n\nldd missing:\n${ldd}\n\ncache/os:\n${cache}\n`)
-      return
-    }
+    // No catch: on Vercel's build image Chromium needs the `nss` package,
+    // installed by vercel.json's installCommand. If it can't launch, fail the
+    // build rather than silently shipping the bare shell for every route.
+    const browser = await chromium.launch({
+      ...(process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {}),
+      args: ['--no-sandbox'],
+    })
     const page = await browser.newPage()
 
     for (const route of ROUTES) {
-      try {
-        await page.goto(`http://localhost:${PORT}${route}`, { waitUntil: 'networkidle', timeout: 10000 })
-        const html = await page.content()
+      await page.goto(`http://localhost:${PORT}${route}`, { waitUntil: 'networkidle', timeout: 10000 })
+      const html = await page.content()
 
-        const outDir = route === '/' ? distDir : path.join(distDir, route)
-        fs.mkdirSync(outDir, { recursive: true })
-        fs.writeFileSync(path.join(outDir, 'index.html'), html)
-        console.log(`Prerendered ${route}`)
-      } catch (err) {
-        console.warn(`Skipping prerender for ${route}: ${err.message}`)
-      }
+      const outDir = route === '/' ? distDir : path.join(distDir, route)
+      fs.mkdirSync(outDir, { recursive: true })
+      fs.writeFileSync(path.join(outDir, 'index.html'), html)
+      console.log(`Prerendered ${route}`)
     }
 
     await browser.close()
-    fs.writeFileSync(path.join(distDir, 'prerender-diagnostic.txt'), 'chromium launched OK\n') // TEMP DIAGNOSTIC
   } finally {
-    server.kill()
+    await server.close()
   }
 }
 

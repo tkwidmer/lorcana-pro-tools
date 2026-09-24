@@ -14,9 +14,9 @@ npm test           # Run the Vitest unit suite once
 npm run test:watch # Run Vitest in watch mode
 ```
 
-Unit tests live in `src/lib/__tests__/` (Vitest) and cover the pure-logic libs:
-`gameStats`, `handInference`, `inkColors`, `leakDetection`, `parseGamelog`,
-`tournamentApi`. CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
+Unit tests live in `src/lib/__tests__/` (Vitest), one `<lib>.test.js` per pure-logic
+lib in `src/lib/` (e.g. `parseGamelog`, `cardImpact`, `practiceSim`, `metaSynthesis`,
+`storeTiers`, `tournamentCut`). CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
 UI and integration behavior is still validated manually.
 
 ## Screenshots & Manual Verification
@@ -81,7 +81,8 @@ Defined in `src/App.jsx`:
 
 | Route | Page File | Purpose |
 |---|---|---|
-| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching, Tournament, Scouting sections |
+| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Metagame, Tournament Tools, Scouting, Content Creators (+ Community when the Discord bot is configured). The catalog lives in `src/lib/siteSections.js` |
+| `/sitemap` | `SitemapPage.jsx` | Plain link list of every tool, rendered from the same `siteSections.js` catalog as `HomePage` so the two never drift |
 | `/blog` | `BlogIndexPage.jsx` | Blog post index — every post in `content/blog/`, newest first (see "Blog" below) |
 | `/blog/:slug` | `BlogPostPage.jsx` | Renders one blog post |
 | `/login` | `LoginPage.jsx` | Google OAuth sign-in via Supabase |
@@ -90,27 +91,34 @@ Defined in `src/App.jsx`:
 | `/coconut-deck-builder` | `CoconutDeckBuilderPage.jsx` | [Format Coconut] deck builder — pick a Coconut card, lock in up to 3 inks, build a singleton 60+ card deck with the format's copy-count exceptions enforced |
 | `/cut-calculator` | `TournamentCutPage.jsx` | Swiss cut probability calculator using binomial/trinomial models |
 | `/limited-guide` | `LimitedGuidePage.jsx` | Limited format reference — BREAD framework, mana curves, uninkable counts |
+| `/rules` | `RulesPage.jsx` | Rules browser index — lists every document in `src/lib/rules/registry.js` with its latest version (see "Rules Browser" below) |
+| `/rules/:doc`, `/rules/:doc/:chapterSlug` | `RulesDocumentPage.jsx` | One rules document, chaptered, with a `?v=` version picker and inline "changed from previous version" highlighting |
+| `/rules/:doc/changes` | `RulesChangesPage.jsx` | Full word-level diff of one version (`?v=`) against the previous one |
 | `/deck-insights` | `DrawOddsPage.jsx` | Comprehensive deck analytics: draw odds, mulligan/scry simulation, keyword analysis, brickability, quest pressure curves |
 | `/game-scraper` | `GameScraperPage.jsx` | Live game state viewer via Chrome extension (automatic) or bookmarklet (manual) |
 | `/library` | `LibraryPage.jsx` | Saved games (`?tab=history`) and a unified opponent directory (`?tab=players`) merging scouted-game and imported-gamelog opponent data |
 | `/scouting/game/:uuid` | `ScoutedGamePage.jsx` | Full game state replay with action log (single scraped snapshot) |
 | `/players/:name` | `PlayerProfilePage.jsx` | Unified per-opponent profile — win rates, deck archetypes, and inferred decklists merged from scouted games and imported duels.ink gamelogs (see "Unified Opponent Profiles" below) |
 | `/deck-comparison` | `DeckComparisonPage.jsx` | Paste two decklists to highlight differences |
+| `/decklist-inspector` | `DecklistInspectorPage.jsx` | Content-creator decklist view — browse by type/cost, pin up to 4 cards' full art beside stat charts, copy an OBS overlay link |
+| `/decklist-inspector/overlay` | `DecklistOverlayPage.jsx` | Chrome-less, read-only render of a decklist for an OBS Browser Source. Deck comes entirely from the `?deck=` param (`decklistShared.js` `encodeDeckParam`/`decodeDeckParam`). **Deliberately not supporter-gated** — a Browser Source has no Supabase session, and the view exposes only what's in the link. `Nav`/`Footer` are hidden here |
 | `/settings` | `SettingsPage.jsx` | Auth management and preferences — including the Appearance (dark mode) toggle |
 | `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
-| `/gamelog` | `GamelogViewerPage.jsx` | Load and display JSON gamelog files |
+| `/gamelog` | `GamelogViewerPage.jsx` | Bare single-gamelog view for `?id=<gamelog id>` (fetched via `fetchGamelogBuffer`, needs a duels.ink token) — opening hand plus per-player played/inked/discarded/destroyed, and a raw structure inspector. No in-app links point here |
 | `/analytics` | `AnalyticsPage.jsx` | Merged gamelog + team analytics — import your own games (.zip/.gz) or shared team exports; per-game drilldown (draw sequence, mulligans, leaks, challenge log), personal card/win-rate stats, and team-wide matchup matrix, metagame breakdown, and MMR/win-rate trends |
 | `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
+| `/meta-synthesis` | `MetaSynthesisPage.jsx` | Plain-English meta report from duels.ink `fetchStats`, centered on the user's rank band — see "Meta Synthesis" below |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
 | `/leaderboard` | `LeaderboardPage.jsx` | duels.ink top 50 players by queue, MMR distribution |
 | `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis; clicking a pairing in the Matches tab opens cross-event history + head-to-head from the Tournament History archive (see below) |
 | `/lore-tracker` | `LoreTrackerPage.jsx` | Mobile in-game lore counter with tap controls and audit log |
+| `/store-lookup` | `StoreLookupPage.jsx` | Paste RPH store IDs/URLs → store details plus store-tier status (see "Store Lookup" below) |
 | `/admin` | `AdminPage.jsx` | Admin-only — search users by email and grant/revoke supporter access; links to the tournament import page |
 | `/admin/tournament-import` | `AdminTournamentImportPage.jsx` | Admin-only — paste a completed RPH event URL to import its final standings/matches into the Tournament History archive |
 
 **Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
 
-**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/tournament-lookup`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
+**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/tournament-lookup`, `/store-lookup`, `/decklist-inspector`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
 
 All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname`) so a render-time throw in one tool shows a fallback instead of white-screening the SPA; `Nav` sits outside the boundary and stays usable.
 
@@ -129,7 +137,8 @@ In `src/components/`:
 
 | File | Purpose |
 |---|---|
-| `Nav.jsx` | Top navigation bar — Blog link, settings link + a username dropdown (logout, plus an Admin link for admins); hidden on `/lore-tracker` |
+| `Nav.jsx` | Top navigation bar — Blog link, settings link + a username dropdown (logout, plus an Admin link for admins); hidden on `/lore-tracker` and `/decklist-inspector/overlay` |
+| `Footer.jsx` | Site-wide footer, hidden on the same routes as `Nav` |
 | `ErrorBoundary.jsx` | Class-based error boundary with a "Something broke" fallback (Try again / Reload / Back to tools; dev-only stack trace). Resets when its `resetKey` prop changes. Wraps the routes in `App.jsx` |
 | `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise a "Supporters only" gate (sign-in CTA when logged out). Reads `useSupporter` |
 | `GameView.jsx` | Unified game display — player panels (lore bar, ink meter, field, hand predictor), action log, export button; reused across `GameScraperPage`, `LibraryPage`, `ScoutedGamePage` |
@@ -141,7 +150,14 @@ In `src/components/`:
 | `PostByline.jsx` | "By <author> · <date>" line for blog posts, author linked to their profile (`authorUrl`). Used by `BlogIndexPage` and `BlogPostPage` |
 | `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below |
 
-Ink color images are rendered inline in each page — there is no shared `InkIcons` component. `MatchHistoryPage` defines a local `InkIcons` function; `AnalyticsPage` defines a local `InkImg` function. Both render `<img src={/ink/${inkName}.png} />`.
+| `InkIcons.jsx` | Shared ink icons — `InkIcon` (one ink) and `InkIcons` (a list, order-preserving and de-duplicated via `resolveInkName()`). Some pages alias it locally (`ColorPairIcons`, `InkImg`); `MatchHistoryPage` wraps it in a small local `InkIcons` with its own sizing/fallback |
+| `StatCard.jsx` | Small label/value stat card (compact and large `size` variants) |
+| `PlayerTags.jsx` | Favorite/team-tag toggle buttons shared by `TournamentLookupPage` tabs and `EliminationBracket` |
+| `EliminationBracket.jsx` | `TournamentLookupPage`'s Bracket tab — reconstructs the top-cut bracket from RPH `round_number` + `table_number` (RPH has no explicit "advances to" link) |
+| `MetaTrendChart.jsx` | Multi-line weekly sparkline of archetype play/win rate (Okabe-Ito colors); used by `MetaSynthesisPage` |
+| `DecklistCardBar.jsx` | Card row with the inkwell cost emblem, shared by the Decklist Inspector and its overlay |
+| `PlayerProfileDetail.jsx` | Body of `PlayerProfilePage` — the unified opponent profile |
+| `analytics/*` | `AnalyticsPage` sub-views — `GamesList`, `GamelogDetail` (per-game drilldown), `StatTables` (card/mulligan tables), `MatchupViews` (matchup matrix, `CardImpactView` WAR + Kept/Sent %, `CardImpactTrendView`), `LeakReport` |
 
 ### Hooks
 
@@ -152,6 +168,8 @@ In `src/hooks/`:
 | `useAuth.js` | `{ user, isLoading, error }` | Supabase session — checks on mount, subscribes to auth state changes, and ensures a `profiles` row exists for the user |
 | `useSupporter.js` | `{ user, isAdmin, isSupporter, tier, isLoading }` | Reads the user's `supporter_tier` from the `profiles` table; `isSupporter` is true for both `supporter` and `admin` |
 | `useCards.js` | `{ cards, loading, error }` | Fetches card data from `/api/cards`, falls back to IndexedDB cache via `cardsCache.js` |
+| `useTournamentLiveUpdates.js` | Pusher connection status | Subscribes to RPH live updates for an event (via `tournamentLive.js`) and calls a debounced `onMessage` so `TournamentLookupPage` silently refetches |
+| `usePairingBadges.js` | badge cache + `ensureBadges`/`hasPedigree`/`hasRivalry` | Shared cache for Tournament Lookup's "pedigree" (made top cut at a Challenge-tier event) and "rivalry" (met before) badges from `/api/tournament-history`, batched to the server's 500-per-request cap |
 | `useTheme.js` | `{ theme, resolvedTheme, setTheme }` | Reads the dark-mode preference from `ThemeProvider` — `theme` is the stored choice (`light`/`dark`/`system`), `resolvedTheme` is what's applied |
 
 ### Shared Libraries
@@ -180,9 +198,19 @@ In `src/lib/`:
 | `tournamentShareImage.js` | Renders a shareable summary image (canvas) for tournament/practice results |
 | `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
 | `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
+| `siteSections.js` | `SECTIONS` — the tool catalog (name, path, description per section) rendered by both `HomePage` and `SitemapPage` |
+| `analyticsAggregation.js` | `enrichGame()` + per-card/mulligan aggregations (`aggregateMyCards`, `aggregateMulliganSentBack`, `aggregateMulliganWinRates`, `aggregateMultiCopyMulligan`) behind `AnalyticsPage` |
+| `practiceSim.js` | `wilsonInterval()`, `shrinkWR()` (Bayesian shrinkage toward the public WR, 10-game prior), and the Bo1/Bo3 tournament Monte Carlo used by `PracticePlanPage` |
+| `drawOddsMath.js` / `monteCarloSim.js` | Exact hypergeometric odds (log-space) and the mulligan/scry/curve/quest-pressure simulations behind Deck Insights |
+| `tournamentCut.js` | Cut-line estimates (`estimateCutlineRange()` — W/L binomial vs. W/D/L trinomial) for the Cut Calculator |
+| `tournamentLive.js` | `subscribeToTournamentLive()` — Pusher subscription to RPH's public `player-event-{id}` channel; wrapped by `hooks/useTournamentLiveUpdates.js` so `TournamentLookupPage` refetches on any broadcast |
+| `metaSynthesis.js` / `rankTiers.js` / `archetypeStats.js` | Meta Synthesis logic (see below), MMR → rank-tier mapping, and curation of duels.ink archetype profiles |
+| `storeTiers.js` | RPH store-tier rules for Store Lookup (see below) |
+| `decklistShared.js` | Decklist Inspector/overlay helpers — deck URL param encoding, ink fills, type/cost bucketing |
+| `rules/` | Rules browser — `registry.js` (document list), `index.js` (accessors), `diff.js` (word diff), `content/<doc>/<version>.js` (see "Rules Browser" below) |
 | `cardImpact.js` | `computeCardImpact()` — per-card "wins above replacement" (WAR) for a deck's games; `computeCardImpactTrend()` — the same logic bucketed by calendar month, powering `CardImpactTrendView`'s WAR-over-time chart |
 | `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
-| `duelsApi.js` | duels.ink API client — match history, gamelog, replay fetches |
+| `duelsApi.js` | duels.ink API client — token management, match history, gamelog, deck/personal-stats, and meta stats fetches |
 | `leaderboardApi.js` | Fetches duels.ink ranked leaderboards via `/api/duels?endpoint=leaderboard` |
 | `metaSnapshots.js` | IndexedDB CRUD for daily meta-matchup snapshots (`lorcana_pro_tools` DB, `metaSnapshots` store, keyed by `id`) — `saveSnapshotIfNew()` captures one snapshot per queue/period/ranks config per day from `WinrateMatrixPage`'s `fetchStats` result; `getSnapshotsForConfig()` reads them back for the Meta Drift comparison |
 | `metaDrift.js` | `computeMetaDrift()` — diffs two saved meta snapshots' matchups (win rate, games) for `WinrateMatrixPage`'s Meta Drift view |
@@ -234,7 +262,7 @@ Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies wit
 | Endpoint | Upstream | Auth | Notes |
 |---|---|---|---|
 | `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`, `leaderboard`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `deck`, `stats`, `leaderboard`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. `stats` forwards duels.ink's documented `era` param; `fetchStats()` in `duelsApi.js` always scopes to the queue's current era, looking its key up once per queue from `meta.eras.currentEra.key`. Only the fields duels.ink documents as stable (`matchups`, `colorPairs`, `activity.totalGames`, `updatedAt`, a few `meta.*`) are a supported contract — the archetype fields (`profiles`, `archetypeMatchups`, `cardLift`) behind `MetaSynthesisPage` and the matrix's archetype view are not. In bo3 queues `matchups[].games` counts matches, not games. |
-| `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`; handles pagination |
+| `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`, `store`, `storeEvents`; handles pagination |
 | `/api/tournament-history` | Supabase (`tournament_history_*` tables) | Bearer Supabase access token — `import` requires admin tier, the read endpoints require any signed-in session | Single consolidated route for the caster history archive, dispatched by `?endpoint=` — `import` (admin-only, fetches an RPH event's final standings + matches server-side and upserts them), `player-history`, `head-to-head`, `search-players`, `recent-imports`. See "Tournament History Archive" below. |
 | `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's commands (Decode Deck QR, `/tournament`, `/favorite`, `/unfavorite`, `/favorites`) directly. See `discord-bot/README.md`. |
 | `/api/subscribe-substack` | Substack's undocumented `/api/v1/free` embed-form endpoint | Bearer Supabase access token | Called by `AuthProvider.jsx` once per session on sign-in. See "Substack Signup Sync" above. |
@@ -364,6 +392,31 @@ Key fields on game objects from the duels.ink API:
 `metagameAnalysis.js` (`analyzeOpponentMetagame`) groups by opponent color pair and returns frequency + win rate sorted by game count.
 
 `WinrateMatrixPage`'s Meta Drift section compares two locally-saved snapshots of the public duels.ink matchup data for the same queue/period/ranks config, to surface how the meta has shifted over time. Every time the page loads, `saveSnapshotIfNew()` (`metaSnapshots.js`) stores that day's `fetchStats` matchups/colorPairs/activity in the `metaSnapshots` IndexedDB store — one snapshot per exact config per day, so repeat visits within a day don't create duplicates. The user picks two saved dates and `computeMetaDrift()` (`metaDrift.js`) diffs the two snapshots' matchups (win rate delta, games delta, matched by color pair regardless of A/B order), sorted by absolute win rate movement. Since snapshots only accumulate as the user actually visits the page, there's no backfill — history starts from whenever this shipped.
+
+### Rules Browser
+
+`/rules` renders official documents (Comprehensive Rules, Tournament Rules, Play Correction Guidelines, CORE Lore Guide, Community Code, Pack Rush, [Format Coconut] Beta Rules, CCQ Event Term Sheet, Artist Policy, Diversity & Inclusion Policy) from static content in `src/lib/rules/content/<doc>/<version>.js`. Each version is a flat `entries` array of `{ id, type: 'chapter' | 'rule', title?, text? }`, with dotted `id`s (`1.1.3`) giving the hierarchy (`ruleDepth()`).
+
+- To add a document, register it in `registry.js` and wire its versions into `index.js`. To add a version, drop a new dated file into that document's `content/` folder.
+- Version *metadata* is synchronous. Entries load lazily (`loadVersion()`/`loadVersionDiff()` via `content/versionLoader.js` + each document's `import.meta.glob`), so one document doesn't pull every version into the bundle. Pages should go through `index.js`, never import content files directly.
+- `diff.js` (`changesById`, `wordDiff`) compares a version against its predecessor. That powers the inline highlighting on `RulesDocumentPage` and the full diff on `RulesChangesPage`.
+
+### Meta Synthesis
+
+`MetaSynthesisPage` turns duels.ink's `/api/stats/meta` response (`fetchStats`) into plain English. `metaSynthesis.js` holds pure, unit-tested functions:
+- `aggregateArchetypes()` merges duels.ink's per-variant cluster profiles into one archetype per colors + archetype name.
+- `buildSynthesis()` covers most-played, top and bottom win rate with a sample floor, matchup summaries, and best/worst signature cards.
+- `compareRankBands()` / `compareWeeks()` produce the "higher ranks vs lower" and "this week vs last" deltas.
+
+The page defaults to the user's own rank band (`fetchCurrentMmr` → `rankTiers.js`) and the latest week, offers Core/Infinity × Bo1/Bo3, persists filters in localStorage (`lorcana_meta_synthesis_filters`), and has a share image (`metaSynthesisShareImage.js`).
+
+### Store Lookup
+
+`StoreLookupPage` extracts every UUID from pasted store IDs/URLs and fetches each store via `/api/tournament?type=store`, plus its events (`storeEvents`) and unique-fan count. `storeTiers.js` models RPH's store-tier program:
+- `computeTierProgress()` tracks provisional Legendary progress in the pro-rating window (`PRORATE_WINDOW`, `LEGENDARY_PRORATED_REQUIREMENTS`, plus running a Hyperia City Prerelease).
+- `computeStandingTierStatus()` gives the standing tier over the trailing 4 set seasons, whose boundaries are derived from Prerelease events (`deriveSeasons()`).
+
+Only `display_status === 'complete'` events count. The window dates and requirements are hardcoded from the Aug 2026 program email, so they'll need updating when RPH changes the program.
 
 ### Tournament Lookup
 

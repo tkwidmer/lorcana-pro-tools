@@ -29,7 +29,7 @@ export function PlayerProfilePage() {
       ) : !profile ? (
         <div className="text-center py-12 text-gray-500">
           <div className="text-sm mb-2">No games found for "{decodedName}".</div>
-          <Link to="/library?tab=players" className="text-sm text-blue-600 hover:underline">All players →</Link>
+          <Link to="/library?tab=players" className="text-sm text-forge-ink font-medium hover:underline">All players →</Link>
         </div>
       ) : (
         <PlayerProfileDetail profile={profile} />

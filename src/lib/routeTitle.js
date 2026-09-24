@@ -1,3 +1,6 @@
+import { getPost } from './blog'
+import { BLOG_DESCRIPTION } from './blogMeta'
+
 // Per-route document titles for the browser tab and SEO. Note: this only
 // updates the title client-side after navigation — crawlers that don't run JS
 // still see the static index.html title. Keep the wording in sync with the
@@ -15,6 +18,7 @@ const TITLES = {
   '/cut-calculator': 'Cut Calculator',
   '/limited-guide': 'Limited Guide',
   '/rules': 'Rules',
+  '/blog': 'Blog',
   '/deck-insights': 'Deck Insights',
   '/game-scraper': 'Game Scraper',
   '/library': 'Scouting Library',
@@ -41,8 +45,16 @@ const PREFIXES = [
   ['/rules/', 'Rules'],
 ]
 
+// A blog post's route resolves to that post, or undefined for any other path.
+function blogPost(pathname) {
+  return pathname.startsWith('/blog/') ? getPost(pathname.slice('/blog/'.length)) : undefined
+}
+
 export function routeTitle(pathname) {
   if (pathname === '/') return HOME_TITLE
+
+  const post = blogPost(pathname)
+  if (post) return `${post.title} · ${SITE}`
 
   let page = TITLES[pathname]
   if (!page) {
@@ -64,6 +76,7 @@ const DESCRIPTIONS = {
   '/coconut-deck-builder': 'Build a singleton [Format Coconut] deck around one of the 18 beta Coconut cards, with ink and copy-count rules enforced automatically.',
   '/cut-calculator': 'Calculate your odds of making the top cut at a Disney Lorcana Swiss tournament using binomial and trinomial win/loss/draw models.',
   '/limited-guide': 'A Disney Lorcana limited format reference covering the BREAD framework, mana curves, and uninkable card counts.',
+  '/blog': BLOG_DESCRIPTION,
   '/rules': 'Browse the official Disney Lorcana comprehensive rules and recent rules changes.',
   '/deck-comparison': 'Paste two Disney Lorcana decklists side by side to highlight the differences between them.',
   '/winrate-matrix': 'A color-pair matchup matrix showing head-to-head Disney Lorcana win rates and first-player advantage.',
@@ -74,5 +87,8 @@ const DESCRIPTIONS = {
 
 export function routeDescription(pathname) {
   if (pathname === '/') return HOME_DESCRIPTION
+
+  const post = blogPost(pathname)
+  if (post) return post.description
   return DESCRIPTIONS[pathname] || HOME_DESCRIPTION
 }

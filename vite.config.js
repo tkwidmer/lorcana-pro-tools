@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { blogPlugin } from './blogPlugin.js'
 
 const RAVEN_BASE = 'https://api.ravensburgerplay.com/api/v2'
 // Match results are not exposed on RAVEN_BASE without an authenticated session
@@ -77,7 +78,7 @@ function tournamentApiDevProxy() {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), tournamentApiDevProxy()],
+  plugins: [react(), tailwindcss(), tournamentApiDevProxy(), blogPlugin()],
   server: {
     port: process.env.PORT ? parseInt(process.env.PORT) : 5173,
     proxy: {

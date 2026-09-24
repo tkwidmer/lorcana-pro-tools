@@ -33,7 +33,7 @@ Tools marked **Supporter** need an active supporter account (see [Getting starte
 
 **Dark mode.** Go to **Settings → Appearance** and choose Light, Dark, or System (System is the default and follows your OS setting). Printed pages always come out light.
 
-**The home page** (`/`) lists every tool by section, and `/sitemap` gives the same list as plain links.
+**The home page** (`/`) lists every tool by section, and `/sitemap` gives the same list as plain links. The **Blog** (`/blog`, linked in the top bar) has articles and announcements.
 
 ---
 
@@ -65,7 +65,7 @@ Builds printable proxy sheets (US Letter, 9 cards per page) for playtesting.
 
 - **Search** any card by name, pick a quantity (×1–×4), and add it to the sheet. Normal cards print in a grayscale text layout that saves ink.
 - **Custom card**: type in your own card (name, type, ink, cost, stats, subtypes, ability text) to test homebrew or unrevealed cards.
-- **[Format Coconut] cards**: add any of the 25 Coconut faces, or all 25 at once with *Add all 25*. These print as full-color art.
+- **[Format Coconut] cards**: add any Coconut face, or every one at once with *Add all*. These print as full-color art.
 - Print from the browser. Printing always uses the light theme.
 
 ### Limited Guide
@@ -115,7 +115,7 @@ Paste **your current physical deck** and **the updated list you want to play**. 
 `/coconut-deck-builder` · Free
 
 A guided builder for the [Format Coconut] multiplayer format:
-1. **Choose your Coconut card** from the 25 available.
+1. **Choose your Coconut card** from the current set. New ones are added as they're released.
 2. **Choose your inks.** You get up to three, and they must include all of the Coconut card's inks. Duo cards lock two.
 3. **Build** a singleton deck of 60+ cards. You can run 4 copies of your Coconut card's base card, and Nick Wilde – Wily Fox also allows 4 Pawpsicle. The page filters and sorts the card pool and enforces the rules as you go.
 

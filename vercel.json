@@ -1,6 +1,9 @@
 {
+  "installCommand": "dnf install -y nss && npm install",
   "rewrites": [
     { "source": "/api/cards", "destination": "https://lorcanajson.org/files/current/en/allCards.json" },
+    { "source": "/blog", "destination": "/blog/index.html" },
+    { "source": "/blog/:slug", "destination": "/blog/:slug/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

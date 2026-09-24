@@ -83,6 +83,8 @@ Defined in `src/App.jsx`:
 |---|---|---|
 | `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Metagame, Tournament Tools, Scouting, Content Creators (+ Community when the Discord bot is configured). The catalog lives in `src/lib/siteSections.js` |
 | `/sitemap` | `SitemapPage.jsx` | Plain link list of every tool, rendered from the same `siteSections.js` catalog as `HomePage` so the two never drift |
+| `/blog` | `BlogIndexPage.jsx` | Blog post index — every post in `content/blog/`, newest first (see "Blog" below) |
+| `/blog/:slug` | `BlogPostPage.jsx` | Renders one blog post |
 | `/login` | `LoginPage.jsx` | Google OAuth sign-in via Supabase |
 | `/auth/callback` | `AuthCallbackPage.jsx` | OAuth redirect handler; checks session and redirects |
 | `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, add [Format Coconut] cards, build print sheets (9/page) |
@@ -135,7 +137,7 @@ In `src/components/`:
 
 | File | Purpose |
 |---|---|
-| `Nav.jsx` | Top navigation bar — settings link + a username dropdown (logout, plus an Admin link for admins); hidden on `/lore-tracker` and `/decklist-inspector/overlay` |
+| `Nav.jsx` | Top navigation bar — Blog link, settings link + a username dropdown (logout, plus an Admin link for admins); hidden on `/lore-tracker` and `/decklist-inspector/overlay` |
 | `Footer.jsx` | Site-wide footer, hidden on the same routes as `Nav` |
 | `ErrorBoundary.jsx` | Class-based error boundary with a "Something broke" fallback (Try again / Reload / Back to tools; dev-only stack trace). Resets when its `resetKey` prop changes. Wraps the routes in `App.jsx` |
 | `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise a "Supporters only" gate (sign-in CTA when logged out). Reads `useSupporter` |
@@ -145,6 +147,7 @@ In `src/components/`:
 | `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts. A card carrying `imageSrc` (Coconut cards) is printed as that image filling the 2.5"×3.5" slot instead of through the text layout |
 | `ShareCardModal.jsx` | Modal shell for sharing a canvas-rendered image (native share / clipboard copy / download); used by `TournamentLookupPage`'s and `PlayerMatchHistory`'s share-card buttons |
 | `PlayerMatchHistory.jsx` | Round-by-round match history table for one player within a single loaded tournament event (opponent, result, score, user-annotated opp colors/play-draw, share card). Used by `TournamentLookupPage`'s player detail view and reused by `PairingHistoryPanel` for either side of a clicked pairing |
+| `PostByline.jsx` | "By <author> · <date>" line for blog posts, author linked to their profile (`authorUrl`). Used by `BlogIndexPage` and `BlogPostPage` |
 | `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below |
 
 | `InkIcons.jsx` | Shared ink icons — `InkIcon` (one ink) and `InkIcons` (a list, order-preserving and de-duplicated via `resolveInkName()`). Some pages alias it locally (`ColorPairIcons`, `InkImg`); `MatchHistoryPage` wraps it in a small local `InkIcons` with its own sizing/fallback |
@@ -213,6 +216,9 @@ In `src/lib/`:
 | `metaDrift.js` | `computeMetaDrift()` — diffs two saved meta snapshots' matchups (win rate, games) for `WinrateMatrixPage`'s Meta Drift view |
 | `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
 | `tournamentHistoryApi.js` | Client for `/api/tournament-history` — `fetchPlayerTournamentHistory()`, `fetchHeadToHead()`, `searchTournamentPlayers()`, `fetchRecentTournamentImports()`, `importTournamentEvent()`. See "Tournament History Archive" below |
+| `blog.js` | Client access to the compiled blog posts — `listPosts()` (newest first), `getPost(slug)`. See "Blog" below |
+| `blogPost.js` | `parsePost()` — frontmatter + markdown → `{ slug, title, date, description, html }`. Build-time only (imports `marked`) |
+| `blogMeta.js` | `BLOG_DESCRIPTION`, `AUTHOR_LINK_REL` + `formatPostDate()`, shared by the client and `blogPlugin.js` |
 | `gameExport.js` | Serialize game records for sharing (used by `AnalyticsPage`) |
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
@@ -433,6 +439,31 @@ The caster-facing tool for surfacing a player's history across multiple imported
 **Caster UI:** clicking a non-bye pairing row in `TournamentLookupPage`'s Matches tab (`MatchesTab`'s `onSelectPairing`) opens `PairingHistoryPanel.jsx` — a modal showing a head-to-head banner (prior meetings across imported majors, or "first meeting") plus each player's cross-event summary (events played, top cuts made) alongside their `PlayerMatchHistory` for the currently loaded event. The panel's cross-event data and the loaded event's `PlayerMatchHistory` are two independent data sources shown side by side — this feature does not merge with `/players/:name`'s separate scouted-game/gamelog opponent-profile system (see "Unified Opponent Profiles" above); they remain unrelated.
 
 **API** (`api/tournament-history.ts`, `?endpoint=` dispatch, folded into one function per the function budget above): `import` (admin-only), `player-history`, `head-to-head`, `search-players`, `recent-imports` (all requiring a valid Supabase session — this route reads/writes project-owned data rather than proxying an external API, so unlike most `/api/*` proxies it does check auth server-side).
+
+### Blog
+
+Posts are markdown files in `content/blog/<slug>.md` — the filename is the URL slug (`/blog/<slug>`, lowercase-hyphenated), and each needs a frontmatter block:
+
+```
+---
+title: My post
+date: 2026-09-23
+description: One sentence — used on the index, as the meta description, and on social cards.
+author: Jane Doe
+authorUrl: https://x.com/janedoe
+---
+```
+
+Posts can be guest-written, so every post names its own `author` and links `authorUrl` (their X/Twitter, Metafy, or other profile; must be `https://`). The byline (`components/PostByline.jsx` client-side, mirrored in `blogPlugin.js`'s static HTML) links it with `rel="author"`, and the post's `BlogPosting` JSON-LD carries it as a `Person`.
+
+Adding a file is all it takes to publish; there's no registry to update. An optional `draft: true` line keeps a post out of production builds (no static page, no sitemap entry, and it compiles to `null` so its content never reaches the bundle) while still showing it in `npm run dev` with a Draft badge; delete the line to publish. The `new-blog-post` skill (`.claude/skills/new-blog-post/`) scaffolds a draft with today's date and InkbornForge as the default author. `parsePost()` (`src/lib/blogPost.js`) throws on a missing field, a non-`YYYY-MM-DD` date, a non-`https://` `authorUrl`, or a non-slug filename, which fails the build rather than shipping a broken post. Links to other pages on the site should be root-relative (`[Cut Calculator](/cut-calculator)`).
+
+`blogPlugin.js` (a Vite plugin registered in `vite.config.js`) does the work:
+- **Compile at build time.** It transforms each `content/blog/*.md` import into a JS module exporting the parsed post, so `src/lib/blog.js`'s `import.meta.glob` gets plain HTML strings and `marked` never ships to the browser.
+- **Static HTML for SEO.** After `vite build`, it writes `dist/blog/index.html` and `dist/blog/<slug>/index.html` from the built `index.html` shell, with per-post `<title>`, description, canonical, Open Graph/Twitter tags, `BlogPosting` JSON-LD, and the post body inside `#root` — then appends the blog URLs to `dist/sitemap.xml`. The client render replaces `#root` on load, same as a prerendered page. `vercel.json` rewrites `/blog` and `/blog/:slug` to those files explicitly (ahead of the SPA catch-all), since serving a directory's `index.html` for a path without a trailing slash isn't something to rely on (vite preview, for one, doesn't).
+- This is independent of `prerender.js` on purpose: that step needs Chromium, and production evidence (every route, including `/proxy/index.html`, returns the identical bare shell) shows it currently emits nothing on Vercel.
+
+Client-side, `routeTitle()`/`routeDescription()` resolve a `/blog/<slug>` path to its post's title/description so in-app navigation updates the tab title too. Post bodies are styled by the `.blog-prose` rules in `src/index.css`, which use palette variables so dark mode works without `dark:` variants.
 
 ### Ink Color Icons
 

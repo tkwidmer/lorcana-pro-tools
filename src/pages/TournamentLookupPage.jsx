@@ -17,6 +17,10 @@ import { FavoriteStar, TeamBadge } from '../components/PlayerTags'
 import { usePairingBadges } from '../hooks/usePairingBadges'
 import { pairKeyOf } from '../lib/tournamentHistoryApi'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Tabs, Tab } from '../components/ui/Tabs'
 
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
 const TEAM_KEY = 'lorcana_tournament_team'
@@ -183,7 +187,7 @@ function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, reg
               <tr
                 key={entry.id}
                 onClick={disableSelect ? undefined : () => onSelectPlayer(entry)}
-                className={`border-t border-gray-100 transition-colors${disableSelect ? '' : ' hover:bg-blue-50 cursor-pointer'}${dropped ? ' opacity-50' : ''}${isFavorite || onTeam ? ' bg-yellow-50' : ''}`}
+                className={`border-t border-gray-100 transition-colors${disableSelect ? '' : ' hover:bg-gray-50 cursor-pointer'}${dropped ? ' opacity-50' : ''}${isFavorite || onTeam ? ' bg-yellow-50' : ''}`}
               >
                 <td className="px-2 py-2.5">
                   <div className="flex items-center justify-center gap-1">
@@ -322,7 +326,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
   if (matchesLoading && !allMatches) {
     return (
       <div className="flex items-center gap-2 text-sm text-gray-500 py-8 justify-center">
-        <span className="inline-block w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <span className="inline-block w-4 h-4 border-2 border-forge border-t-transparent rounded-full animate-spin" />
         Loading matches…
       </div>
     )
@@ -362,12 +366,12 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-2">
-        <input
+        <Input
           type="text"
           placeholder="Search by player name…"
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="flex-1"
         />
         <div className="flex gap-1">
           {MATCH_FILTER_OPTIONS.map(({ key, label }) => (
@@ -377,7 +381,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
               onClick={() => setFilterMode(key)}
               className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
                 filterMode === key
-                  ? 'bg-blue-600 text-white border-blue-600'
+                  ? 'bg-gray-900 text-white border-gray-900'
                   : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
               }`}
             >
@@ -453,7 +457,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                                     })
                                 : undefined
                             }
-                            className={`border-t border-gray-100${clickable ? ' hover:bg-blue-50 cursor-pointer' : ''}`}
+                            className={`border-t border-gray-100${clickable ? ' hover:bg-gray-50 cursor-pointer' : ''}`}
                           >
                             <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
                             <td className="px-4 py-2.5">
@@ -902,30 +906,22 @@ export function TournamentLookupPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">
-          Tournament Lookup
-        </h1>
-        <p className="text-sm text-gray-500">
-          Load standings and select yourself to see your rank, tiebreakers, and ID eligibility.
-        </p>
-      </div>
+      <PageHeader
+        title="Tournament Lookup"
+        description="Load standings and select yourself to see your rank, tiebreakers, and ID eligibility."
+      />
 
       <form onSubmit={(e) => { e.preventDefault(); loadStandings(eventUrl) }} className="mb-6 flex gap-3">
-        <input
+        <Input
           type="url"
           placeholder="https://tcg.ravensburgerplay.com/events/528227"
           value={eventUrl}
           onChange={(e) => { setEventUrl(e.target.value); setError(null) }}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="flex-1"
         />
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-        >
+        <Button variant="primary" type="submit" disabled={loading}>
           {loading ? 'Loading…' : 'Load Standings'}
-        </button>
+        </Button>
       </form>
 
       {recents.length > 0 && (
@@ -937,7 +933,7 @@ export function TournamentLookupPage() {
                 key={t.eventId}
                 className={`flex items-start justify-between gap-2 pl-3 pr-2 py-2 rounded-lg border text-sm transition-colors ${
                   t.eventId === currentEventId
-                    ? 'border-blue-300 bg-blue-50 text-blue-800'
+                    ? 'border-forge bg-forge-soft text-forge-ink'
                     : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
                 }`}
               >
@@ -1072,87 +1068,45 @@ export function TournamentLookupPage() {
 
       {/* Tab switcher */}
       {(allStandings || roster) && !player && (
-        <div className="flex gap-1 mb-4 border-b border-gray-200 overflow-x-auto">
+        <Tabs className="mb-4">
           {rosterMode ? (
-            <button
-              onClick={() => setActiveTab('roster')}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                activeTab === 'roster'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
+            <Tab active={activeTab === 'roster'} onClick={() => setActiveTab('roster')}>
               Roster
-            </button>
+            </Tab>
           ) : (
             <>
-              <button
-                onClick={() => setActiveTab('standings')}
-                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                  activeTab === 'standings'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
+              <Tab active={activeTab === 'standings'} onClick={() => setActiveTab('standings')}>
                 Standings
-              </button>
-              <button
-                onClick={() => setActiveTab('matches')}
-                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'matches'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
+              </Tab>
+              <Tab active={activeTab === 'matches'} onClick={() => setActiveTab('matches')}>
                 Matches
                 {matchesLoading && (
                   <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60" />
                 )}
                 {!matchesLoading && allMatches && (
-                  <span className="text-xs text-gray-400 font-normal">({allMatches.length})</span>
+                  <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({allMatches.length})</span>
                 )}
-              </button>
+              </Tab>
               {structure?.eliminationPhaseName && allMatches?.some((m) => m.phase_name === structure.eliminationPhaseName) && (
-                <button
-                  onClick={() => setActiveTab('bracket')}
-                  className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                    activeTab === 'bracket'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
+                <Tab active={activeTab === 'bracket'} onClick={() => setActiveTab('bracket')}>
                   Bracket
-                </button>
+                </Tab>
               )}
             </>
           )}
-          <button
-            onClick={() => setActiveTab('favorites')}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'favorites'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
+          <Tab active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')}>
             ★ Favorites
             {favoritedEntries.length > 0 && (
-              <span className="text-xs text-gray-400 font-normal">({favoritedEntries.length})</span>
+              <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({favoritedEntries.length})</span>
             )}
-          </button>
-          <button
-            onClick={() => setActiveTab('team')}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'team'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
+          </Tab>
+          <Tab active={activeTab === 'team'} onClick={() => setActiveTab('team')}>
             My Team
             {teamEntries.length > 0 && (
-              <span className="text-xs text-gray-400 font-normal">({teamEntries.length})</span>
+              <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({teamEntries.length})</span>
             )}
-          </button>
-        </div>
+          </Tab>
+        </Tabs>
       )}
 
       {/* Tracked Player Activity ticker — persistent across tabs, session-only */}
@@ -1182,12 +1136,12 @@ export function TournamentLookupPage() {
       {/* Standings table */}
       {allStandings && !player && activeTab === 'standings' && (
         <div className="space-y-3">
-          <input
+          <Input
             type="text"
             placeholder="Search by name…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full"
           />
 
           <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -1212,15 +1166,15 @@ export function TournamentLookupPage() {
                     return (
                       <Fragment key={entry.id}>
                         {atCutLine && (
-                          <tr className="bg-blue-50">
-                            <td colSpan={5} className="px-4 py-1 text-xs text-blue-600 font-semibold">
+                          <tr className="bg-forge-soft">
+                            <td colSpan={5} className="px-4 py-1 text-xs text-forge-ink font-semibold">
                               — Top {structure.topCutSize} cut line —
                             </td>
                           </tr>
                         )}
                         <tr
                           onClick={() => setPlayer(entry)}
-                          className={`border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors${dropped ? ' opacity-50' : ''}${isFavorite || onTeam ? ' bg-yellow-50' : ''}`}
+                          className={`border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors${dropped ? ' opacity-50' : ''}${isFavorite || onTeam ? ' bg-yellow-50' : ''}`}
                         >
                           <td className="px-2 py-2.5">
                             <div className="flex items-center justify-center gap-1">
@@ -1297,16 +1251,16 @@ export function TournamentLookupPage() {
       {/* Roster tab (pre-tournament — no standings yet) */}
       {rosterMode && roster && !player && activeTab === 'roster' && (
         <div className="space-y-3">
-          <div className="text-sm text-blue-800 border border-blue-200 bg-blue-50 rounded-lg p-4">
+          <div className="text-sm text-gray-700 border border-gray-200 bg-gray-50 rounded-lg p-4">
             No active round yet — standings aren't published for this event. Here's the registered
             roster so you can favorite or team-tag players ahead of round 1.
           </div>
-          <input
+          <Input
             type="text"
             placeholder="Search by name…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full"
           />
           <div className="border border-gray-200 rounded-lg overflow-hidden">
             <div className="max-h-[32rem] overflow-y-auto">
@@ -1391,7 +1345,7 @@ export function TournamentLookupPage() {
         <div className="space-y-4">
           <button
             onClick={() => setPlayer(null)}
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="text-sm font-medium text-forge-ink hover:underline"
           >
             ← Back to standings
           </button>

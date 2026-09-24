@@ -4,7 +4,7 @@ export function Card({ title, description, className = '', children }) {
   return (
     <div className={`bg-white border border-gray-200 rounded-lg ${className}`}>
       {title && (
-        <h2 className="font-display text-base font-medium uppercase tracking-wide text-gray-900 mb-1">
+        <h2 className={`font-display text-base font-medium uppercase tracking-wide text-gray-900 ${description ? 'mb-1' : 'mb-4'}`}>
           {title}
         </h2>
       )}

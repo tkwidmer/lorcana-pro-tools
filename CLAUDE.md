@@ -137,7 +137,10 @@ In `src/components/`:
 
 | File | Purpose |
 |---|---|
-| `Nav.jsx` | Top navigation bar — Blog link, settings link + a username dropdown (logout, plus an Admin link for admins); hidden on `/lore-tracker` and `/decklist-inspector/overlay` |
+| `Nav.jsx` | Ink-black top bar — one dropdown per `siteSections.js` section (tools + the newest blog post), Blog link, ⌘K tool search, settings link, username dropdown (logout, plus an Admin link for admins); below `xl` the sections collapse into a hamburger menu. Hidden on `/lore-tracker` and `/decklist-inspector/overlay` |
+| `ToolSearch.jsx` | The ⌘K / Ctrl+K quick switcher over the tool catalog, opened from `Nav` |
+| `ToolIcon.jsx` | Renders a catalog tool's glyph from `lib/toolIcons.js` by the tool's `icon` name |
+| `ui/Button.jsx`, `ui/Card.jsx`, `ui/PageHeader.jsx`, `ui/Field.jsx` (`Input`/`Textarea`), `ui/Badge.jsx` | Shared UI building blocks — see "Design System" below |
 | `Footer.jsx` | Site-wide footer, hidden on the same routes as `Nav` |
 | `ErrorBoundary.jsx` | Class-based error boundary with a "Something broke" fallback (Try again / Reload / Back to tools; dev-only stack trace). Resets when its `resetKey` prop changes. Wraps the routes in `App.jsx` |
 | `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise a "Supporters only" gate (sign-in CTA when logged out). Reads `useSupporter` |
@@ -198,7 +201,8 @@ In `src/lib/`:
 | `tournamentShareImage.js` | Renders a shareable summary image (canvas) for tournament/practice results |
 | `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
 | `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
-| `siteSections.js` | `SECTIONS` — the tool catalog (name, path, description per section) rendered by both `HomePage` and `SitemapPage` |
+| `siteSections.js` | `SECTIONS` — the tool catalog (name, path, icon, description per tool; `navLabel` per section) rendered by `HomePage`, `SitemapPage`, and `Nav`. `findTool(pathname)` resolves a route to its section/tool |
+| `toolIcons.js` | Stroke-glyph path data for each catalog tool's `icon`, drawn by `components/ToolIcon.jsx` |
 | `analyticsAggregation.js` | `enrichGame()` + per-card/mulligan aggregations (`aggregateMyCards`, `aggregateMulliganSentBack`, `aggregateMulliganWinRates`, `aggregateMultiCopyMulligan`) behind `AnalyticsPage` |
 | `practiceSim.js` | `wilsonInterval()`, `shrinkWR()` (Bayesian shrinkage toward the public WR, 10-game prior), and the Bo1/Bo3 tournament Monte Carlo used by `PracticePlanPage` |
 | `drawOddsMath.js` / `monteCarloSim.js` | Exact hypergeometric odds (log-space) and the mulligan/scry/curve/quest-pressure simulations behind Deck Insights |
@@ -223,13 +227,23 @@ In `src/lib/`:
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
 
+### Design System (Ink & Parchment)
+
+The look is taken from the brand art: paper surfaces, an ink-black nav bar, condensed display type set in caps like the wordmark, and one forge-gold accent. It's defined as tokens in `src/index.css`'s `@theme` block, so it applies app-wide without per-page markup:
+
+- **Fonts:** `font-sans` is Source Sans 3 (body), `font-display` is Oswald (loaded from Google Fonts in `index.html`). Every `<h1>` gets the display face in caps via a base rule; use `font-display uppercase tracking-wide` for other headings and labels that should match.
+- **Brand colors:** `paper` (page ground), `ink` / `on-ink` (nav bar, stays dark in both themes), `forge` / `on-forge` (gold fill for the one primary action and supporter status), `forge-ink` (gold text on a light surface), `forge-soft` (tinted gold panel). The gray scale is retuned to a warm paper neutral and `white` is the card surface, so existing `gray-*`/`white` utilities already carry the brand.
+- **Radii** are squared off app-wide (`rounded`, `rounded-lg`, etc. are 2–4px); `rounded-full` is unchanged.
+- **Building blocks** in `src/components/ui/` — use these rather than hand-rolling class strings: `Button` (`primary` gold / `secondary` ink outline / `quiet` / `danger`; `to` for a router link, `href` for an external one), `Card` (bordered surface with optional `title`/`description`), `PageHeader` (page title + description + `actions`; the eyebrow is the route's catalog section from `findTool()`), `Input`/`Textarea`, `Badge` (`forge` for supporter status, `neutral` otherwise).
+- New catalog tools need an `icon` from `lib/toolIcons.js` (a unit test enforces it).
+
 ### Dark Mode
 
 **There are no `dark:` variants in this codebase, and new code should not add any.** Dark mode is implemented once, in `src/index.css`, by remapping Tailwind's color tokens under `html.dark`. Every color utility Tailwind v4 generates resolves through a CSS variable (`.bg-gray-50` compiles to `background-color: var(--color-gray-50)`), so redefining those variables flips the whole app at once — retrofitting ~16k lines of markup with paired `dark:` classes was never on the table, and pages added later get dark mode for free as long as they stay on the palette.
 
 What this means when writing UI:
 
-- Use the normal Tailwind palette (`bg-white`, `bg-gray-50`, `border-gray-200`, `text-gray-500`, `bg-gray-900 text-white`, tinted `bg-red-50`/`text-red-700` panels) and it will theme itself. The remap is built around exactly these idioms: grays 50–300 become dark surfaces and borders, 400–950 become light text, and accent families are mirrored so tinted panels darken while their paired text lightens.
+- Use the normal Tailwind palette plus the brand tokens above (`bg-white`, `bg-gray-50`, `border-gray-200`, `text-gray-500`, `bg-gray-900 text-white`, tinted `bg-red-50`/`text-red-700` panels) and it will theme itself. The remap is built around exactly these idioms: grays 50–300 become dark surfaces and borders, 400–950 become light text, and accent families are mirrored so tinted panels darken while their paired text lightens.
 - **Don't use `bg-black` for a solid fill** — `--color-black` is deliberately *not* remapped, because it's the modal-scrim color (`bg-black/40`) and must stay dark in both themes. Use `bg-gray-900` for a solid dark-in-light fill.
 - Hardcoded colors (inline `style` hex values, canvas rendering) don't participate. `ProxyCard.jsx` is fully inline-styled on purpose — a printable proxy must stay white regardless of theme.
 - The remap is scoped to `@media screen`, so printed output (proxy sheets, standings) always uses the light palette.

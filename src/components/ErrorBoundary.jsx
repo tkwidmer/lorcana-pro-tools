@@ -1,10 +1,10 @@
 import { Component } from 'react'
-import { Link } from 'react-router-dom'
+import { Button } from './ui/Button'
 
 function Fallback({ error, onReset }) {
   return (
     <div className="max-w-xl mx-auto px-6 py-24 text-center">
-      <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-3">
+      <h1 className="text-3xl font-medium text-gray-900 mb-3">
         Something broke
       </h1>
       <p className="text-gray-500 mb-8 leading-relaxed">
@@ -13,24 +13,9 @@ function Fallback({ error, onReset }) {
         the tool list.
       </p>
       <div className="flex items-center justify-center gap-3">
-        <button
-          onClick={onReset}
-          className="border border-gray-900 text-sm font-medium px-5 py-2 rounded hover:bg-gray-900 hover:text-white transition-colors"
-        >
-          Try again
-        </button>
-        <button
-          onClick={() => window.location.reload()}
-          className="border border-gray-300 text-sm font-medium px-5 py-2 rounded text-gray-600 hover:border-gray-500 transition-colors"
-        >
-          Reload page
-        </button>
-        <Link
-          to="/"
-          className="text-sm font-medium px-5 py-2 text-gray-500 hover:text-gray-900 transition-colors"
-        >
-          Back to tools
-        </Link>
+        <Button variant="primary" onClick={onReset}>Try again</Button>
+        <Button variant="quiet" onClick={() => window.location.reload()}>Reload page</Button>
+        <Button variant="quiet" to="/">Back to tools</Button>
       </div>
 
       {import.meta.env.DEV && error && (

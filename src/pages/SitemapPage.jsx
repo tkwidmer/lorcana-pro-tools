@@ -1,19 +1,17 @@
 import { Link } from 'react-router-dom'
 import { SECTIONS } from '../lib/siteSections'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const SUBSTACK_URL = 'https://inkbornforge.substack.com'
 
 export function SitemapPage() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-12">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Sitemap</h1>
-      <p className="text-sm text-gray-500 mb-10">
-        Every page on InkbornForge, in one place.
-      </p>
+    <div className="max-w-3xl mx-auto px-6 py-8">
+      <PageHeader title="Sitemap" description="Every page on InkbornForge, in one place." />
 
       <div className="space-y-8">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Home</h2>
+          <h2 className="font-display text-lg font-medium uppercase tracking-wide text-gray-900 border-b-2 border-gray-900 pb-1 mb-3">Home</h2>
           <ul className="space-y-2">
             <li>
               <Link to="/" className="text-sm text-gray-700 hover:text-gray-900 hover:underline">
@@ -25,7 +23,7 @@ export function SitemapPage() {
 
         {SECTIONS.map(section => (
           <div key={section.title}>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">
+            <h2 className="font-display text-lg font-medium uppercase tracking-wide text-gray-900 border-b-2 border-gray-900 pb-1 mb-3">
               {section.title}
             </h2>
             <ul className="space-y-2">
@@ -55,7 +53,7 @@ export function SitemapPage() {
         ))}
 
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Elsewhere</h2>
+          <h2 className="font-display text-lg font-medium uppercase tracking-wide text-gray-900 border-b-2 border-gray-900 pb-1 mb-3">Elsewhere</h2>
           <ul className="space-y-2">
             <li>
               <a

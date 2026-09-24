@@ -11,10 +11,10 @@ export function Footer() {
   if (pathname === '/decklist-inspector/overlay') return null
 
   return (
-    <footer className="no-print border-t border-gray-200 bg-white mt-16">
+    <footer className="no-print border-t-2 border-gray-900 mt-16">
       <div className="w-full px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <p className="text-sm text-gray-500">
-          &copy; {new Date().getFullYear()} InkbornForge
+        <p className="font-display text-sm uppercase tracking-wider text-gray-500">
+          &copy; {new Date().getFullYear()} InkbornForge · Hone your approach · Sharpen your play
         </p>
         <div className="flex items-center gap-6">
           <Link

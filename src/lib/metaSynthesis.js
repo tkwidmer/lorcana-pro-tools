@@ -46,11 +46,17 @@ export function aggregateArchetypes(profiles) {
   }))
 }
 
-function withPlayRate(archetypes, totalGames) {
-  return archetypes.map(a => ({
-    ...a,
-    playRate: totalGames > 0 ? (a.gamesPlayed / totalGames) * 100 : 0,
-  }))
+// An archetype's share of the metagame: its share of all decks played. Every
+// game has two decks (duels.ink's `colorPairs` games sum to exactly 2×
+// `activity.totalGames`), so this divides by 2 × total games and shares sum
+// to 100%. duels.ink's own "play rate" divides by games instead, so it's
+// twice this and sums to ~200%.
+export function metaShare(gamesPlayed, totalGames) {
+  return totalGames > 0 ? (gamesPlayed / (2 * totalGames)) * 100 : 0
+}
+
+function withMetaShare(archetypes, totalGames) {
+  return archetypes.map(a => ({ ...a, metaShare: metaShare(a.gamesPlayed, totalGames) }))
 }
 
 // Reliability floor for ranking by win rate — duels.ink's own
@@ -62,7 +68,7 @@ export function winRateSampleFloor(stats) {
 
 export function topPlayedArchetypes(stats, { limit = 5 } = {}) {
   const totalGames = stats?.activity?.totalGames ?? 0
-  return withPlayRate(aggregateArchetypes(stats?.profiles), totalGames)
+  return withMetaShare(aggregateArchetypes(stats?.profiles), totalGames)
     .sort((a, b) => b.gamesPlayed - a.gamesPlayed)
     .slice(0, limit)
 }
@@ -70,7 +76,7 @@ export function topPlayedArchetypes(stats, { limit = 5 } = {}) {
 export function topWinRateArchetypes(stats, { limit = 5, minGames } = {}) {
   const totalGames = stats?.activity?.totalGames ?? 0
   const floor = minGames ?? winRateSampleFloor(stats)
-  return withPlayRate(aggregateArchetypes(stats?.profiles), totalGames)
+  return withMetaShare(aggregateArchetypes(stats?.profiles), totalGames)
     .filter(a => a.gamesPlayed >= floor)
     .sort((a, b) => b.winRate - a.winRate)
     .slice(0, limit)
@@ -79,18 +85,18 @@ export function topWinRateArchetypes(stats, { limit = 5, minGames } = {}) {
 export function bottomWinRateArchetypes(stats, { limit = 3, minGames } = {}) {
   const totalGames = stats?.activity?.totalGames ?? 0
   const floor = minGames ?? winRateSampleFloor(stats)
-  return withPlayRate(aggregateArchetypes(stats?.profiles), totalGames)
+  return withMetaShare(aggregateArchetypes(stats?.profiles), totalGames)
     .filter(a => a.gamesPlayed >= floor)
     .sort((a, b) => a.winRate - b.winRate)
     .slice(0, limit)
 }
 
 // Every archetype with enough games to be worth naming — used to populate
-// the "Pick your deck" selector. Sorted by play rate desc.
+// the "Pick your deck" selector. Sorted by meta share desc.
 export function listReliableArchetypes(stats, { minGames } = {}) {
   const totalGames = stats?.activity?.totalGames ?? 0
   const floor = minGames ?? (stats?.meta?.archetypeMinDisplayGames ?? 50)
-  return withPlayRate(aggregateArchetypes(stats?.profiles), totalGames)
+  return withMetaShare(aggregateArchetypes(stats?.profiles), totalGames)
     .filter(a => a.gamesPlayed >= floor)
     .sort((a, b) => b.gamesPlayed - a.gamesPlayed)
 }
@@ -247,10 +253,10 @@ export function buildSynthesis(stats, context = {}) {
 
   if (topPlayed.length > 0) {
     const top = topPlayed[0]
-    blocks.push(textBlock(`${top.name} is the most-played archetype at ${pct(top.playRate)} of games, sitting at ${pct(top.winRate)} win rate.`))
+    blocks.push(textBlock(`${top.name} is the most-played archetype at ${pct(top.metaShare)} of the meta, sitting at ${pct(top.winRate)} win rate.`))
     const rest = topPlayed.slice(1, 1 + SUMMARY_LIST_LIMIT)
     if (rest.length > 0) {
-      blocks.push(listBlock('Also seeing significant play:', rest.map(a => `${a.name} — ${pct(a.playRate)} play rate, ${pct(a.winRate)} win rate`)))
+      blocks.push(listBlock('Also seeing significant play:', rest.map(a => `${a.name} — ${pct(a.metaShare)} of the meta, ${pct(a.winRate)} win rate`)))
     }
   }
 
@@ -259,14 +265,14 @@ export function buildSynthesis(stats, context = {}) {
     const isAlsoTopPlayed = topPlayed[0]?.key === best.key
     blocks.push(textBlock(isAlsoTopPlayed
       ? `${best.name} isn't just the most popular deck — it also leads on win rate at ${pct(best.winRate)}.`
-      : `${best.name} has the best win rate among established decks at ${pct(best.winRate)}, on ${pct(best.playRate)} play rate.`))
+      : `${best.name} has the best win rate among established decks at ${pct(best.winRate)}, on ${pct(best.metaShare)} of the meta.`))
     const others = topWinRate.slice(1, 1 + SUMMARY_LIST_LIMIT).filter(a => a.key !== topPlayed[0]?.key)
     if (others.length > 0) {
       blocks.push(listBlock('Right behind it:', others.map(a => `${a.name} — ${pct(a.winRate)} win rate`)))
     }
   }
 
-  const heavilyPlayedButLosing = underperformers.filter(a => a.playRate >= 3 && a.winRate < 49)
+  const heavilyPlayedButLosing = underperformers.filter(a => a.metaShare >= 1.5 && a.winRate < 49)
   if (heavilyPlayedButLosing.length > 0) {
     blocks.push(listBlock(
       'Despite meaningful play, these decks are underperforming (below 49% win rate):',
@@ -322,7 +328,7 @@ export function buildSynthesis(stats, context = {}) {
   return { blocks, topPlayed, topWinRate, underperformers, focusMatchups, focusCards, focusWorstCards }
 }
 
-// Diffs archetype play-rate share between two stats responses over the same
+// Diffs archetype meta share between two stats responses over the same
 // queue — used both for the rank-band comparison and the week-over-week
 // trend, which only differ in which two `/api/stats/meta` calls they diff
 // and how the result reads.
@@ -331,16 +337,16 @@ function diffArchetypeShares(aStats, bStats, minDelta) {
   const bTotal = bStats?.activity?.totalGames ?? 0
   if (!aTotal || !bTotal) return null
 
-  const aMap = new Map(withPlayRate(aggregateArchetypes(aStats.profiles), aTotal).map(x => [x.key, x]))
-  const bMap = new Map(withPlayRate(aggregateArchetypes(bStats.profiles), bTotal).map(x => [x.key, x]))
+  const aMap = new Map(withMetaShare(aggregateArchetypes(aStats.profiles), aTotal).map(x => [x.key, x]))
+  const bMap = new Map(withMetaShare(aggregateArchetypes(bStats.profiles), bTotal).map(x => [x.key, x]))
 
   const deltas = []
   for (const [key, a] of aMap) {
-    const bRate = bMap.get(key)?.playRate ?? 0
-    deltas.push({ key, name: a.name, aPlayRate: a.playRate, bPlayRate: bRate, delta: a.playRate - bRate })
+    const bRate = bMap.get(key)?.metaShare ?? 0
+    deltas.push({ key, name: a.name, aShare: a.metaShare, bShare: bRate, delta: a.metaShare - bRate })
   }
   for (const [key, b] of bMap) {
-    if (!aMap.has(key)) deltas.push({ key, name: b.name, aPlayRate: 0, bPlayRate: b.playRate, delta: -b.playRate })
+    if (!aMap.has(key)) deltas.push({ key, name: b.name, aShare: 0, bShare: b.metaShare, delta: -b.metaShare })
   }
 
   return {
@@ -352,10 +358,10 @@ function diffArchetypeShares(aStats, bStats, minDelta) {
 function shareShiftBlocks({ risers, fallers }, { risersIntro, fallersIntro }) {
   const blocks = []
   if (risers.length > 0) {
-    blocks.push(listBlock(risersIntro, risers.map(r => `${r.name} — ${pct(r.aPlayRate)} (up from ${pct(r.bPlayRate)})`)))
+    blocks.push(listBlock(risersIntro, risers.map(r => `${r.name} — ${pct(r.aShare)} (up from ${pct(r.bShare)})`)))
   }
   if (fallers.length > 0) {
-    blocks.push(listBlock(fallersIntro, fallers.map(f => `${f.name} — ${pct(f.aPlayRate)} (down from ${pct(f.bPlayRate)})`)))
+    blocks.push(listBlock(fallersIntro, fallers.map(f => `${f.name} — ${pct(f.aShare)} (down from ${pct(f.bShare)})`)))
   }
   return blocks
 }
@@ -363,7 +369,7 @@ function shareShiftBlocks({ risers, fallers }, { risersIntro, fallersIntro }) {
 // Compares the same queue/period across two rank bands (e.g. the user's
 // selected band vs everyone below it) to surface what shifts with MMR.
 // `upperLabel`/`lowerLabel` describe the two bands in the returned blocks.
-export function compareRankBands(upperStats, lowerStats, { upperLabel, lowerLabel, minDelta = 2 } = {}) {
+export function compareRankBands(upperStats, lowerStats, { upperLabel, lowerLabel, minDelta = 1 } = {}) {
   const diff = diffArchetypeShares(upperStats, lowerStats, minDelta)
   if (!diff) return { risers: [], fallers: [], blocks: [] }
   const { risers, fallers } = diff
@@ -384,7 +390,7 @@ export function compareRankBands(upperStats, lowerStats, { upperLabel, lowerLabe
 // week's, to surface week-over-week movement — the meta shifts fast, so
 // "what's different from last week" is often more useful than a static
 // snapshot. `thisLabel`/`lastLabel` describe the two periods in the blocks.
-export function compareWeeks(thisWeekStats, lastWeekStats, { thisLabel = 'this week', lastLabel = 'last week', minDelta = 2 } = {}) {
+export function compareWeeks(thisWeekStats, lastWeekStats, { thisLabel = 'this week', lastLabel = 'last week', minDelta = 1 } = {}) {
   const diff = diffArchetypeShares(thisWeekStats, lastWeekStats, minDelta)
   if (!diff) return { risers: [], fallers: [], blocks: [] }
   const { risers, fallers } = diff
@@ -399,4 +405,58 @@ export function compareWeeks(thisWeekStats, lastWeekStats, { thisLabel = 'this w
   ]
 
   return { risers, fallers, blocks }
+}
+
+// Archetype-vs-archetype win rate matrix: every archetype with at least
+// `minMetaShare`% of the meta, most played first, and the rolled-up record of
+// each ordered pair. duels.ink's `archetypeMatchups` are per build variant
+// (profile id), so they're summed into the same colors+name groups as
+// aggregateArchetypes. `cell(rowKey, colKey)` is the row archetype's record
+// against the column archetype, or null if they never met. On the diagonal
+// (mirror) `firstPlayerWinRate` is the win rate of whoever went first —
+// duels.ink records first-player games from side A, which in a mirror is
+// simply the first player.
+export function archetypeMatrix(stats, { minMetaShare = 1 } = {}) {
+  const totalGames = stats?.activity?.totalGames ?? 0
+  const aggregates = aggregateArchetypes(stats?.profiles)
+  const idToKey = new Map()
+  for (const a of aggregates) for (const id of a.ids) idToKey.set(id, a.key)
+
+  const totals = new Map() // "rowKey::colKey" -> { games, wins, firstPlayerGames, firstPlayerWins }
+  const add = (row, col, games, wins, firstPlayerGames = 0, firstPlayerWins = 0) => {
+    const k = `${row}::${col}`
+    const t = totals.get(k) ?? { games: 0, wins: 0, firstPlayerGames: 0, firstPlayerWins: 0 }
+    t.games += games
+    t.wins += wins
+    t.firstPlayerGames += firstPlayerGames
+    t.firstPlayerWins += firstPlayerWins
+    totals.set(k, t)
+  }
+  for (const m of stats?.archetypeMatchups ?? []) {
+    const keyA = idToKey.get(m.archetypeIdA)
+    const keyB = idToKey.get(m.archetypeIdB)
+    if (!keyA || !keyB) continue
+    if (keyA === keyB) {
+      add(keyA, keyB, m.games, m.winsA, m.firstPlayerGames, m.firstPlayerWins)
+    } else {
+      add(keyA, keyB, m.games, m.winsA)
+      add(keyB, keyA, m.games, m.games - m.winsA)
+    }
+  }
+
+  const archetypes = aggregates
+    .filter(a => metaShare(a.gamesPlayed, totalGames) >= minMetaShare)
+    .sort((a, b) => b.gamesPlayed - a.gamesPlayed)
+
+  function cell(rowKey, colKey) {
+    const t = totals.get(`${rowKey}::${colKey}`)
+    if (!t || t.games === 0) return null
+    return {
+      games: t.games,
+      winRate: (t.wins / t.games) * 100,
+      firstPlayerWinRate: t.firstPlayerGames > 0 ? (t.firstPlayerWins / t.firstPlayerGames) * 100 : null,
+    }
+  }
+
+  return { archetypes, cell }
 }

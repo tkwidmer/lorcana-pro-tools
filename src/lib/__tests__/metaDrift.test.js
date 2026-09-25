@@ -18,13 +18,13 @@ const weeks = [
 ]
 
 describe('archetypeDrift', () => {
-  it('groups variants per week and reports games, share and win rate', () => {
+  it('groups variants per week and reports games, meta share (of decks) and win rate', () => {
     const [p] = archetypeDrift(weeks, { fromIndex: 0, toIndex: 1, sortBy: 'games', minGames: 0 })
     expect(p.name).toBe('Amber/Steel Princesses')
-    expect(p.cells[0]).toEqual({ games: 200, share: 20, winRate: 50 })
-    expect(p.cells[1]).toEqual({ games: 400, share: 40, winRate: 60 })
+    expect(p.cells[0]).toEqual({ games: 200, metaShare: 10, winRate: 50 })
+    expect(p.cells[1]).toEqual({ games: 400, metaShare: 20, winRate: 60 })
     expect(p.winRateDelta).toBe(10)
-    expect(p.shareDelta).toBe(20)
+    expect(p.metaShareDelta).toBe(10)
     expect(p.totalGames).toBe(600)
   })
 
@@ -33,8 +33,8 @@ describe('archetypeDrift', () => {
     const [p] = archetypeDrift(three, { fromIndex: 0, toIndex: 2, sortBy: 'games', minGames: 0 })
     expect(p.winRateDelta).toBe(20)       // 50% → 70%
     expect(p.weekWinRateDelta).toBe(10)   // 60% → 70%
-    expect(p.shareDelta).toBe(30)         // 20% → 50%
-    expect(p.weekShareDelta).toBe(10)     // 40% → 50%
+    expect(p.metaShareDelta).toBe(15)     // 10% → 25% of decks
+    expect(p.weekMetaShareDelta).toBe(5)  // 20% → 25% of decks
   })
 
   it('leaves a week empty when the archetype did not appear, with no delta', () => {

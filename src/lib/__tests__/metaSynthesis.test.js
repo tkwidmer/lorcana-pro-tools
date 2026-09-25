@@ -11,6 +11,7 @@ import {
   buildSynthesis,
   compareRankBands,
   compareWeeks,
+  archetypeMatrix,
 } from '../metaSynthesis'
 
 // Flattens a block list (see metaSynthesis.js's textBlock/listBlock) into
@@ -79,10 +80,10 @@ describe('aggregateArchetypes', () => {
 })
 
 describe('topPlayedArchetypes', () => {
-  it('sorts by games played desc and computes play rate', () => {
+  it('sorts by games played desc and computes meta share as a share of decks', () => {
     const result = topPlayedArchetypes(stats, { limit: 2 })
     expect(result.map(a => a.archetypeName)).toEqual(['Midrange', 'Princess Aggro'])
-    expect(result[0].playRate).toBeCloseTo((1000 / 1450) * 100)
+    expect(result[0].metaShare).toBeCloseTo((1000 / (2 * 1450)) * 100)
   })
 })
 
@@ -309,5 +310,44 @@ describe('compareRankBands', () => {
   it('returns no blocks when either band has no games', () => {
     const result = compareRankBands({ activity: { totalGames: 0 }, profiles: [] }, lower, {})
     expect(result.blocks).toEqual([])
+  })
+})
+
+describe('archetypeMatrix', () => {
+  const matrixStats = {
+    activity: { totalGames: 1000 },
+    profiles: [
+      { id: 'p1', colors: ['amber', 'steel'], archetypeName: 'Princesses', gamesPlayed: 300, wins: 150 },
+      { id: 'p2', colors: ['amber', 'steel'], archetypeName: 'Princesses', gamesPlayed: 100, wins: 50 },
+      { id: 'd1', colors: ['amber', 'emerald'], archetypeName: 'Dogs', gamesPlayed: 200, wins: 100 },
+      { id: 'x1', colors: ['ruby', 'steel'], archetypeName: 'Rare', gamesPlayed: 10, wins: 5 },
+    ],
+    archetypeMatchups: [
+      { archetypeIdA: 'p1', archetypeIdB: 'd1', games: 40, winsA: 30 },
+      { archetypeIdA: 'd1', archetypeIdB: 'p2', games: 10, winsA: 5 },
+      { archetypeIdA: 'p1', archetypeIdB: 'p2', games: 20, winsA: 10, firstPlayerGames: 10, firstPlayerWins: 6 },
+    ],
+  }
+
+  it('keeps archetypes at or above the meta-share floor, most played first', () => {
+    const { archetypes } = archetypeMatrix(matrixStats, { minMetaShare: 1 })
+    expect(archetypes.map(a => a.archetypeName)).toEqual(['Princesses', 'Dogs'])
+  })
+
+  it('rolls variant matchups up per ordered archetype pair, from each side', () => {
+    const { cell } = archetypeMatrix(matrixStats)
+    // Princesses: 30/40 as side A + 5/10 as side B → 35/50.
+    expect(cell('amber/steel|Princesses', 'amber/emerald|Dogs')).toMatchObject({ games: 50, winRate: 70 })
+    expect(cell('amber/emerald|Dogs', 'amber/steel|Princesses')).toMatchObject({ games: 50, winRate: 30 })
+  })
+
+  it('gives the first-player win rate on the mirror', () => {
+    const { cell } = archetypeMatrix(matrixStats)
+    expect(cell('amber/steel|Princesses', 'amber/steel|Princesses')).toMatchObject({ games: 20, firstPlayerWinRate: 60 })
+  })
+
+  it('returns null for archetypes that never met', () => {
+    const { cell } = archetypeMatrix(matrixStats)
+    expect(cell('amber/emerald|Dogs', 'amber/emerald|Dogs')).toBeNull()
   })
 })

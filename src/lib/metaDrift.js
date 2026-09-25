@@ -4,7 +4,7 @@
 // aggregateArchetypes (colors + name), whose `key` is stable across weeks, so
 // the same archetype lines up from one week to the next.
 
-import { aggregateArchetypes, archetypeMatchupSummary } from './metaSynthesis'
+import { aggregateArchetypes, archetypeMatchupSummary, metaShare } from './metaSynthesis'
 
 // Orders rows by their `toIndex` week (the latest complete one) — by games
 // or by win rate, descending. Rows absent that week go last.
@@ -23,7 +23,7 @@ function deltas(cells, fromIndex, toIndex, fields) {
   ]))
 }
 
-// One row per archetype: its games, share of the week's games, and win rate
+// One row per archetype: its games, meta share (see metaShare), and win rate
 // in each week (null for a week it didn't appear), plus the change between
 // weeks `fromIndex` and `toIndex` and over the last week into `toIndex`, sorted by `sortBy` ('games' | 'winRate')
 // in week `toIndex`. Archetypes under `minGames` across all weeks are
@@ -38,7 +38,7 @@ export function archetypeDrift(weeks, { fromIndex, toIndex, sortBy, minGames = 1
       }
       byKey.get(a.key).cells[i] = {
         games: a.gamesPlayed,
-        share: totalGames > 0 ? (a.gamesPlayed / totalGames) * 100 : 0,
+        metaShare: metaShare(a.gamesPlayed, totalGames),
         winRate: a.winRate,
       }
     }
@@ -48,7 +48,7 @@ export function archetypeDrift(weeks, { fromIndex, toIndex, sortBy, minGames = 1
     .map(row => ({
       ...row,
       totalGames: row.cells.reduce((sum, c) => sum + (c?.games ?? 0), 0),
-      ...deltas(row.cells, fromIndex, toIndex, ['winRate', 'share']),
+      ...deltas(row.cells, fromIndex, toIndex, ['winRate', 'metaShare']),
     }))
     .filter(row => row.totalGames >= minGames)
   return sortByWeek(rows, toIndex, sortBy)

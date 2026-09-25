@@ -14,6 +14,7 @@ import {
   listReliableArchetypes,
   topPlayedArchetypes,
   aggregateArchetypes,
+  metaShare,
 } from '../lib/metaSynthesis'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Button } from '../components/ui/Button'
@@ -304,13 +305,12 @@ export function MetaSynthesisPage() {
           return
         }
 
-        const playRateSeries = trackedKeys.map(key => {
+        const metaShareSeries = trackedKeys.map(key => {
           let name = key
           const values = weekStats.map(ws => {
-            const totalGames = ws?.activity?.totalGames ?? 0
             const found = aggregateArchetypes(ws?.profiles).find(a => a.key === key)
             if (found) name = found.name
-            return found && totalGames > 0 ? (found.gamesPlayed / totalGames) * 100 : 0
+            return found ? metaShare(found.gamesPlayed, ws?.activity?.totalGames ?? 0) : 0
           })
           return { key, name, values }
         })
@@ -332,7 +332,7 @@ export function MetaSynthesisPage() {
           return { key, name, values }
         })
 
-        setTrendData({ weeks: recentWeeks, playRateSeries, winRateSeries })
+        setTrendData({ weeks: recentWeeks, metaShareSeries, winRateSeries })
       } catch {
         if (!cancelled) setTrendData(null)
       }
@@ -502,7 +502,7 @@ export function MetaSynthesisPage() {
           >
             <option value="">None — overall snapshot</option>
             {deckOptions.map(a => (
-              <option key={a.key} value={a.key}>{a.name} ({a.playRate.toFixed(1)}%)</option>
+              <option key={a.key} value={a.key}>{a.name} ({a.metaShare.toFixed(1)}%)</option>
             ))}
           </select>
         </div>
@@ -528,10 +528,10 @@ export function MetaSynthesisPage() {
             {trendData && (
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Play Rate Trend
+                  % of Meta Trend
                 </div>
                 <div className="p-4">
-                  <MetaTrendChart weeks={trendData.weeks} series={trendData.playRateSeries} />
+                  <MetaTrendChart weeks={trendData.weeks} series={trendData.metaShareSeries} />
                 </div>
               </div>
             )}
@@ -561,7 +561,7 @@ export function MetaSynthesisPage() {
                   <thead className="text-xs uppercase tracking-wide text-gray-400">
                     <tr>
                       <th className="text-left px-4 py-2">Archetype</th>
-                      <th className="text-right px-4 py-2">Play Rate</th>
+                      <th className="text-right px-4 py-2">% of Meta</th>
                       <th className="text-right px-4 py-2">Win Rate</th>
                       <th className="text-right px-4 py-2 hidden sm:table-cell">Games</th>
                     </tr>
@@ -575,7 +575,7 @@ export function MetaSynthesisPage() {
                             <span>{a.name}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.metaShare.toFixed(1)}%</td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums">{a.winRate.toFixed(1)}%</td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
                           {a.gamesPlayed.toLocaleString()}
@@ -597,7 +597,7 @@ export function MetaSynthesisPage() {
                     <tr>
                       <th className="text-left px-4 py-2">Archetype</th>
                       <th className="text-right px-4 py-2">Win Rate</th>
-                      <th className="text-right px-4 py-2">Play Rate</th>
+                      <th className="text-right px-4 py-2">% of Meta</th>
                       <th className="text-right px-4 py-2 hidden sm:table-cell">Games</th>
                     </tr>
                   </thead>
@@ -611,7 +611,7 @@ export function MetaSynthesisPage() {
                           </div>
                         </td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums">{a.winRate.toFixed(1)}%</td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.metaShare.toFixed(1)}%</td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
                           {a.gamesPlayed.toLocaleString()}
                         </td>

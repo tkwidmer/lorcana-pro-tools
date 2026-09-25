@@ -188,7 +188,7 @@ Public duels.ink stats for every queue: head-to-head win rates between color pai
 **Meta Drift** compares two saved dates for the same queue and period, showing which matchups moved and by how much. Snapshots are saved in your browser each day you visit, so drift history only starts from your first visit.
 
 ### Meta Synthesis
-`/meta-synthesis` · Free
+`/meta-synthesis` · **Supporter**
 
 A plain-English read of the current meta, based on your own rank band by default (it uses your MMR if you've connected a token) and on the latest week. It covers:
 - the most-played and best-performing archetypes, plus the weakest ones,

@@ -50,7 +50,7 @@ VITE_SUPABASE_ANON_KEY=...
 
 Vercel also accepts `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` prefixes (both are checked in `supabaseClient.js`).
 
-Optional: `VITE_DISCORD_CLIENT_ID` — the Application ID of the Discord bot (not a secret). When set, `HomePage` shows an "Add to Discord" card under a Community section linking to the bot's OAuth invite URL; when unset, that card is omitted.
+`VITE_DISCORD_CLIENT_ID` is no longer read: the "Add to Discord" invite card (a Community section in `siteSections.js`) was removed from the home page while the bot matures. The bot itself (`/api/discord-interactions`) is unaffected.
 
 Optional: `VITE_METAFY_CLIENT_ID` — the Metafy OAuth client ID (not a secret). When set, `SettingsPage` shows a "Connect Metafy" card; when unset, `connectMetafy()` throws and the card's connect button surfaces an error instead of redirecting.
 
@@ -81,7 +81,7 @@ Defined in `src/App.jsx`:
 
 | Route | Page File | Purpose |
 |---|---|---|
-| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Tournament Tools, Content Creators (+ Community when the Discord bot is configured). The catalog lives in `src/lib/siteSections.js` |
+| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Tournament Tools, Content Creators. The catalog lives in `src/lib/siteSections.js` |
 | `/sitemap` | `SitemapPage.jsx` | Plain link list of every tool, rendered from the same `siteSections.js` catalog as `HomePage` so the two never drift |
 | `/blog` | `BlogIndexPage.jsx` | Blog post index — every post in `content/blog/`, newest first (see "Blog" below) |
 | `/blog/:slug` | `BlogPostPage.jsx` | Renders one blog post |

@@ -3,14 +3,6 @@
 // never drift out of sync. `navLabel` is the section's short name in the nav
 // bar; `icon` names a glyph in components/ToolIcon.jsx.
 
-// Send Messages (0x800) + Read Message History (0x10000) — the only
-// permissions the Discord QR-decoding bot needs.
-const DISCORD_BOT_PERMISSIONS = 67584
-const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID
-const DISCORD_INVITE_URL = DISCORD_CLIENT_ID
-  ? `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&scope=bot+applications.commands&permissions=${DISCORD_BOT_PERMISSIONS}`
-  : null
-
 export const SECTIONS = [
   {
     title: 'Resources',
@@ -144,22 +136,6 @@ export const SECTIONS = [
       },
     ],
   },
-  ...(DISCORD_INVITE_URL
-    ? [
-        {
-          title: 'Community',
-          navLabel: 'Community',
-          tools: [
-            {
-              href: DISCORD_INVITE_URL,
-              name: 'Add to Discord',
-              icon: 'chat',
-              description: 'Invite the InkbornForge bot to your server. Right-click any deck list image and pick "Decode Deck QR" to get a clickable duels.ink link to the deck.',
-            },
-          ],
-        },
-      ]
-    : []),
 ]
 
 // The section and tool a pathname belongs to, or null for pages outside the

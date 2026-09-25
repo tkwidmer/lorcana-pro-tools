@@ -81,7 +81,7 @@ Defined in `src/App.jsx`:
 
 | Route | Page File | Purpose |
 |---|---|---|
-| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Metagame, Tournament Tools, Scouting, Content Creators. The catalog lives in `src/lib/siteSections.js` |
+| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Tournament Tools, Content Creators. The catalog lives in `src/lib/siteSections.js` |
 | `/sitemap` | `SitemapPage.jsx` | Plain link list of every tool, rendered from the same `siteSections.js` catalog as `HomePage` so the two never drift |
 | `/blog` | `BlogIndexPage.jsx` | Blog post index — every post in `content/blog/`, newest first (see "Blog" below) |
 | `/blog/:slug` | `BlogPostPage.jsx` | Renders one blog post |

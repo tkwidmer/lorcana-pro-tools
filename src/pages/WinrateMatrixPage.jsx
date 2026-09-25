@@ -357,11 +357,170 @@ export function WinrateMatrixPage() {
         </p>
       </div>
 
+      {/* Matrix */}
+      <div className="mb-8">
+        <SectionHeader
+          title="Winrate Matrix"
+          description="Win rate of each color pair (row) against every other color pair (column) in the selected period. Mirror cells show the win rate of the player going first."
+          open={matrixOpen}
+          onToggle={() => setMatrixOpen(o => !o)}
+        />
+        {matrixOpen && (
+      <div className="mt-6 overflow-x-auto border border-gray-200 rounded-lg">
+        <div className="inline-flex flex-col gap-1 p-4 bg-white">
+          {/* Header row */}
+          <div className="inline-flex gap-1">
+            <div className="w-16 h-16 flex-shrink-0" />
+            {matrixColorPairs.map((pair, idx) => (
+              <div key={idx} className="w-16 h-16 flex-shrink-0 flex justify-center items-center">
+                <ColorPairIcons colors={pair.colors} size={20} />
+              </div>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {matrixColorPairs.map((rowPair, rowIdx) => (
+            <div key={rowIdx} className="inline-flex gap-1">
+              <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center border border-gray-100">
+                <ColorPairIcons colors={rowPair.colors} size={20} />
+              </div>
+              {matrixColorPairs.map((colPair, colIdx) => {
+                const matchup = getMatchup(rowPair.colors, colPair.colors)
+                if (!matchup) {
+                  return (
+                    <div key={colIdx} className="w-16 h-16 flex-shrink-0 bg-gray-50 border border-gray-100" />
+                  )
+                }
+                const isMirror = JSON.stringify(rowPair.colors) === JSON.stringify(colPair.colors)
+                const displayWinRate = isMirror ? matchup.firstPlayerWinRate : matchup.winRate
+                return (
+                  <div
+                    key={colIdx}
+                    className="w-16 h-16 flex-shrink-0 relative group"
+                  >
+                    <div
+                      className={`w-16 h-16 rounded p-1 text-center flex flex-col items-center justify-center text-xs font-semibold text-gray-900 ${getWinrateColor(displayWinRate, isMirror)}`}
+                    >
+                      <div>{displayWinRate.toFixed(0)}%</div>
+                      <div className="text-xs text-gray-600">{(matchup.games / 1000).toFixed(1)}k</div>
+                    </div>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                      {matchup.games.toLocaleString()} {matchupUnit}{isMirror ? ' (1st player)' : ''}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+        )}
+      </div>
+
+      {/* Archetypes — duels.ink's named-archetype breakdown layered on top of
+          the raw color-pair matchups above. */}
+      {archetypes.length > 0 && (
+        <div className="mb-8">
+          <SectionHeader
+            title="Archetype Win Rate"
+            description="Every archetype in the selected period, with its win rate, play rate and games. Click one to see its win rate against each other archetype."
+            open={archetypesOpen}
+            onToggle={() => setArchetypesOpen(o => !o)}
+          />
+          {archetypesOpen && (
+            <div className="mt-6">
+              <div className="overflow-x-auto border border-gray-200 rounded-lg mb-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
+                      <th className="py-2 px-3">Archetype</th>
+                      <th className="py-2 px-3">Colors</th>
+                      <th className="py-2 px-3 text-right">Win Rate</th>
+                      <th className="py-2 px-3 text-right">Play Rate</th>
+                      <th className="py-2 px-3 text-right">Games</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {archetypes.map(p => (
+                      <tr
+                        key={p.key}
+                        onClick={() => setFocusedArchetypeKey(prev => (prev === p.key ? null : p.key))}
+                        className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${focusedArchetypeKey === p.key ? 'bg-gray-100' : ''}`}
+                      >
+                        <td className="py-1.5 px-3 font-medium text-gray-900">{p.archetypeName}</td>
+                        <td className="py-1.5 px-3">
+                          <ColorPairIcons colors={p.colors} size={16} />
+                        </td>
+                        <td className={`py-1.5 px-3 text-right font-semibold ${p.winRate >= 51 ? 'text-emerald-600' : p.winRate <= 49 ? 'text-red-500' : 'text-gray-600'}`}>
+                          {p.winRate.toFixed(1)}%
+                        </td>
+                        <td className="py-1.5 px-3 text-right text-gray-600">
+                          {(totalGames > 0 ? (p.gamesPlayed / totalGames) * 100 : 0).toFixed(1)}%
+                        </td>
+                        <td className="py-1.5 px-3 text-right text-gray-400">
+                          {p.gamesPlayed.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {focusedArchetype ? (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                    {focusedArchetype.archetypeName} — matchups
+                  </h3>
+                  {focusedMatchups.length === 0 ? (
+                    <p className="text-sm text-gray-500">No head-to-head data available for this archetype.</p>
+                  ) : (
+                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
+                            <th className="py-2 px-3">Opponent</th>
+                            <th className="py-2 px-3 text-right">Win Rate</th>
+                            <th className="py-2 px-3 text-right">Games</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {focusedMatchups.map(row => (
+                            <tr key={row.key} className="border-b border-gray-100">
+                              <td className="py-1.5 px-3">
+                                <span className="inline-flex items-center gap-2">
+                                  <ColorPairIcons colors={archetypesByKey.get(row.key).colors} size={16} />
+                                  <span className="text-gray-900">
+                                    {archetypesByKey.get(row.key).archetypeName}
+                                    {row.isMirror ? ' (mirror)' : ''}
+                                  </span>
+                                </span>
+                              </td>
+                              <td className={`py-1.5 px-3 text-right font-semibold ${row.winRate >= 51 ? 'text-emerald-600' : row.winRate <= 49 ? 'text-red-500' : 'text-gray-600'}`}>
+                                {row.winRate.toFixed(1)}%
+                              </td>
+                              <td className="py-1.5 px-3 text-right text-gray-400">
+                                {row.games.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">Click an archetype above to see its head-to-head matchups.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Meta drift — each archetype's win rate and share of games, week by week over
           the last month, with a drill-in to its matchups. */}
       <div className="mb-8">
         <SectionHeader
-          title="Meta Drift"
+          title="Archetype Meta Drift"
           description="How each archetype's win rate and play rate moved week by week over the last month. Click an archetype to see its matchups over the same weeks."
           open={compareOpen}
           onToggle={() => setCompareOpen(o => !o)}
@@ -496,165 +655,6 @@ export function WinrateMatrixPage() {
               </>
             )}
           </div>
-        )}
-      </div>
-
-      {/* Archetypes — duels.ink's named-archetype breakdown layered on top of
-          the raw color-pair matchups below. */}
-      {archetypes.length > 0 && (
-        <div className="mb-8">
-          <SectionHeader
-            title="Archetypes"
-            description="Every archetype in the selected period, with its win rate, play rate and games. Click one to see its win rate against each other archetype."
-            open={archetypesOpen}
-            onToggle={() => setArchetypesOpen(o => !o)}
-          />
-          {archetypesOpen && (
-            <div className="mt-6">
-              <div className="overflow-x-auto border border-gray-200 rounded-lg mb-6">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
-                      <th className="py-2 px-3">Archetype</th>
-                      <th className="py-2 px-3">Colors</th>
-                      <th className="py-2 px-3 text-right">Win Rate</th>
-                      <th className="py-2 px-3 text-right">Play Rate</th>
-                      <th className="py-2 px-3 text-right">Games</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {archetypes.map(p => (
-                      <tr
-                        key={p.key}
-                        onClick={() => setFocusedArchetypeKey(prev => (prev === p.key ? null : p.key))}
-                        className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${focusedArchetypeKey === p.key ? 'bg-gray-100' : ''}`}
-                      >
-                        <td className="py-1.5 px-3 font-medium text-gray-900">{p.archetypeName}</td>
-                        <td className="py-1.5 px-3">
-                          <ColorPairIcons colors={p.colors} size={16} />
-                        </td>
-                        <td className={`py-1.5 px-3 text-right font-semibold ${p.winRate >= 51 ? 'text-emerald-600' : p.winRate <= 49 ? 'text-red-500' : 'text-gray-600'}`}>
-                          {p.winRate.toFixed(1)}%
-                        </td>
-                        <td className="py-1.5 px-3 text-right text-gray-600">
-                          {(totalGames > 0 ? (p.gamesPlayed / totalGames) * 100 : 0).toFixed(1)}%
-                        </td>
-                        <td className="py-1.5 px-3 text-right text-gray-400">
-                          {p.gamesPlayed.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {focusedArchetype ? (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                    {focusedArchetype.archetypeName} — matchups
-                  </h3>
-                  {focusedMatchups.length === 0 ? (
-                    <p className="text-sm text-gray-500">No head-to-head data available for this archetype.</p>
-                  ) : (
-                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
-                            <th className="py-2 px-3">Opponent</th>
-                            <th className="py-2 px-3 text-right">Win Rate</th>
-                            <th className="py-2 px-3 text-right">Games</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {focusedMatchups.map(row => (
-                            <tr key={row.key} className="border-b border-gray-100">
-                              <td className="py-1.5 px-3">
-                                <span className="inline-flex items-center gap-2">
-                                  <ColorPairIcons colors={archetypesByKey.get(row.key).colors} size={16} />
-                                  <span className="text-gray-900">
-                                    {archetypesByKey.get(row.key).archetypeName}
-                                    {row.isMirror ? ' (mirror)' : ''}
-                                  </span>
-                                </span>
-                              </td>
-                              <td className={`py-1.5 px-3 text-right font-semibold ${row.winRate >= 51 ? 'text-emerald-600' : row.winRate <= 49 ? 'text-red-500' : 'text-gray-600'}`}>
-                                {row.winRate.toFixed(1)}%
-                              </td>
-                              <td className="py-1.5 px-3 text-right text-gray-400">
-                                {row.games.toLocaleString()}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">Click an archetype above to see its head-to-head matchups.</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Matrix */}
-      <div>
-        <SectionHeader
-          title="Matchup Matrix"
-          description="Win rate of each color pair (row) against every other color pair (column) in the selected period. Mirror cells show the win rate of the player going first."
-          open={matrixOpen}
-          onToggle={() => setMatrixOpen(o => !o)}
-        />
-        {matrixOpen && (
-      <div className="mt-6 overflow-x-auto border border-gray-200 rounded-lg">
-        <div className="inline-flex flex-col gap-1 p-4 bg-white">
-          {/* Header row */}
-          <div className="inline-flex gap-1">
-            <div className="w-16 h-16 flex-shrink-0" />
-            {matrixColorPairs.map((pair, idx) => (
-              <div key={idx} className="w-16 h-16 flex-shrink-0 flex justify-center items-center">
-                <ColorPairIcons colors={pair.colors} size={20} />
-              </div>
-            ))}
-          </div>
-
-          {/* Rows */}
-          {matrixColorPairs.map((rowPair, rowIdx) => (
-            <div key={rowIdx} className="inline-flex gap-1">
-              <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center border border-gray-100">
-                <ColorPairIcons colors={rowPair.colors} size={20} />
-              </div>
-              {matrixColorPairs.map((colPair, colIdx) => {
-                const matchup = getMatchup(rowPair.colors, colPair.colors)
-                if (!matchup) {
-                  return (
-                    <div key={colIdx} className="w-16 h-16 flex-shrink-0 bg-gray-50 border border-gray-100" />
-                  )
-                }
-                const isMirror = JSON.stringify(rowPair.colors) === JSON.stringify(colPair.colors)
-                const displayWinRate = isMirror ? matchup.firstPlayerWinRate : matchup.winRate
-                return (
-                  <div
-                    key={colIdx}
-                    className="w-16 h-16 flex-shrink-0 relative group"
-                  >
-                    <div
-                      className={`w-16 h-16 rounded p-1 text-center flex flex-col items-center justify-center text-xs font-semibold text-gray-900 ${getWinrateColor(displayWinRate, isMirror)}`}
-                    >
-                      <div>{displayWinRate.toFixed(0)}%</div>
-                      <div className="text-xs text-gray-600">{(matchup.games / 1000).toFixed(1)}k</div>
-                    </div>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                      {matchup.games.toLocaleString()} {matchupUnit}{isMirror ? ' (1st player)' : ''}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
         )}
       </div>
     </div>

@@ -4,6 +4,8 @@ import { SearchBar } from '../components/SearchBar'
 import { ProxyCard } from '../components/ProxyCard'
 import { COCONUT_CARDS, coconutCardImageUrl } from '../lib/coconutCards'
 import { CoconutArtCredit } from '../components/CoconutArtCredit'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Button } from '../components/ui/Button'
 
 const CARDS_PER_SHEET = 9
 
@@ -75,12 +77,9 @@ function CoconutPicker({ onAdd }) {
     <div className="border border-gray-200 rounded-lg bg-white p-5 mb-6">
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-sm font-semibold text-gray-800">[Format Coconut] cards</h2>
-        <button
-          onClick={() => COCONUT_CARDS.forEach(cc => onAdd(coconutProxyCard(cc)))}
-          className="text-sm px-3 py-1.5 rounded bg-gray-900 text-white hover:bg-gray-800 whitespace-nowrap"
-        >
+        <Button size="sm" onClick={() => COCONUT_CARDS.forEach(cc => onAdd(coconutProxyCard(cc)))}>
           Add all {COCONUT_CARDS.length}
-        </button>
+        </Button>
       </div>
       <p className="text-xs text-gray-500 mb-1">
         Click a card to add one copy. These print as their full-color card face, not
@@ -135,7 +134,7 @@ function CustomCardForm({ onAdd }) {
   const showLore = isCharacter || isLocation
 
   const labelCls = 'block text-xs font-medium text-gray-600 mb-1'
-  const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-black'
+  const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900'
   const numInputCls = inputCls + ' text-center'
 
   const colorOptions = (
@@ -315,17 +314,13 @@ export function ProxyGeneratorPage() {
   return (
     <>
       {/* ── Screen UI ─────────────────────────────────────────── */}
-      <div className="no-print min-h-screen bg-gray-50">
+      <div className="no-print min-h-screen">
         <div className="w-full px-6 py-8">
 
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-              Proxy Generator
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Search for cards, build your sheet, then print. 9 cards per page, B&amp;W friendly.
-            </p>
-          </div>
+          <PageHeader
+            title="Proxy Generator"
+            description="Search for cards, build your sheet, then print. 9 cards per page, B&W friendly."
+          />
 
           <div className="flex items-center gap-3 mb-4">
             {loading ? (
@@ -365,12 +360,9 @@ export function ProxyGeneratorPage() {
                 >
                   Clear all
                 </button>
-                <button
-                  onClick={() => window.print()}
-                  className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-800 whitespace-nowrap"
-                >
+                <Button variant="primary" onClick={() => window.print()}>
                   Print
-                </button>
+                </Button>
               </>
             )}
           </div>

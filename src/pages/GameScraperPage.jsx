@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { resolveInkName } from '../lib/inkColors'
 import { saveGame } from '../lib/scoutedGames'
 import { GameView } from '../components/GameView'
+import { PageHeader } from '../components/ui/PageHeader'
 
 // Cache for card data: { byId: {setCode-number -> {color, name, fullName}}, byName: {name/fullName -> {...}} }
 let cardDataCache = null
@@ -403,7 +404,7 @@ function RawPayloadInspector({ entry }) {
                       <td className="pr-3 py-0.5">
                         {m.incomingLogs?.length > 0 && (
                           <details>
-                            <summary className="cursor-pointer text-blue-600">logs</summary>
+                            <summary className="cursor-pointer text-forge-ink">logs</summary>
                             <pre className="bg-gray-50 rounded p-2 overflow-auto max-h-64 whitespace-pre-wrap break-all">
                               {JSON.stringify(m.incomingLogs, null, 2)}
                             </pre>
@@ -521,12 +522,7 @@ export function GameScraperPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Game Scraper</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Open a duels.ink spectate tab to view live game state.
-        </p>
-      </div>
+      <PageHeader title="Game Scraper" description="Open a duels.ink spectate tab to view live game state." />
 
       <ExtensionPanel active={extensionActive} />
       <BookmarkletPanel uuid={activeUuid} />

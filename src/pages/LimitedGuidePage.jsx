@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const FORMATS = {
   draft: {
@@ -153,12 +154,7 @@ export function LimitedGuidePage() {
     <div className="w-full px-6 py-8">
       <div className="max-w-lg">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
-            Limited Guide
-          </h1>
-          <p className="text-gray-500 mb-5">
-            Quick reference for building your best sealed or draft deck.
-          </p>
+          <PageHeader title="Limited Guide" description="Quick reference for building your best sealed or draft deck." />
           <FormatToggle value={format} onChange={setFormat} />
           <p className="text-sm text-gray-400 mt-2">{fmt.description}</p>
         </div>

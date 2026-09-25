@@ -15,6 +15,8 @@ import {
   topPlayedArchetypes,
   aggregateArchetypes,
 } from '../lib/metaSynthesis'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Button } from '../components/ui/Button'
 
 const FORMATS = [
   { id: 'core', label: 'Core' },
@@ -377,22 +379,15 @@ export function MetaSynthesisPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Meta Synthesis</h1>
-          <p className="text-sm text-gray-500">
-            A plain-language read on what's actually happening in the meta right now — most-played archetypes, win rates, and how it shifts by rank.
-          </p>
-        </div>
-        {synthesis && (
-          <button
-            onClick={handleShare}
-            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
-          >
+      <PageHeader
+        title="Meta Synthesis"
+        description="A plain-language read on what's actually happening in the meta right now — most-played archetypes, win rates, and how it shifts by rank."
+        actions={synthesis && (
+          <Button variant="quiet" size="sm" onClick={handleShare}>
             Share Card
-          </button>
+          </Button>
         )}
-      </div>
+      />
 
       <div className="mb-6 flex flex-wrap gap-6">
         <div>

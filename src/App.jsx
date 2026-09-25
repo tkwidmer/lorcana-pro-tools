@@ -92,7 +92,7 @@ function RoutedContent() {
         <Route path="/team-analytics" element={<Navigate to="/analytics" replace />} />
         <Route path="/analytics" element={<SupporterRoute><AnalyticsPage /></SupporterRoute>} />
         <Route path="/winrate-matrix" element={<WinrateMatrixPage />} />
-        <Route path="/meta-synthesis" element={<MetaSynthesisPage />} />
+        <Route path="/meta-synthesis" element={<SupporterRoute><MetaSynthesisPage /></SupporterRoute>} />
         <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />

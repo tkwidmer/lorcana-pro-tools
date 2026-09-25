@@ -11,9 +11,12 @@ import {
   PRORATE_WINDOW,
   standingWindowEvents,
   computeStandingTierStatus,
+  STANDARD_MAINTENANCE_REQUIREMENTS,
+  LEGENDARY_MAINTENANCE_REQUIREMENTS,
 } from '../lib/storeTiers'
 import { DEFAULT_TRACKED_STORE_URLS } from '../lib/trackedStores'
 import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
 import { Textarea } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 
@@ -101,6 +104,68 @@ const STANDING_TIER_STYLES = {
   welcome: 'text-gray-600 bg-gray-100',
   standard: 'text-blue-700 bg-blue-100',
   legendary: 'text-emerald-700 bg-emerald-100',
+}
+
+// Definitions and benefits from RPH's store-tier program announcement.
+const TIER_DEFINITIONS = [
+  {
+    tier: 'welcome',
+    definition: 'Where stores new to the program start.',
+    benefits: [
+      'Listed on the store locator',
+      'Materials in the OP kit',
+      'Can run upcoming Prerelease events',
+    ],
+  },
+  {
+    tier: 'standard',
+    definition: 'Stores graduate here after establishing a baseline of play.',
+    requirements: STANDARD_MAINTENANCE_REQUIREMENTS,
+    benefits: [
+      'Can run Set Championships',
+      'Access to seasonal trade marketing kits',
+      'Allocation of Collector Boosters and future RPH-focused products',
+    ],
+  },
+  {
+    tier: 'legendary',
+    definition: 'Rewards to support stores with a larger community.',
+    requirements: LEGENDARY_MAINTENANCE_REQUIREMENTS,
+    benefits: [
+      'Additional OP and Set Championship kit (as of Set 16)',
+      'Increased allocation of Collector Boosters',
+      'Larger allocation of Prerelease Boxes',
+      'Priority to apply to host Local Qualifier events',
+    ],
+  },
+]
+
+function TierDefinitions() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {TIER_DEFINITIONS.map(({ tier, definition, requirements, benefits }) => (
+        <Card key={tier} className="p-4">
+          <span
+            className={`inline-block text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 mb-2 ${STANDING_TIER_STYLES[tier]}`}
+          >
+            {STANDING_TIER_LABELS[tier]}
+          </span>
+          <p className="text-sm text-gray-700 mb-2">{definition}</p>
+          {requirements && (
+            <p className="text-xs text-gray-500 mb-2">
+              Requires {requirements.totalEvents} events, {requirements.uniqueFans} unique fans, and{' '}
+              {requirements.eventTickets} tickets over the trailing 4 set seasons, plus a Prerelease each season.
+            </p>
+          )}
+          <ul className="list-disc pl-4 text-xs text-gray-600 space-y-1">
+            {benefits.map((benefit) => (
+              <li key={benefit}>{benefit}</li>
+            ))}
+          </ul>
+        </Card>
+      ))}
+    </div>
+  )
 }
 
 function StandingTierBlock({ standing }) {
@@ -381,6 +446,8 @@ export function StoreLookupPage() {
           {loading ? 'Loading…' : 'Look Up Stores'}
         </Button>
       </form>
+
+      <TierDefinitions />
 
       {results.length > 0 && (
         <div className="mb-4 text-sm text-gray-600">

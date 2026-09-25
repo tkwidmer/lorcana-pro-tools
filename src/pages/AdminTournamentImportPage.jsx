@@ -6,6 +6,10 @@ import {
   fetchRecentTournamentImports,
   fetchSuggestedTournamentImports,
 } from '../lib/tournamentHistoryApi'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Input } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
 
 export function AdminTournamentImportPage() {
   const { isAdmin, isLoading } = useSupporter()
@@ -85,35 +89,26 @@ export function AdminTournamentImportPage() {
   if (isLoading) return null
 
   return (
-    <div className="w-full px-6 py-12">
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Import Tournament History</h1>
-        <p className="text-gray-500 text-sm">
-          Import a completed Ravensburger Play Hub event's final standings and match results into the
-          caster history archive. Safe to re-run for the same event once more rounds have completed —
-          it updates the stored data rather than duplicating it.
-        </p>
-      </div>
+    <div className="w-full px-6 py-8">
+      <PageHeader
+        title="Import Tournament History"
+        description="Import a completed Ravensburger Play Hub event's final standings and match results into the caster history archive. Safe to re-run for the same event once more rounds have completed — it updates the stored data rather than duplicating it."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-8">
-          <div className="border border-gray-200 rounded-lg p-6">
-            <h2 className="text-base font-bold text-gray-900 mb-4">Import an event</h2>
+          <Card className="p-6" title="Import an event">
             <form onSubmit={handleImport} className="flex gap-2">
-              <input
+              <Input
                 type="url"
                 value={eventUrl}
                 onChange={(e) => { setEventUrl(e.target.value); setError(null) }}
                 placeholder="https://tcg.ravensburgerplay.com/events/528227"
-                className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+                className="flex-1"
               />
-              <button
-                type="submit"
-                disabled={importing}
-                className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 whitespace-nowrap"
-              >
+              <Button variant="primary" type="submit" disabled={importing}>
                 {importing ? 'Importing…' : 'Import'}
-              </button>
+              </Button>
             </form>
 
             {error && (
@@ -131,10 +126,9 @@ export function AdminTournamentImportPage() {
                 </p>
               </div>
             )}
-          </div>
+          </Card>
 
-          <div className="border border-gray-200 rounded-lg p-6">
-            <h2 className="text-base font-bold text-gray-900 mb-4">Recently imported events</h2>
+          <Card className="p-6" title="Recently imported events">
             {recentLoading ? (
               <p className="text-sm text-gray-500">Loading…</p>
             ) : recent.length === 0 ? (
@@ -161,12 +155,12 @@ export function AdminTournamentImportPage() {
                 </tbody>
               </table>
             )}
-          </div>
+          </Card>
         </div>
 
-        <div className="border border-gray-200 rounded-lg p-6">
+        <Card className="p-6">
           <div className="flex items-start justify-between gap-2 mb-1">
-            <h2 className="text-base font-bold text-gray-900">Suggested events</h2>
+            <h2 className="font-display text-base font-medium uppercase tracking-wide text-gray-900">Suggested events</h2>
             <button
               type="button"
               onClick={loadSuggestions}
@@ -204,14 +198,9 @@ export function AdminTournamentImportPage() {
                       {s.startingPlayerCount ? ` · ${s.startingPlayerCount} players` : ''}
                     </p>
                     <div className="flex items-center gap-2 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => handleImportSuggestion(s)}
-                        disabled={isImporting || isDone}
-                        className="border border-gray-900 text-xs font-medium px-3 py-1 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40"
-                      >
+                      <Button size="sm" onClick={() => handleImportSuggestion(s)} disabled={isImporting || isDone}>
                         {isImporting ? 'Importing…' : isDone ? 'Imported' : 'Import'}
-                      </button>
+                      </Button>
                       <a
                         href={s.eventUrl}
                         target="_blank"
@@ -227,7 +216,7 @@ export function AdminTournamentImportPage() {
               })}
             </ul>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   )

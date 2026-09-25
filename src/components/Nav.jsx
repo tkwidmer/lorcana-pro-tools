@@ -10,8 +10,8 @@ import { ToolSearch } from './ToolSearch'
 import { Badge } from './ui/Badge'
 import { useState, useRef, useEffect, useCallback } from 'react'
 
-// Sections with at least one in-app tool get a nav menu (Community is only
-// an external Discord invite, so it stays on the home page).
+// Sections with at least one in-app tool get a nav menu (a section of only
+// external links would stay on the home page).
 const NAV_SECTIONS = SECTIONS.filter(section => section.tools.some(tool => tool.path))
 
 function Chevron({ open }) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   fetchGameStore,
   fetchAllStoreEvents,
@@ -21,6 +22,9 @@ import { Textarea } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 
 const LAST_INPUT_KEY = 'lorcana_store_lookup_last_input'
+// Shareable link: `?stores=<id>,<id>` — always the extracted IDs, whatever
+// form (IDs or store URLs) was pasted.
+const STORES_PARAM = 'stores'
 const DEFAULT_INPUT = DEFAULT_TRACKED_STORE_URLS.join('\n')
 
 // Store IDs are UUIDs. Accept either raw IDs (one per line / comma-separated)
@@ -309,7 +313,13 @@ function StoreCard({ result }) {
 }
 
 export function StoreLookupPage() {
-  const [input, setInput] = useState(() => localStorage.getItem(LAST_INPUT_KEY) ?? DEFAULT_INPUT)
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [input, setInput] = useState(() => {
+    const sharedIds = extractStoreIds(searchParams.get(STORES_PARAM) ?? '')
+    if (sharedIds.length > 0) return sharedIds.join('\n')
+    return localStorage.getItem(LAST_INPUT_KEY) ?? DEFAULT_INPUT
+  })
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const hasAutoLoaded = useRef(false)
@@ -366,6 +376,9 @@ export function StoreLookupPage() {
     }
 
     localStorage.setItem(LAST_INPUT_KEY, text)
+    // Written as a raw search string (not setSearchParams) so the commas stay
+    // literal instead of being encoded as %2C in the shared link.
+    navigate({ search: `?${STORES_PARAM}=${storeIds.join(',')}` }, { replace: true })
     setLoading(true)
     setResults(
       storeIds.map((storeId) => ({

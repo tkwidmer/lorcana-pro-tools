@@ -34,6 +34,18 @@ export const SECTIONS = [
         icon: 'scroll',
         description: 'Browse the Comprehensive Rules, Tournament Rules, and Play Correction Guidelines. Version updates highlight exactly what changed.',
       },
+      {
+        path: '/winrate-matrix',
+        name: 'Winrate Matrix',
+        icon: 'grid',
+        description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
+      },
+      {
+        path: '/meta-synthesis',
+        name: 'Meta Synthesis',
+        icon: 'sparkle',
+        description: 'A plain-language read on what\'s happening in the meta right now — most-played and highest-winrate archetypes, centered on your own rank and defaulting to the latest week.',
+      },
     ],
   },
   {
@@ -93,24 +105,6 @@ export const SECTIONS = [
         name: 'Scouting Library',
         icon: 'library',
         description: 'Review saved games, stats dashboards, and unified opponent profiles combining scouted games and imported gamelogs — inferred decklists, win rates, and every card we\'ve seen them play, ink, or discard.',
-      },
-    ],
-  },
-  {
-    title: 'Metagame',
-    navLabel: 'Metagame',
-    tools: [
-      {
-        path: '/winrate-matrix',
-        name: 'Winrate Matrix',
-        icon: 'grid',
-        description: 'View head-to-head matchup winrates between color pairs for all queues. See meta trends, deck popularity, and first-player advantage by week or all-time.',
-      },
-      {
-        path: '/meta-synthesis',
-        name: 'Meta Synthesis',
-        icon: 'sparkle',
-        description: 'A plain-language read on what\'s happening in the meta right now — most-played and highest-winrate archetypes, centered on your own rank and defaulting to the latest week.',
       },
     ],
   },

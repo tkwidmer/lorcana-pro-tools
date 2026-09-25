@@ -236,7 +236,7 @@ Standings refresh live when the event updates, and recent events are remembered.
 A full-screen lore counter for your phone during paper games. Tap the left side to subtract and the right side to add, per player, from 0 to 20. Every change goes into an audit log, so you can settle "wait, what's the score?" disputes.
 
 ### Store Lookup
-`/store-lookup` · **Supporter**
+`/store-lookup` · Free
 
 Paste one or more Ravensburger Play store IDs or URLs to see each store's address, contact details, seat count, and store types. It also shows the store's tier status: progress toward pro-rated Legendary in the current window (events, unique fans, tickets, and whether it ran a Hyperia City Prerelease), and its standing tier over the trailing four set seasons.
 

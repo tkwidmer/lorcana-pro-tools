@@ -5,6 +5,7 @@ import { ToolIcon } from '../components/ToolIcon'
 import { Badge } from '../components/ui/Badge'
 
 const SUBSTACK_URL = 'https://inkbornforge.substack.com'
+const METAFY_URL = 'https://metafy.gg/@inkbornforge'
 
 const CARD = 'group flex flex-col gap-3 bg-white border border-gray-200 border-b-[3px] rounded-lg p-5 hover:border-gray-900 transition-colors'
 
@@ -40,24 +41,35 @@ function ToolCard({ tool }) {
   )
 }
 
-function PromoCard({ icon, title, body, cta, ...linkProps }) {
+// The sub-link sits outside the main link — anchors can't nest.
+function PromoCard({ icon, title, body, cta, subLink, ...linkProps }) {
   const Tag = linkProps.to ? Link : 'a'
   return (
-    <Tag
-      {...linkProps}
-      className="group flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-white border border-gray-200 rounded-lg px-6 py-5 hover:border-gray-900 transition-colors"
-    >
-      <span className="h-10 w-10 shrink-0 grid place-items-center rounded bg-ink">
-        <img src={icon} alt="" className="h-5 w-auto" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-bold text-gray-900">{title}</span>
-        <span className="block text-sm text-gray-500 mt-0.5">{body}</span>
-      </span>
-      <span className="sm:ml-auto shrink-0 font-display text-sm uppercase tracking-wider text-forge-ink group-hover:underline">
-        {cta} →
-      </span>
-    </Tag>
+    <div className="flex flex-col bg-white border border-gray-200 rounded-lg hover:border-gray-900 transition-colors">
+      <Tag
+        {...linkProps}
+        className="group flex flex-col sm:flex-row items-start sm:items-center gap-4 px-6 py-5"
+      >
+        <span className="h-10 w-10 shrink-0 grid place-items-center rounded bg-ink">
+          <img src={icon} alt="" className="h-5 w-auto" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-bold text-gray-900">{title}</span>
+          <span className="block text-sm text-gray-500 mt-0.5">{body}</span>
+        </span>
+        <span className="sm:ml-auto shrink-0 font-display text-sm uppercase tracking-wider text-forge-ink group-hover:underline">
+          {cta} →
+        </span>
+      </Tag>
+      {subLink && (
+        <Link
+          to={subLink.to}
+          className="border-t border-gray-200 px-6 py-2 text-sm text-gray-500 hover:text-gray-900 hover:underline"
+        >
+          {subLink.label}
+        </Link>
+      )}
+    </div>
   )
 }
 
@@ -77,11 +89,14 @@ export function HomePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <PromoCard
-          to="/settings"
+          href={METAFY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
           icon="/metafy-icon.svg"
           title="Become a Metafy supporter"
           body="Unlock deck insights, game scouting, analytics, and more supporter-only tools."
           cta="Support us"
+          subLink={{ to: '/settings', label: 'Already a member? Link your Metafy account in Settings →' }}
         />
         <PromoCard
           href={SUBSTACK_URL}

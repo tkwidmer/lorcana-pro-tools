@@ -16,7 +16,7 @@ export function PageHeader({ title, description, actions }) {
           </p>
         )}
         <h1 className="text-3xl sm:text-4xl font-medium leading-tight text-gray-900">{title}</h1>
-        {description && <p className="text-gray-500 mt-1">{description}</p>}
+        {description && <div className="text-gray-500 mt-1">{description}</div>}
       </div>
       {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
     </header>

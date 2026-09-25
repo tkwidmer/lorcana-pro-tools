@@ -22,6 +22,8 @@ import {
   hasActiveFilters,
   cardMatchesFilters,
 } from '../lib/coconutCardFilters'
+import { Button } from '../components/ui/Button'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const INK_LABELS = {
   amber: 'Amber',
@@ -100,23 +102,25 @@ const EMPTY_FILTERS = {
 function DeckListView({ decks, loading, cardsLoading, onNew, onOpen, onDelete }) {
   return (
     <div className="w-full px-6 py-8">
-      <div className="flex items-start justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Coconut Deck Builder</h1>
-          <p className="text-sm text-gray-500 mt-1">
+      <PageHeader
+        title="Coconut Deck Builder"
+        description={<>
+          <p>
             Build singleton decks for [Format Coconut] — pick a Coconut card, lock in your inks, and build a {MIN_DECK_SIZE}+ card deck around it. Saved locally in your browser only.
           </p>
           <CoconutArtCredit className="mt-1" />
-        </div>
-        <button
-          onClick={onNew}
-          disabled={cardsLoading}
-          title={cardsLoading ? 'Loading card data…' : undefined}
-          className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-800 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          + New deck
-        </button>
-      </div>
+        </>}
+        actions={
+          <Button
+            variant="primary"
+            onClick={onNew}
+            disabled={cardsLoading}
+            title={cardsLoading ? 'Loading card data…' : undefined}
+          >
+            + New deck
+          </Button>
+        }
+      />
 
       {loading ? (
         <div className="text-sm text-gray-400">Loading saved decks…</div>
@@ -175,7 +179,7 @@ function PickCoconutCardView({ onPick, onCancel }) {
     <div className="w-full px-6 py-8">
       <div className="flex items-center justify-between mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Choose your Coconut card</h1>
+          <h1 className="text-3xl font-medium leading-tight text-gray-900">Choose your Coconut card</h1>
           <p className="text-sm text-gray-500 mt-1">
             Your deck is built around this card's alternate ability — you can run up to 4 copies of it.
           </p>
@@ -241,7 +245,7 @@ function PickInksView({ coconutCard, onConfirm, onCancel }) {
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Choose your inks</h1>
+        <h1 className="text-3xl font-medium leading-tight text-gray-900">Choose your inks</h1>
         <p className="text-sm text-gray-500 mt-1">
           Pick up to {MAX_INKS} ink types. {coconutCard.name}'s{' '}
           {coconutCard.inks.length > 1 ? 'inks' : 'ink'}{' '}
@@ -276,12 +280,9 @@ function PickInksView({ coconutCard, onConfirm, onCancel }) {
         <button onClick={onCancel} className="text-sm text-gray-400 hover:text-gray-700 underline">
           ← Back
         </button>
-        <button
-          onClick={() => onConfirm(inks)}
-          className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-800 ml-auto"
-        >
+        <Button variant="primary" className="ml-auto" onClick={() => onConfirm(inks)}>
           Continue →
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -361,12 +362,12 @@ function CardFilterModal({
         </div>
 
         <div className="px-4 py-3 border-t border-gray-200 shrink-0 flex justify-between">
-          <button onClick={onReset} className="px-3 py-1.5 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50 transition-colors">
+          <Button variant="danger" size="sm" onClick={onReset}>
             Reset
-          </button>
-          <button onClick={onClose} className="px-4 py-1.5 text-xs font-medium rounded bg-gray-900 text-white hover:bg-gray-800 transition-colors">
+          </Button>
+          <Button variant="primary" size="sm" onClick={onClose}>
             Done
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -834,7 +835,7 @@ function DeckOverview({ deck, cardsByFullName }) {
           <ManaCurveBar label="Mana Curve" curve={insights.curveAll} barClassName="bg-gray-900" />
         </div>
         <div className="border border-gray-200 rounded-lg bg-white p-4">
-          <ManaCurveBar label="Mana Curve — Characters Only" curve={insights.curveChar} barClassName="bg-indigo-500" />
+          <ManaCurveBar label="Mana Curve — Characters Only" curve={insights.curveChar} barClassName="bg-forge" />
         </div>
       </div>
 
@@ -940,12 +941,9 @@ function DecklistModal({ deck, coconutCard, cardsByFullName, onImport, onClose }
           >
             {copyStatus === 'copied' ? '✓ Copied' : copyStatus === 'error' ? 'Failed' : 'Copy to Clipboard'}
           </button>
-          <button
-            onClick={handleImport}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-gray-900 text-white hover:bg-gray-800 transition-colors"
-          >
+          <Button variant="primary" size="sm" onClick={handleImport}>
             Import
-          </button>
+          </Button>
         </div>
       </div>
     </div>

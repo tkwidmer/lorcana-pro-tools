@@ -1,6 +1,6 @@
 ---
 name: duels-api-docs
-description: Fetch the latest duels.ink API documentation before building or modifying any feature that talks to duels.ink (match history, gamelogs, replays, leaderboard, decks, stats, or the consolidated /api/duels proxy route). Use this whenever a task touches duelsApi.js, leaderboardApi.js, parseGamelog.js, or api/duels.ts, or when the shape/behavior of a duels.ink endpoint is unclear.
+description: Fetch the latest duels.ink API documentation before building or modifying any feature that talks to duels.ink (match history, gamelogs, replays, decks, stats, or the consolidated /api/duels proxy route). Use this whenever a task touches duelsApi.js, parseGamelog.js, or api/duels.ts, or when the shape/behavior of a duels.ink endpoint is unclear.
 ---
 
 # duels.ink API Docs
@@ -12,10 +12,10 @@ API can change.
 ## When to use
 
 Before implementing or debugging anything involving:
-- `src/lib/duelsApi.js`, `src/lib/leaderboardApi.js`, `src/lib/parseGamelog.js`
+- `src/lib/duelsApi.js`, `src/lib/parseGamelog.js`
 - `api/duels.ts` — the single consolidated serverless proxy for every
   duels.ink endpoint, dispatched by `?endpoint=` (`match-history`, `gamelog`,
-  `deck`, `stats`, `leaderboard`). Folded into one
+  `deck`, `stats`). Folded into one
   function because Vercel's Hobby plan caps a deployment at 12 serverless
   functions — don't split it back into per-endpoint files without checking
   the total function count in `api/*.ts` first.

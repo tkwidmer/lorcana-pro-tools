@@ -22,12 +22,10 @@ const ROUTES = [
   '/',
   '/proxy',
   '/coconut-deck-builder',
-  '/cut-calculator',
   '/limited-guide',
   '/rules',
   '/deck-comparison',
   '/winrate-matrix',
-  '/leaderboard',
   '/lore-tracker',
 ]
 

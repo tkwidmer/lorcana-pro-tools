@@ -100,24 +100,12 @@ export const SECTIONS = [
         icon: 'sparkle',
         description: 'A plain-language read on what\'s happening in the meta right now — most-played and highest-winrate archetypes, centered on your own rank and defaulting to the latest week.',
       },
-      {
-        path: '/leaderboard',
-        name: 'Leaderboard',
-        icon: 'podium',
-        description: 'See the top 50 ranked duels.ink players for each queue, plus MMR distribution and current season info.',
-      },
     ],
   },
   {
     title: 'Tournament Tools',
     navLabel: 'Tournaments',
     tools: [
-      {
-        path: '/cut-calculator',
-        name: 'Cut Calculator',
-        icon: 'calculator',
-        description: 'Track your record during a Swiss tournament and know exactly when it\'s safe to intentional draw into top cut.',
-      },
       {
         path: '/tournament-lookup',
         name: 'Tournament Lookup',

@@ -7,9 +7,9 @@ Five new features for Lorcana Pro Tools, aimed at players trying to get better a
 InkbornForge already covers a lot of ground (see [TOOLS.md](TOOLS.md)):
 - **Deck maths**: Deck Insights
 - **Personal outcomes**: Match History, Analytics, Card Impact (WAR), and the Kept/Sent mulligan win rates
-- **Meta**: Winrate Matrix, Meta Synthesis, Leaderboard
+- **Meta**: Winrate Matrix, Meta Synthesis
 - **Event prep**: Practice Plan's Bayesian matchup estimates, tournament Monte Carlo, and rep allocation
-- **Live events**: Tournament Lookup, Cut Calculator
+- **Live events**: Tournament Lookup
 - **Scouting**: Game Scraper, Scouting Library
 
 What's missing is the **deliberate practice loop** that stronger players rely on:

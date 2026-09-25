@@ -32,7 +32,7 @@ function PlayerCard({ player, onLore, onNameChange, flipped }) {
         type="text"
         value={player.name}
         onChange={(e) => onNameChange(e.target.value)}
-        className="shrink-0 border-b border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900 text-center focus:outline-none focus:bg-gray-50 bg-white"
+        className="shrink-0 border-b border-gray-200 px-3 py-2 font-display text-base uppercase tracking-wider text-gray-900 text-center focus:outline-none focus:bg-gray-50 bg-white"
         placeholder="Player name"
       />
       <div className="flex-1 relative select-none min-h-0">
@@ -47,7 +47,7 @@ function PlayerCard({ player, onLore, onNameChange, flipped }) {
           />
         </div>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-8xl font-black text-gray-900 tabular-nums">{player.lore}</span>
+          <span className="font-display text-9xl font-medium text-gray-900 tabular-nums">{player.lore}</span>
         </div>
         <div className="absolute bottom-2 left-0 right-0 flex justify-between px-4 pointer-events-none">
           <span className="text-red-300 text-sm font-medium">− less</span>
@@ -77,8 +77,8 @@ function AuditModal({ auditLog, onClose, onClearAudit }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
-          <h2 className="text-sm font-semibold text-gray-900">
-            Audit Log {auditLog.length > 0 && <span className="text-gray-400 font-normal">({auditLog.length})</span>}
+          <h2 className="font-display text-base font-medium uppercase tracking-wide text-gray-900">
+            Audit Log {auditLog.length > 0 && <span className="text-gray-400 font-sans normal-case tracking-normal">({auditLog.length})</span>}
           </h2>
           <div className="flex items-center gap-1">
             {auditLog.length > 0 && (
@@ -175,25 +175,25 @@ export function LoreTrackerPage() {
   }
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden bg-white">
-      {/* Compact header */}
-      <header className="shrink-0 border-b border-gray-200 px-4 py-2.5 flex items-center gap-3">
+    <div className="h-dvh flex flex-col overflow-hidden bg-paper">
+      {/* Compact ink header — this page hides the site Nav, so it carries the brand bar itself */}
+      <header className="shrink-0 bg-ink text-on-ink px-4 py-2.5 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1"
+          className="text-sm text-on-ink/70 hover:text-on-ink transition-colors flex items-center gap-1"
         >
           ← Back
         </button>
-        <div className="flex-1" />
+        <span className="flex-1 text-center font-display text-sm uppercase tracking-[0.12em]">Lore Tracker</span>
         <button
           onClick={() => setAuditOpen(true)}
-          className="text-sm text-gray-500 hover:text-gray-900 transition-colors border border-gray-200 rounded px-3 py-1.5 hover:border-gray-400"
+          className="text-sm text-on-ink/80 hover:text-on-ink transition-colors border border-on-ink/25 rounded px-3 py-1.5 hover:border-on-ink/60"
         >
           Audit{auditLog.length > 0 && ` (${auditLog.length})`}
         </button>
         <button
           onClick={handleReset}
-          className="text-sm text-red-600 hover:text-red-800 transition-colors border border-gray-200 rounded px-3 py-1.5 hover:border-red-200 hover:bg-red-50"
+          className="text-sm text-red-400 hover:text-red-300 transition-colors border border-on-ink/25 rounded px-3 py-1.5 hover:border-red-400"
         >
           Reset
         </button>

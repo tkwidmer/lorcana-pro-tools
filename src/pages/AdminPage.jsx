@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useSupporter } from '../hooks/useSupporter'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Input } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
 
 function StatusLabel({ tier }) {
-  if (tier === 'admin') return <span className="text-blue-600 font-medium">Admin</span>
-  if (tier === 'supporter') return <span className="text-green-600 font-medium">Supporter</span>
+  if (tier === 'admin') return <Badge tone="neutral">Admin</Badge>
+  if (tier === 'supporter') return <Badge>Supporter</Badge>
   return <span className="text-gray-400">Free</span>
 }
 
@@ -15,23 +20,15 @@ function GrantRevokeButton({ tier, userId, updating, onGrant, onRevoke }) {
   if (tier === 'admin') return <span className="text-xs text-gray-300">—</span>
   if (tier === 'supporter') {
     return (
-      <button
-        onClick={() => onRevoke(userId)}
-        disabled={updating === userId}
-        className="border border-gray-300 text-xs font-medium px-3 py-1.5 text-gray-500 hover:border-red-400 hover:text-red-600 transition-colors rounded disabled:opacity-40"
-      >
+      <Button variant="danger" size="sm" onClick={() => onRevoke(userId)} disabled={updating === userId}>
         {updating === userId ? '…' : 'Revoke'}
-      </button>
+      </Button>
     )
   }
   return (
-    <button
-      onClick={() => onGrant(userId)}
-      disabled={updating === userId}
-      className="border border-gray-900 text-xs font-medium px-3 py-1.5 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40"
-    >
+    <Button size="sm" onClick={() => onGrant(userId)} disabled={updating === userId}>
       {updating === userId ? '…' : 'Grant'}
-    </button>
+    </Button>
   )
 }
 
@@ -122,43 +119,30 @@ export function AdminPage() {
   if (isLoading) return null
 
   return (
-    <div className="w-full px-6 py-12">
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Admin</h1>
-        <p className="text-gray-500 text-sm">Manage supporter access.</p>
-      </div>
+    <div className="w-full px-6 py-8">
+      <PageHeader title="Admin" description="Manage supporter access." />
 
       <div className="space-y-8 max-w-2xl">
-        <div className="border border-gray-200 rounded-lg p-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-gray-900">Tournament history</h2>
-            <p className="text-sm text-gray-500 mt-1">Import major RPH events into the caster history archive.</p>
-          </div>
-          <Link
-            to="/admin/tournament-import"
-            className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded whitespace-nowrap"
-          >
-            Import events
-          </Link>
-        </div>
+        <Card
+          className="p-6"
+          title="Tournament history"
+          description="Import major RPH events into the caster history archive."
+        >
+          <Button to="/admin/tournament-import">Import events</Button>
+        </Card>
 
-        <div className="border border-gray-200 rounded-lg p-6">
-          <h2 className="text-base font-bold text-gray-900 mb-4">Grant or revoke access</h2>
+        <Card className="p-6" title="Grant or revoke access">
           <form onSubmit={search} className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search by email…"
-              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+              className="flex-1"
             />
-            <button
-              type="submit"
-              disabled={searching}
-              className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40"
-            >
+            <Button variant="primary" type="submit" disabled={searching}>
               {searching ? 'Searching…' : 'Search'}
-            </button>
+            </Button>
           </form>
 
           {results.length > 0 && (
@@ -185,10 +169,9 @@ export function AdminPage() {
               </tbody>
             </table>
           )}
-        </div>
+        </Card>
 
-        <div className="border border-gray-200 rounded-lg p-6">
-          <h2 className="text-base font-bold text-gray-900 mb-4">Current supporters</h2>
+        <Card className="p-6" title="Current supporters">
           {supporters.length === 0 ? (
             <p className="text-sm text-gray-500">No supporters yet.</p>
           ) : (
@@ -208,33 +191,27 @@ export function AdminPage() {
                       {u.supporter_since ? new Date(u.supporter_since).toLocaleDateString() : '—'}
                     </td>
                     <td className="py-2 text-right">
-                      <button
-                        onClick={() => revoke(u.user_id)}
-                        disabled={updating === u.user_id}
-                        className="border border-gray-300 text-xs font-medium px-3 py-1.5 text-gray-500 hover:border-red-400 hover:text-red-600 transition-colors rounded disabled:opacity-40"
-                      >
+                      <Button variant="danger" size="sm" onClick={() => revoke(u.user_id)} disabled={updating === u.user_id}>
                         {updating === u.user_id ? '…' : 'Revoke'}
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </div>
+        </Card>
 
-        <div className="border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-bold text-gray-900">
-              All users {!allUsersLoading && <span className="text-gray-400 font-normal">({allUsers.length})</span>}
-            </h2>
-          </div>
-          <input
+        <Card
+          className="p-6"
+          title={<>All users {!allUsersLoading && <span className="text-gray-400 font-sans normal-case tracking-normal">({allUsers.length})</span>}</>}
+        >
+          <Input
             type="text"
             value={userFilter}
             onChange={e => setUserFilter(e.target.value)}
             placeholder="Filter by email…"
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900 mb-4"
+            className="w-full mb-4"
           />
           {allUsersLoading ? (
             <p className="text-sm text-gray-500">Loading…</p>
@@ -270,7 +247,7 @@ export function AdminPage() {
               </table>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   )

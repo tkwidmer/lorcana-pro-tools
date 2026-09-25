@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { fetchGamelogBuffer, getToken } from '../lib/duelsApi'
+import { PageHeader } from '../components/ui/PageHeader'
 
 async function decompressGzip(arrayBuffer) {
   const ds = new DecompressionStream('gzip')
@@ -136,7 +137,7 @@ function PlayerSection({ name, data, isWinner }) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <h2 className="text-base font-bold text-gray-900">{name}</h2>
+        <h2 className="font-display text-lg font-medium uppercase tracking-wide text-gray-900">{name}</h2>
         {isWinner && <span className="text-xs font-semibold px-2 py-0.5 rounded bg-green-100 text-green-800">Winner</span>}
       </div>
 
@@ -224,12 +225,9 @@ export function GamelogViewerPage() {
   }
 
   return (
-    <div className="w-full px-6 py-12">
-      <div className="mb-8">
-        <Link to="/match-history" className="text-sm text-gray-400 hover:text-gray-700 transition-colors">← Match History</Link>
-        <h1 className="text-2xl font-bold text-gray-900 mt-2">Gamelog</h1>
-        <p className="text-xs text-gray-400 font-mono mt-0.5">{gameId}</p>
-      </div>
+    <div className="w-full px-6 py-8">
+      <Link to="/match-history" className="inline-block text-sm font-medium text-forge-ink hover:underline mb-3">← Match History</Link>
+      <PageHeader title="Gamelog" description={<span className="text-xs font-mono">{gameId}</span>} />
 
       {status === 'loading' && <p className="text-sm text-gray-500">Fetching gamelog…</p>}
 

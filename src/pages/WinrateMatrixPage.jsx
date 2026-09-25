@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { fetchStats } from '../lib/duelsApi'
 import { InkIcons as ColorPairIcons } from '../components/InkIcons'
 import { winrateCellColor as getWinrateColor } from '../lib/statColors'
-import { computeMetaDrift } from '../lib/metaDrift'
+import { archetypeDrift, archetypeMatchupDrift } from '../lib/metaDrift'
 import { aggregateArchetypes, archetypeMatchupSummary } from '../lib/metaSynthesis'
 import { PageHeader } from '../components/ui/PageHeader'
 
@@ -35,7 +35,7 @@ function loadStoredFilters() {
     if (!raw) return null
     const parsed = JSON.parse(raw)
     return {
-      queue: typeof parsed.queue === 'string' ? parsed.queue : 'infinity-bo1',
+      queue: typeof parsed.queue === 'string' ? parsed.queue : 'core-bo1',
       period: typeof parsed.period === 'string' ? parsed.period : 'all_time',
       ranks: Array.isArray(parsed.ranks) ? parsed.ranks.filter(r => typeof r === 'string') : [],
     }
@@ -46,7 +46,7 @@ function loadStoredFilters() {
 
 export function WinrateMatrixPage() {
   const stored = loadStoredFilters()
-  const [selectedQueue, setSelectedQueue] = useState(stored?.queue ?? 'infinity-bo1')
+  const [selectedQueue, setSelectedQueue] = useState(stored?.queue ?? 'core-bo1')
   const [selectedPeriod, setSelectedPeriod] = useState(stored?.period ?? 'all_time')
   const [selectedRanks, setSelectedRanks] = useState(stored?.ranks ?? [])
   const [availableWeeks, setAvailableWeeks] = useState([])
@@ -58,8 +58,8 @@ export function WinrateMatrixPage() {
   const [driftWeeks, setDriftWeeks] = useState([])
   const [driftLoading, setDriftLoading] = useState(false)
   const [driftError, setDriftError] = useState(null)
-  const [fromWeek, setFromWeek] = useState('')
-  const [toWeek, setToWeek] = useState('')
+  const [driftFocusKey, setDriftFocusKey] = useState(null)
+  const [driftSort, setDriftSort] = useState('games')
 
   const [archetypesOpen, setArchetypesOpen] = useState(false)
   const [focusedArchetypeKey, setFocusedArchetypeKey] = useState(null)
@@ -117,15 +117,7 @@ export function WinrateMatrixPage() {
           week,
           stats: await fetchStats({ queue: selectedQueue, period: `week:${week.startDate}`, ranks: selectedRanks }),
         })))
-        if (cancelled) return
-        setDriftWeeks(weeks)
-        // Default to the two most recent complete weeks — the in-progress
-        // week's partial game counts would skew the games delta.
-        const currentWeekStart = weeks[weeks.length - 1].stats.meta.currentWeek.startDate
-        const complete = weeks.filter(w => w.week.startDate !== currentWeekStart)
-        const pair = complete.length >= 2 ? complete.slice(-2) : weeks.slice(-2)
-        setFromWeek(pair[0].week.startDate)
-        setToWeek(pair[pair.length - 1].week.startDate)
+        if (!cancelled) setDriftWeeks(weeks)
       } catch (err) {
         if (!cancelled) setDriftError(err.message)
       } finally {
@@ -136,14 +128,17 @@ export function WinrateMatrixPage() {
     return () => { cancelled = true }
   }, [compareOpen, selectedQueue, selectedRanks, availableWeeks])
 
-  const fromWeekStats = driftWeeks.find(w => w.week.startDate === fromWeek)?.stats ?? null
-  const toWeekStats = driftWeeks.find(w => w.week.startDate === toWeek)?.stats ?? null
-  const driftRows = (compareOpen && fromWeekStats && toWeekStats && fromWeek !== toWeek)
-    ? computeMetaDrift(fromWeekStats, toWeekStats)
-    : []
-  const weekLabel = w => w.week.startDate === w.stats.meta.currentWeek.startDate ? `${w.week.label} (in progress)` : w.week.label
-  const fromLabel = driftWeeks.find(w => w.week.startDate === fromWeek)?.week.label ?? fromWeek
-  const toLabel = driftWeeks.find(w => w.week.startDate === toWeek)?.week.label ?? toWeek
+  // Change is measured across complete weeks only — the in-progress week's
+  // partial sample would skew it.
+  const inProgressIndex = driftWeeks.findIndex(w => w.week.startDate === w.stats.meta.currentWeek.startDate)
+  const completeCount = inProgressIndex === -1 ? driftWeeks.length : inProgressIndex
+  const driftRange = { fromIndex: 0, toIndex: completeCount - 1, sortBy: driftSort }
+  const driftWeekStats = driftWeeks.map(w => w.stats)
+  const driftRows = compareOpen && completeCount >= 2 ? archetypeDrift(driftWeekStats, driftRange) : []
+  const driftFocus = driftRows.find(r => r.key === driftFocusKey) ?? null
+  const driftMatchupRows = driftFocus ? archetypeMatchupDrift(driftWeekStats, driftFocus.key, driftRange) : []
+  const winRateClass = wr => wr >= 51 ? 'text-emerald-600' : wr <= 49 ? 'text-red-500' : 'text-gray-600'
+  const signed = (n, suffix) => `${n > 0 ? '+' : ''}${n.toFixed(1)}${suffix}`
 
   if (loading) {
     return (
@@ -339,7 +334,8 @@ export function WinrateMatrixPage() {
         </p>
       </div>
 
-      {/* Meta drift — compares two of the last few weeks for this queue/rank filter. */}
+      {/* Meta drift — each archetype's win rate and share of games, week by week over
+          the last month, with a drill-in to its matchups. */}
       <div className="mb-8">
         <button
           onClick={() => setCompareOpen(o => !o)}
@@ -356,79 +352,126 @@ export function WinrateMatrixPage() {
               <p className="text-sm text-red-700">Couldn't load weekly stats: {driftError}</p>
             ) : driftLoading ? (
               <p className="text-sm text-gray-500">Loading the last {DRIFT_WEEKS} weeks...</p>
-            ) : driftWeeks.length < 2 ? (
-              <p className="text-sm text-gray-500">Not enough weeks of data in this era yet to compare.</p>
+            ) : completeCount < 2 ? (
+              <p className="text-sm text-gray-500">Not enough complete weeks of data in this era yet to compare.</p>
             ) : (
               <>
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <label className="text-sm font-semibold text-gray-900">From</label>
-                  <select
-                    value={fromWeek}
-                    onChange={e => setFromWeek(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg text-sm border border-gray-300 bg-white text-gray-900"
-                  >
-                    {driftWeeks.map(w => (
-                      <option key={w.week.startDate} value={w.week.startDate}>{weekLabel(w)}</option>
-                    ))}
-                  </select>
-                  <span className="text-gray-400">→</span>
-                  <label className="text-sm font-semibold text-gray-900">To</label>
-                  <select
-                    value={toWeek}
-                    onChange={e => setToWeek(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg text-sm border border-gray-300 bg-white text-gray-900"
-                  >
-                    {driftWeeks.map(w => (
-                      <option key={w.week.startDate} value={w.week.startDate}>{weekLabel(w)}</option>
-                    ))}
-                  </select>
+                <p className="text-sm text-gray-500 mb-3">
+                  Win rate each week, with games and the % of that week's games it appeared in underneath (duels.ink's play rate). Change runs from {driftWeeks[0].week.label} to {driftWeeks[completeCount - 1].week.label}. Click an archetype for its matchups.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="text-sm font-semibold text-gray-900">Sort by {driftWeeks[completeCount - 1].week.label}:</span>
+                  {[{ id: 'games', label: 'Games' }, { id: 'winRate', label: 'Win rate' }].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setDriftSort(opt.id)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        driftSort === opt.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
-                {fromWeek === toWeek ? (
-                  <p className="text-sm text-gray-500">Pick two different weeks to see the delta.</p>
-                ) : driftRows.length === 0 ? (
-                  <p className="text-sm text-gray-500">No overlapping matchup data between these two weeks.</p>
-                ) : (
-                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
-                          <th className="py-2 px-3">Matchup</th>
-                          <th className="py-2 px-3 text-right">{fromLabel}</th>
-                          <th className="py-2 px-3 text-right">{toLabel}</th>
-                          <th className="py-2 px-3 text-right">Δ Winrate</th>
-                          <th className="py-2 px-3 text-right capitalize">Δ {matchupUnit}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {driftRows.map((row, idx) => (
-                          <tr key={idx} className="border-b border-gray-100">
-                            <td className="py-1.5 px-3">
-                              <span className="inline-flex items-center gap-1">
-                                <ColorPairIcons colors={row.colorsA} size={16} />
-                                <span className="text-gray-400 text-xs">vs</span>
-                                <ColorPairIcons colors={row.colorsB} size={16} />
-                              </span>
-                            </td>
-                            <td className="py-1.5 px-3 text-right text-gray-600">
-                              {row.prevWinRate != null ? `${row.prevWinRate.toFixed(0)}%` : '—'}
-                            </td>
-                            <td className="py-1.5 px-3 text-right text-gray-600">
-                              {row.currWinRate != null ? `${row.currWinRate.toFixed(0)}%` : '—'}
-                            </td>
-                            <td className={`py-1.5 px-3 text-right font-semibold ${
-                              row.winRateDelta == null ? 'text-gray-400'
-                                : row.winRateDelta > 0 ? 'text-emerald-600'
-                                : row.winRateDelta < 0 ? 'text-red-500' : 'text-gray-500'
-                            }`}>
-                              {row.isNew ? 'new' : row.isGone ? 'gone' : `${row.winRateDelta > 0 ? '+' : ''}${row.winRateDelta.toFixed(1)}%`}
-                            </td>
-                            <td className="py-1.5 px-3 text-right text-gray-400">
-                              {row.gamesDelta != null ? `${row.gamesDelta > 0 ? '+' : ''}${row.gamesDelta.toLocaleString()}` : '—'}
-                            </td>
-                          </tr>
+                <div className="overflow-x-auto border border-gray-200 rounded-lg mb-6">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
+                        <th className="py-2 px-3">Archetype</th>
+                        {driftWeeks.map((w, i) => (
+                          <th key={w.week.startDate} className="py-2 px-3 text-right whitespace-nowrap">
+                            {w.week.label}{i === inProgressIndex ? ' (so far)' : ''}
+                          </th>
                         ))}
-                      </tbody>
-                    </table>
+                        <th className="py-2 px-3 text-right">Change</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {driftRows.map(row => (
+                        <tr
+                          key={row.key}
+                          onClick={() => setDriftFocusKey(prev => (prev === row.key ? null : row.key))}
+                          className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${driftFocusKey === row.key ? 'bg-gray-100' : ''}`}
+                        >
+                          <td className="py-1.5 px-3">
+                            <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                              <ColorPairIcons colors={row.colors} size={16} />
+                              <span className="font-medium text-gray-900">{row.archetypeName}</span>
+                            </span>
+                          </td>
+                          {row.cells.map((cell, i) => (
+                            <td key={i} className="py-1.5 px-3 text-right whitespace-nowrap">
+                              {cell ? (
+                                <>
+                                  <div className={`font-semibold ${winRateClass(cell.winRate)}`}>{cell.winRate.toFixed(1)}%</div>
+                                  <div className="text-xs text-gray-400">{cell.games.toLocaleString()} · {cell.share.toFixed(1)}%</div>
+                                </>
+                              ) : <span className="text-gray-400">—</span>}
+                            </td>
+                          ))}
+                          <td className="py-1.5 px-3 text-right whitespace-nowrap">
+                            {row.winRateDelta != null ? (
+                              <>
+                                <div className={`font-semibold ${row.winRateDelta > 0 ? 'text-emerald-600' : row.winRateDelta < 0 ? 'text-red-500' : 'text-gray-500'}`}>{signed(row.winRateDelta, '%')}</div>
+                                <div className="text-xs text-gray-400">{signed(row.shareDelta, ' pts play rate')}</div>
+                              </>
+                            ) : <span className="text-gray-400">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {driftFocus && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                      {driftFocus.name} — win rate vs each archetype, by week ({matchupUnit})
+                    </h3>
+                    {driftMatchupRows.length === 0 ? (
+                      <p className="text-sm text-gray-500">Not enough head-to-head data for this archetype.</p>
+                    ) : (
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
+                              <th className="py-2 px-3">Opponent</th>
+                              {driftWeeks.map((w, i) => (
+                                <th key={w.week.startDate} className="py-2 px-3 text-right whitespace-nowrap">
+                                  {w.week.label}{i === inProgressIndex ? ' (so far)' : ''}
+                                </th>
+                              ))}
+                              <th className="py-2 px-3 text-right">Change</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {driftMatchupRows.map(row => (
+                              <tr key={row.key} className="border-b border-gray-100">
+                                <td className="py-1.5 px-3">
+                                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                                    <ColorPairIcons colors={row.colors} size={16} />
+                                    <span className="text-gray-900">{row.archetypeName}</span>
+                                  </span>
+                                </td>
+                                {row.cells.map((cell, i) => (
+                                  <td key={i} className="py-1.5 px-3 text-right whitespace-nowrap">
+                                    {cell ? (
+                                      <>
+                                        <div className={`font-semibold ${winRateClass(cell.winRate)}`}>{cell.winRate.toFixed(1)}%</div>
+                                        <div className="text-xs text-gray-400">{cell.games.toLocaleString()}</div>
+                                      </>
+                                    ) : <span className="text-gray-400">—</span>}
+                                  </td>
+                                ))}
+                                <td className={`py-1.5 px-3 text-right font-semibold whitespace-nowrap ${row.winRateDelta == null ? 'text-gray-400' : row.winRateDelta > 0 ? 'text-emerald-600' : row.winRateDelta < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                                  {row.winRateDelta != null ? signed(row.winRateDelta, '%') : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
               </>

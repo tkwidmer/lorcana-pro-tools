@@ -185,7 +185,7 @@ A bare-bones view of one duels.ink gamelog: your opening hand, then what each pl
 
 Public duels.ink stats for every queue: head-to-head win rates between color pairs and archetypes, play rate, and first-player advantage, by week or all-time. Archetypes are grouped the way you'd name them: duels.ink's per-build variants of the same colors and name count as one archetype. Click an archetype to see its matchups.
 
-**Meta Drift** compares any two of the last five weeks for the selected queue and ranks, showing which matchups moved and by how much. It defaults to the two most recent complete weeks.
+**Meta Drift** shows each archetype's win rate, games and play rate for each of the last five weeks, and how they changed, sorted by the latest week's games or win rate. Click an archetype to see its win rate against every other archetype, week by week. The page opens on Core BO1.
 
 ### Meta Synthesis
 `/meta-synthesis` · **Supporter**

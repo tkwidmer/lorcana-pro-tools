@@ -5,6 +5,7 @@ import { buildCardIndex, toSimpleName } from '../lib/cardAnalysis'
 import { resolveColors, VALID_INKS, INK_HEX } from '../lib/inkColors'
 import { BUCKET_ORDER, BUCKET_LABEL, encodeDeckParam, buildBuckets } from '../lib/decklistShared'
 import { CardBar } from '../components/DecklistCardBar'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const SAMPLE = `4x Maui - Hero to All
 4x Moana - Of Motunui
@@ -260,13 +261,10 @@ export function DecklistInspectorPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Decklist Inspector</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Paste a decklist, browse it by card type and cost, then click up to {MAX_SELECTED} cards to
-          pin their full art for video / stream overlays.
-        </p>
-      </div>
+      <PageHeader
+        title="Decklist Inspector"
+        description={`Paste a decklist, browse it by card type and cost, then click up to ${MAX_SELECTED} cards to pin their full art for video / stream overlays.`}
+      />
 
       {loading && <p className="text-sm text-gray-400">Loading card data…</p>}
       {error && <p className="text-sm text-red-600">Failed to load card data: {error}</p>}

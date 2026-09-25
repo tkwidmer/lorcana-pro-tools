@@ -96,7 +96,7 @@ function RoutedContent() {
         <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />
-        <Route path="/store-lookup" element={<SupporterRoute><StoreLookupPage /></SupporterRoute>} />
+        <Route path="/store-lookup" element={<StoreLookupPage />} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/tournament-import" element={<AdminTournamentImportPage />} />

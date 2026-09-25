@@ -427,6 +427,8 @@ The page defaults to the user's own rank band (`fetchCurrentMmr` → `rankTiers.
 - `computeTierProgress()` tracks provisional Legendary progress in the pro-rating window (`PRORATE_WINDOW`, `LEGENDARY_PRORATED_REQUIREMENTS`, plus running a Hyperia City Prerelease).
 - `computeStandingTierStatus()` gives the standing tier over the trailing 4 set seasons, whose boundaries are derived from Prerelease events (`deriveSeasons()`).
 
+Each lookup writes the extracted store IDs to the URL as `?stores=<id>,<id>` (whether IDs or store URLs were pasted), so the link is shareable; opening it pre-fills the input from that param (over the localStorage last input) and auto-runs the lookup.
+
 The page also shows a static Welcome/Standard/Legendary reference (definitions + benefits from RPH's announcement, requirements from the `*_MAINTENANCE_REQUIREMENTS` constants).
 
 Only `display_status === 'complete'` events count. The window dates and requirements are hardcoded from the Aug 2026 program email, so they'll need updating when RPH changes the program.

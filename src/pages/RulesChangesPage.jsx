@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { getDocument, getVersionMeta, getPreviousVersionMeta, loadVersionDiff } from '../lib/rules'
 import { wordDiff } from '../lib/rules/diff'
+import { PageHeader } from '../components/ui/PageHeader'
 
 function WordDiff({ oldText, newText }) {
   const parts = wordDiff(oldText, newText)
@@ -93,15 +94,10 @@ function ChangesVersionView({ doc, docSlug, versionId, version, previousVersion 
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6">
-        <Link to={`/rules/${doc.slug}?v=${version.version}`} className="text-sm text-gray-500 hover:text-gray-900">
-          ← {doc.name}
-        </Link>
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mt-2 mb-1">
-          Changes in {version.label}
-        </h1>
-        <p className="text-gray-500">Compared against {previousVersion.label}.</p>
-      </div>
+      <Link to={`/rules/${doc.slug}?v=${version.version}`} className="inline-block text-sm font-medium text-forge-ink hover:underline mb-3">
+        ← {doc.name}
+      </Link>
+      <PageHeader title={`Changes in ${version.label}`} description={`Compared against ${previousVersion.label}.`} />
 
       <div className="inline-flex border border-gray-200 rounded-lg overflow-hidden mb-6">
         {TABS.map(t => (

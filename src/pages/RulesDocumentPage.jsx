@@ -14,6 +14,7 @@ import {
   getChapterDiff,
 } from '../lib/rules'
 import { changesById, wordDiff } from '../lib/rules/diff'
+import { PageHeader } from '../components/ui/PageHeader'
 
 function WordDiff({ oldText, newText }) {
   const parts = wordDiff(oldText, newText)
@@ -227,16 +228,12 @@ function DocumentVersionView({ doc, docSlug, versionId, versions, chapterSlug, s
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6">
-        <Link to="/rules" className="text-sm text-gray-500 hover:text-gray-900">← Rules</Link>
-        <div className="flex items-start justify-between gap-4 mt-2 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
-              {doc.name}
-            </h1>
-            <p className="text-gray-500">{doc.tagline}</p>
-          </div>
-          <div className="flex items-center gap-3">
+      <Link to="/rules" className="inline-block text-sm font-medium text-forge-ink hover:underline mb-3">← Rules</Link>
+      <PageHeader
+        title={doc.name}
+        description={doc.tagline}
+        actions={
+          <>
             <VersionSelect versions={versions} current={version} onChange={handleVersionChange} />
             {previousVersionMeta && (
               <button
@@ -250,9 +247,9 @@ function DocumentVersionView({ doc, docSlug, versionId, versions, chapterSlug, s
                 Inline changes
               </button>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <ChangeSummary doc={doc} version={version} diffResult={diffResult} />
 

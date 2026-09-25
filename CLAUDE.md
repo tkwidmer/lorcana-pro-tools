@@ -427,6 +427,8 @@ The page defaults to the user's own rank band (`fetchCurrentMmr` → `rankTiers.
 - `computeTierProgress()` tracks provisional Legendary progress in the pro-rating window (`PRORATE_WINDOW`, `LEGENDARY_PRORATED_REQUIREMENTS`, plus running a Hyperia City Prerelease).
 - `computeStandingTierStatus()` gives the standing tier over the trailing 4 set seasons, whose boundaries are derived from Prerelease events (`deriveSeasons()`).
 
+The page also shows a static Welcome/Standard/Legendary reference (definitions + benefits from RPH's announcement, requirements from the `*_MAINTENANCE_REQUIREMENTS` constants).
+
 Only `display_status === 'complete'` events count. The window dates and requirements are hardcoded from the Aug 2026 program email, so they'll need updating when RPH changes the program.
 
 ### Tournament Lookup

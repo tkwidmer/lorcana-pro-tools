@@ -4,6 +4,7 @@ import { InkIcons as ColorPairIcons } from '../components/InkIcons'
 import { winrateCellColor as getWinrateColor } from '../lib/statColors'
 import { computeMetaDrift } from '../lib/metaDrift'
 import { aggregateArchetypes, archetypeMatchupSummary } from '../lib/metaSynthesis'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -146,8 +147,8 @@ export function WinrateMatrixPage() {
 
   if (loading) {
     return (
-      <div className="w-full px-6 py-12">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Winrate Matrix</h1>
+      <div className="w-full px-6 py-8">
+        <PageHeader title="Winrate Matrix" />
         <p className="text-gray-500">Loading stats...</p>
       </div>
     )
@@ -155,8 +156,8 @@ export function WinrateMatrixPage() {
 
   if (error) {
     return (
-      <div className="w-full px-6 py-12">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Winrate Matrix</h1>
+      <div className="w-full px-6 py-8">
+        <PageHeader title="Winrate Matrix" />
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-900 font-medium">Error loading stats:</p>
           <p className="text-red-700 text-sm">{error}</p>
@@ -167,8 +168,8 @@ export function WinrateMatrixPage() {
 
   if (!stats) {
     return (
-      <div className="w-full px-6 py-12">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Winrate Matrix</h1>
+      <div className="w-full px-6 py-8">
+        <PageHeader title="Winrate Matrix" />
         <p className="text-gray-500">No data available</p>
       </div>
     )
@@ -235,11 +236,11 @@ export function WinrateMatrixPage() {
     : []
 
   return (
-    <div className="w-full px-6 py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Winrate Matrix</h1>
-        <p className="text-gray-500">Head-to-head matchup winrates for {stats.meta?.queue?.name || selectedQueue}</p>
-      </div>
+    <div className="w-full px-6 py-8">
+      <PageHeader
+        title="Winrate Matrix"
+        description={`Head-to-head matchup winrates for ${stats.meta?.queue?.name || selectedQueue}`}
+      />
 
       <div className="mb-8">
         <div className="flex flex-col sm:flex-row gap-6 mb-6">
@@ -342,9 +343,9 @@ export function WinrateMatrixPage() {
       <div className="mb-8">
         <button
           onClick={() => setCompareOpen(o => !o)}
-          className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
         >
-          <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Meta Drift</span>
+          <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Meta Drift</span>
           <svg className={`w-4 h-4 text-gray-400 transition-transform ${compareOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
@@ -442,9 +443,9 @@ export function WinrateMatrixPage() {
         <div className="mb-8">
           <button
             onClick={() => setArchetypesOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Archetypes</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Archetypes</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${archetypesOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>

@@ -1,20 +1,16 @@
 import { Link } from 'react-router-dom'
 import { getDocuments, getLatestVersionMeta } from '../lib/rules'
+import { PageHeader } from '../components/ui/PageHeader'
 
 export function RulesPage() {
   const documents = getDocuments()
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
-          Rules
-        </h1>
-        <p className="text-gray-500">
-          Browse the current Disney Lorcana rules documents. When a document
-          updates, the new version highlights exactly what changed.
-        </p>
-      </div>
+      <PageHeader
+        title="Rules"
+        description="Browse the current Disney Lorcana rules documents. When a document updates, the new version highlights exactly what changed."
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {documents.map(doc => {

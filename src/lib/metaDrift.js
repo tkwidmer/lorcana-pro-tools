@@ -13,15 +13,19 @@ function sortByWeek(rows, toIndex, sortBy) {
   return rows.sort((a, b) => value(b) - value(a))
 }
 
+// `<field>Delta` is the overall change from week `fromIndex` to `toIndex`;
+// `week<Field>Delta` is the one-week change into `toIndex` from the week before.
 function deltas(cells, fromIndex, toIndex, fields) {
-  const from = cells[fromIndex]
-  const to = cells[toIndex]
-  return Object.fromEntries(fields.map(f => [`${f}Delta`, from && to ? to[f] - from[f] : null]))
+  const change = (a, b, f) => (a && b ? b[f] - a[f] : null)
+  return Object.fromEntries(fields.flatMap(f => [
+    [`${f}Delta`, change(cells[fromIndex], cells[toIndex], f)],
+    [`week${f[0].toUpperCase()}${f.slice(1)}Delta`, change(cells[toIndex - 1], cells[toIndex], f)],
+  ]))
 }
 
 // One row per archetype: its games, share of the week's games, and win rate
 // in each week (null for a week it didn't appear), plus the change between
-// weeks `fromIndex` and `toIndex`, sorted by `sortBy` ('games' | 'winRate')
+// weeks `fromIndex` and `toIndex` and over the last week into `toIndex`, sorted by `sortBy` ('games' | 'winRate')
 // in week `toIndex`. Archetypes under `minGames` across all weeks are
 // dropped — a handful of games makes the weekly win rate noise.
 export function archetypeDrift(weeks, { fromIndex, toIndex, sortBy, minGames = 100 }) {

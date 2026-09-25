@@ -28,6 +28,15 @@ describe('archetypeDrift', () => {
     expect(p.totalGames).toBe(600)
   })
 
+  it('reports the one-week change into the latest week separately from the overall change', () => {
+    const three = [...weeks, week(1000, [princess('p1', 500, 350)])]
+    const [p] = archetypeDrift(three, { fromIndex: 0, toIndex: 2, sortBy: 'games', minGames: 0 })
+    expect(p.winRateDelta).toBe(20)       // 50% → 70%
+    expect(p.weekWinRateDelta).toBe(10)   // 60% → 70%
+    expect(p.shareDelta).toBe(30)         // 20% → 50%
+    expect(p.weekShareDelta).toBe(10)     // 40% → 50%
+  })
+
   it('leaves a week empty when the archetype did not appear, with no delta', () => {
     const d = archetypeDrift(weeks, { fromIndex: 0, toIndex: 1, sortBy: 'games', minGames: 0 }).find(r => r.archetypeName === 'Dogs')
     expect(d.cells[0]).toBeNull()

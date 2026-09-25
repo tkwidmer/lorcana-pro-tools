@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { Fragment, useState, useEffect } from 'react'
 import { fetchStats } from '../lib/duelsApi'
 import { InkIcons as ColorPairIcons } from '../components/InkIcons'
 import { winrateCellColor as getWinrateColor } from '../lib/statColors'
@@ -139,7 +139,26 @@ export function WinrateMatrixPage() {
   const driftMatchupRows = driftFocus ? archetypeMatchupDrift(driftWeekStats, driftFocus.key, driftRange) : []
   // Names the exact span the Change column covers, e.g. "Change Aug 23 - 29 → Sep 13 - 19".
   const weekName = i => driftWeeks[i].week.label.replace(/, \d{4}$/, '')
-  const changeLabel = completeCount >= 2 ? `Change ${weekName(0)} → ${weekName(completeCount - 1)}` : 'Change'
+  // Change headers name their exact span on a second line, e.g. "Aug 23 - 29 → Sep 13 - 19".
+  const changeHeader = (title, fromIndex) => (
+    <th className="py-2 px-3 text-right">
+      <div className="whitespace-nowrap">{title}</div>
+      {completeCount >= 2 && (
+        <div className="font-normal normal-case tracking-normal whitespace-nowrap">{weekName(fromIndex)} → {weekName(completeCount - 1)}</div>
+      )}
+    </th>
+  )
+  // A Change cell: win-rate delta, with the play-rate delta under it when given.
+  const deltaCell = (winRateDelta, shareDelta) => (
+    <td className="py-1.5 px-3 text-right whitespace-nowrap">
+      {winRateDelta != null ? (
+        <>
+          <div className={`font-semibold ${winRateDelta > 0 ? 'text-emerald-600' : winRateDelta < 0 ? 'text-red-500' : 'text-gray-500'}`}>{signed(winRateDelta, '%')}</div>
+          {shareDelta != null && <div className="text-xs text-gray-400">{signed(shareDelta, ' pts play rate')}</div>}
+        </>
+      ) : <span className="text-gray-400">—</span>}
+    </td>
+  )
   const winRateClass = wr => wr >= 51 ? 'text-emerald-600' : wr <= 49 ? 'text-red-500' : 'text-gray-600'
   const signed = (n, suffix) => `${n > 0 ? '+' : ''}${n.toFixed(1)}${suffix}`
 
@@ -360,7 +379,7 @@ export function WinrateMatrixPage() {
             ) : (
               <>
                 <p className="text-sm text-gray-500 mb-3">
-                  Win rate each week, with games and the % of that week's games it appeared in underneath (duels.ink's play rate). The last column is the overall change from the first week shown ({driftWeeks[0].week.label}) to the latest complete week ({driftWeeks[completeCount - 1].week.label}), not just the most recent week. Click an archetype for its matchups.
+                  Win rate each week, with games and the % of that week's games it appeared in underneath (duels.ink's play rate). The last two columns are the change over the latest complete week alone, and the overall change from the first week shown ({driftWeeks[0].week.label}) to the latest complete week ({driftWeeks[completeCount - 1].week.label}). Click an archetype for its matchups.
                 </p>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <span className="text-sm font-semibold text-gray-900">Sort by {driftWeeks[completeCount - 1].week.label}:</span>
@@ -383,16 +402,17 @@ export function WinrateMatrixPage() {
                         <th className="py-2 px-3">Archetype</th>
                         {driftWeeks.map((w, i) => (
                           <th key={w.week.startDate} className="py-2 px-3 text-right whitespace-nowrap">
-                            {w.week.label}{i === inProgressIndex ? ' (so far)' : ''}
+                            {weekName(i)}{i === inProgressIndex ? ' (so far)' : ''}
                           </th>
                         ))}
-                        <th className="py-2 px-3 text-right whitespace-nowrap">{changeLabel}</th>
+                        {changeHeader('Last week', completeCount - 2)}
+                        {changeHeader('Overall', 0)}
                       </tr>
                     </thead>
                     <tbody>
                       {driftRows.map(row => (
+                        <Fragment key={row.key}>
                         <tr
-                          key={row.key}
                           onClick={() => setDriftFocusKey(prev => (prev === row.key ? null : row.key))}
                           className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${driftFocusKey === row.key ? 'bg-gray-100' : ''}`}
                         >
@@ -412,71 +432,69 @@ export function WinrateMatrixPage() {
                               ) : <span className="text-gray-400">—</span>}
                             </td>
                           ))}
-                          <td className="py-1.5 px-3 text-right whitespace-nowrap">
-                            {row.winRateDelta != null ? (
-                              <>
-                                <div className={`font-semibold ${row.winRateDelta > 0 ? 'text-emerald-600' : row.winRateDelta < 0 ? 'text-red-500' : 'text-gray-500'}`}>{signed(row.winRateDelta, '%')}</div>
-                                <div className="text-xs text-gray-400">{signed(row.shareDelta, ' pts play rate')}</div>
-                              </>
-                            ) : <span className="text-gray-400">—</span>}
-                          </td>
+                          {deltaCell(row.weekWinRateDelta, row.weekShareDelta)}
+                          {deltaCell(row.winRateDelta, row.shareDelta)}
                         </tr>
+                        {driftFocusKey === row.key && (
+                          <tr className="border-b border-gray-200">
+                            <td colSpan={driftWeeks.length + 3} className="p-0">
+                          <div className="p-3 bg-gray-50 border-l-4 border-forge">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                              {driftFocus.name} — win rate vs each archetype, by week ({matchupUnit})
+                            </h3>
+                            {driftMatchupRows.length === 0 ? (
+                              <p className="text-sm text-gray-500">Not enough head-to-head data for this archetype.</p>
+                            ) : (
+                              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
+                                      <th className="py-2 px-3">Opponent</th>
+                                      {driftWeeks.map((w, i) => (
+                                        <th key={w.week.startDate} className="py-2 px-3 text-right whitespace-nowrap">
+                                          {weekName(i)}{i === inProgressIndex ? ' (so far)' : ''}
+                                        </th>
+                                      ))}
+                                      {changeHeader('Last week', completeCount - 2)}
+                        {changeHeader('Overall', 0)}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {driftMatchupRows.map(m => (
+                                      <tr key={m.key} className="border-b border-gray-100">
+                                        <td className="py-1.5 px-3">
+                                          <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                                            <ColorPairIcons colors={m.colors} size={16} />
+                                            <span className="text-gray-900">{m.archetypeName}</span>
+                                          </span>
+                                        </td>
+                                        {m.cells.map((cell, i) => (
+                                          <td key={i} className="py-1.5 px-3 text-right whitespace-nowrap">
+                                            {cell ? (
+                                              <>
+                                                <div className={`font-semibold ${winRateClass(cell.winRate)}`}>{cell.winRate.toFixed(1)}%</div>
+                                                <div className="text-xs text-gray-400">{cell.games.toLocaleString()}</div>
+                                              </>
+                                            ) : <span className="text-gray-400">—</span>}
+                                          </td>
+                                        ))}
+                                        {deltaCell(m.weekWinRateDelta, null)}
+                                        {deltaCell(m.winRateDelta, null)}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>
                 </div>
-
-                {driftFocus && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                      {driftFocus.name} — win rate vs each archetype, by week ({matchupUnit})
-                    </h3>
-                    {driftMatchupRows.length === 0 ? (
-                      <p className="text-sm text-gray-500">Not enough head-to-head data for this archetype.</p>
-                    ) : (
-                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
-                              <th className="py-2 px-3">Opponent</th>
-                              {driftWeeks.map((w, i) => (
-                                <th key={w.week.startDate} className="py-2 px-3 text-right whitespace-nowrap">
-                                  {w.week.label}{i === inProgressIndex ? ' (so far)' : ''}
-                                </th>
-                              ))}
-                              <th className="py-2 px-3 text-right whitespace-nowrap">{changeLabel}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {driftMatchupRows.map(row => (
-                              <tr key={row.key} className="border-b border-gray-100">
-                                <td className="py-1.5 px-3">
-                                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                                    <ColorPairIcons colors={row.colors} size={16} />
-                                    <span className="text-gray-900">{row.archetypeName}</span>
-                                  </span>
-                                </td>
-                                {row.cells.map((cell, i) => (
-                                  <td key={i} className="py-1.5 px-3 text-right whitespace-nowrap">
-                                    {cell ? (
-                                      <>
-                                        <div className={`font-semibold ${winRateClass(cell.winRate)}`}>{cell.winRate.toFixed(1)}%</div>
-                                        <div className="text-xs text-gray-400">{cell.games.toLocaleString()}</div>
-                                      </>
-                                    ) : <span className="text-gray-400">—</span>}
-                                  </td>
-                                ))}
-                                <td className={`py-1.5 px-3 text-right font-semibold whitespace-nowrap ${row.winRateDelta == null ? 'text-gray-400' : row.winRateDelta > 0 ? 'text-emerald-600' : row.winRateDelta < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                                  {row.winRateDelta != null ? signed(row.winRateDelta, '%') : '—'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
               </>
             )}
           </div>

@@ -82,6 +82,18 @@ export const SECTIONS = [
         icon: 'target',
         description: 'Pre-event prep: pick your deck and the expected meta, then see which matchups to focus on based on your personal win rates vs the public matrix.',
       },
+      {
+        path: '/game-scraper',
+        name: 'Game Scraper',
+        icon: 'eye',
+        description: 'Paste a duels.ink spectate URL to view live game state: player lore, board, hand counts, and action log with auto-refresh.',
+      },
+      {
+        path: '/library',
+        name: 'Scouting Library',
+        icon: 'library',
+        description: 'Review saved games, stats dashboards, and unified opponent profiles combining scouted games and imported gamelogs — inferred decklists, win rates, and every card we\'ve seen them play, ink, or discard.',
+      },
     ],
   },
   {
@@ -123,24 +135,6 @@ export const SECTIONS = [
         name: 'Store Lookup',
         icon: 'store',
         description: 'Paste one or more Ravensburger Play store IDs or store URLs to look up store details — address, contact info, seat count, and store types.',
-      },
-    ],
-  },
-  {
-    title: 'Scouting',
-    navLabel: 'Scouting',
-    tools: [
-      {
-        path: '/game-scraper',
-        name: 'Game Scraper',
-        icon: 'eye',
-        description: 'Paste a duels.ink spectate URL to view live game state: player lore, board, hand counts, and action log with auto-refresh.',
-      },
-      {
-        path: '/library',
-        name: 'Scouting Library',
-        icon: 'library',
-        description: 'Review saved games, stats dashboards, and unified opponent profiles combining scouted games and imported gamelogs — inferred decklists, win rates, and every card we\'ve seen them play, ink, or discard.',
       },
     ],
   },

@@ -53,6 +53,24 @@ describe('aggregateArchetypes', () => {
     expect(midrange.name).toBe('Amber/Amethyst Midrange')
   })
 
+  it('merges distinct duels.ink slugs that share colors + archetypeName', () => {
+    const result = aggregateArchetypes([
+      { id: 'p1', colors: ['amber', 'steel'], archetypeName: 'Princesses', archetypeSlug: 'amber-steel-beast-ariel-4', gamesPlayed: 2592, wins: 1572 },
+      { id: 'p2', colors: ['amber', 'steel'], archetypeName: 'Princesses', archetypeSlug: 'amber-steel-beast', gamesPlayed: 1098, wins: 633 },
+      { id: 'p3', colors: ['steel', 'amber'], archetypeName: 'Princesses', archetypeSlug: 'amber-steel-stitch-akood', gamesPlayed: 1045, wins: 614 },
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0].gamesPlayed).toBe(4735)
+    expect(result[0].variantCount).toBe(3)
+  })
+
+  it('does not repeat colors duels.ink already put in the name', () => {
+    const [a] = aggregateArchetypes([
+      { id: 'd', colors: ['amber', 'sapphire'], archetypeName: 'Amber/Sapphire Detectives', gamesPlayed: 10, wins: 5 },
+    ])
+    expect(a.name).toBe('Amber/Sapphire Detectives')
+  })
+
   it('excludes uncurated profiles', () => {
     const result = aggregateArchetypes(profiles)
     expect(result.some(a => a.archetypeName == null)).toBe(false)

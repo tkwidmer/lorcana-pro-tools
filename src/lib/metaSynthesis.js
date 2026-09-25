@@ -8,9 +8,12 @@ import { getCuratedArchetypes } from './archetypeStats'
 
 // duels.ink's clustering algorithm splits one conceptual archetype (e.g.
 // "Amber/Amethyst Midrange") into several profile rows — one per detected
-// build variant — each with its own signature cards and win rate. For a
-// high-level synthesis those variants should read as one archetype, so this
-// groups profiles by colors + archetypeName and sums their games/wins.
+// build variant — each with its own signature cards and win rate. It also
+// reuses one display name across several `archetypeSlug`s of the same colors
+// (Infinity's three amber/steel "Princesses" slugs share their flagship
+// cards), and one slug can carry several names. The name + colors is all a
+// player can tell apart, so that's the grouping key: this sums games/wins of
+// every profile sharing colors + archetypeName.
 export function aggregateArchetypes(profiles) {
   const groups = new Map()
   for (const p of getCuratedArchetypes(profiles)) {
@@ -22,9 +25,12 @@ export function aggregateArchetypes(profiles) {
       existing.variantCount += 1
       existing.ids.push(p.id)
     } else {
+      const colorLabel = p.colors.map(c => c[0].toUpperCase() + c.slice(1)).join('/')
       groups.set(key, {
         key,
-        name: `${p.colors.map(c => c[0].toUpperCase() + c.slice(1)).join('/')} ${p.archetypeName}`,
+        // Names are reused across colors ("Midrange", "Evasives"), so prefix
+        // the colors — unless duels.ink already did ("Amber/Sapphire Detectives").
+        name: p.archetypeName.startsWith(colorLabel) ? p.archetypeName : `${colorLabel} ${p.archetypeName}`,
         archetypeName: p.archetypeName,
         colors: p.colors,
         gamesPlayed: p.gamesPlayed,

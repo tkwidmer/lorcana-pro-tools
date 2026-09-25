@@ -1,15 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { fetchStats } from '../lib/duelsApi'
 import { InkIcons as ColorPairIcons } from '../components/InkIcons'
 import { winrateCellColor as getWinrateColor } from '../lib/statColors'
-import { saveSnapshotIfNew, getSnapshotsForConfig } from '../lib/metaSnapshots'
 import { computeMetaDrift } from '../lib/metaDrift'
-import {
-  getCuratedArchetypes,
-  archetypePlayRate,
-  getArchetypeMatchupsFor,
-  buildProfilesById,
-} from '../lib/archetypeStats'
+import { aggregateArchetypes, archetypeMatchupSummary } from '../lib/metaSynthesis'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -30,6 +24,9 @@ const RANKS = [
 ]
 
 const FILTERS_KEY = 'lorcana_winrate_matrix_filters'
+
+// Meta Drift compares weeks within roughly the last month.
+const DRIFT_WEEKS = 5
 
 function loadStoredFilters() {
   try {
@@ -57,12 +54,14 @@ export function WinrateMatrixPage() {
   const [error, setError] = useState(null)
 
   const [compareOpen, setCompareOpen] = useState(false)
-  const [snapshots, setSnapshots] = useState([])
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  const [driftWeeks, setDriftWeeks] = useState([])
+  const [driftLoading, setDriftLoading] = useState(false)
+  const [driftError, setDriftError] = useState(null)
+  const [fromWeek, setFromWeek] = useState('')
+  const [toWeek, setToWeek] = useState('')
 
   const [archetypesOpen, setArchetypesOpen] = useState(false)
-  const [focusedArchetypeId, setFocusedArchetypeId] = useState(null)
+  const [focusedArchetypeKey, setFocusedArchetypeKey] = useState(null)
 
   useEffect(() => {
     localStorage.setItem(FILTERS_KEY, JSON.stringify({
@@ -70,12 +69,6 @@ export function WinrateMatrixPage() {
       period: selectedPeriod,
       ranks: selectedRanks,
     }))
-  }, [selectedQueue, selectedPeriod, selectedRanks])
-
-  const refreshSnapshots = useCallback(async () => {
-    const saved = await getSnapshotsForConfig(selectedQueue, selectedPeriod, selectedRanks)
-    setSnapshots(saved)
-    return saved
   }, [selectedQueue, selectedPeriod, selectedRanks])
 
   useEffect(() => {
@@ -92,12 +85,6 @@ export function WinrateMatrixPage() {
         if (data.meta?.availableWeeks) {
           setAvailableWeeks(data.meta.availableWeeks)
         }
-        await saveSnapshotIfNew(selectedQueue, selectedPeriod, selectedRanks, data)
-        const saved = await refreshSnapshots()
-        if (saved.length >= 2) {
-          setFromDate(prev => prev && saved.some(s => s.dateStr === prev) ? prev : saved[0].dateStr)
-          setToDate(prev => prev && saved.some(s => s.dateStr === prev) ? prev : saved[saved.length - 1].dateStr)
-        }
       } catch (err) {
         // A restored "week:<date>" filter can point at a week duels.ink no longer
         // serves (weeks roll off over time) — fall back to All Time rather than
@@ -113,13 +100,49 @@ export function WinrateMatrixPage() {
     }
 
     loadStats()
-  }, [selectedQueue, selectedPeriod, selectedRanks, refreshSnapshots])
+  }, [selectedQueue, selectedPeriod, selectedRanks])
 
-  const fromSnapshot = snapshots.find(s => s.dateStr === fromDate) ?? null
-  const toSnapshot = snapshots.find(s => s.dateStr === toDate) ?? null
-  const driftRows = (compareOpen && fromSnapshot && toSnapshot && fromDate !== toDate)
-    ? computeMetaDrift(fromSnapshot, toSnapshot)
+  // Meta Drift fetches each of the last DRIFT_WEEKS weeks for this queue/rank
+  // filter straight from duels.ink, so it works on a first visit — no locally
+  // accumulated history needed. Independent of the selected period.
+  useEffect(() => {
+    if (!compareOpen || availableWeeks.length === 0) return
+    let cancelled = false
+    const loadDrift = async () => {
+      setDriftLoading(true)
+      setDriftError(null)
+      try {
+        const weeks = await Promise.all(availableWeeks.slice(-DRIFT_WEEKS).map(async week => ({
+          week,
+          stats: await fetchStats({ queue: selectedQueue, period: `week:${week.startDate}`, ranks: selectedRanks }),
+        })))
+        if (cancelled) return
+        setDriftWeeks(weeks)
+        // Default to the two most recent complete weeks — the in-progress
+        // week's partial game counts would skew the games delta.
+        const currentWeekStart = weeks[weeks.length - 1].stats.meta.currentWeek.startDate
+        const complete = weeks.filter(w => w.week.startDate !== currentWeekStart)
+        const pair = complete.length >= 2 ? complete.slice(-2) : weeks.slice(-2)
+        setFromWeek(pair[0].week.startDate)
+        setToWeek(pair[pair.length - 1].week.startDate)
+      } catch (err) {
+        if (!cancelled) setDriftError(err.message)
+      } finally {
+        if (!cancelled) setDriftLoading(false)
+      }
+    }
+    loadDrift()
+    return () => { cancelled = true }
+  }, [compareOpen, selectedQueue, selectedRanks, availableWeeks])
+
+  const fromWeekStats = driftWeeks.find(w => w.week.startDate === fromWeek)?.stats ?? null
+  const toWeekStats = driftWeeks.find(w => w.week.startDate === toWeek)?.stats ?? null
+  const driftRows = (compareOpen && fromWeekStats && toWeekStats && fromWeek !== toWeek)
+    ? computeMetaDrift(fromWeekStats, toWeekStats)
     : []
+  const weekLabel = w => w.week.startDate === w.stats.meta.currentWeek.startDate ? `${w.week.label} (in progress)` : w.week.label
+  const fromLabel = driftWeeks.find(w => w.week.startDate === fromWeek)?.week.label ?? fromWeek
+  const toLabel = driftWeeks.find(w => w.week.startDate === toWeek)?.week.label ?? toWeek
 
   if (loading) {
     return (
@@ -197,16 +220,18 @@ export function WinrateMatrixPage() {
 
   // duels.ink also breaks each color pair down into named archetypes
   // (e.g. amber/emerald -> "Princess Aggro" vs "Elinor Circle") with their
-  // own win rates and head-to-head records against other archetypes.
-  const curatedArchetypes = getCuratedArchetypes(stats.profiles)
-  const profilesById = buildProfilesById(stats.profiles)
+  // own win rates and head-to-head records against other archetypes. Its
+  // per-variant rows are grouped into the archetypes a player can actually
+  // tell apart (see aggregateArchetypes).
+  const archetypes = aggregateArchetypes(stats.profiles).sort((a, b) => b.gamesPlayed - a.gamesPlayed)
+  const archetypesByKey = new Map(archetypes.map(a => [a.key, a]))
   const totalGames = stats.activity?.totalGames ?? 0
   // In bo3 queues duels.ink counts matchups[].games in finished matches, not
   // individual games (documented; activity.totalGames still counts games).
   const matchupUnit = stats.meta.queues.active.find(q => q.id === stats.meta.queueId).gameMode === 'bo3' ? 'matches' : 'games'
-  const focusedArchetype = focusedArchetypeId ? profilesById.get(focusedArchetypeId) ?? null : null
-  const focusedMatchups = focusedArchetypeId
-    ? getArchetypeMatchupsFor(stats.archetypeMatchups, focusedArchetypeId, profilesById)
+  const focusedArchetype = focusedArchetypeKey ? archetypesByKey.get(focusedArchetypeKey) ?? null : null
+  const focusedMatchups = focusedArchetype
+    ? archetypeMatchupSummary(stats, focusedArchetype.key, { minGames: 1 }).rows
     : []
 
   return (
@@ -313,9 +338,7 @@ export function WinrateMatrixPage() {
         </p>
       </div>
 
-      {/* Meta drift — compares two locally-saved snapshots of this exact queue/period/rank
-          config. A snapshot is saved automatically the first time this page loads on a new
-          day for a given config, so this fills in as you keep visiting. */}
+      {/* Meta drift — compares two of the last few weeks for this queue/rank filter. */}
       <div className="mb-8">
         <button
           onClick={() => setCompareOpen(o => !o)}
@@ -328,47 +351,49 @@ export function WinrateMatrixPage() {
         </button>
         {compareOpen && (
           <div className="mt-6">
-            {snapshots.length < 2 ? (
-              <p className="text-sm text-gray-500">
-                Only {snapshots.length} saved snapshot{snapshots.length === 1 ? '' : 's'} for this queue/period/rank combo so far — a new one is captured automatically each day you visit this page. Check back after a couple of days to see drift.
-              </p>
+            {driftError ? (
+              <p className="text-sm text-red-700">Couldn't load weekly stats: {driftError}</p>
+            ) : driftLoading ? (
+              <p className="text-sm text-gray-500">Loading the last {DRIFT_WEEKS} weeks...</p>
+            ) : driftWeeks.length < 2 ? (
+              <p className="text-sm text-gray-500">Not enough weeks of data in this era yet to compare.</p>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-3 mb-4">
                   <label className="text-sm font-semibold text-gray-900">From</label>
                   <select
-                    value={fromDate}
-                    onChange={e => setFromDate(e.target.value)}
+                    value={fromWeek}
+                    onChange={e => setFromWeek(e.target.value)}
                     className="px-2 py-1.5 rounded-lg text-sm border border-gray-300 bg-white text-gray-900"
                   >
-                    {snapshots.map(s => (
-                      <option key={s.id} value={s.dateStr}>{s.dateStr}</option>
+                    {driftWeeks.map(w => (
+                      <option key={w.week.startDate} value={w.week.startDate}>{weekLabel(w)}</option>
                     ))}
                   </select>
                   <span className="text-gray-400">→</span>
                   <label className="text-sm font-semibold text-gray-900">To</label>
                   <select
-                    value={toDate}
-                    onChange={e => setToDate(e.target.value)}
+                    value={toWeek}
+                    onChange={e => setToWeek(e.target.value)}
                     className="px-2 py-1.5 rounded-lg text-sm border border-gray-300 bg-white text-gray-900"
                   >
-                    {snapshots.map(s => (
-                      <option key={s.id} value={s.dateStr}>{s.dateStr}</option>
+                    {driftWeeks.map(w => (
+                      <option key={w.week.startDate} value={w.week.startDate}>{weekLabel(w)}</option>
                     ))}
                   </select>
                 </div>
-                {fromDate === toDate ? (
-                  <p className="text-sm text-gray-500">Pick two different dates to see the delta.</p>
+                {fromWeek === toWeek ? (
+                  <p className="text-sm text-gray-500">Pick two different weeks to see the delta.</p>
                 ) : driftRows.length === 0 ? (
-                  <p className="text-sm text-gray-500">No overlapping matchup data between these two snapshots.</p>
+                  <p className="text-sm text-gray-500">No overlapping matchup data between these two weeks.</p>
                 ) : (
                   <div className="overflow-x-auto border border-gray-200 rounded-lg">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-200 bg-gray-50">
                           <th className="py-2 px-3">Matchup</th>
-                          <th className="py-2 px-3 text-right">{fromDate}</th>
-                          <th className="py-2 px-3 text-right">{toDate}</th>
+                          <th className="py-2 px-3 text-right">{fromLabel}</th>
+                          <th className="py-2 px-3 text-right">{toLabel}</th>
                           <th className="py-2 px-3 text-right">Δ Winrate</th>
                           <th className="py-2 px-3 text-right capitalize">Δ {matchupUnit}</th>
                         </tr>
@@ -413,7 +438,7 @@ export function WinrateMatrixPage() {
 
       {/* Archetypes — duels.ink's named-archetype breakdown layered on top of
           the raw color-pair matchups below. */}
-      {curatedArchetypes.length > 0 && (
+      {archetypes.length > 0 && (
         <div className="mb-8">
           <button
             onClick={() => setArchetypesOpen(o => !o)}
@@ -438,11 +463,11 @@ export function WinrateMatrixPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {curatedArchetypes.map(p => (
+                    {archetypes.map(p => (
                       <tr
-                        key={p.id}
-                        onClick={() => setFocusedArchetypeId(prev => (prev === p.id ? null : p.id))}
-                        className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${focusedArchetypeId === p.id ? 'bg-gray-100' : ''}`}
+                        key={p.key}
+                        onClick={() => setFocusedArchetypeKey(prev => (prev === p.key ? null : p.key))}
+                        className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${focusedArchetypeKey === p.key ? 'bg-gray-100' : ''}`}
                       >
                         <td className="py-1.5 px-3 font-medium text-gray-900">{p.archetypeName}</td>
                         <td className="py-1.5 px-3">
@@ -452,7 +477,7 @@ export function WinrateMatrixPage() {
                           {p.winRate.toFixed(1)}%
                         </td>
                         <td className="py-1.5 px-3 text-right text-gray-600">
-                          {archetypePlayRate(p, totalGames).toFixed(1)}%
+                          {(totalGames > 0 ? (p.gamesPlayed / totalGames) * 100 : 0).toFixed(1)}%
                         </td>
                         <td className="py-1.5 px-3 text-right text-gray-400">
                           {p.gamesPlayed.toLocaleString()}
@@ -482,12 +507,12 @@ export function WinrateMatrixPage() {
                         </thead>
                         <tbody>
                           {focusedMatchups.map(row => (
-                            <tr key={row.opponentId} className="border-b border-gray-100">
+                            <tr key={row.key} className="border-b border-gray-100">
                               <td className="py-1.5 px-3">
                                 <span className="inline-flex items-center gap-2">
-                                  {row.opponent && <ColorPairIcons colors={row.opponent.colors} size={16} />}
+                                  <ColorPairIcons colors={archetypesByKey.get(row.key).colors} size={16} />
                                   <span className="text-gray-900">
-                                    {row.opponent?.archetypeName || row.opponent?.name || 'Unknown'}
+                                    {archetypesByKey.get(row.key).archetypeName}
                                     {row.isMirror ? ' (mirror)' : ''}
                                   </span>
                                 </span>

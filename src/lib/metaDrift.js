@@ -1,7 +1,7 @@
-// Compares two saved meta snapshots (see metaSnapshots.js) for the same
-// queue/period/ranks config and returns the winRate/games delta per matchup,
-// so a shift in the meta between two dates can be surfaced without re-fetching
-// duels.ink — both snapshots' matchups are already stored locally.
+// Compares two duels.ink /api/stats/meta responses for the same queue/ranks
+// (WinrateMatrixPage fetches one per week) and returns the winRate/games
+// delta per color-pair matchup, so a shift in the meta between two weeks can
+// be surfaced.
 export function computeMetaDrift(fromSnapshot, toSnapshot) {
   if (!fromSnapshot || !toSnapshot) return []
 

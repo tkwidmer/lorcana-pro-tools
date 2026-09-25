@@ -13,8 +13,8 @@ describe('siteSections', () => {
   })
 
   it('finds the tool and section for a catalog path', () => {
-    const match = findTool('/cut-calculator')
-    expect(match.tool.name).toBe('Cut Calculator')
+    const match = findTool('/tournament-lookup')
+    expect(match.tool.name).toBe('Tournament Lookup')
     expect(match.section.title).toBe('Tournament Tools')
   })
 

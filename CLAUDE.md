@@ -16,7 +16,7 @@ npm run test:watch # Run Vitest in watch mode
 
 Unit tests live in `src/lib/__tests__/` (Vitest), one `<lib>.test.js` per pure-logic
 lib in `src/lib/` (e.g. `parseGamelog`, `cardImpact`, `practiceSim`, `metaSynthesis`,
-`storeTiers`, `tournamentCut`). CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
+`storeTiers`). CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
 UI and integration behavior is still validated manually.
 
 ## Screenshots & Manual Verification
@@ -89,7 +89,6 @@ Defined in `src/App.jsx`:
 | `/auth/callback` | `AuthCallbackPage.jsx` | OAuth redirect handler; checks session and redirects |
 | `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, add [Format Coconut] cards, build print sheets (9/page) |
 | `/coconut-deck-builder` | `CoconutDeckBuilderPage.jsx` | [Format Coconut] deck builder — pick a Coconut card, lock in up to 3 inks, build a singleton 60+ card deck with the format's copy-count exceptions enforced |
-| `/cut-calculator` | `TournamentCutPage.jsx` | Swiss cut probability calculator using binomial/trinomial models |
 | `/limited-guide` | `LimitedGuidePage.jsx` | Limited format reference — BREAD framework, mana curves, uninkable counts |
 | `/rules` | `RulesPage.jsx` | Rules browser index — lists every document in `src/lib/rules/registry.js` with its latest version (see "Rules Browser" below) |
 | `/rules/:doc`, `/rules/:doc/:chapterSlug` | `RulesDocumentPage.jsx` | One rules document, chaptered, with a `?v=` version picker and inline "changed from previous version" highlighting |
@@ -109,7 +108,6 @@ Defined in `src/App.jsx`:
 | `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
 | `/meta-synthesis` | `MetaSynthesisPage.jsx` | Plain-English meta report from duels.ink `fetchStats`, centered on the user's rank band — see "Meta Synthesis" below |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
-| `/leaderboard` | `LeaderboardPage.jsx` | duels.ink top 50 players by queue, MMR distribution |
 | `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis; clicking a pairing in the Matches tab opens cross-event history + head-to-head from the Tournament History archive (see below) |
 | `/lore-tracker` | `LoreTrackerPage.jsx` | Mobile in-game lore counter with tap controls and audit log |
 | `/store-lookup` | `StoreLookupPage.jsx` | Paste RPH store IDs/URLs → store details plus store-tier status (see "Store Lookup" below) |
@@ -129,6 +127,7 @@ Legacy redirects:
 - `/game-library` → `/analytics`
 - `/shared` → `/library`
 - `/legality-checker` → `/deck-insights`
+- `/cut-calculator` → `/tournament-lookup` (retired; Tournament Lookup's ID analysis covers it)
 - `/opponent-directory` → `/library?tab=players` (the two pages were merged into one — see below)
 
 ### Components
@@ -206,7 +205,6 @@ In `src/lib/`:
 | `analyticsAggregation.js` | `enrichGame()` + per-card/mulligan aggregations (`aggregateMyCards`, `aggregateMulliganSentBack`, `aggregateMulliganWinRates`, `aggregateMultiCopyMulligan`) behind `AnalyticsPage` |
 | `practiceSim.js` | `wilsonInterval()`, `shrinkWR()` (Bayesian shrinkage toward the public WR, 10-game prior), and the Bo1/Bo3 tournament Monte Carlo used by `PracticePlanPage` |
 | `drawOddsMath.js` / `monteCarloSim.js` | Exact hypergeometric odds (log-space) and the mulligan/scry/curve/quest-pressure simulations behind Deck Insights |
-| `tournamentCut.js` | Cut-line estimates (`estimateCutlineRange()` — W/L binomial vs. W/D/L trinomial) for the Cut Calculator |
 | `tournamentLive.js` | `subscribeToTournamentLive()` — Pusher subscription to RPH's public `player-event-{id}` channel; wrapped by `hooks/useTournamentLiveUpdates.js` so `TournamentLookupPage` refetches on any broadcast |
 | `metaSynthesis.js` / `rankTiers.js` / `archetypeStats.js` | Meta Synthesis logic (see below), MMR → rank-tier mapping, and curation of duels.ink archetype profiles |
 | `storeTiers.js` | RPH store-tier rules for Store Lookup (see below) |
@@ -215,7 +213,6 @@ In `src/lib/`:
 | `cardImpact.js` | `computeCardImpact()` — per-card "wins above replacement" (WAR) for a deck's games; `computeCardImpactTrend()` — the same logic bucketed by calendar month, powering `CardImpactTrendView`'s WAR-over-time chart |
 | `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
 | `duelsApi.js` | duels.ink API client — token management, match history, gamelog, deck/personal-stats, and meta stats fetches |
-| `leaderboardApi.js` | Fetches duels.ink ranked leaderboards via `/api/duels?endpoint=leaderboard` |
 | `metaSnapshots.js` | IndexedDB CRUD for daily meta-matchup snapshots (`lorcana_pro_tools` DB, `metaSnapshots` store, keyed by `id`) — `saveSnapshotIfNew()` captures one snapshot per queue/period/ranks config per day from `WinrateMatrixPage`'s `fetchStats` result; `getSnapshotsForConfig()` reads them back for the Meta Drift comparison |
 | `metaDrift.js` | `computeMetaDrift()` — diffs two saved meta snapshots' matchups (win rate, games) for `WinrateMatrixPage`'s Meta Drift view |
 | `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
@@ -275,7 +272,7 @@ Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies wit
 
 | Endpoint | Upstream | Auth | Notes |
 |---|---|---|---|
-| `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`, `leaderboard`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `deck`, `stats`, `leaderboard`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. `stats` forwards duels.ink's documented `era` param; `fetchStats()` in `duelsApi.js` always scopes to the queue's current era, looking its key up once per queue from `meta.eras.currentEra.key`. Only the fields duels.ink documents as stable (`matchups`, `colorPairs`, `activity.totalGames`, `updatedAt`, a few `meta.*`) are a supported contract — the archetype fields (`profiles`, `archetypeMatchups`, `cardLift`) behind `MetaSynthesisPage` and the matrix's archetype view are not. In bo3 queues `matchups[].games` counts matches, not games. |
+| `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `deck`, `stats`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. `stats` forwards duels.ink's documented `era` param; `fetchStats()` in `duelsApi.js` always scopes to the queue's current era, looking its key up once per queue from `meta.eras.currentEra.key`. Only the fields duels.ink documents as stable (`matchups`, `colorPairs`, `activity.totalGames`, `updatedAt`, a few `meta.*`) are a supported contract — the archetype fields (`profiles`, `archetypeMatchups`, `cardLift`) behind `MetaSynthesisPage` and the matrix's archetype view are not. In bo3 queues `matchups[].games` counts matches, not games. |
 | `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`, `store`, `storeEvents`; handles pagination |
 | `/api/tournament-history` | Supabase (`tournament_history_*` tables) | Bearer Supabase access token — `import` requires admin tier, the read endpoints require any signed-in session | Single consolidated route for the caster history archive, dispatched by `?endpoint=` — `import` (admin-only, fetches an RPH event's final standings + matches server-side and upserts them), `player-history`, `head-to-head`, `search-players`, `recent-imports`. See "Tournament History Archive" below. |
 | `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's commands (Decode Deck QR, `/tournament`, `/favorite`, `/unfavorite`, `/favorites`) directly. See `discord-bot/README.md`. |
@@ -470,7 +467,7 @@ authorUrl: https://x.com/janedoe
 
 Posts can be guest-written, so every post names its own `author` and links `authorUrl` (their X/Twitter, Metafy, or other profile; must be `https://`). The byline (`components/PostByline.jsx` client-side, mirrored in `blogPlugin.js`'s static HTML) links it with `rel="author"`, and the post's `BlogPosting` JSON-LD carries it as a `Person`.
 
-Adding a file is all it takes to publish; there's no registry to update. An optional `draft: true` line keeps a post out of production builds (no static page, no sitemap entry, and it compiles to `null` so its content never reaches the bundle) while still showing it in `npm run dev` with a Draft badge; delete the line to publish. The `new-blog-post` skill (`.claude/skills/new-blog-post/`) scaffolds a draft with today's date and InkbornForge as the default author. `parsePost()` (`src/lib/blogPost.js`) throws on a missing field, a non-`YYYY-MM-DD` date, a non-`https://` `authorUrl`, or a non-slug filename, which fails the build rather than shipping a broken post. Links to other pages on the site should be root-relative (`[Cut Calculator](/cut-calculator)`).
+Adding a file is all it takes to publish; there's no registry to update. An optional `draft: true` line keeps a post out of production builds (no static page, no sitemap entry, and it compiles to `null` so its content never reaches the bundle) while still showing it in `npm run dev` with a Draft badge; delete the line to publish. The `new-blog-post` skill (`.claude/skills/new-blog-post/`) scaffolds a draft with today's date and InkbornForge as the default author. `parsePost()` (`src/lib/blogPost.js`) throws on a missing field, a non-`YYYY-MM-DD` date, a non-`https://` `authorUrl`, or a non-slug filename, which fails the build rather than shipping a broken post. Links to other pages on the site should be root-relative (`[Tournament Lookup](/tournament-lookup)`).
 
 `blogPlugin.js` (a Vite plugin registered in `vite.config.js`) does the work:
 - **Compile at build time.** It transforms each `content/blog/*.md` import into a JS module exporting the parsed post, so `src/lib/blog.js`'s `import.meta.glob` gets plain HTML strings and `marked` never ships to the browser.
@@ -488,8 +485,6 @@ PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapp
 **Draw odds (DrawOddsPage / `deck-insights`)** — Uses log-space binomial coefficients to avoid overflow. Hypergeometric distribution for exact card draw probabilities. Monte Carlo simulation (10,000 iterations) for mulligan decisions, scry effects, multi-group joint probabilities, and 12-turn quest pressure curves.
 
 **Hand inference (handInference.js + HandPredictor.jsx)** — Hypergeometric P(≥1 copy in hand) given remaining deck size and current hand size. Combines observed deck composition with historical player profiles as a prior.
-
-**Cut calculator (TournamentCutPage)** — Upper bound uses a pure W/L binomial; lower bound uses a trinomial W/D/L with empirical draw rate. Estimates safe cutline range and advises on intentional draw risk.
 
 **Tournament ID analysis (tournamentApi.js `analyzeId`)** — After an ID, player gains 1 point. Counts how many players below the cut could leapfrog them if those players all win (+3 pts). Classifies as safe (≥3 point buffer), borderline (1–2 buffer), or danger (0 or outside cut).
 

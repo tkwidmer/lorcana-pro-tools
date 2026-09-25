@@ -11,7 +11,7 @@ InkbornForge has always been a set of tools. Starting today, it's also a place t
 ## What to expect
 
 - **Meta analysis** built on the same data behind the [Winrate Matrix](/winrate-matrix) and [Meta Synthesis](/meta-synthesis).
-- **Tournament prep** — making the most of the [Cut Calculator](/cut-calculator) and practice planning.
+- **Tournament prep** — making the most of [Tournament Lookup](/tournament-lookup) and practice planning.
 - **Tool updates** when something new ships.
 
 Thanks for reading, and see you at the table.

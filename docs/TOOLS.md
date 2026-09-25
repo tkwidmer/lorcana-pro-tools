@@ -9,8 +9,8 @@ Tools marked **Supporter** need an active supporter account (see [Getting starte
 - [Resources](#resources): Proxy Generator, Limited Guide, Rules
 - [Deckbuilding](#deckbuilding): Deck Insights, Deck Comparison, Coconut Deck Builder
 - [Coaching](#coaching): Match History, Analytics, Practice Plan, Gamelog Viewer
-- [Metagame](#metagame): Winrate Matrix, Meta Synthesis, Leaderboard
-- [Tournament](#tournament): Cut Calculator, Tournament Lookup, Lore Tracker, Store Lookup
+- [Metagame](#metagame): Winrate Matrix, Meta Synthesis
+- [Tournament](#tournament): Tournament Lookup, Lore Tracker, Store Lookup
 - [Scouting](#scouting): Game Scraper, Scouting Library, Player Profiles
 - [Content creators](#content-creators): Decklist Inspector and its OBS overlay
 - [Discord bot](#discord-bot)
@@ -41,15 +41,15 @@ Tools marked **Supporter** need an active supporter account (see [Getting starte
 
 | I want to… | Start with | Then |
 |---|---|---|
-| Prepare for an upcoming tournament | [Practice Plan](#practice-plan) | [Meta Synthesis](#meta-synthesis), [Cut Calculator](#cut-calculator) |
+| Prepare for an upcoming tournament | [Practice Plan](#practice-plan) | [Meta Synthesis](#meta-synthesis) |
 | Know if a deck list is consistent | [Deck Insights](#deck-insights) | [Winrate Matrix](#winrate-matrix) for how it fares in the meta |
 | Find out which cards in my deck are pulling their weight | [Analytics → Card Impact (WAR)](#analytics) | [Deck Comparison](#deck-comparison) to plan the swaps |
 | See how I'm doing lately | [Match History](#match-history) | [Analytics](#analytics) trends |
 | Stop making the same mistakes | [Analytics → leak report](#analytics) | [Practice Plan → Skills to drill](#practice-plan) |
 | Scout an opponent | [Scouting Library → Players](#scouting-library) | [Game Scraper](#game-scraper) to capture more games |
-| Understand the current meta | [Meta Synthesis](#meta-synthesis) | [Winrate Matrix](#winrate-matrix), [Leaderboard](#leaderboard) |
+| Understand the current meta | [Meta Synthesis](#meta-synthesis) | [Winrate Matrix](#winrate-matrix) |
 | Follow a live event, as a player or a caster | [Tournament Lookup](#tournament-lookup) | [Discord bot `/favorite`](#discord-bot) |
-| Decide whether to take an intentional draw | [Tournament Lookup → ID analysis](#tournament-lookup) | [Cut Calculator](#cut-calculator) |
+| Decide whether to take an intentional draw | [Tournament Lookup → ID analysis](#tournament-lookup) | |
 | Settle a rules question | [Rules](#rules) | |
 | Playtest cards I don't own | [Proxy Generator](#proxy-generator) | |
 | Move my paper deck to a new list | [Deck Comparison](#deck-comparison) | |
@@ -198,21 +198,9 @@ A plain-English read of the current meta, based on your own rank band by default
 
 You can switch between Core and Infinity, and between Bo1 and Bo3. There's also a share image.
 
-### Leaderboard
-`/leaderboard` · Free
-
-The top 50 ranked duels.ink players in each queue, with links to their Twitch, X, and YouTube where known. Also shows the MMR distribution, the rank tier thresholds, and current season info.
-
 ---
 
 ## Tournament
-
-### Cut Calculator
-`/cut-calculator` · Free
-
-Enter the number of **players**, **Swiss rounds**, and **top cut** size. Optionally add how many players already have draws, which you can read off the standings. Then step in your current wins, losses, and draws.
-
-It estimates the points needed to make the cut as a range, from a pessimistic cut line that assumes no IDs to an optimistic one that accounts for IDs in the field. It then rates an intentional draw (ID) as *Safe to ID*, *Probably safe to ID*, or *Risky ID — field dependent*.
 
 ### Tournament Lookup
 `/tournament-lookup` · **Supporter**

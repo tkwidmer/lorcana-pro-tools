@@ -10,7 +10,6 @@ import { BlogIndexPage } from './pages/BlogIndexPage'
 import { BlogPostPage } from './pages/BlogPostPage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { CoconutDeckBuilderPage } from './pages/CoconutDeckBuilderPage'
-import { TournamentCutPage } from './pages/TournamentCutPage'
 import { LimitedGuidePage } from './pages/LimitedGuidePage'
 import { RulesPage } from './pages/RulesPage'
 import { RulesDocumentPage } from './pages/RulesDocumentPage'
@@ -30,7 +29,6 @@ import { AnalyticsPage } from './pages/AnalyticsPage'
 import { WinrateMatrixPage } from './pages/WinrateMatrixPage'
 import { MetaSynthesisPage } from './pages/MetaSynthesisPage'
 import { PracticePlanPage } from './pages/PracticePlanPage'
-import { LeaderboardPage } from './pages/LeaderboardPage'
 import { TournamentLookupPage } from './pages/TournamentLookupPage'
 import { StoreLookupPage } from './pages/StoreLookupPage'
 import { LoreTrackerPage } from './pages/LoreTrackerPage'
@@ -67,7 +65,6 @@ function RoutedContent() {
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
         <Route path="/coconut-deck-builder" element={<CoconutDeckBuilderPage />} />
-        <Route path="/cut-calculator" element={<TournamentCutPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/rules/:doc/changes" element={<RulesChangesPage />} />
@@ -94,7 +91,6 @@ function RoutedContent() {
         <Route path="/winrate-matrix" element={<WinrateMatrixPage />} />
         <Route path="/meta-synthesis" element={<MetaSynthesisPage />} />
         <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />
-        <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />
         <Route path="/store-lookup" element={<StoreLookupPage />} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
@@ -104,6 +100,8 @@ function RoutedContent() {
         <Route path="/game-library" element={<Navigate to="/analytics" replace />} />
         <Route path="/shared" element={<Navigate to="/library" replace />} />
         <Route path="/legality-checker" element={<Navigate to="/deck-insights" replace />} />
+        {/* The Cut Calculator was retired — Tournament Lookup's ID analysis covers it. */}
+        <Route path="/cut-calculator" element={<Navigate to="/tournament-lookup" replace />} />
         {/* Opponent Directory was merged into the Library's Players tab, which now
             combines scouted-game and gamelog-derived opponent data in one place. */}
         <Route path="/opponent-directory" element={<Navigate to="/library?tab=players" replace />} />

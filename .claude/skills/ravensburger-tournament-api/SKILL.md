@@ -1,6 +1,6 @@
 ---
 name: ravensburger-tournament-api
-description: Load this before touching src/lib/tournamentApi.js, api/tournament.ts, api/_lib/discordTournamentApi.ts, api/_lib/discordTournamentEmbeds.ts, TournamentLookupPage, TournamentCutPage, PracticePlanPage, or the Discord /tournament and /favorite commands. There is no published documentation for this API — the two client implementations in this repo are the only reference, and the upstream has an undocumented quirk (match data requires a second, separate host) worth knowing before assuming a straightforward REST API.
+description: Load this before touching src/lib/tournamentApi.js, api/tournament.ts, api/_lib/discordTournamentApi.ts, api/_lib/discordTournamentEmbeds.ts, TournamentLookupPage, PracticePlanPage, or the Discord /tournament and /favorite commands. There is no published documentation for this API — the two client implementations in this repo are the only reference, and the upstream has an undocumented quirk (match data requires a second, separate host) worth knowing before assuming a straightforward REST API.
 ---
 
 # Ravensburger Play Hub Tournament API
@@ -26,7 +26,7 @@ Before touching:
   tournament-API-specific routing on top of it)
 - `api/_lib/discordTournamentApi.ts` — the Discord bot's standalone port of
   the same logic (kept in sync manually, not shared source)
-- `TournamentLookupPage`, `TournamentCutPage`, `PracticePlanPage` — consumers
+- `TournamentLookupPage`, `PracticePlanPage` — consumers
   of standings/structure data
 - The Discord `/tournament` and `/favorite` commands and
   `api/discord-tournament-tick.ts`

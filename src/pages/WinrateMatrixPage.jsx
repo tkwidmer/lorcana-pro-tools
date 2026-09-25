@@ -62,6 +62,7 @@ export function WinrateMatrixPage() {
   const [driftSort, setDriftSort] = useState('games')
 
   const [archetypesOpen, setArchetypesOpen] = useState(false)
+  const [matrixOpen, setMatrixOpen] = useState(true)
   const [focusedArchetypeKey, setFocusedArchetypeKey] = useState(null)
 
   useEffect(() => {
@@ -359,15 +360,12 @@ export function WinrateMatrixPage() {
       {/* Meta drift — each archetype's win rate and share of games, week by week over
           the last month, with a drill-in to its matchups. */}
       <div className="mb-8">
-        <button
-          onClick={() => setCompareOpen(o => !o)}
-          className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
-        >
-          <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Meta Drift</span>
-          <svg className={`w-4 h-4 text-gray-400 transition-transform ${compareOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
+        <SectionHeader
+          title="Meta Drift"
+          description="How each archetype's win rate and play rate moved week by week over the last month. Click an archetype to see its matchups over the same weeks."
+          open={compareOpen}
+          onToggle={() => setCompareOpen(o => !o)}
+        />
         {compareOpen && (
           <div className="mt-6">
             {driftError ? (
@@ -379,7 +377,7 @@ export function WinrateMatrixPage() {
             ) : (
               <>
                 <p className="text-sm text-gray-500 mb-3">
-                  Win rate each week, with games and the % of that week's games it appeared in underneath (duels.ink's play rate). The last two columns are the change over the latest complete week alone, and the overall change from the first week shown ({driftWeeks[0].week.label}) to the latest complete week ({driftWeeks[completeCount - 1].week.label}). Click an archetype for its matchups.
+                  Win rate each week, with games and the % of that week's games it appeared in underneath (duels.ink's play rate). The last two columns are the change over the latest complete week alone, and the overall change from the first week shown ({driftWeeks[0].week.label}) to the latest complete week ({driftWeeks[completeCount - 1].week.label}).
                 </p>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <span className="text-sm font-semibold text-gray-900">Sort by {driftWeeks[completeCount - 1].week.label}:</span>
@@ -505,15 +503,12 @@ export function WinrateMatrixPage() {
           the raw color-pair matchups below. */}
       {archetypes.length > 0 && (
         <div className="mb-8">
-          <button
-            onClick={() => setArchetypesOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
-          >
-            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Archetypes</span>
-            <svg className={`w-4 h-4 text-gray-400 transition-transform ${archetypesOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+          <SectionHeader
+            title="Archetypes"
+            description="Every archetype in the selected period, with its win rate, play rate and games. Click one to see its win rate against each other archetype."
+            open={archetypesOpen}
+            onToggle={() => setArchetypesOpen(o => !o)}
+          />
           {archetypesOpen && (
             <div className="mt-6">
               <div className="overflow-x-auto border border-gray-200 rounded-lg mb-6">
@@ -604,7 +599,15 @@ export function WinrateMatrixPage() {
       )}
 
       {/* Matrix */}
-      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+      <div>
+        <SectionHeader
+          title="Matchup Matrix"
+          description="Win rate of each color pair (row) against every other color pair (column) in the selected period. Mirror cells show the win rate of the player going first."
+          open={matrixOpen}
+          onToggle={() => setMatrixOpen(o => !o)}
+        />
+        {matrixOpen && (
+      <div className="mt-6 overflow-x-auto border border-gray-200 rounded-lg">
         <div className="inline-flex flex-col gap-1 p-4 bg-white">
           {/* Header row */}
           <div className="inline-flex gap-1">
@@ -652,6 +655,28 @@ export function WinrateMatrixPage() {
           ))}
         </div>
       </div>
+        )}
+      </div>
     </div>
+  )
+}
+
+// A collapsible section title with a one-line explanation of what the
+// section is for, shown whether or not the section is open.
+function SectionHeader({ title, description, open, onToggle }) {
+  return (
+    <>
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
+      >
+        <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">{title}</span>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      <p className="mt-2 text-sm text-gray-500">{description}</p>
+    </>
   )
 }

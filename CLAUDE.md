@@ -32,7 +32,7 @@ preview URL if local verification isn't possible for some reason.
 
 When creating a pull request:
 
-1. **Include Vercel preview link** — Add the live preview URL in the PR description so reviewers can test changes without building locally. Preview links follow the pattern `https://<branch-name>.<project>.vercel.app`
+1. **Include Vercel preview link** — Add the live preview URL in the PR description so reviewers can test changes without building locally. Don't construct the URL — Vercel truncates the branch and appends a hash, so any guessed pattern is wrong. Read it from the vercel[bot] comment on the PR per the `vercel-preview-url` skill (`.claude/skills/vercel-preview-url/`)
 2. **Include screenshots for UI changes** — For any updates or new features affecting the user interface, capture and attach relevant screenshots in the PR body. Include before/after pairs when applicable
 
 ## Stack

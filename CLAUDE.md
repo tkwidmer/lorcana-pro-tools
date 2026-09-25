@@ -32,7 +32,7 @@ preview URL if local verification isn't possible for some reason.
 
 When creating a pull request:
 
-1. **Include Vercel preview link** — Add the live preview URL in the PR description so reviewers can test changes without building locally. Preview links follow the pattern `https://<branch-name>.<project>.vercel.app`
+1. **Include Vercel preview link** — Add the live preview URL in the PR description so reviewers can test changes without building locally. Don't construct the URL — Vercel truncates the branch and appends a hash, so any guessed pattern is wrong. Read it from the vercel[bot] comment on the PR per the `vercel-preview-url` skill (`.claude/skills/vercel-preview-url/`)
 2. **Include screenshots for UI changes** — For any updates or new features affecting the user interface, capture and attach relevant screenshots in the PR body. Include before/after pairs when applicable
 
 ## Stack
@@ -213,8 +213,7 @@ In `src/lib/`:
 | `cardImpact.js` | `computeCardImpact()` — per-card "wins above replacement" (WAR) for a deck's games; `computeCardImpactTrend()` — the same logic bucketed by calendar month, powering `CardImpactTrendView`'s WAR-over-time chart |
 | `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
 | `duelsApi.js` | duels.ink API client — token management, match history, gamelog, deck/personal-stats, and meta stats fetches |
-| `metaSnapshots.js` | IndexedDB CRUD for daily meta-matchup snapshots (`lorcana_pro_tools` DB, `metaSnapshots` store, keyed by `id`) — `saveSnapshotIfNew()` captures one snapshot per queue/period/ranks config per day from `WinrateMatrixPage`'s `fetchStats` result; `getSnapshotsForConfig()` reads them back for the Meta Drift comparison |
-| `metaDrift.js` | `computeMetaDrift()` — diffs two saved meta snapshots' matchups (win rate, games) for `WinrateMatrixPage`'s Meta Drift view |
+| `metaDrift.js` | `archetypeDrift()` / `archetypeMatchupDrift()` — week-by-week win rate, games and play rate per grouped archetype, and one archetype's win rate vs each other archetype, for `WinrateMatrixPage`'s Meta Drift view |
 | `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
 | `tournamentHistoryApi.js` | Client for `/api/tournament-history` — `fetchPlayerTournamentHistory()`, `fetchHeadToHead()`, `searchTournamentPlayers()`, `fetchRecentTournamentImports()`, `importTournamentEvent()`. See "Tournament History Archive" below |
 | `blog.js` | Client access to the compiled blog posts — `listPosts()` (newest first), `getPost(slug)`. See "Blog" below |
@@ -314,7 +313,6 @@ A prior Patreon OAuth integration (`api/patreon.ts` + friends) was fully removed
 | IndexedDB `lorcana_pro_tools` v2 | `games` store (key: `uuid`) | Scraped game snapshots from `GameScraperPage` |
 | IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
 | IndexedDB `lorcana_pro_tools` v3 | `coconutDecks` store (key: `id`) | Saved [Format Coconut] decks from `CoconutDeckBuilderPage` |
-| IndexedDB `lorcana_pro_tools` v4 | `metaSnapshots` store (key: `id`) | Daily meta-matchup snapshots from `WinrateMatrixPage`, one per queue/period/ranks config per day, used by its Meta Drift comparison |
 | IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `AnalyticsPage` |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
 | localStorage `lorcana_theme` | — | Dark-mode preference: `light` \| `dark` \| `system` (see Dark Mode) |
@@ -402,7 +400,9 @@ Key fields on game objects from the duels.ink API:
 
 `metagameAnalysis.js` (`analyzeOpponentMetagame`) groups by opponent color pair and returns frequency + win rate sorted by game count.
 
-`WinrateMatrixPage`'s Meta Drift section compares two locally-saved snapshots of the public duels.ink matchup data for the same queue/period/ranks config, to surface how the meta has shifted over time. Every time the page loads, `saveSnapshotIfNew()` (`metaSnapshots.js`) stores that day's `fetchStats` matchups/colorPairs/activity in the `metaSnapshots` IndexedDB store — one snapshot per exact config per day, so repeat visits within a day don't create duplicates. The user picks two saved dates and `computeMetaDrift()` (`metaDrift.js`) diffs the two snapshots' matchups (win rate delta, games delta, matched by color pair regardless of A/B order), sorted by absolute win rate movement. Since snapshots only accumulate as the user actually visits the page, there's no backfill — history starts from whenever this shipped.
+`WinrateMatrixPage` (defaults to Core Bo1) has two collapsible sections. **Win Rates** (open by default) groups by Archetypes (default) or Ink pairs and shows a Matrix (default) or a List; the archetype matrix is `archetypeMatrix()` (`metaSynthesis.js`) — archetypes with ≥1% of the meta, pairings under 30 games blanked — and the archetype list expands a row's matchups inline. **Archetype Meta Drift** is built on grouped archetypes (`aggregateArchetypes`, below). When opened, it fetches the last 5 of `meta.availableWeeks` (`period=week:<startDate>`) for the selected queue/ranks in parallel. `archetypeDrift()` (`metaDrift.js`) gives one row per archetype with each week's win rate, games and play rate, plus the overall change from the first week to the latest complete week (not week-over-week), plus a "Last week" column for the latest complete week vs the one before; each change header names its span. The in-progress week is shown but excluded, since its sample is partial. Rows sort by the latest complete week's games or win rate. Clicking an archetype expands `archetypeMatchupDrift()` in a row directly beneath it: its win rate vs each other archetype per week (mirrors omitted). Nothing is stored — it works on a first visit. "% of the meta" everywhere (this page, Meta Synthesis) is `metaShare()` (`metaSynthesis.js`): share of decks, archetype games ÷ (2 × `activity.totalGames`), since every game has two decks (`colorPairs` games sum to exactly 2× `totalGames`). duels.ink's own "play rate" divides by games and is twice this. Named archetypes cover ~80% of decks in Core, so their shares sum to less than 100%. (Drift used to diff daily color-pair snapshots saved in IndexedDB; `db.js` v5 drops that `metaSnapshots` store.)
+
+The page's Archetypes table uses `aggregateArchetypes()` (`metaSynthesis.js`), same as Meta Synthesis: duels.ink's `profiles` are per-build-variant clusters, it reuses one `archetypeName` across several `archetypeSlug`s of the same colors, and one slug can carry several names — so profiles are grouped by colors + `archetypeName`, the only distinction a player can see (Core Bo1 Set 13: 89 named profiles → 30 archetypes). `archetypeMatchups` is keyed by profile `id` and is rolled up to the same groups by `archetypeMatchupSummary()`.
 
 ### Rules Browser
 

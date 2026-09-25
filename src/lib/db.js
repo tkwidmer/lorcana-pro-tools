@@ -1,11 +1,10 @@
 const DB_NAME = 'lorcana_pro_tools'
-const DB_VERSION = 4
+const DB_VERSION = 5
 
 const STORE_KEY_PATHS = {
   games: 'uuid',
   cards: 'version',
   coconutDecks: 'id',
-  metaSnapshots: 'id',
 }
 
 let dbPromise = null
@@ -16,6 +15,11 @@ export function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const db = req.result
+      // STORE_KEY_PATHS is the whole schema: drop stores that left it
+      // (v5 removed the old Meta Drift `metaSnapshots` store).
+      for (const store of [...db.objectStoreNames]) {
+        if (!(store in STORE_KEY_PATHS)) db.deleteObjectStore(store)
+      }
       for (const store of Object.keys(STORE_KEY_PATHS)) {
         if (!db.objectStoreNames.contains(store)) {
           db.createObjectStore(store, { keyPath: STORE_KEY_PATHS[store] })

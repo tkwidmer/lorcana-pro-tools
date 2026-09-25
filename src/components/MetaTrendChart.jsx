@@ -3,18 +3,18 @@
 // series should follow.
 const SERIES_COLORS = ['#0072B2', '#E69F00', '#CC79A7']
 
-// Small multi-line sparkline showing each tracked archetype's play rate or
+// Small multi-line sparkline showing each tracked archetype's % of the meta or
 // win rate across the most recent weeks duels.ink has stats for. `series`:
 // [{ key, name, values }] — one value per entry in `weeks`, oldest first.
 // `weeks`: [{ startDate, label }].
 //
-// `scaleFromZero` picks the y-axis domain: play rate reads naturally
+// `scaleFromZero` picks the y-axis domain: % of the meta reads naturally
 // against a 0 baseline (most archetypes cluster well below the max), but
 // win rate clusters tightly around 50% — a 0 baseline would flatten a
 // meaningful 47%→53% swing into a barely-visible line near the top of the
 // chart, so win-rate charts should pass `scaleFromZero={false}` to get a
 // tight, padded domain around the actual data instead.
-export function MetaTrendChart({ weeks, series, metricLabel = 'play rate', formatValue = v => `${v.toFixed(1)}%`, scaleFromZero = true }) {
+export function MetaTrendChart({ weeks, series, metricLabel = '% of meta', formatValue = v => `${v.toFixed(1)}%`, scaleFromZero = true }) {
   if (weeks.length < 2 || series.length === 0) return null
 
   const W = 600

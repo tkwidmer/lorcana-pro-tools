@@ -137,6 +137,9 @@ export function WinrateMatrixPage() {
   const driftRows = compareOpen && completeCount >= 2 ? archetypeDrift(driftWeekStats, driftRange) : []
   const driftFocus = driftRows.find(r => r.key === driftFocusKey) ?? null
   const driftMatchupRows = driftFocus ? archetypeMatchupDrift(driftWeekStats, driftFocus.key, driftRange) : []
+  // Names the exact span the Change column covers, e.g. "Change Aug 23 - 29 → Sep 13 - 19".
+  const weekName = i => driftWeeks[i].week.label.replace(/, \d{4}$/, '')
+  const changeLabel = completeCount >= 2 ? `Change ${weekName(0)} → ${weekName(completeCount - 1)}` : 'Change'
   const winRateClass = wr => wr >= 51 ? 'text-emerald-600' : wr <= 49 ? 'text-red-500' : 'text-gray-600'
   const signed = (n, suffix) => `${n > 0 ? '+' : ''}${n.toFixed(1)}${suffix}`
 
@@ -357,7 +360,7 @@ export function WinrateMatrixPage() {
             ) : (
               <>
                 <p className="text-sm text-gray-500 mb-3">
-                  Win rate each week, with games and the % of that week's games it appeared in underneath (duels.ink's play rate). Change runs from {driftWeeks[0].week.label} to {driftWeeks[completeCount - 1].week.label}. Click an archetype for its matchups.
+                  Win rate each week, with games and the % of that week's games it appeared in underneath (duels.ink's play rate). The last column is the overall change from the first week shown ({driftWeeks[0].week.label}) to the latest complete week ({driftWeeks[completeCount - 1].week.label}), not just the most recent week. Click an archetype for its matchups.
                 </p>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <span className="text-sm font-semibold text-gray-900">Sort by {driftWeeks[completeCount - 1].week.label}:</span>
@@ -383,7 +386,7 @@ export function WinrateMatrixPage() {
                             {w.week.label}{i === inProgressIndex ? ' (so far)' : ''}
                           </th>
                         ))}
-                        <th className="py-2 px-3 text-right">Change</th>
+                        <th className="py-2 px-3 text-right whitespace-nowrap">{changeLabel}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -441,7 +444,7 @@ export function WinrateMatrixPage() {
                                   {w.week.label}{i === inProgressIndex ? ' (so far)' : ''}
                                 </th>
                               ))}
-                              <th className="py-2 px-3 text-right">Change</th>
+                              <th className="py-2 px-3 text-right whitespace-nowrap">{changeLabel}</th>
                             </tr>
                           </thead>
                           <tbody>

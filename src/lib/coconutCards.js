@@ -241,6 +241,14 @@ export const COCONUT_CARDS = [
     inks: ['amber', 'emerald'],
     ability: 'Once during your turn, you may pay 1 ink less for the next Toy character you play. If you do and you have a character named Woody and a character named Buzz Lightyear in play, draw a card.',
   },
+  {
+    id: 'pete-bad-guy',
+    name: 'Pete',
+    version: 'Bad Guy',
+    baseFullName: 'Pete - Bad Guy',
+    inks: ['emerald'],
+    ability: "Whenever you play an action, if it's the second action you played this turn, chosen opposing character gains Reckless and can't challenge your characters or locations until the start of your next turn.",
+  },
 ]
 
 // Real beta [Format Coconut] card art, bundled locally rather than fetched from

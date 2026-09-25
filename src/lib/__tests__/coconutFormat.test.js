@@ -169,7 +169,7 @@ describe('validateDeck', () => {
 // of the base card from exactly those two fields.
 describe('COCONUT_CARDS data', () => {
   it('gives every card a baseFullName and at least one ink', () => {
-    expect(COCONUT_CARDS.length).toBe(25)
+    expect(COCONUT_CARDS.length).toBe(26)
     for (const c of COCONUT_CARDS) {
       expect(c.baseFullName, `${c.id} baseFullName`).toBeTruthy()
       expect(Array.isArray(c.inks) && c.inks.length > 0, `${c.id} inks`).toBe(true)

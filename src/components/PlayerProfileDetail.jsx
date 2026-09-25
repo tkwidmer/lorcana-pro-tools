@@ -158,7 +158,7 @@ export function PlayerProfileDetail({ profile }) {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{profile.name}</h1>
+        <h1 className="text-3xl font-medium leading-tight text-gray-900">{profile.name}</h1>
         <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
           <span>
             {profile.gameCount} game{profile.gameCount !== 1 ? 's' : ''}

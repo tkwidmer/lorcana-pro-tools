@@ -24,6 +24,9 @@ import {
 import { DeckStats, ChallengeStats } from '../components/analytics/StatTables'
 import { LeakReport } from '../components/analytics/LeakReport'
 import { GamelogDetail } from '../components/analytics/GamelogDetail'
+import { Button } from '../components/ui/Button'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Input } from '../components/ui/Field'
 
 const MY_NAME_KEY = 'lorcana_my_name'
 
@@ -378,10 +381,10 @@ export function AnalyticsPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Analytics</h1>
-        <p className="text-sm text-gray-500">Import your games (or teammates' shared exports) for personal and team-wide analytics.</p>
-      </div>
+      <PageHeader
+        title="Analytics"
+        description="Import your games (or teammates' shared exports) for personal and team-wide analytics."
+      />
 
       {/* Drop zone */}
       <div
@@ -415,14 +418,14 @@ export function AnalyticsPage() {
         <div className="mb-5">
           <div className="flex items-center gap-3 flex-wrap">
             <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Your player name:</label>
-            <input
+            <Input
               type="text"
               value={nameInput}
               onChange={e => setNameInput(e.target.value)}
               onBlur={() => saveName(nameInput)}
               onKeyDown={e => { if (e.key === 'Enter') { saveName(nameInput); e.currentTarget.blur() } }}
               placeholder="e.g. Teagan"
-              className="flex-1 min-w-48 text-sm border border-gray-200 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder:text-gray-300"
+              className="flex-1 min-w-48"
             />
           </div>
           <p className="text-xs text-gray-400 mt-1.5">
@@ -593,13 +596,14 @@ export function AnalyticsPage() {
                 </div>
                 <div className="p-4">
                   <DecklistDisplay decklist={stat.latestDecklist} cardIdToName={cardIdToName} />
-                  <button
+                  <Button
+                    size="sm"
+                    className="mt-4"
                     onClick={() => handleLoadInsights(stat)}
                     disabled={insightsLoading === stat.fp}
-                    className="mt-4 text-xs px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-40"
                   >
                     {insightsLoading === stat.fp ? 'Loading…' : '→ Load into Deck Insights'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )
@@ -616,7 +620,7 @@ export function AnalyticsPage() {
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Imported</div>
-            <div className="text-2xl font-bold text-blue-600">{importedGames.length}</div>
+            <div className="text-2xl font-bold text-gray-900">{importedGames.length}</div>
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Personal</div>
@@ -630,7 +634,7 @@ export function AnalyticsPage() {
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">MMR Range</div>
-            <div className="text-base font-bold text-purple-600 leading-tight">{mmrRange ? `${mmrRange.low}–${mmrRange.peak}` : '—'}</div>
+            <div className="text-base font-bold text-gray-900 leading-tight">{mmrRange ? `${mmrRange.low}–${mmrRange.peak}` : '—'}</div>
             <div className="text-xs text-gray-400 mt-0.5">{gamesWithMMR.length} games tracked</div>
           </div>
           <div className="border border-gray-200 rounded-lg p-4">
@@ -679,9 +683,9 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setTurnDistOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Turn Distribution</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Turn Distribution</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${turnDistOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -699,9 +703,9 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setInkwellTrendOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Inkwell & Turns Trend</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Inkwell & Turns Trend</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${inkwellTrendOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -719,9 +723,9 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setTrendOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Win Rate Trend</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Win Rate Trend</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${trendOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -739,9 +743,9 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setMmrTrendOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">MMR Trend</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">MMR Trend</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${mmrTrendOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -759,9 +763,9 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setMetagameOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Opponent Metagame</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Opponent Metagame</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${metagameOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -779,9 +783,9 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setMatchupOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Matchup Matrix</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Matchup Matrix</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${matchupOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -799,9 +803,9 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setCardImpactOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Card Impact (WAR)</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Card Impact (WAR)</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${cardImpactOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -858,8 +862,8 @@ export function AnalyticsPage() {
       {/* Single-game drilldown — click a game below (or in the lists further down) to open it */}
       {activeGamelog && (
         <div className="mb-4">
-          <div className="flex items-center justify-between py-3 border-b-2 border-gray-200">
-            <span className="text-xl font-bold text-gray-800">Game Detail</span>
+          <div className="flex items-center justify-between py-3 border-b-2 border-gray-900">
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Game Detail</span>
             <button onClick={() => setActiveId(null)} className="text-xs text-gray-400 hover:text-gray-700">✕ Close</button>
           </div>
           <GamelogDetail gamelog={activeGamelog} myPlayerNum={activeMyPlayerNum} myName={myName} />
@@ -871,9 +875,9 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setImportedOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Imported Games ({importedGames.length})</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Imported Games ({importedGames.length})</span>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={(e) => { e.stopPropagation(); handleClearImported() }}
@@ -907,13 +911,13 @@ export function AnalyticsPage() {
         <div className="mb-4">
           <button
             onClick={() => setPersonalOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Personal Games ({personalGames.length})</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Personal Games ({personalGames.length})</span>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={(e) => { e.stopPropagation(); downloadGameIds([], games.map(g => g.id)) }}
-                className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
+                className="text-xs text-forge-ink hover:underline"
               >
                 Export IDs
               </button>

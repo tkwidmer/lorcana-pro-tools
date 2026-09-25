@@ -28,7 +28,7 @@ export function ScoutedGamePage() {
       ) : !record ? (
         <div className="text-center py-12 text-gray-500">
           <div className="text-sm mb-2">Game not found.</div>
-          <Link to="/library?tab=history" className="text-sm text-blue-600 hover:underline">
+          <Link to="/library?tab=history" className="text-sm text-forge-ink font-medium hover:underline">
             Back to history →
           </Link>
         </div>

@@ -11,6 +11,10 @@ import { GameView } from '../components/GameView'
 import { InkIcons, InkIcon } from '../components/InkIcons'
 import { StatCard } from '../components/StatCard'
 import { PlayerProfileDetail } from '../components/PlayerProfileDetail'
+import { Button } from '../components/ui/Button'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Tabs, Tab } from '../components/ui/Tabs'
+import { Input, Textarea } from '../components/ui/Field'
 
 // --- Ignored players (stored in localStorage) ---
 
@@ -96,19 +100,16 @@ function ImportPanel() {
             <div className="text-sm text-gray-600 mb-3">
               Drop a <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">.json</code> snapshot here or paste JSON below.
             </div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="text-sm bg-gray-900 text-white px-4 py-2 rounded hover:bg-gray-700"
-            >
+            <Button variant="primary" onClick={() => fileRef.current?.click()}>
               Choose file
-            </button>
+            </Button>
             <input ref={fileRef} type="file" accept=".json,application/json"
               onChange={(e) => handleFile(e.target.files[0])} className="hidden" />
-            <textarea
+            <Textarea
               placeholder="Or paste JSON here…"
               onPaste={handlePaste}
               onChange={(e) => e.target.value && loadText(e.target.value)}
-              className="mt-4 w-full h-24 text-xs font-mono border border-gray-200 rounded p-2 focus:outline-none focus:border-gray-500"
+              className="block mt-4 w-full h-24 text-xs font-mono"
             />
             {error && (
               <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">{error}</div>
@@ -125,12 +126,11 @@ function ImportPanel() {
                 className="text-xs text-gray-500 hover:text-gray-900 underline ml-auto">
                 Load different file
               </button>
-              <button onClick={handleSave} disabled={saved}
-                className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded hover:bg-gray-700 disabled:bg-gray-400">
+              <Button variant="primary" size="sm" onClick={handleSave} disabled={saved}>
                 {saved ? 'Saved' : 'Save to history'}
-              </button>
+              </Button>
               {saved && snapshot.uuid && (
-                <Link to={`/scouting/game/${snapshot.uuid}`} className="text-xs text-blue-600 hover:underline">
+                <Link to={`/scouting/game/${snapshot.uuid}`} className="text-xs text-forge-ink font-medium hover:underline">
                   View →
                 </Link>
               )}
@@ -225,7 +225,7 @@ function HistoryTab({ records, onDelete, onClearAll }) {
     return (
       <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-lg text-gray-500">
         <div className="text-sm mb-2">No games saved yet.</div>
-        <Link to="/game-scraper" className="text-sm text-blue-600 hover:underline">Scrape a game →</Link>
+        <Link to="/game-scraper" className="text-sm text-forge-ink font-medium hover:underline">Scrape a game →</Link>
       </div>
     )
   }
@@ -238,7 +238,7 @@ function HistoryTab({ records, onDelete, onClearAll }) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => downloadGameIds(records.map(r => r.uuid), [])}
-            className="text-xs text-gray-400 hover:text-blue-600 underline"
+            className="text-xs text-gray-400 hover:text-forge-ink underline"
           >
             Export IDs
           </button>
@@ -263,7 +263,7 @@ function HistoryTab({ records, onDelete, onClearAll }) {
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500">
                 {s.winner != null && (
-                  <span className="text-purple-700 font-medium">
+                  <span className="text-gray-900 font-medium">
                     {s.winner === 1 ? s.p1Name : s.p2Name} won
                   </span>
                 )}
@@ -331,9 +331,9 @@ function PlayersTab({ records, gamelogs }) {
     return (
       <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-lg text-gray-500">
         <div className="text-sm mb-2">No players yet.</div>
-        <Link to="/game-scraper" className="text-sm text-blue-600 hover:underline">Scrape a game →</Link>
+        <Link to="/game-scraper" className="text-sm text-forge-ink font-medium hover:underline">Scrape a game →</Link>
         {' · '}
-        <Link to="/analytics" className="text-sm text-blue-600 hover:underline">Import gamelogs →</Link>
+        <Link to="/analytics" className="text-sm text-forge-ink font-medium hover:underline">Import gamelogs →</Link>
       </div>
     )
   }
@@ -341,12 +341,12 @@ function PlayersTab({ records, gamelogs }) {
   return (
     <>
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <input
+        <Input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search player name…"
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          className="flex-1"
         />
         <div className="flex flex-wrap gap-1.5 items-center">
           {VALID_INKS.map(color => (
@@ -354,7 +354,7 @@ function PlayersTab({ records, gamelogs }) {
               key={color}
               onClick={() => toggleInk(color)}
               className={`p-1.5 rounded-md border transition ${
-                inkFilter.includes(color) ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+                inkFilter.includes(color) ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-300'
               }`}
               title={color}
             >
@@ -373,7 +373,7 @@ function PlayersTab({ records, gamelogs }) {
                 <button
                   onClick={() => setSelected(p.name)}
                   className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition ${
-                    selected === p.name ? 'bg-indigo-50' : ''
+                    selected === p.name ? 'bg-forge-soft' : ''
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2 pr-10">
@@ -433,7 +433,7 @@ function PlayersTab({ records, gamelogs }) {
                       </div>
                       <button
                         onClick={() => handleUnignore(p.name)}
-                        className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap"
+                        className="text-xs text-forge-ink hover:underline whitespace-nowrap"
                       >
                         Unhide
                       </button>
@@ -495,28 +495,20 @@ export function LibraryPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Scouting Library</h1>
-        <p className="text-sm text-gray-500 mt-1">Your saved games, player stats, and imported snapshots.</p>
-      </div>
+      <PageHeader
+        title="Scouting Library"
+        description="Your saved games, player stats, and imported snapshots."
+      />
 
       <ImportPanel />
 
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
+      <Tabs className="mb-6">
         {['history', 'players'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setTab(tab)}
-            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px transition-colors ${
-              activeTab === tab
-                ? 'border-gray-900 text-gray-900'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
+          <Tab key={tab} active={activeTab === tab} onClick={() => setTab(tab)}>
             {tab === 'history' ? `History${records.length ? ` (${records.length})` : ''}` : 'Players'}
-          </button>
+          </Tab>
         ))}
-      </div>
+      </Tabs>
 
       {loading ? (
         <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>

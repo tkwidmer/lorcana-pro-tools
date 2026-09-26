@@ -9,6 +9,7 @@ import { deckFingerprint, isDeckModified } from '../lib/deckFingerprint'
 import { buildCardIdToName } from '../lib/cardIdResolver'
 import { Button } from '../components/ui/Button'
 import { PageHeader } from '../components/ui/PageHeader'
+import { SessionInsights } from '../components/SessionInsights'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
 const DECK_DETAILS_KEY = 'lorcana_deck_details'
@@ -935,6 +936,8 @@ export function MatchHistoryPage() {
           })()}
         </div>
       )}
+
+      {filteredGames.length > 0 && <SessionInsights games={filteredGames} />}
 
       {games.length > 0 && (
         <div className="overflow-x-auto">

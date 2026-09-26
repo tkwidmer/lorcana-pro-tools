@@ -9,6 +9,23 @@ export function wilsonInterval(wins, n) {
   return [Math.max(0, center - margin), Math.min(1, center + margin)]
 }
 
+// 95% interval for the difference of two proportions (p1 - p2), using
+// Newcombe's hybrid score method built from each side's Wilson interval —
+// well-behaved at small n and near 0/1, where the plain normal
+// approximation isn't. Both samples must be non-empty.
+export function diffInterval(w1, n1, w2, n2) {
+  if (!n1 || !n2) throw new Error('diffInterval needs two non-empty samples')
+  const p1 = w1 / n1
+  const p2 = w2 / n2
+  const [l1, u1] = wilsonInterval(w1, n1)
+  const [l2, u2] = wilsonInterval(w2, n2)
+  const d = p1 - p2
+  return [
+    d - Math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2),
+    d + Math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2),
+  ]
+}
+
 // Bayesian shrinkage of personal WR toward public WR.
 // Treats public_wr as a prior of weight `priorN` pseudo-games.
 export function shrinkWR(wins, n, publicWR, priorN = 10) {

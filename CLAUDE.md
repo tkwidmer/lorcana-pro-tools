@@ -149,6 +149,7 @@ In `src/components/`:
 | `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts. A card carrying `imageSrc` (Coconut cards) is printed as that image filling the 2.5"×3.5" slot instead of through the text layout |
 | `ShareCardModal.jsx` | Modal shell for sharing a canvas-rendered image (native share / clipboard copy / download); used by `TournamentLookupPage`'s and `PlayerMatchHistory`'s share-card buttons |
 | `PlayerMatchHistory.jsx` | Round-by-round match history table for one player within a single loaded tournament event (opponent, result, score, user-annotated opp colors/play-draw, share card). Used by `TournamentLookupPage`'s player detail view and reused by `PairingHistoryPanel` for either side of a clicked pairing |
+| `SessionInsights.jsx` | Match History's collapsible "Sessions & Tilt" card: session summary, a stop-loss callout, and win-rate tables by game number in session, after a losing streak, time of day, and day of week. Renders `sessionStats.js` over the page's `filteredGames` |
 | `PostByline.jsx` | "By <author> · <date>" line for blog posts, author linked to their profile (`authorUrl`). Used by `BlogIndexPage` and `BlogPostPage` |
 | `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below |
 
@@ -200,10 +201,11 @@ In `src/lib/`:
 | `tournamentShareImage.js` | Renders a shareable summary image (canvas) for tournament/practice results |
 | `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
 | `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
+| `sessionStats.js` | Session & tilt analysis over match-history rows. `buildSessions()` excludes bot games and starts a new session after a `SESSION_GAP_MINUTES` (30) gap between `ended_at` and the next `started_at`; it throws on a row missing either timestamp. Also `winRateByPosition()`, `winRateAfterLossStreak()` (streaks reset at session boundaries, and draws don't move them), `winRateByTimeOfDay()`/`winRateByDayOfWeek()` (browser-local time), and `stopLossSuggestion()`, which only suggests a break when the after-streak gap's `diffInterval()` is entirely below zero with at least 15 games |
 | `siteSections.js` | `SECTIONS` — the tool catalog (name, path, icon, description per tool; `navLabel` per section) rendered by `HomePage`, `SitemapPage`, and `Nav`. `findTool(pathname)` resolves a route to its section/tool |
 | `toolIcons.js` | Stroke-glyph path data for each catalog tool's `icon`, drawn by `components/ToolIcon.jsx` |
 | `analyticsAggregation.js` | `enrichGame()` + per-card/mulligan aggregations (`aggregateMyCards`, `aggregateMulliganSentBack`, `aggregateMulliganWinRates`, `aggregateMultiCopyMulligan`) behind `AnalyticsPage` |
-| `practiceSim.js` | `wilsonInterval()`, `shrinkWR()` (Bayesian shrinkage toward the public WR, 10-game prior), and the Bo1/Bo3 tournament Monte Carlo used by `PracticePlanPage` |
+| `practiceSim.js` | `wilsonInterval()`, `diffInterval()` (Newcombe 95% interval for a difference of two proportions), `shrinkWR()` (Bayesian shrinkage toward the public WR, 10-game prior), and the Bo1/Bo3 tournament Monte Carlo used by `PracticePlanPage` |
 | `drawOddsMath.js` / `monteCarloSim.js` | Exact hypergeometric odds (log-space) and the mulligan/scry/curve/quest-pressure simulations behind Deck Insights |
 | `tournamentLive.js` | `subscribeToTournamentLive()` — Pusher subscription to RPH's public `player-event-{id}` channel; wrapped by `hooks/useTournamentLiveUpdates.js` so `TournamentLookupPage` refetches on any broadcast |
 | `metaSynthesis.js` / `rankTiers.js` / `archetypeStats.js` | Meta Synthesis logic (see below), MMR → rank-tier mapping, and curation of duels.ink archetype profiles |
@@ -380,6 +382,8 @@ The two sources can't be deduplicated against each other — there's no shared g
 ```
 games → afterDate → afterQueue → afterMyColors → afterOppColors → filteredGames
 ```
+
+`SessionInsights` (the Sessions & Tilt card) reads `filteredGames`, so every filter above scopes it too.
 
 Color options exclude 3+ ink entries (sealed/limited formats). Deck identity uses `your_deck_id` (stable API field) with `deckFingerprint(your_decklist)` as fallback. Deck names are stored in localStorage under `lorcana_deck_names`.
 

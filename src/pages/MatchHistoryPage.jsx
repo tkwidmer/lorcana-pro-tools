@@ -7,6 +7,8 @@ import { useCards } from '../hooks/useCards'
 import { InkIcons as SharedInkIcons } from '../components/InkIcons'
 import { deckFingerprint, isDeckModified } from '../lib/deckFingerprint'
 import { buildCardIdToName } from '../lib/cardIdResolver'
+import { Button } from '../components/ui/Button'
+import { PageHeader } from '../components/ui/PageHeader'
 import { SessionInsights } from '../components/SessionInsights'
 
 const DECK_NAMES_KEY = 'lorcana_deck_names'
@@ -154,7 +156,7 @@ function GameRow({ game, selected, onToggle, indent = false, gameLabel = null, d
   const id = game.game_id
   return (
     <tr
-      className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${selected ? 'bg-blue-50 hover:bg-blue-50' : ''} ${indent ? 'opacity-90' : ''}`}
+      className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${selected ? 'bg-forge-soft hover:bg-forge-soft' : ''} ${indent ? 'opacity-90' : ''}`}
       onClick={() => onToggle(id)}
     >
       <td className={`py-3 pr-1 ${indent ? 'pl-7' : 'pl-3'}`} onClick={e => e.stopPropagation()}>
@@ -653,24 +655,22 @@ export function MatchHistoryPage() {
   const someSelected = selectedGames.length > 0 && !allSelected
 
   return (
-    <div className="w-full px-6 py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">Match History</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm text-gray-500">Imported from duels.ink</p>
+    <div className="w-full px-6 py-8">
+      <PageHeader
+        title="Match History"
+        description={<>
+          Imported from duels.ink
           {activeTokenLabel && (
             <>
-              <span className="text-gray-300">·</span>
-              <span className="text-sm text-gray-500">
-                Viewing as{' '}
-                <Link to="/settings" className="font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                  {activeTokenLabel}
-                </Link>
-              </span>
+              <span className="text-gray-300"> · </span>
+              Viewing as{' '}
+              <Link to="/settings" className="font-medium text-gray-700 hover:text-gray-900 transition-colors">
+                {activeTokenLabel}
+              </Link>
             </>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {!hasToken && (
         <div className="border border-gray-200 rounded-lg p-6 text-sm text-gray-600">
@@ -922,13 +922,14 @@ export function MatchHistoryPage() {
                       <DeckCardList cardIds={detail.deck.cardIds} cardIdToName={cardIdToName} />
                     </div>
                   )}
-                  <button
+                  <Button
+                    size="sm"
+                    className="mt-4"
                     onClick={() => handleLoadInsights(stat)}
                     disabled={insightsLoading === stat.key}
-                    className="mt-4 text-xs px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-40"
                   >
                     {insightsLoading === stat.key ? 'Loading…' : '→ Load into Deck Insights'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )
@@ -991,14 +992,9 @@ export function MatchHistoryPage() {
 
       {nextCursor && (
         <div className="mt-6">
-          <button
-            type="button"
-            onClick={() => load({ cursor: nextCursor, append: true })}
-            disabled={loadingMore}
-            className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
-          >
+          <Button onClick={() => load({ cursor: nextCursor, append: true })} disabled={loadingMore}>
             {loadingMore ? 'Loading…' : 'Load more'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

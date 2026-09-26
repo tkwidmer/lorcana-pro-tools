@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   fetchGameStore,
   fetchAllStoreEvents,
@@ -11,10 +12,19 @@ import {
   PRORATE_WINDOW,
   standingWindowEvents,
   computeStandingTierStatus,
+  STANDARD_MAINTENANCE_REQUIREMENTS,
+  LEGENDARY_MAINTENANCE_REQUIREMENTS,
 } from '../lib/storeTiers'
 import { DEFAULT_TRACKED_STORE_URLS } from '../lib/trackedStores'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Textarea } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const LAST_INPUT_KEY = 'lorcana_store_lookup_last_input'
+// Shareable link: `?stores=<id>,<id>` — always the extracted IDs, whatever
+// form (IDs or store URLs) was pasted.
+const STORES_PARAM = 'stores'
 const DEFAULT_INPUT = DEFAULT_TRACKED_STORE_URLS.join('\n')
 
 // Store IDs are UUIDs. Accept either raw IDs (one per line / comma-separated)
@@ -98,6 +108,68 @@ const STANDING_TIER_STYLES = {
   welcome: 'text-gray-600 bg-gray-100',
   standard: 'text-blue-700 bg-blue-100',
   legendary: 'text-emerald-700 bg-emerald-100',
+}
+
+// Definitions and benefits from RPH's store-tier program announcement.
+const TIER_DEFINITIONS = [
+  {
+    tier: 'welcome',
+    definition: 'Where stores new to the program start.',
+    benefits: [
+      'Listed on the store locator',
+      'Materials in the OP kit',
+      'Can run upcoming Prerelease events',
+    ],
+  },
+  {
+    tier: 'standard',
+    definition: 'Stores graduate here after establishing a baseline of play.',
+    requirements: STANDARD_MAINTENANCE_REQUIREMENTS,
+    benefits: [
+      'Can run Set Championships',
+      'Access to seasonal trade marketing kits',
+      'Allocation of Collector Boosters and future RPH-focused products',
+    ],
+  },
+  {
+    tier: 'legendary',
+    definition: 'Rewards to support stores with a larger community.',
+    requirements: LEGENDARY_MAINTENANCE_REQUIREMENTS,
+    benefits: [
+      'Additional OP and Set Championship kit (as of Set 16)',
+      'Increased allocation of Collector Boosters',
+      'Larger allocation of Prerelease Boxes',
+      'Priority to apply to host Local Qualifier events',
+    ],
+  },
+]
+
+function TierDefinitions() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {TIER_DEFINITIONS.map(({ tier, definition, requirements, benefits }) => (
+        <Card key={tier} className="p-4">
+          <span
+            className={`inline-block text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 mb-2 ${STANDING_TIER_STYLES[tier]}`}
+          >
+            {STANDING_TIER_LABELS[tier]}
+          </span>
+          <p className="text-sm text-gray-700 mb-2">{definition}</p>
+          {requirements && (
+            <p className="text-xs text-gray-500 mb-2">
+              Requires {requirements.totalEvents} events, {requirements.uniqueFans} unique fans, and{' '}
+              {requirements.eventTickets} tickets over the trailing 4 set seasons, plus a Prerelease each season.
+            </p>
+          )}
+          <ul className="list-disc pl-4 text-xs text-gray-600 space-y-1">
+            {benefits.map((benefit) => (
+              <li key={benefit}>{benefit}</li>
+            ))}
+          </ul>
+        </Card>
+      ))}
+    </div>
+  )
 }
 
 function StandingTierBlock({ standing }) {
@@ -241,7 +313,13 @@ function StoreCard({ result }) {
 }
 
 export function StoreLookupPage() {
-  const [input, setInput] = useState(() => localStorage.getItem(LAST_INPUT_KEY) ?? DEFAULT_INPUT)
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [input, setInput] = useState(() => {
+    const sharedIds = extractStoreIds(searchParams.get(STORES_PARAM) ?? '')
+    if (sharedIds.length > 0) return sharedIds.join('\n')
+    return localStorage.getItem(LAST_INPUT_KEY) ?? DEFAULT_INPUT
+  })
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const hasAutoLoaded = useRef(false)
@@ -298,6 +376,9 @@ export function StoreLookupPage() {
     }
 
     localStorage.setItem(LAST_INPUT_KEY, text)
+    // Written as a raw search string (not setSearchParams) so the commas stay
+    // literal instead of being encoded as %2C in the shared link.
+    navigate({ search: `?${STORES_PARAM}=${storeIds.join(',')}` }, { replace: true })
     setLoading(true)
     setResults(
       storeIds.map((storeId) => ({
@@ -356,34 +437,30 @@ export function StoreLookupPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">
-          Store Lookup
-        </h1>
-        <p className="text-sm text-gray-500">
+      <PageHeader
+        title="Store Lookup"
+        description={<>
           Paste one or more Ravensburger Play store IDs or store URLs (one per line, or separated by commas)
           to look up store details, progress toward provisional Legendary status for the {PRORATE_WINDOW_LABEL}{' '}
           pro-rating window, and steady-state Standard/Legendary standing over the trailing 4 set seasons
           (derived from each store's own Prerelease event history).
-        </p>
-      </div>
+        </>}
+      />
 
       <form onSubmit={loadStores} className="mb-6">
-        <textarea
+        <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="63116552-e809-4e3d-85f0-9ef1f8f3f950"
           rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono mb-3"
+          className="block w-full font-mono mb-3"
         />
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <Button variant="primary" type="submit" disabled={loading}>
           {loading ? 'Loading…' : 'Look Up Stores'}
-        </button>
+        </Button>
       </form>
+
+      <TierDefinitions />
 
       {results.length > 0 && (
         <div className="mb-4 text-sm text-gray-600">

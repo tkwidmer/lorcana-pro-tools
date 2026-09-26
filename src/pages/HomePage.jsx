@@ -1,122 +1,131 @@
 import { Link } from 'react-router-dom'
 import { isSupporterPath } from '../lib/access'
 import { SECTIONS } from '../lib/siteSections'
+import { ToolIcon } from '../components/ToolIcon'
+import { Badge } from '../components/ui/Badge'
 
 const SUBSTACK_URL = 'https://inkbornforge.substack.com'
+const METAFY_URL = 'https://metafy.gg/@inkbornforge'
+
+const CARD = 'group flex flex-col gap-3 bg-white border border-gray-200 border-b-[3px] rounded-lg p-5 hover:border-gray-900 transition-colors'
+
+function ToolCardBody({ tool, external }) {
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <span className="h-9 w-9 shrink-0 grid place-items-center rounded bg-gray-900 text-white">
+          <ToolIcon name={tool.icon} />
+        </span>
+        <h3 className="font-display text-base font-medium uppercase tracking-wide leading-tight text-gray-900 group-hover:underline">
+          {tool.name}{external && ' ↗'}
+        </h3>
+        {tool.path && isSupporterPath(tool.path) && <Badge className="ml-auto">Supporters</Badge>}
+      </div>
+      <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
+    </>
+  )
+}
 
 function ToolCard({ tool }) {
   if (tool.href) {
     return (
-      <a
-        href={tool.href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group block border border-gray-200 rounded-lg p-6 hover:border-gray-900 transition-colors"
-      >
-        <h3 className="text-base font-bold text-gray-900 group-hover:underline mb-2">
-          {tool.name}
-        </h3>
-        <p className="text-sm text-gray-500 leading-relaxed mb-4">
-          {tool.description}
-        </p>
-        <span className="text-sm font-medium text-gray-900">
-          Add to Discord →
-        </span>
+      <a href={tool.href} target="_blank" rel="noopener noreferrer" className={CARD}>
+        <ToolCardBody tool={tool} external />
       </a>
     )
   }
-
-  const supporterOnly = isSupporterPath(tool.path)
   return (
-    <Link
-      to={tool.path}
-      className="group block border border-gray-200 rounded-lg p-6 hover:border-gray-900 transition-colors"
-    >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className="text-base font-bold text-gray-900 group-hover:underline">
-          {tool.name}
-        </h3>
-        {supporterOnly && (
-          <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
-            Supporters
-          </span>
-        )}
-      </div>
-      <p className="text-sm text-gray-500 leading-relaxed mb-4">
-        {tool.description}
-      </p>
-      <span className="text-sm font-medium text-gray-900">
-        Open Tool →
-      </span>
+    <Link to={tool.path} className={CARD}>
+      <ToolCardBody tool={tool} />
     </Link>
+  )
+}
+
+// The sub-link sits outside the main link — anchors can't nest.
+function PromoCard({ icon, title, body, cta, subLink, ...linkProps }) {
+  const Tag = linkProps.to ? Link : 'a'
+  return (
+    <div className="flex flex-col bg-white border border-gray-200 rounded-lg hover:border-gray-900 transition-colors">
+      <Tag
+        {...linkProps}
+        className="group flex flex-col sm:flex-row items-start sm:items-center gap-4 px-6 py-5"
+      >
+        <span className="h-10 w-10 shrink-0 grid place-items-center rounded bg-ink">
+          <img src={icon} alt="" className="h-5 w-auto" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-bold text-gray-900">{title}</span>
+          <span className="block text-sm text-gray-500 mt-0.5">{body}</span>
+        </span>
+        <span className="sm:ml-auto shrink-0 font-display text-sm uppercase tracking-wider text-forge-ink group-hover:underline">
+          {cta} →
+        </span>
+      </Tag>
+      {subLink && (
+        <Link
+          to={subLink.to}
+          className="border-t border-gray-200 px-6 py-2 text-sm text-gray-500 hover:text-gray-900 hover:underline"
+        >
+          {subLink.label}
+        </Link>
+      )}
+    </div>
   )
 }
 
 export function HomePage() {
   return (
-    <div className="w-full px-6 py-12">
-      <div className="mb-10">
+    <div className="w-full px-6 py-8 flex flex-col gap-12">
+      <div>
         <img
           src="/inkborn_forge_substack_header.png"
           alt="InkbornForge — Hone Your Approach, Sharpen Your Play"
-          className="w-full h-auto rounded-lg mb-4"
+          className="brand-banner w-full h-auto rounded-lg border border-gray-200"
         />
-        <p className="text-gray-500">
+        <p className="text-gray-500 mt-4">
           A growing suite of tools for Disney Lorcana players.
         </p>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-10">
-        <Link
-          to="/settings"
-          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-5 border border-gray-200 rounded-lg hover:border-gray-900 transition-colors group"
-        >
-          <div className="flex items-center gap-3">
-            <img src="/metafy-icon.svg" alt="" className="h-6 w-auto shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-gray-900">Become a Metafy supporter</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Unlock deck insights, game scouting, analytics, and more supporter-only tools.
-              </p>
-            </div>
-          </div>
-          <span className="shrink-0 text-sm font-medium text-gray-900 group-hover:underline">
-            Support us →
-          </span>
-        </Link>
-        <a
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <PromoCard
+          href={METAFY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          icon="/metafy-icon.svg"
+          title="Become a Metafy supporter"
+          body="Unlock deck insights, game scouting, analytics, and more supporter-only tools."
+          cta="Support us"
+          subLink={{ to: '/settings', label: 'Already a member? Link your Metafy account in Settings →' }}
+        />
+        <PromoCard
           href={SUBSTACK_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-5 border border-gray-200 rounded-lg hover:border-gray-900 transition-colors group"
-        >
-          <div className="flex items-center gap-3">
-            <img src="/substack-icon.svg" alt="" className="h-6 w-6 shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-gray-900">Join us on Substack</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Strategy articles, tool updates, and Lorcana news — straight to your inbox.
-              </p>
-            </div>
-          </div>
-          <span className="shrink-0 text-sm font-medium text-gray-900 group-hover:underline">
-            Subscribe →
-          </span>
-        </a>
+          icon="/substack-icon.svg"
+          title="Join us on Substack"
+          body="Strategy articles, tool updates, and Lorcana news — straight to your inbox."
+          cta="Subscribe"
+        />
       </div>
-      <div className="space-y-10">
-        {SECTIONS.map(section => (
-          <div key={section.title}>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+
+      {SECTIONS.map(section => (
+        <section key={section.title}>
+          <div className="flex items-baseline gap-3 border-b-2 border-gray-900 pb-2 mb-5">
+            <h2 className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">
               {section.title}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {section.tools.map(tool => (
-                <ToolCard key={tool.path || tool.href} tool={tool} />
-              ))}
-            </div>
+            <span className="text-sm text-gray-500">
+              {section.tools.length} {section.tools.length === 1 ? 'tool' : 'tools'}
+            </span>
           </div>
-        ))}
-      </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+            {section.tools.map(tool => (
+              <ToolCard key={tool.path || tool.href} tool={tool} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   )
 }

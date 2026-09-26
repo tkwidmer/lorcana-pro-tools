@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { parseDeckListToMap } from '../lib/parseDeckList'
+import { PageHeader } from '../components/ui/PageHeader'
 
 function totalCards(cardMap) {
   let total = 0
@@ -87,14 +88,14 @@ export function DeckComparisonPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Deck List Comparison</h1>
-        <p className="text-sm text-gray-500 mt-1">
+      <PageHeader
+        title="Deck List Comparison"
+        description={<>
           Paste your paper deck and your updated list to see exactly which cards to swap.
           Format: <code className="bg-gray-100 px-1 rounded text-xs">4x Card Name</code> or{' '}
           <code className="bg-gray-100 px-1 rounded text-xs">4 Card Name</code>, one per line.
-        </p>
-      </div>
+        </>}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div>

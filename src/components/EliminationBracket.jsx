@@ -49,7 +49,7 @@ function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleF
       }
       className={`border rounded-lg bg-white text-xs overflow-hidden w-48 shrink-0 ${
         isTagged ? 'border-yellow-300' : 'border-gray-200'
-      } ${clickable ? 'cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all' : ''}`}
+      } ${clickable ? 'cursor-pointer hover:border-gray-900 hover:shadow-sm transition-all' : ''}`}
     >
       <div className={`px-2.5 py-1.5 flex items-center justify-between gap-2 ${p1Won ? 'bg-green-50' : isTagged ? 'bg-yellow-50' : ''}`}>
         <span className={`font-medium truncate flex items-center gap-1 ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-500'}`}>
@@ -87,7 +87,7 @@ function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleF
         </div>
       )}
       {inProgress && (
-        <div className="px-2.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-semibold text-center">In Progress</div>
+        <div className="px-2.5 py-0.5 bg-forge-soft text-forge-ink text-[10px] font-semibold uppercase tracking-wider text-center">In Progress</div>
       )}
     </div>
   )

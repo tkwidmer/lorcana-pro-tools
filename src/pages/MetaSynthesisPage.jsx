@@ -14,7 +14,10 @@ import {
   listReliableArchetypes,
   topPlayedArchetypes,
   aggregateArchetypes,
+  metaShare,
 } from '../lib/metaSynthesis'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Button } from '../components/ui/Button'
 
 const FORMATS = [
   { id: 'core', label: 'Core' },
@@ -302,13 +305,12 @@ export function MetaSynthesisPage() {
           return
         }
 
-        const playRateSeries = trackedKeys.map(key => {
+        const metaShareSeries = trackedKeys.map(key => {
           let name = key
           const values = weekStats.map(ws => {
-            const totalGames = ws?.activity?.totalGames ?? 0
             const found = aggregateArchetypes(ws?.profiles).find(a => a.key === key)
             if (found) name = found.name
-            return found && totalGames > 0 ? (found.gamesPlayed / totalGames) * 100 : 0
+            return found ? metaShare(found.gamesPlayed, ws?.activity?.totalGames ?? 0) : 0
           })
           return { key, name, values }
         })
@@ -330,7 +332,7 @@ export function MetaSynthesisPage() {
           return { key, name, values }
         })
 
-        setTrendData({ weeks: recentWeeks, playRateSeries, winRateSeries })
+        setTrendData({ weeks: recentWeeks, metaShareSeries, winRateSeries })
       } catch {
         if (!cancelled) setTrendData(null)
       }
@@ -377,22 +379,15 @@ export function MetaSynthesisPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Meta Synthesis</h1>
-          <p className="text-sm text-gray-500">
-            A plain-language read on what's actually happening in the meta right now — most-played archetypes, win rates, and how it shifts by rank.
-          </p>
-        </div>
-        {synthesis && (
-          <button
-            onClick={handleShare}
-            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
-          >
+      <PageHeader
+        title="Meta Synthesis"
+        description="A plain-language read on what's actually happening in the meta right now — most-played archetypes, win rates, and how it shifts by rank."
+        actions={synthesis && (
+          <Button variant="quiet" size="sm" onClick={handleShare}>
             Share Card
-          </button>
+          </Button>
         )}
-      </div>
+      />
 
       <div className="mb-6 flex flex-wrap gap-6">
         <div>
@@ -507,7 +502,7 @@ export function MetaSynthesisPage() {
           >
             <option value="">None — overall snapshot</option>
             {deckOptions.map(a => (
-              <option key={a.key} value={a.key}>{a.name} ({a.playRate.toFixed(1)}%)</option>
+              <option key={a.key} value={a.key}>{a.name} ({a.metaShare.toFixed(1)}%)</option>
             ))}
           </select>
         </div>
@@ -533,10 +528,10 @@ export function MetaSynthesisPage() {
             {trendData && (
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Play Rate Trend
+                  % of Meta Trend
                 </div>
                 <div className="p-4">
-                  <MetaTrendChart weeks={trendData.weeks} series={trendData.playRateSeries} />
+                  <MetaTrendChart weeks={trendData.weeks} series={trendData.metaShareSeries} />
                 </div>
               </div>
             )}
@@ -566,7 +561,7 @@ export function MetaSynthesisPage() {
                   <thead className="text-xs uppercase tracking-wide text-gray-400">
                     <tr>
                       <th className="text-left px-4 py-2">Archetype</th>
-                      <th className="text-right px-4 py-2">Play Rate</th>
+                      <th className="text-right px-4 py-2">% of Meta</th>
                       <th className="text-right px-4 py-2">Win Rate</th>
                       <th className="text-right px-4 py-2 hidden sm:table-cell">Games</th>
                     </tr>
@@ -580,7 +575,7 @@ export function MetaSynthesisPage() {
                             <span>{a.name}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.metaShare.toFixed(1)}%</td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums">{a.winRate.toFixed(1)}%</td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
                           {a.gamesPlayed.toLocaleString()}
@@ -602,7 +597,7 @@ export function MetaSynthesisPage() {
                     <tr>
                       <th className="text-left px-4 py-2">Archetype</th>
                       <th className="text-right px-4 py-2">Win Rate</th>
-                      <th className="text-right px-4 py-2">Play Rate</th>
+                      <th className="text-right px-4 py-2">% of Meta</th>
                       <th className="text-right px-4 py-2 hidden sm:table-cell">Games</th>
                     </tr>
                   </thead>
@@ -616,7 +611,7 @@ export function MetaSynthesisPage() {
                           </div>
                         </td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums">{a.winRate.toFixed(1)}%</td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.playRate.toFixed(1)}%</td>
+                        <td className="px-4 py-2 text-right font-mono tabular-nums">{a.metaShare.toFixed(1)}%</td>
                         <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-500 hidden sm:table-cell">
                           {a.gamesPlayed.toLocaleString()}
                         </td>

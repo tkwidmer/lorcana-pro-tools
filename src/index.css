@@ -36,13 +36,72 @@
  * applies it before first paint to avoid a flash of the wrong theme.
  */
 
+/* ── Ink & Parchment brand tokens ─────────────────────────────
+ *
+ * The light palette. Grays are retuned from Tailwind's cool blue-gray to a
+ * warm paper neutral, so every existing `bg-gray-*`/`text-gray-*` utility
+ * picks up the brand without markup changes. `white` is the card surface;
+ * `paper` is the page ground behind it.
+ *
+ * Brand-only tokens (new utilities):
+ *   paper      page background
+ *   ink        the ink-black nav bar / footer; stays dark in both themes
+ *   on-ink     text and icons on `ink`
+ *   forge      gold fill for primary actions and supporter status
+ *   on-forge   text on a `forge` fill
+ *   forge-ink  gold used as text/icon on a paper or white surface
+ *   forge-soft tinted gold panel behind `forge-ink` text
+ *
+ * Radii are squared off app-wide (the brand is print/letterpress, not pill
+ * shaped); `rounded-full` is untouched.
+ */
+@theme {
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Oswald", "Arial Narrow", ui-sans-serif, sans-serif;
+
+  --radius: 0.1875rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.1875rem;
+  --radius-lg: 0.1875rem;
+  --radius-xl: 0.25rem;
+  --radius-2xl: 0.375rem;
+
+  --color-paper: #f2f1ee;
+  --color-white: #fbfaf8;
+  --color-ink: #17171a;
+  --color-on-ink: #f2f1ee;
+  --color-forge: #b5832a;
+  --color-on-forge: #17171a;
+  --color-forge-ink: #8a5a12;
+  --color-forge-soft: #f1e5cc;
+
+  --color-gray-50: #ebe9e4;
+  --color-gray-100: #e3e0da;
+  --color-gray-200: #d5d2cb;
+  --color-gray-300: #bfbbb3;
+  --color-gray-400: #8f8b84;
+  --color-gray-500: #6b6862;
+  --color-gray-600: #57544f;
+  --color-gray-700: #403e3a;
+  --color-gray-800: #2a2927;
+  --color-gray-900: #17171a;
+  --color-gray-950: #0e0e10;
+}
+
 @layer base {
   :root {
     color-scheme: light;
   }
   html {
-    background-color: var(--color-white);
+    background-color: var(--color-paper);
     color: var(--color-gray-900);
+  }
+  /* Page titles use the condensed display face, set in caps like the
+     wordmark. Size and weight still come from each page's utilities. */
+  h1 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 }
 
@@ -50,21 +109,31 @@
   html.dark {
     color-scheme: dark;
 
-    /* Surfaces and text. `white` is the base page/card surface; gray-50 and
-       up read as progressively more elevated panels, then flip to text
-       colors at gray-400. */
-    --color-white: oklch(17% 0.008 264.4);
-    --color-gray-50: oklch(21% 0.009 264.4);
-    --color-gray-100: oklch(25.5% 0.011 264.4);
-    --color-gray-200: oklch(31% 0.013 264.4);
-    --color-gray-300: oklch(38% 0.015 264.4);
-    --color-gray-400: oklch(64% 0.024 264.4);
-    --color-gray-500: oklch(72% 0.022 264.4);
-    --color-gray-600: oklch(80% 0.018 264.4);
-    --color-gray-700: oklch(86% 0.014 264.4);
-    --color-gray-800: oklch(91% 0.01 264.4);
-    --color-gray-900: oklch(95.5% 0.006 264.4);
-    --color-gray-950: oklch(98% 0.004 264.4);
+    /* Brand tokens. `ink` gets darker than the page so the nav bar still
+       reads as a separate band. */
+    --color-paper: #131315;
+    --color-ink: #0b0b0c;
+    --color-on-ink: #ecebe7;
+    --color-forge: #d6a24a;
+    --color-on-forge: #131315;
+    --color-forge-ink: #e0b25f;
+    --color-forge-soft: #33291a;
+
+    /* Surfaces and text. `white` is the card surface; gray-50 and up read as
+       progressively more elevated panels, then flip to text colors at
+       gray-400. */
+    --color-white: #1b1b1e;
+    --color-gray-50: #232327;
+    --color-gray-100: #2a2a2f;
+    --color-gray-200: #34343a;
+    --color-gray-300: #45454c;
+    --color-gray-400: #8f8d87;
+    --color-gray-500: #a3a19b;
+    --color-gray-600: #bdbbb5;
+    --color-gray-700: #d2d0cb;
+    --color-gray-800: #e2e0dc;
+    --color-gray-900: #ecebe7;
+    --color-gray-950: #f6f5f2;
 
     /* Accent families, mirrored. The comment on each line is the light-mode
        shade its value came from. */
@@ -226,6 +295,14 @@
   }
 }
 
+/* The home banner is ink-wash art on white paper; in dark mode invert it so
+   it reads as pale ink on a dark page instead of a bright white slab. */
+@media screen {
+  html.dark .brand-banner {
+    filter: invert(1);
+  }
+}
+
 /* ── Blog post body ───────────────────────────────────────── */
 /* Styles the HTML compiled from content/blog/*.md. Colors go through the
    palette variables so the html.dark remap themes it like everything else. */
@@ -235,15 +312,15 @@
   line-height: 1.75;
 }
 .blog-prose > * + * { margin-top: 1.25em; }
-.blog-prose h2 { font-size: 1.5rem; font-weight: 700; color: var(--color-gray-900); margin-top: 2em; line-height: 1.3; }
-.blog-prose h3 { font-size: 1.25rem; font-weight: 600; color: var(--color-gray-900); margin-top: 1.6em; line-height: 1.4; }
+.blog-prose h2 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 500; color: var(--color-gray-900); margin-top: 2em; line-height: 1.3; }
+.blog-prose h3 { font-family: var(--font-display); font-size: 1.3rem; font-weight: 500; color: var(--color-gray-900); margin-top: 1.6em; line-height: 1.4; }
 .blog-prose h4 { font-weight: 600; color: var(--color-gray-900); margin-top: 1.5em; }
-.blog-prose a { color: var(--color-blue-700); text-decoration: underline; }
+.blog-prose a { color: var(--color-forge-ink); text-decoration: underline; }
 .blog-prose strong { color: var(--color-gray-900); font-weight: 600; }
 .blog-prose ul { list-style: disc; padding-left: 1.5em; }
 .blog-prose ol { list-style: decimal; padding-left: 1.5em; }
 .blog-prose li + li { margin-top: 0.4em; }
-.blog-prose blockquote { border-left: 4px solid var(--color-gray-300); padding-left: 1em; color: var(--color-gray-600); font-style: italic; }
+.blog-prose blockquote { border-left: 4px solid var(--color-forge); padding-left: 1em; color: var(--color-gray-600); font-style: italic; }
 .blog-prose code { font-size: 0.875em; background: var(--color-gray-100); border-radius: 0.25rem; padding: 0.1em 0.35em; }
 .blog-prose pre { background: var(--color-gray-100); border-radius: 0.5rem; padding: 1em; overflow-x: auto; }
 .blog-prose pre code { background: none; padding: 0; }

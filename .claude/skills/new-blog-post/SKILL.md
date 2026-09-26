@@ -62,7 +62,7 @@ there's real content. Keep their voice — edit, don't rewrite, unless asked.
 
 Markdown notes for the body:
 - Start sections at `##` — the page already renders the title as the `<h1>`.
-- Link to site tools root-relatively: `[Cut Calculator](/cut-calculator)`.
+- Link to site tools root-relatively: `[Tournament Lookup](/tournament-lookup)`.
 - Images go in `public/blog/<slug>/` and are referenced as
   `/blog/<slug>/<file>`.
 

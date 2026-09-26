@@ -14,6 +14,7 @@ import {
   buildCardIndex,
   getLegality,
 } from '../lib/cardAnalysis'
+import { PageHeader } from '../components/ui/PageHeader'
 
 function Badge({ status, rotationRisk }) {
   if (status === null) {
@@ -582,14 +583,10 @@ export function DeckInsightsPage() {
 
   return (
     <div className="w-full px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
-          Deck Insights
-        </h1>
-        <p className="text-gray-500">
-          Paste a deck list to analyse your curve, consistency, lore pressure, keyword synergies, mulligan strategy, and draw odds.
-        </p>
-      </div>
+      <PageHeader
+        title="Deck Insights"
+        description="Paste a deck list to analyse your curve, consistency, lore pressure, keyword synergies, mulligan strategy, and draw odds."
+      />
 
       {/* Deck List */}
       <div className="border border-gray-200 rounded-lg p-6 mb-4">
@@ -646,9 +643,9 @@ export function DeckInsightsPage() {
         <div className="mb-4">
           <button
             onClick={() => setLegalityOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Format Legality</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Format Legality</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${legalityOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -799,9 +796,9 @@ export function DeckInsightsPage() {
         <div className="mb-4">
           <button
             onClick={() => setInsightsOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Deck Insights</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Deck Insights</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${insightsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -1372,9 +1369,9 @@ export function DeckInsightsPage() {
           <div className="mb-4">
             <button
               onClick={() => setMulliganOpen(o => !o)}
-              className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+              className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
             >
-              <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Mulligan Advisor</span>
+              <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Mulligan Advisor</span>
               <svg className={`w-4 h-4 text-gray-400 transition-transform ${mulliganOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
@@ -1628,9 +1625,9 @@ export function DeckInsightsPage() {
         <div className="mb-4">
           <button
             onClick={() => setTargetedOddsOpen(o => !o)}
-            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
           >
-            <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Targeted Card Odds</span>
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Targeted Card Odds</span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${targetedOddsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -1850,7 +1847,7 @@ export function DeckInsightsPage() {
               : combo.map(g => `${g.name} by T${g.targetTurn}`).join(' · ')
             : null
           return (
-            <div key={key} className={`border rounded-lg p-4 ${isFullSet ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'}`}>
+            <div key={key} className={`border rounded-lg p-4 ${isFullSet ? 'border-forge bg-forge-soft/40' : 'border-gray-200'}`}>
               <p className="text-sm font-semibold text-gray-900 mb-3">
                 {combo.length === 2 ? (
                   <>{combo[0].name} <span className="text-gray-400 font-normal">and</span> {combo[1].name}</>
@@ -1918,9 +1915,9 @@ export function DeckInsightsPage() {
       <div className="mb-4 mt-6">
         <button
           onClick={() => setMethodologyOpen(o => !o)}
-          className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+          className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
         >
-          <span className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Methodology</span>
+          <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Methodology</span>
           <svg className={`w-4 h-4 text-gray-400 transition-transform ${methodologyOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>

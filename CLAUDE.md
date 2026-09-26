@@ -16,7 +16,7 @@ npm run test:watch # Run Vitest in watch mode
 
 Unit tests live in `src/lib/__tests__/` (Vitest), one `<lib>.test.js` per pure-logic
 lib in `src/lib/` (e.g. `parseGamelog`, `cardImpact`, `practiceSim`, `metaSynthesis`,
-`storeTiers`, `tournamentCut`). CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
+`storeTiers`). CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
 UI and integration behavior is still validated manually.
 
 ## Screenshots & Manual Verification
@@ -32,7 +32,7 @@ preview URL if local verification isn't possible for some reason.
 
 When creating a pull request:
 
-1. **Include Vercel preview link** — Add the live preview URL in the PR description so reviewers can test changes without building locally. Preview links follow the pattern `https://<branch-name>.<project>.vercel.app`
+1. **Include Vercel preview link** — Add the live preview URL in the PR description so reviewers can test changes without building locally. Don't construct the URL — Vercel truncates the branch and appends a hash, so any guessed pattern is wrong. Read it from the vercel[bot] comment on the PR per the `vercel-preview-url` skill (`.claude/skills/vercel-preview-url/`)
 2. **Include screenshots for UI changes** — For any updates or new features affecting the user interface, capture and attach relevant screenshots in the PR body. Include before/after pairs when applicable
 
 ## Stack
@@ -50,7 +50,7 @@ VITE_SUPABASE_ANON_KEY=...
 
 Vercel also accepts `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` prefixes (both are checked in `supabaseClient.js`).
 
-Optional: `VITE_DISCORD_CLIENT_ID` — the Application ID of the Discord bot (not a secret). When set, `HomePage` shows an "Add to Discord" card under a Community section linking to the bot's OAuth invite URL; when unset, that card is omitted.
+`VITE_DISCORD_CLIENT_ID` is no longer read: the "Add to Discord" invite card (a Community section in `siteSections.js`) was removed from the home page while the bot matures. The bot itself (`/api/discord-interactions`) is unaffected.
 
 Optional: `VITE_METAFY_CLIENT_ID` — the Metafy OAuth client ID (not a secret). When set, `SettingsPage` shows a "Connect Metafy" card; when unset, `connectMetafy()` throws and the card's connect button surfaces an error instead of redirecting.
 
@@ -81,7 +81,7 @@ Defined in `src/App.jsx`:
 
 | Route | Page File | Purpose |
 |---|---|---|
-| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Metagame, Tournament Tools, Scouting, Content Creators (+ Community when the Discord bot is configured). The catalog lives in `src/lib/siteSections.js` |
+| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Tournament Tools, Content Creators. The catalog lives in `src/lib/siteSections.js` |
 | `/sitemap` | `SitemapPage.jsx` | Plain link list of every tool, rendered from the same `siteSections.js` catalog as `HomePage` so the two never drift |
 | `/blog` | `BlogIndexPage.jsx` | Blog post index — every post in `content/blog/`, newest first (see "Blog" below) |
 | `/blog/:slug` | `BlogPostPage.jsx` | Renders one blog post |
@@ -89,7 +89,6 @@ Defined in `src/App.jsx`:
 | `/auth/callback` | `AuthCallbackPage.jsx` | OAuth redirect handler; checks session and redirects |
 | `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, add [Format Coconut] cards, build print sheets (9/page) |
 | `/coconut-deck-builder` | `CoconutDeckBuilderPage.jsx` | [Format Coconut] deck builder — pick a Coconut card, lock in up to 3 inks, build a singleton 60+ card deck with the format's copy-count exceptions enforced |
-| `/cut-calculator` | `TournamentCutPage.jsx` | Swiss cut probability calculator using binomial/trinomial models |
 | `/limited-guide` | `LimitedGuidePage.jsx` | Limited format reference — BREAD framework, mana curves, uninkable counts |
 | `/rules` | `RulesPage.jsx` | Rules browser index — lists every document in `src/lib/rules/registry.js` with its latest version (see "Rules Browser" below) |
 | `/rules/:doc`, `/rules/:doc/:chapterSlug` | `RulesDocumentPage.jsx` | One rules document, chaptered, with a `?v=` version picker and inline "changed from previous version" highlighting |
@@ -109,7 +108,6 @@ Defined in `src/App.jsx`:
 | `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
 | `/meta-synthesis` | `MetaSynthesisPage.jsx` | Plain-English meta report from duels.ink `fetchStats`, centered on the user's rank band — see "Meta Synthesis" below |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
-| `/leaderboard` | `LeaderboardPage.jsx` | duels.ink top 50 players by queue, MMR distribution |
 | `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis; clicking a pairing in the Matches tab opens cross-event history + head-to-head from the Tournament History archive (see below) |
 | `/lore-tracker` | `LoreTrackerPage.jsx` | Mobile in-game lore counter with tap controls and audit log |
 | `/store-lookup` | `StoreLookupPage.jsx` | Paste RPH store IDs/URLs → store details plus store-tier status (see "Store Lookup" below) |
@@ -118,7 +116,7 @@ Defined in `src/App.jsx`:
 
 **Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
 
-**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/tournament-lookup`, `/store-lookup`, `/decklist-inspector`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
+**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/tournament-lookup`, `/meta-synthesis`, `/decklist-inspector`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
 
 All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname`) so a render-time throw in one tool shows a fallback instead of white-screening the SPA; `Nav` sits outside the boundary and stays usable.
 
@@ -129,6 +127,7 @@ Legacy redirects:
 - `/game-library` → `/analytics`
 - `/shared` → `/library`
 - `/legality-checker` → `/deck-insights`
+- `/cut-calculator` → `/tournament-lookup` (retired; Tournament Lookup's ID analysis covers it)
 - `/opponent-directory` → `/library?tab=players` (the two pages were merged into one — see below)
 
 ### Components
@@ -137,7 +136,10 @@ In `src/components/`:
 
 | File | Purpose |
 |---|---|
-| `Nav.jsx` | Top navigation bar — Blog link, settings link + a username dropdown (logout, plus an Admin link for admins); hidden on `/lore-tracker` and `/decklist-inspector/overlay` |
+| `Nav.jsx` | Ink-black top bar — one dropdown per `siteSections.js` section (tools + the newest blog post), Blog link, ⌘K tool search, settings link, username dropdown (logout, plus an Admin link for admins); below `xl` the sections collapse into a hamburger menu. Hidden on `/lore-tracker` and `/decklist-inspector/overlay` |
+| `ToolSearch.jsx` | The ⌘K / Ctrl+K quick switcher over the tool catalog, opened from `Nav` |
+| `ToolIcon.jsx` | Renders a catalog tool's glyph from `lib/toolIcons.js` by the tool's `icon` name |
+| `ui/Button.jsx`, `ui/Card.jsx`, `ui/PageHeader.jsx`, `ui/Field.jsx` (`Input`/`Textarea`/`Select`), `ui/Tabs.jsx` (`Tabs`/`Tab`), `ui/Badge.jsx` | Shared UI building blocks — see "Design System" below |
 | `Footer.jsx` | Site-wide footer, hidden on the same routes as `Nav` |
 | `ErrorBoundary.jsx` | Class-based error boundary with a "Something broke" fallback (Try again / Reload / Back to tools; dev-only stack trace). Resets when its `resetKey` prop changes. Wraps the routes in `App.jsx` |
 | `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise a "Supporters only" gate (sign-in CTA when logged out). Reads `useSupporter` |
@@ -186,7 +188,7 @@ In `src/lib/`:
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
 | `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
 | `scoutedGames.js` | IndexedDB CRUD for scraped game snapshots (`lorcana_pro_tools` DB, `games` store, keyed by `uuid`) — powers the Scouting Library |
-| `coconutCards.js` | Static data for all 25 [Format Coconut] cards — `id` (also the art filename), `name`/`version`, `baseFullName`, `inks` (one ink, or two for the duo cards), `duelsId` (duels.ink's own id, the 18 it carries only), ability text, and the Nick Wilde → Pawpsicle extra-copy exception. Also exports `getCoconutCard()` and `coconutCardImageUrl()` |
+| `coconutCards.js` | Static data for all 26 [Format Coconut] cards — `id` (also the art filename), `name`/`version`, `baseFullName`, `inks` (one ink, or two for the duo cards), `duelsId` (duels.ink's own id, the 18 it carries only), ability text, and the Nick Wilde → Pawpsicle extra-copy exception. Also exports `getCoconutCard()` and `coconutCardImageUrl()` |
 | `coconutFormat.js` | [Format Coconut] deck rules — `getCardLimit()` (1, or 4 for the Coconut card/its extra-copy exception), ink legality, and `validateDeck()` (60+ cards, singleton, ink) |
 | `coconutDecks.js` | IndexedDB CRUD for saved Coconut decks (`lorcana_pro_tools` DB, `coconutDecks` store, keyed by `id`) |
 | `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
@@ -200,11 +202,11 @@ In `src/lib/`:
 | `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
 | `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
 | `sessionStats.js` | Session & tilt analysis over match-history rows. `buildSessions()` excludes bot games and starts a new session after a `SESSION_GAP_MINUTES` (30) gap between `ended_at` and the next `started_at`; it throws on a row missing either timestamp. Also `winRateByPosition()`, `winRateAfterLossStreak()` (streaks reset at session boundaries, and draws don't move them), `winRateByTimeOfDay()`/`winRateByDayOfWeek()` (browser-local time), and `stopLossSuggestion()`, which only suggests a break when the after-streak gap's `diffInterval()` is entirely below zero with at least 15 games |
-| `siteSections.js` | `SECTIONS` — the tool catalog (name, path, description per section) rendered by both `HomePage` and `SitemapPage` |
+| `siteSections.js` | `SECTIONS` — the tool catalog (name, path, icon, description per tool; `navLabel` per section) rendered by `HomePage`, `SitemapPage`, and `Nav`. `findTool(pathname)` resolves a route to its section/tool |
+| `toolIcons.js` | Stroke-glyph path data for each catalog tool's `icon`, drawn by `components/ToolIcon.jsx` |
 | `analyticsAggregation.js` | `enrichGame()` + per-card/mulligan aggregations (`aggregateMyCards`, `aggregateMulliganSentBack`, `aggregateMulliganWinRates`, `aggregateMultiCopyMulligan`) behind `AnalyticsPage` |
-| `practiceSim.js` | `wilsonInterval()`, `diffInterval()` (Newcombe 95% interval for a difference of two proportions), (Bayesian shrinkage toward the public WR, 10-game prior), and the Bo1/Bo3 tournament Monte Carlo used by `PracticePlanPage` |
+| `practiceSim.js` | `wilsonInterval()`, `diffInterval()` (Newcombe 95% interval for a difference of two proportions), `shrinkWR()` (Bayesian shrinkage toward the public WR, 10-game prior), and the Bo1/Bo3 tournament Monte Carlo used by `PracticePlanPage` |
 | `drawOddsMath.js` / `monteCarloSim.js` | Exact hypergeometric odds (log-space) and the mulligan/scry/curve/quest-pressure simulations behind Deck Insights |
-| `tournamentCut.js` | Cut-line estimates (`estimateCutlineRange()` — W/L binomial vs. W/D/L trinomial) for the Cut Calculator |
 | `tournamentLive.js` | `subscribeToTournamentLive()` — Pusher subscription to RPH's public `player-event-{id}` channel; wrapped by `hooks/useTournamentLiveUpdates.js` so `TournamentLookupPage` refetches on any broadcast |
 | `metaSynthesis.js` / `rankTiers.js` / `archetypeStats.js` | Meta Synthesis logic (see below), MMR → rank-tier mapping, and curation of duels.ink archetype profiles |
 | `storeTiers.js` | RPH store-tier rules for Store Lookup (see below) |
@@ -213,9 +215,7 @@ In `src/lib/`:
 | `cardImpact.js` | `computeCardImpact()` — per-card "wins above replacement" (WAR) for a deck's games; `computeCardImpactTrend()` — the same logic bucketed by calendar month, powering `CardImpactTrendView`'s WAR-over-time chart |
 | `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
 | `duelsApi.js` | duels.ink API client — token management, match history, gamelog, deck/personal-stats, and meta stats fetches |
-| `leaderboardApi.js` | Fetches duels.ink ranked leaderboards via `/api/duels?endpoint=leaderboard` |
-| `metaSnapshots.js` | IndexedDB CRUD for daily meta-matchup snapshots (`lorcana_pro_tools` DB, `metaSnapshots` store, keyed by `id`) — `saveSnapshotIfNew()` captures one snapshot per queue/period/ranks config per day from `WinrateMatrixPage`'s `fetchStats` result; `getSnapshotsForConfig()` reads them back for the Meta Drift comparison |
-| `metaDrift.js` | `computeMetaDrift()` — diffs two saved meta snapshots' matchups (win rate, games) for `WinrateMatrixPage`'s Meta Drift view |
+| `metaDrift.js` | `archetypeDrift()` / `archetypeMatchupDrift()` — week-by-week win rate, games and play rate per grouped archetype, and one archetype's win rate vs each other archetype, for `WinrateMatrixPage`'s Meta Drift view |
 | `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
 | `tournamentHistoryApi.js` | Client for `/api/tournament-history` — `fetchPlayerTournamentHistory()`, `fetchHeadToHead()`, `searchTournamentPlayers()`, `fetchRecentTournamentImports()`, `importTournamentEvent()`. See "Tournament History Archive" below |
 | `blog.js` | Client access to the compiled blog posts — `listPosts()` (newest first), `getPost(slug)`. See "Blog" below |
@@ -225,13 +225,23 @@ In `src/lib/`:
 | `gameImport.js` | Deserialize imported game records |
 | `exportGameIds.js` | CSV export of game IDs |
 
+### Design System (Ink & Parchment)
+
+The look is taken from the brand art: paper surfaces, an ink-black nav bar, condensed display type set in caps like the wordmark, and one forge-gold accent. It's defined as tokens in `src/index.css`'s `@theme` block, so it applies app-wide without per-page markup:
+
+- **Fonts:** `font-sans` is Source Sans 3 (body), `font-display` is Oswald (loaded from Google Fonts in `index.html`). Every `<h1>` gets the display face in caps via a base rule; use `font-display uppercase tracking-wide` for other headings and labels that should match.
+- **Brand colors:** `paper` (page ground), `ink` / `on-ink` (nav bar, stays dark in both themes), `forge` / `on-forge` (gold fill for the one primary action and supporter status), `forge-ink` (gold text on a light surface), `forge-soft` (tinted gold panel). The gray scale is retuned to a warm paper neutral and `white` is the card surface, so existing `gray-*`/`white` utilities already carry the brand.
+- **Radii** are squared off app-wide (`rounded`, `rounded-lg`, etc. are 2–4px); `rounded-full` is unchanged.
+- **Building blocks** in `src/components/ui/` — use these rather than hand-rolling class strings: `Button` (`primary` gold / `secondary` ink outline / `quiet` / `danger`; `to` for a router link, `href` for an external one), `Card` (bordered surface with optional `title`/`description`), `PageHeader` (page title + description + `actions`; the eyebrow is the route's catalog section from `findTool()`), `Input`/`Textarea`/`Select`, `Tabs`/`Tab` (underlined tab bar, forge underline on the active tab), `Badge` (`forge` for supporter status, `neutral` otherwise). Blue accents are off-brand: use `forge` for the one primary action or current selection, and ink/gray for the rest. Win/loss/draw colours and similar status colours stay semantic.
+- New catalog tools need an `icon` from `lib/toolIcons.js` (a unit test enforces it).
+
 ### Dark Mode
 
 **There are no `dark:` variants in this codebase, and new code should not add any.** Dark mode is implemented once, in `src/index.css`, by remapping Tailwind's color tokens under `html.dark`. Every color utility Tailwind v4 generates resolves through a CSS variable (`.bg-gray-50` compiles to `background-color: var(--color-gray-50)`), so redefining those variables flips the whole app at once — retrofitting ~16k lines of markup with paired `dark:` classes was never on the table, and pages added later get dark mode for free as long as they stay on the palette.
 
 What this means when writing UI:
 
-- Use the normal Tailwind palette (`bg-white`, `bg-gray-50`, `border-gray-200`, `text-gray-500`, `bg-gray-900 text-white`, tinted `bg-red-50`/`text-red-700` panels) and it will theme itself. The remap is built around exactly these idioms: grays 50–300 become dark surfaces and borders, 400–950 become light text, and accent families are mirrored so tinted panels darken while their paired text lightens.
+- Use the normal Tailwind palette plus the brand tokens above (`bg-white`, `bg-gray-50`, `border-gray-200`, `text-gray-500`, `bg-gray-900 text-white`, tinted `bg-red-50`/`text-red-700` panels) and it will theme itself. The remap is built around exactly these idioms: grays 50–300 become dark surfaces and borders, 400–950 become light text, and accent families are mirrored so tinted panels darken while their paired text lightens.
 - **Don't use `bg-black` for a solid fill** — `--color-black` is deliberately *not* remapped, because it's the modal-scrim color (`bg-black/40`) and must stay dark in both themes. Use `bg-gray-900` for a solid dark-in-light fill.
 - Hardcoded colors (inline `style` hex values, canvas rendering) don't participate. `ProxyCard.jsx` is fully inline-styled on purpose — a printable proxy must stay white regardless of theme.
 - The remap is scoped to `@media screen`, so printed output (proxy sheets, standings) always uses the light palette.
@@ -263,7 +273,7 @@ Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies wit
 
 | Endpoint | Upstream | Auth | Notes |
 |---|---|---|---|
-| `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`, `leaderboard`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `deck`, `stats`, `leaderboard`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. `stats` forwards duels.ink's documented `era` param; `fetchStats()` in `duelsApi.js` always scopes to the queue's current era, looking its key up once per queue from `meta.eras.currentEra.key`. Only the fields duels.ink documents as stable (`matchups`, `colorPairs`, `activity.totalGames`, `updatedAt`, a few `meta.*`) are a supported contract — the archetype fields (`profiles`, `archetypeMatchups`, `cardLift`) behind `MetaSynthesisPage` and the matrix's archetype view are not. In bo3 queues `matchups[].games` counts matches, not games. |
+| `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `deck`, `stats`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. `stats` forwards duels.ink's documented `era` param; `fetchStats()` in `duelsApi.js` always scopes to the queue's current era, looking its key up once per queue from `meta.eras.currentEra.key`. Only the fields duels.ink documents as stable (`matchups`, `colorPairs`, `activity.totalGames`, `updatedAt`, a few `meta.*`) are a supported contract — the archetype fields (`profiles`, `archetypeMatchups`, `cardLift`) behind `MetaSynthesisPage` and the matrix's archetype view are not. In bo3 queues `matchups[].games` counts matches, not games. |
 | `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`, `store`, `storeEvents`; handles pagination |
 | `/api/tournament-history` | Supabase (`tournament_history_*` tables) | Bearer Supabase access token — `import` requires admin tier, the read endpoints require any signed-in session | Single consolidated route for the caster history archive, dispatched by `?endpoint=` — `import` (admin-only, fetches an RPH event's final standings + matches server-side and upserts them), `player-history`, `head-to-head`, `search-players`, `recent-imports`. See "Tournament History Archive" below. |
 | `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's commands (Decode Deck QR, `/tournament`, `/favorite`, `/unfavorite`, `/favorites`) directly. See `discord-bot/README.md`. |
@@ -305,7 +315,6 @@ A prior Patreon OAuth integration (`api/patreon.ts` + friends) was fully removed
 | IndexedDB `lorcana_pro_tools` v2 | `games` store (key: `uuid`) | Scraped game snapshots from `GameScraperPage` |
 | IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
 | IndexedDB `lorcana_pro_tools` v3 | `coconutDecks` store (key: `id`) | Saved [Format Coconut] decks from `CoconutDeckBuilderPage` |
-| IndexedDB `lorcana_pro_tools` v4 | `metaSnapshots` store (key: `id`) | Daily meta-matchup snapshots from `WinrateMatrixPage`, one per queue/period/ranks config per day, used by its Meta Drift comparison |
 | IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `AnalyticsPage` |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
 | localStorage `lorcana_theme` | — | Dark-mode preference: `light` \| `dark` \| `system` (see Dark Mode) |
@@ -395,7 +404,9 @@ Key fields on game objects from the duels.ink API:
 
 `metagameAnalysis.js` (`analyzeOpponentMetagame`) groups by opponent color pair and returns frequency + win rate sorted by game count.
 
-`WinrateMatrixPage`'s Meta Drift section compares two locally-saved snapshots of the public duels.ink matchup data for the same queue/period/ranks config, to surface how the meta has shifted over time. Every time the page loads, `saveSnapshotIfNew()` (`metaSnapshots.js`) stores that day's `fetchStats` matchups/colorPairs/activity in the `metaSnapshots` IndexedDB store — one snapshot per exact config per day, so repeat visits within a day don't create duplicates. The user picks two saved dates and `computeMetaDrift()` (`metaDrift.js`) diffs the two snapshots' matchups (win rate delta, games delta, matched by color pair regardless of A/B order), sorted by absolute win rate movement. Since snapshots only accumulate as the user actually visits the page, there's no backfill — history starts from whenever this shipped.
+`WinrateMatrixPage` (defaults to Core Bo1) has two collapsible sections. **Win Rates** (open by default) groups by Archetypes (default) or Ink pairs and shows a Matrix (default) or a List; the archetype matrix is `archetypeMatrix()` (`metaSynthesis.js`) — archetypes with ≥1% of the meta, pairings under 30 games blanked — and the archetype list expands a row's matchups inline. **Archetype Meta Drift** is built on grouped archetypes (`aggregateArchetypes`, below). When opened, it fetches the last 5 of `meta.availableWeeks` (`period=week:<startDate>`) for the selected queue/ranks in parallel. `archetypeDrift()` (`metaDrift.js`) gives one row per archetype with each week's win rate, games and play rate, plus the overall change from the first week to the latest complete week (not week-over-week), plus a "Last week" column for the latest complete week vs the one before; each change header names its span. The in-progress week is shown but excluded, since its sample is partial. Rows sort by the latest complete week's games or win rate. Clicking an archetype expands `archetypeMatchupDrift()` in a row directly beneath it: its win rate vs each other archetype per week (mirrors omitted). Nothing is stored — it works on a first visit. "% of the meta" everywhere (this page, Meta Synthesis) is `metaShare()` (`metaSynthesis.js`): share of decks, archetype games ÷ (2 × `activity.totalGames`), since every game has two decks (`colorPairs` games sum to exactly 2× `totalGames`). duels.ink's own "play rate" divides by games and is twice this. Named archetypes cover ~80% of decks in Core, so their shares sum to less than 100%. (Drift used to diff daily color-pair snapshots saved in IndexedDB; `db.js` v5 drops that `metaSnapshots` store.)
+
+The page's Archetypes table uses `aggregateArchetypes()` (`metaSynthesis.js`), same as Meta Synthesis: duels.ink's `profiles` are per-build-variant clusters, it reuses one `archetypeName` across several `archetypeSlug`s of the same colors, and one slug can carry several names — so profiles are grouped by colors + `archetypeName`, the only distinction a player can see (Core Bo1 Set 13: 89 named profiles → 30 archetypes). `archetypeMatchups` is keyed by profile `id` and is rolled up to the same groups by `archetypeMatchupSummary()`.
 
 ### Rules Browser
 
@@ -419,6 +430,10 @@ The page defaults to the user's own rank band (`fetchCurrentMmr` → `rankTiers.
 `StoreLookupPage` extracts every UUID from pasted store IDs/URLs and fetches each store via `/api/tournament?type=store`, plus its events (`storeEvents`) and unique-fan count. `storeTiers.js` models RPH's store-tier program:
 - `computeTierProgress()` tracks provisional Legendary progress in the pro-rating window (`PRORATE_WINDOW`, `LEGENDARY_PRORATED_REQUIREMENTS`, plus running a Hyperia City Prerelease).
 - `computeStandingTierStatus()` gives the standing tier over the trailing 4 set seasons, whose boundaries are derived from Prerelease events (`deriveSeasons()`).
+
+Each lookup writes the extracted store IDs to the URL as `?stores=<id>,<id>` (whether IDs or store URLs were pasted), so the link is shareable; opening it pre-fills the input from that param (over the localStorage last input) and auto-runs the lookup.
+
+The page also shows a static Welcome/Standard/Legendary reference (definitions + benefits from RPH's announcement, requirements from the `*_MAINTENANCE_REQUIREMENTS` constants).
 
 Only `display_status === 'complete'` events count. The window dates and requirements are hardcoded from the Aug 2026 program email, so they'll need updating when RPH changes the program.
 
@@ -460,7 +475,7 @@ authorUrl: https://x.com/janedoe
 
 Posts can be guest-written, so every post names its own `author` and links `authorUrl` (their X/Twitter, Metafy, or other profile; must be `https://`). The byline (`components/PostByline.jsx` client-side, mirrored in `blogPlugin.js`'s static HTML) links it with `rel="author"`, and the post's `BlogPosting` JSON-LD carries it as a `Person`.
 
-Adding a file is all it takes to publish; there's no registry to update. An optional `draft: true` line keeps a post out of production builds (no static page, no sitemap entry, and it compiles to `null` so its content never reaches the bundle) while still showing it in `npm run dev` with a Draft badge; delete the line to publish. The `new-blog-post` skill (`.claude/skills/new-blog-post/`) scaffolds a draft with today's date and InkbornForge as the default author. `parsePost()` (`src/lib/blogPost.js`) throws on a missing field, a non-`YYYY-MM-DD` date, a non-`https://` `authorUrl`, or a non-slug filename, which fails the build rather than shipping a broken post. Links to other pages on the site should be root-relative (`[Cut Calculator](/cut-calculator)`).
+Adding a file is all it takes to publish; there's no registry to update. An optional `draft: true` line keeps a post out of production builds (no static page, no sitemap entry, and it compiles to `null` so its content never reaches the bundle) while still showing it in `npm run dev` with a Draft badge; delete the line to publish. The `new-blog-post` skill (`.claude/skills/new-blog-post/`) scaffolds a draft with today's date and InkbornForge as the default author. `parsePost()` (`src/lib/blogPost.js`) throws on a missing field, a non-`YYYY-MM-DD` date, a non-`https://` `authorUrl`, or a non-slug filename, which fails the build rather than shipping a broken post. Links to other pages on the site should be root-relative (`[Tournament Lookup](/tournament-lookup)`).
 
 `blogPlugin.js` (a Vite plugin registered in `vite.config.js`) does the work:
 - **Compile at build time.** It transforms each `content/blog/*.md` import into a JS module exporting the parsed post, so `src/lib/blog.js`'s `import.meta.glob` gets plain HTML strings and `marked` never ships to the browser.
@@ -479,13 +494,11 @@ PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapp
 
 **Hand inference (handInference.js + HandPredictor.jsx)** — Hypergeometric P(≥1 copy in hand) given remaining deck size and current hand size. Combines observed deck composition with historical player profiles as a prior.
 
-**Cut calculator (TournamentCutPage)** — Upper bound uses a pure W/L binomial; lower bound uses a trinomial W/D/L with empirical draw rate. Estimates safe cutline range and advises on intentional draw risk.
-
 **Tournament ID analysis (tournamentApi.js `analyzeId`)** — After an ID, player gains 1 point. Counts how many players below the cut could leapfrog them if those players all win (+3 pts). Classifies as safe (≥3 point buffer), borderline (1–2 buffer), or danger (0 or outside cut).
 
 ### [Format Coconut] Deck Builder
 
-`CoconutDeckBuilderPage` walks through: pick one of the 25 beta Coconut cards (`coconutCards.js`) → lock in up to 3 ink types, which must include **every** one of that Coconut card's `inks` → build a 60+ card singleton deck around it. Most Coconut cards have a single ink and leave two free slots; the newer wave is built on Lorcana's dual-ink duo cards, so those lock two inks and leave one. Each Coconut card reuses its associated Disney Lorcana card's real stats (matched by `fullName` against the live `useCards()` data) rather than being a distinct printed card — the base card's ability is replaced on screen with the Coconut card's alternate ability text (`coconutCards.js`'s `ability` field), since we don't have separate art or a separate database entry for the Coconut variant.
+`CoconutDeckBuilderPage` walks through: pick one of the 26 beta Coconut cards (`coconutCards.js`) → lock in up to 3 ink types, which must include **every** one of that Coconut card's `inks` → build a 60+ card singleton deck around it. Most Coconut cards have a single ink and leave two free slots; the newer wave is built on Lorcana's dual-ink duo cards, so those lock two inks and leave one. Each Coconut card reuses its associated Disney Lorcana card's real stats (matched by `fullName` against the live `useCards()` data) rather than being a distinct printed card — the base card's ability is replaced on screen with the Coconut card's alternate ability text (`coconutCards.js`'s `ability` field), since we don't have separate art or a separate database entry for the Coconut variant.
 
 `coconutFormat.js` enforces the format's deck-building rules:
 - 1 copy max per card, except up to 4 copies of the card matching the chosen Coconut card's `baseFullName`, and (Nick Wilde – "Wily Fox" only) up to 4 copies of an item named Pawpsicle, via the `extraCopy` field on that Coconut card entry.
@@ -521,7 +534,7 @@ Coconut: coconut-008
 Don't add an uncommented header line — it breaks the paste into duels.ink.
 
 The `Coconut:` header is emitted only when the card has a `duelsId`. duels.ink's
-catalog stops at `coconut-018`, so the seven duo cards export without it; the
+catalog stops at `coconut-018`, so the seven duo cards and Pete export without it; the
 `# Coconut Card:` comment still identifies them on re-import here. The parser
 also accepts a list copied straight off duels.ink (its `Coconut: <id>` header
 and its `(1-145)` card-id suffixes).
@@ -534,13 +547,13 @@ and the Proxy Generator — carry the credit via `components/CoconutArtCredit.js
 keep it on any new surface that displays the art.
 
 Coconut cards have their own printed face rather than reusing the base card's
-LorcanaJSON art, so all 25 are bundled as local assets at
+LorcanaJSON art, so all 26 are bundled as local assets at
 `public/coconut-cards/<card id>.jpg` — the filename is the card's `id`, which is
 what `coconutCardImageUrl(id)` builds. Both `CoconutDeckBuilderPage` and the
 Proxy Generator read them through that helper; nothing fetches them remotely.
 
 The Proxy Generator's "+ Coconut cards" panel lists every face from
-`COCONUT_CARDS` (click one to add a copy, or "Add all 25" to print one of
+`COCONUT_CARDS` (click one to add a copy, or "Add all 26" to print one of
 each). These go onto the sheet as `{ imageSrc, name, version }` rather than a
 LorcanaJSON card object, which is what makes `ProxyCard` print the image
 instead of the B&W text layout — so a Coconut sheet prints in full color.

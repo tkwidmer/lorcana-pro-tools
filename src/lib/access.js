@@ -8,7 +8,7 @@ export const SUPPORTER_PATHS = new Set([
   '/analytics',
   '/practice-plan',
   '/tournament-lookup',
-  '/store-lookup',
+  '/meta-synthesis',
   '/library',
   '/game-scraper',
   '/decklist-inspector',

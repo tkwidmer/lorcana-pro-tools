@@ -13,6 +13,10 @@ import {
 } from '../lib/duelsApi'
 import { supabase } from '../lib/supabaseClient'
 import { useTheme } from '../hooks/useTheme'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Input } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
 
 async function metafyFetch(method) {
   const { data } = await supabase.auth.getSession()
@@ -87,11 +91,11 @@ function AppearanceCard() {
   const { theme, resolvedTheme, setTheme } = useTheme()
 
   return (
-    <div className="border border-gray-200 rounded-lg p-6">
-      <h2 className="text-base font-bold text-gray-900 mb-1">Appearance</h2>
-      <p className="text-sm text-gray-500 mb-5">
-        Choose a color theme. It applies to every page and is remembered on this device.
-      </p>
+    <Card
+      className="p-6"
+      title="Appearance"
+      description="Choose a color theme. It applies to every page and is remembered on this device."
+    >
 
       <div role="radiogroup" aria-label="Color theme" className="flex flex-wrap gap-2">
         {THEME_CHOICES.map(choice => {
@@ -120,7 +124,7 @@ function AppearanceCard() {
           Following your device setting — currently {resolvedTheme}.
         </p>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -302,24 +306,23 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="w-full px-6 py-12">
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-500 text-sm">Configure appearance, integrations, and API tokens.</p>
-      </div>
+    <div className="w-full px-6 py-8">
+      <PageHeader title="Settings" description="Configure appearance, integrations, and API tokens." />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-1 lg:order-2 flex flex-col gap-6">
           <AppearanceCard />
 
-          <div className="border border-gray-200 rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-1">
-              <img src="/metafy-icon.svg" alt="" className="h-5 w-auto shrink-0" />
-              <h2 className="text-base font-bold text-gray-900">Metafy</h2>
-            </div>
-            <p className="text-sm text-gray-500 mb-5">
-              Connect your Metafy account — an active subscription to our community automatically grants Supporter access.
-            </p>
+          <Card
+            className="p-6"
+            title={
+              <span className="flex items-center gap-2">
+                <img src="/metafy-icon.svg" alt="" className="h-5 w-auto shrink-0" />
+                Metafy
+              </span>
+            }
+            description="Connect your Metafy account — an active subscription to our community automatically grants Supporter access."
+          >
 
             {metafyBanner === 'connected' && (
               <p className="text-sm text-green-600 font-medium mb-4">✓ Metafy connected.</p>
@@ -333,14 +336,9 @@ export function SettingsPage() {
             )}
 
             {metafyStatus?.connected === false && (
-              <button
-                type="button"
-                onClick={handleConnectMetafy}
-                disabled={metafyBusy}
-                className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
+              <Button variant="primary" onClick={handleConnectMetafy} disabled={metafyBusy}>
                 {metafyBusy ? 'Connecting…' : 'Connect Metafy'}
-              </button>
+              </Button>
             )}
 
             {metafyStatus?.connected === true && (
@@ -351,22 +349,18 @@ export function SettingsPage() {
                     {metafyStatus.hasAccess ? 'Active subscriber' : 'No active subscription to the right tier'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDisconnectMetafy}
-                  disabled={metafyBusy}
-                  className="mt-3 border border-gray-300 text-xs font-medium px-3 py-1.5 text-gray-500 hover:border-red-400 hover:text-red-600 transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                >
+                <Button variant="danger" size="sm" className="mt-3" onClick={handleDisconnectMetafy} disabled={metafyBusy}>
                   {metafyBusy ? 'Disconnecting…' : 'Disconnect'}
-                </button>
+                </Button>
               </div>
             )}
-          </div>
+          </Card>
         </div>
 
-        <div className="border border-gray-200 rounded-lg p-6 lg:col-span-2 lg:order-1">
-          <h2 className="text-base font-bold text-gray-900 mb-1">duels.ink API Tokens</h2>
-          <p className="text-sm text-gray-500 mb-5">
+        <Card
+          className="p-6 lg:col-span-2 lg:order-1"
+          title="duels.ink API Tokens"
+          description={<>
             Add tokens for each team member. Get tokens from the API section at{' '}
             <a
               href="https://duels.ink/settings"
@@ -377,7 +371,8 @@ export function SettingsPage() {
               duels.ink/settings
             </a>
             . The <span className="font-medium text-gray-700">active</span> token is used when loading match history. Tokens are saved to your account, encrypted, and available on any device you sign into.
-          </p>
+          </>}
+        >
 
           {loading && (
             <p className="text-sm text-gray-400 mb-5">Loading your tokens…</p>
@@ -467,29 +462,16 @@ export function SettingsPage() {
                     {/* Actions row */}
                     <div className="flex flex-wrap items-center gap-2">
                       {!isActive && (
-                        <button
-                          type="button"
-                          onClick={() => handleActivate(t.id)}
-                          className="border border-gray-900 text-xs font-medium px-3 py-1.5 hover:bg-gray-900 hover:text-white transition-colors rounded"
-                        >
+                        <Button size="sm" onClick={() => handleActivate(t.id)}>
                           Set active
-                        </button>
+                        </Button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleTest(t.id, t.token)}
-                        disabled={status === 'loading'}
-                        className="border border-gray-900 text-xs font-medium px-3 py-1.5 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
+                      <Button size="sm" onClick={() => handleTest(t.id, t.token)} disabled={status === 'loading'}>
                         {status === 'loading' ? 'Testing…' : 'Test connection'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(t.id)}
-                        className="border border-gray-300 text-xs font-medium px-3 py-1.5 text-gray-500 hover:border-red-400 hover:text-red-600 transition-colors rounded"
-                      >
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => handleRemove(t.id)}>
                         Remove
-                      </button>
+                      </Button>
 
                       {status && status !== 'loading' && (
                         <span className={`text-xs font-medium ${status === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
@@ -511,21 +493,20 @@ export function SettingsPage() {
           <div className="border border-dashed border-gray-300 rounded-lg p-4">
             <p className="text-sm font-medium text-gray-700 mb-3">Add token</p>
             <div className="flex flex-col gap-2 mb-3">
-              <input
+              <Input
                 type="text"
                 value={newLabel}
                 onChange={e => setNewLabel(e.target.value)}
                 placeholder="Label (e.g. Alice's account)"
-                className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
               />
               <div className="relative">
-                <input
+                <Input
                   type={showNew ? 'text' : 'password'}
                   value={newTokenValue}
                   onChange={e => setNewTokenValue(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAdd()}
                   placeholder="Paste token here"
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono pr-14 focus:outline-none focus:border-gray-900"
+                  className="w-full font-mono pr-14"
                 />
                 <button
                   type="button"
@@ -537,14 +518,9 @@ export function SettingsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleAdd}
-                disabled={!newTokenValue.trim()}
-                className="border border-gray-900 text-sm font-medium px-4 py-2 hover:bg-gray-900 hover:text-white transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
+              <Button variant="primary" onClick={handleAdd} disabled={!newTokenValue.trim()}>
                 Add token
-              </button>
+              </Button>
               {addStatus === 'added' && (
                 <span className="text-sm text-green-600 font-medium">Added</span>
               )}
@@ -553,7 +529,7 @@ export function SettingsPage() {
               )}
             </div>
           </div>
-        </div>
+        </Card>
         </div>
     </div>
   )

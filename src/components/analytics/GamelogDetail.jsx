@@ -1,5 +1,6 @@
 import { replayViewerUrl } from '../../lib/analyticsAggregation'
 import { GameLeaks } from './LeakReport'
+import { Badge } from '../ui/Badge'
 
 // --- Individual game view ---
 
@@ -533,13 +534,13 @@ export function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <div>
           {myPlayerNum === 1 && (
-            <div className="inline-flex items-center text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded mb-2">You</div>
+            <Badge className="mb-2">You</Badge>
           )}
           <PlayerSection name={p1Name} data={p1} isWinner={p1IsWinner} finalLore={p1FinalLore} />
         </div>
         <div>
           {myPlayerNum === 2 && (
-            <div className="inline-flex items-center text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded mb-2">You</div>
+            <Badge className="mb-2">You</Badge>
           )}
           <PlayerSection name={p2Name} data={p2} isWinner={p2IsWinner} finalLore={p2FinalLore} />
         </div>

@@ -1,4 +1,5 @@
 import { AUTHOR_LINK_REL, formatPostDate } from '../lib/blogMeta'
+import { Badge } from './ui/Badge'
 
 // "By <author> · <date>" for a blog post. The author links out to their
 // X/Twitter, Metafy, or other profile (authorUrl in the post's frontmatter).
@@ -6,9 +7,7 @@ export function PostByline({ post, className = '' }) {
   return (
     <p className={`text-sm text-gray-500 ${className}`}>
       {post.draft && (
-        <span className="mr-2 text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
-          Draft
-        </span>
+        <Badge tone="neutral" className="mr-2">Draft</Badge>
       )}
       By{' '}
       <a

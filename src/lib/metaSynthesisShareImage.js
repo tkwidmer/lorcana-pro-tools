@@ -163,7 +163,7 @@ export async function generateMetaSynthesisImage({ title, subtitle, blocks, topP
       ctx.font = `12px ui-monospace, monospace`
       ctx.fillStyle = '#94A3B8'
       ctx.textAlign = 'right'
-      ctx.fillText(`${a.playRate.toFixed(1)}% play · ${a.winRate.toFixed(1)}% win`, W - PAD - 6, y)
+      ctx.fillText(`${a.metaShare.toFixed(1)}% meta · ${a.winRate.toFixed(1)}% win`, W - PAD - 6, y)
       ctx.textAlign = 'left'
     }
   }

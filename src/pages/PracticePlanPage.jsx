@@ -8,6 +8,8 @@ import { summarizeLeaks, LEAK_TYPES } from '../lib/leakDetection'
 import { InkIcons as ColorPairIcons } from '../components/InkIcons'
 import { winrateTextColor as getWinrateColor, deltaColor } from '../lib/statColors'
 import { wilsonInterval, shrinkWR, runMonteCarlo } from '../lib/practiceSim'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Select } from '../components/ui/Field'
 
 const QUEUES = [
   { id: 'infinity-bo1', name: 'Infinity BO1' },
@@ -524,9 +526,11 @@ export function PracticePlanPage() {
 
   if (!hasToken) {
     return (
-      <div className="w-full px-6 py-12">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Practice Plan</h1>
-        <p className="text-gray-500 mb-6">Build a focused practice schedule based on your weakest matchups and the expected meta.</p>
+      <div className="w-full px-6 py-8">
+        <PageHeader
+          title="Practice Plan"
+          description="Build a focused practice schedule based on your weakest matchups and the expected meta."
+        />
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-900">
           Connect your duels.ink account to pull your personal win rates per matchup.
           <div className="mt-3">
@@ -540,33 +544,30 @@ export function PracticePlanPage() {
   const yourPairOptions = twoColorPairs.slice().sort((a, b) => (b.games ?? 0) - (a.games ?? 0))
 
   return (
-    <div className="w-full px-6 py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Practice Plan</h1>
-        <p className="text-gray-500">
-          Pick the deck you're planning to play and the meta you expect. We'll cross-reference your personal win rates
-          with the public matrix to highlight where practice time will most affect your event result.
-        </p>
-      </div>
+    <div className="w-full px-6 py-8">
+      <PageHeader
+        title="Practice Plan"
+        description="Pick the deck you're planning to play and the meta you expect. We'll cross-reference your personal win rates with the public matrix to highlight where practice time will most affect your event result."
+      />
 
       {/* Controls */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-4">
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2">Queue (public stats)</label>
-          <select
+          <Select
             value={queue}
             onChange={e => setQueue(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="w-full"
           >
             {QUEUES.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2">Your deck</label>
-          <select
+          <Select
             value={yourColorsKey}
             onChange={e => setYourColorsKey(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="w-full"
           >
             <option value="">— select ink pair —</option>
             {yourPairOptions.map(cp => (
@@ -574,7 +575,7 @@ export function PracticePlanPage() {
                 {cp.colors.join(' / ')} ({cp.winRate?.toFixed?.(1) ?? '?'}% pub WR)
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -768,13 +769,13 @@ export function PracticePlanPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-1">Skills to drill</h2>
           <p className="text-xs text-gray-500 mb-4">
             Recurring leaks detected in your saved gamelogs on this deck. The matchup table tells you <em>where</em> to practice — this tells you <em>what</em> to fix.{' '}
-            <Link to="/analytics" className="text-blue-600 hover:underline">Import more games</Link> for sharper signal.
+            <Link to="/analytics" className="text-forge-ink font-medium hover:underline">Import more games</Link> for sharper signal.
           </p>
 
           {!overallSkills || overallSkills.analyzed === 0 ? (
             <p className="text-sm text-gray-400">
               No gamelogs imported for {yourColors.join('/')} yet. Import games in the{' '}
-              <Link to="/analytics" className="text-blue-600 hover:underline">Analytics</Link> to unlock skill drills.
+              <Link to="/analytics" className="text-forge-ink font-medium hover:underline">Analytics</Link> to unlock skill drills.
             </p>
           ) : (
             <>

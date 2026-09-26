@@ -20,10 +20,10 @@ export function Section({ title, subtitle, children, collapsible, defaultOpen = 
     <div className="mb-4">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between py-3 border-b-2 border-gray-200 hover:border-gray-400 transition-colors group"
+        className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
       >
         <div className="text-left">
-          <span className="text-base font-bold text-gray-800 group-hover:text-gray-900 transition-colors">{title}</span>
+          <span className="font-display text-base font-medium uppercase tracking-wide text-gray-900">{title}</span>
           {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
         </div>
         <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-4 ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

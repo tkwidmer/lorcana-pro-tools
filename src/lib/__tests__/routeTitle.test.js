@@ -30,7 +30,7 @@ describe('routeTitle', () => {
 describe('routeDescription', () => {
   it('returns a page-specific description for known public routes', () => {
     expect(routeDescription('/proxy')).toMatch(/proxy sheets/)
-    expect(routeDescription('/cut-calculator')).toMatch(/top cut/)
+    expect(routeDescription('/lore-tracker')).toMatch(/lore counter/)
   })
 
   it('falls back to the home description for unknown or gated routes', () => {

@@ -99,30 +99,34 @@ The app does **not** track deck versions:
 
 The raw data to do better already exists. In the official duels.ink docs (`GET /api/me/match-history`), every game row carries `your_deck_id` and `your_decklist` (`{cardId, count}[]`). Imported gamelogs carry `deck_id`, `yourDecklist` and `playedAt` (`src/lib/parseGamelog.js`). Versions can be worked out in the browser, with no new API route, so the Vercel function budget is untouched.
 
-### Step 0: verify the data before building
+### Step 0: data check (done)
 
-The docs call `your_decklist` "your aggregated decklist". That doesn't prove it's the list **as played in that game**; it could be the deck's current list stamped onto every row. The whole design rests on this, so it gets checked against real data first:
-- Add a temporary dev-only `console.table` to Match History's `load()`.
-- For each `your_deck_id`, it prints:
-  - the number of distinct `deckFingerprint(your_decklist)` values,
-  - the first and last `started_at` of each,
-  - how many rows have no list,
-  - the `deckVersions` count and a sample entry from `fetchPersonalStats()`. The sample also shows whether `cardIds` repeats an ID for multiple copies.
-- Run it against an account with a deck that's known to have been edited.
+The docs call `your_decklist` "your aggregated decklist". That doesn't prove it's the list **as played in that game**; it could be the deck's current list stamped onto every row. So before building, a read-only console check ran against a real account (1,843 games, 196 decks).
 
-**Decision rule:**
-- If the edited deck shows more than one fingerprint, with dates that line up with the `personal-stats` timeframes, the per-game lists are the source of truth.
-- If every row carries the same current list, versions come from `personal-stats` `deckVersions` instead. The adapter shape below hides that difference from everything downstream.
+**Result 1: `your_decklist` is the list as played.** Every edited deck showed several distinct lists, each in its own date range, in order and not overlapping. The boundaries matched duels.ink's `personal-stats` `deckVersions` to the game.
 
-Remove the log afterwards.
+**Result 2: a version must compare cards by name, not id.** duels.ink gives every printing its own id: a reprint (`9-6` and `9-206` are both Aurora - Holding Court) or a promo (`1-C1-2` is Let It Go). `personal-stats` merged some back-to-back lists into one version. In all three decks checked, every merge was a printing-only swap, and every boundary it kept had real card changes:
+
+| Deck | Lists by card id (games) | `personal-stats` versions (games) |
+|---|---|---|
+| Amber/Amethyst | 7 · 1 · 6 · **4 · 66 · 9** | 7 · 1 · 6 · **79** |
+| Amethyst/Sapphire | 9 · **2 · 5** · 4 · **23 · 44** | 9 · **7** · 4 · **67** |
+| Amber/Steel | 19 · 32 · 12 · **1 · 14** | 19 · 32 · 12 · **15** |
+
+Keyed by name, the lists produce the same versions as duels.ink, straight from match history. `personal-stats` isn't needed at all.
+
+**Found along the way:**
+- `buildCardIdToName()` keyed promos as `setCode-number`, so promo ids (`setCode-promoGrouping-number`) never resolved anywhere in the app. Fixed in the first build PR.
+- `personal-stats` `cardIds` holds one entry per copy, and a version can have several timeframes (going back to an old list reuses its version).
+- 393 early games (Feb–Apr) have no `your_deck_id`. They're mostly 40, 24 and 12-card lists from other formats, and go in Unassigned.
 
 ### What the user sees
 
 **Definitions:**
-- A **version** is one distinct card-and-count list played under one deck (keyed by `your_deck_id`, falling back to a fingerprint).
+- A **version** is one distinct card-and-count list played under one deck (keyed by `your_deck_id`), with cards compared by name so a reprint or promo swap isn't a new version.
 - Versions are ordered by the first game played and labelled **v1…vN**.
 - Switching back to an earlier list counts as the same version, and that version shows every date span it was played.
-- Games with no recorded list go into a visible **Unassigned** bucket rather than being dropped.
+- Games with no deck id or no recorded list go into a visible **Unassigned** bucket rather than being dropped.
 
 **Version timeline:** one row per version, showing:
 - the label and date spans,
@@ -132,7 +136,7 @@ Remove the log afterwards.
 **Compare:** pick any two versions to see:
 - the win-rate difference with a 95% range,
 - a plain verdict, for example:
-  - *"Not enough games yet: about 140 more per version needed to detect a 5-point difference."*
+  - *"Not enough games yet: about 350 more per version needed to detect a 10-point difference."*
   - *"No clear difference: the gap is within the noise."*
   - *"v3 is ahead with reasonable confidence."*
 - a side-by-side win rate by opponent colors, so a version that happened to face an easier meta is easy to spot.
@@ -147,12 +151,12 @@ It appears in three places, as requested:
 **Shared logic: `src/lib/deckVersions.js`** (pure functions, unit-tested in `src/lib/__tests__/deckVersions.test.js`)
 - **Adapters.** One per data source, both producing `{ id, deckKey, decklist, playedAt, won, oppColors }`:
   - `fromMatchHistoryRow(row)` uses `your_deck_id`, `your_decklist`, `started_at`, `result` and `opp_deck_colors`.
-  - `fromEnrichedGame(game)` is for Analytics.
-- **`buildDeckVersions(games)`** groups by `deckKey`, then by `deckFingerprint(decklist)`. Each version gets its record, a `wilsonInterval()` (reused from `src/lib/practiceSim.js`), its date spans, and the card changes from the previous version.
+  - `fromEnrichedGame(game)` is for Analytics, added with the Analytics step.
+- **`buildDeckVersions(games, cardIdToName)`** groups by `deckKey`, then by the list's name-keyed card counts. Each version gets its record, a `wilsonInterval()` (reused from `src/lib/practiceSim.js`), its date spans, and the card changes from the previous version.
 - **`compareVersions(a, b)`** returns:
   - the win-rate difference with a 95% interval (Newcombe's method, built from two `wilsonInterval()`s),
   - a verdict: `not-enough-games` / `no-clear-difference` / `a-ahead` / `b-ahead`,
-  - `gamesNeeded`: games per version needed to detect a 5-point difference, from the two-proportion sample-size formula at 80% power,
+  - `gamesNeeded`: games per version needed to detect a 10-point difference, from the two-proportion sample-size formula at 80% power (393 at a 50% win rate). A 5-point difference would need about 1,570 games per version, more than any one list gets played,
   - both versions' win rates by opponent colors.
 - **Card changes.** Move `computeDelta()` out of `src/pages/DeckComparisonPage.jsx` into `src/lib/decklistDelta.js`. The Deck Comparison page and deck versions then share one diff implementation. Card names come from `buildCardIdToName()` (`src/lib/cardIdResolver.js`).
 
@@ -172,7 +176,7 @@ It appears in three places, as requested:
 ### Build order
 
 Each step can ship as its own PR:
-1. Step 0 evidence check.
+1. Step 0 evidence check. **Done.**
 2. `deckVersions.js`, `decklistDelta.js`, and their tests.
 3. The `/deck-lab` page.
 4. The Match History timeline and version filter.
@@ -180,7 +184,8 @@ Each step can ship as its own PR:
 
 ### Risks / open questions
 
-- **Per-game list reliability.** Step 0 settles this before any feature code is written.
+- **Per-game list reliability.** Settled by step 0: the lists are per game.
+- **Card data lag.** A card id missing from LorcanaJSON (a brand-new set) makes `buildDeckVersions()` throw rather than guess a name.
 - **Tiny versions.** A one-game test list makes a noisy row. Show it, faded, rather than hiding it, so the history stays complete.
 - **Long histories.** A heavy player's full history takes several paged requests. Show progress, and reuse what's already loaded when coming from Match History.
 - **Mixed formats.** Core and Infinity games of the same list count as one version. The existing queue filter can split them.

@@ -16,12 +16,12 @@ describe('buildCardIdToName', () => {
     expect(buildCardIdToName([{ name: 'No Id' }])).toEqual({})
   })
 
-  it('prefers a non-promo Core-legal card over a promo on setCode-number collisions', () => {
+  it('keys a promo by its promo grouping, so it never shadows the regular printing', () => {
     const cards = [
-      { setCode: '1', number: '5', fullName: 'Promo Reprint', promoGrouping: 'p1' },
-      { setCode: '1', number: '5', fullName: 'Core Original', allowedInFormats: { Core: { allowed: true } } },
+      { setCode: '1', number: 2, fullName: 'Let It Go', promoGrouping: 'C1' },
+      { setCode: '1', number: 2, fullName: 'Regular Card' },
     ]
-    expect(buildCardIdToName(cards)['1-5']).toBe('Core Original')
+    expect(buildCardIdToName(cards)).toEqual({ '1-C1-2': 'Let It Go', '1-2': 'Regular Card' })
   })
 
   it('returns {} for empty/missing input', () => {

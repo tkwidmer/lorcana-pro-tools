@@ -249,6 +249,14 @@ export const COCONUT_CARDS = [
     inks: ['emerald'],
     ability: "Whenever you play an action, if it's the second action you played this turn, chosen opposing character gains Reckless and can't challenge your characters or locations until the start of your next turn.",
   },
+  {
+    // An item with no subtitle, so no version — the first Coconut card without one.
+    id: 'the-black-cauldron',
+    name: 'The Black Cauldron',
+    baseFullName: 'The Black Cauldron',
+    inks: ['amber'],
+    ability: 'Whenever one of your characters is banished, you may put that card from your discard under one of your items named The Black Cauldron faceup.',
+  },
 ]
 
 // Real beta [Format Coconut] card art, bundled locally rather than fetched from

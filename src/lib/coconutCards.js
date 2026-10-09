@@ -257,6 +257,14 @@ export const COCONUT_CARDS = [
     inks: ['amber'],
     ability: 'Whenever one of your characters is banished, you may put that card from your discard under one of your items named The Black Cauldron faceup.',
   },
+  {
+    id: 'merida-wisp-conjurer',
+    name: 'Merida',
+    version: 'Wisp Conjurer',
+    baseFullName: 'Merida - Wisp Conjurer',
+    inks: ['amethyst'],
+    ability: 'Once during your turn, you may have the next character you play this turn enter play exerted. Whenever a character of yours enters play exerted, you may pay 1 ink to gain 1 lore.',
+  },
 ]
 
 // Real beta [Format Coconut] card art, bundled locally rather than fetched from

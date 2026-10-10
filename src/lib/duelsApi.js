@@ -417,3 +417,10 @@ export async function fetchStats({ queue, period, ranks }) {
   if (ranks && ranks.length > 0) params.ranks = ranks.join(',')
   return getStats(params)
 }
+
+// All-time community stats for one specific card-set era, which stays
+// fixed after the next set ships (unlike fetchStats, which follows the
+// current era).
+export function fetchEraStats({ queue, era }) {
+  return getStats({ queue, period: 'all_time', era })
+}

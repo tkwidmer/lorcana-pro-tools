@@ -1,7 +1,7 @@
 // Resolves LorcanaJSON `${setCode}-${number}` card ids (the id shape used by
-// duels.ink match history, gamelogs, and /api/stats/meta's cardLift) to a
-// display name, given the full card list from useCards().
-export function buildCardIdToName(cards) {
+// duels.ink match history, gamelogs, and /api/stats/meta's cardLift) to the
+// card object, given the full card list from useCards().
+export function buildCardIdToCard(cards) {
   // When LorcanaJSON has multiple entries with the same setCode-number (e.g. promo reprints),
   // prefer non-promo cards, then Core > Infinity > other format cards, then higher set number on ties.
   const cardByKey = {}
@@ -20,7 +20,12 @@ export function buildCardIdToName(cards) {
     if (ts > es) { cardByKey[key] = c; continue }
     if (ts === es && (parseInt(c.setCode) || 0) > (parseInt(existing.setCode) || 0)) cardByKey[key] = c
   }
+  return cardByKey
+}
+
+// Same ids, resolved to a display name.
+export function buildCardIdToName(cards) {
   const map = {}
-  for (const [key, c] of Object.entries(cardByKey)) map[key] = c.fullName ?? c.name
+  for (const [key, c] of Object.entries(buildCardIdToCard(cards))) map[key] = c.fullName ?? c.name
   return map
 }

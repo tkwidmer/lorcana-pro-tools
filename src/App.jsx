@@ -28,6 +28,7 @@ import { GamelogViewerPage } from './pages/GamelogViewerPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { WinrateMatrixPage } from './pages/WinrateMatrixPage'
 import { MetaSynthesisPage } from './pages/MetaSynthesisPage'
+import { StockDecksPage } from './pages/StockDecksPage'
 import { PracticePlanPage } from './pages/PracticePlanPage'
 import { TournamentLookupPage } from './pages/TournamentLookupPage'
 import { StoreLookupPage } from './pages/StoreLookupPage'
@@ -66,6 +67,7 @@ function RoutedContent() {
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
         <Route path="/coconut-deck-builder" element={<CoconutDeckBuilderPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
+        <Route path="/stock-decks" element={<StockDecksPage />} />
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/rules/:doc/changes" element={<RulesChangesPage />} />
         <Route path="/rules/:doc/:chapterSlug" element={<RulesDocumentPage />} />

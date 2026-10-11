@@ -38,18 +38,6 @@ export const SECTIONS = [
         icon: 'sparkle',
         description: 'A plain-language read on what\'s happening in the meta right now — most-played and highest-winrate archetypes, centered on your own rank and defaulting to the latest week.',
       },
-      {
-        path: '/stock-decks',
-        name: 'Stock Deck Lists',
-        icon: 'cards',
-        description: 'A starting list for every archetype in the meta, grouped by ink pair and organized by set. Copy any list straight into duels.ink.',
-      },
-      {
-        path: '/forge-decks',
-        name: 'The Forge Decklists',
-        icon: 'flame',
-        description: 'Our recommended deck lists for each format, organized by set. Copy any list straight into duels.ink.',
-      },
     ],
   },
   {
@@ -73,6 +61,18 @@ export const SECTIONS = [
         name: 'Coconut Deck Builder',
         icon: 'palm',
         description: 'Build decks for the [Format Coconut] multiplayer format — pick a Coconut card, lock in your inks, and build a singleton deck around it with the copy-count exceptions enforced automatically.',
+      },
+      {
+        path: '/stock-decks',
+        name: 'Stock Deck Lists',
+        icon: 'cards',
+        description: 'A starting list for every archetype in the meta, grouped by ink pair and organized by set. Copy any list straight into duels.ink.',
+      },
+      {
+        path: '/forge-decks',
+        name: 'The Forge Decklists',
+        icon: 'flame',
+        description: 'Our recommended deck lists for each format, organized by set. Copy any list straight into duels.ink.',
       },
     ],
   },

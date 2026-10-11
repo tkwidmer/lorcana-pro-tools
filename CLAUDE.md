@@ -211,6 +211,7 @@ In `src/lib/`:
 | `tournamentLive.js` | `subscribeToTournamentLive()` — Pusher subscription to RPH's public `player-event-{id}` channel; wrapped by `hooks/useTournamentLiveUpdates.js` so `TournamentLookupPage` refetches on any broadcast |
 | `metaSynthesis.js` / `rankTiers.js` / `archetypeStats.js` | Meta Synthesis logic (see below), MMR → rank-tier mapping, and curation of duels.ink archetype profiles |
 | `stockDecks.js` | `STOCK_DECK_FOLDERS` + `buildStockDecks()` behind `StockDecksPage` (see "Stock Deck Lists" below) |
+| `forgeDecks.js` | `parseForgeDeck()` / `forgeDecksFor(folderId)` — The Forge's own recommended lists from `content/forge-decks/` (see "Stock Deck Lists" below) |
 | `storeTiers.js` | RPH store-tier rules for Store Lookup (see below) |
 | `decklistShared.js` | Decklist Inspector/overlay helpers — deck URL param encoding, ink fills, type/cost bucketing |
 | `rules/` | Rules browser — `registry.js` (document list), `index.js` (accessors), `diff.js` (word diff), `content/<doc>/<version>.js` (see "Rules Browser" below) |
@@ -430,6 +431,8 @@ The page defaults to the user's own rank band (`fetchCurrentMmr` → `rankTiers.
 ### Stock Deck Lists
 
 `StockDecksPage` (`/stock-decks`) shows a starting list for every named duels.ink archetype, grouped by ink pair. Each folder in `STOCK_DECK_FOLDERS` (`stockDecks.js`) pins one duels.ink queue + era (`fetchEraStats()` in `duelsApi.js`, `period=all_time`), so an old set's folder keeps showing that set's lists; add a folder per new set or meta. A list is the `centroidCounts` (duels.ink's average build, cardId → copies) of the archetype's most-played variant (`representativeProfile()` in `metaSynthesis.js`). Centroids occasionally total 61–62 cards; the page shows the real total rather than trimming.
+
+Above those, a "The Forge recommends" section shows the site's own lists for the folder, one file each at `content/forge-decks/<folder id>/<slug>.txt`: a `name`/`inks`/optional `note` frontmatter block (`frontmatter.js`, shared with the blog) over `4 Card Name` lines. `forgeDecks.js` loads them at build time and throws on a malformed file; card names are matched to LorcanaJSON `fullName` at runtime, and unmatched names are listed under the list rather than hidden. Adding a file publishes it.
 
 ### Store Lookup
 

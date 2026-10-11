@@ -22,22 +22,14 @@
 //
 //   Markdown body…
 import { marked } from 'marked'
+import { splitFrontmatter } from './frontmatter'
 
 const REQUIRED_FIELDS = ['title', 'date', 'description', 'author', 'authorUrl']
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function parseFrontmatter(filename, raw) {
-  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
-  if (!match) throw new Error(`${filename}: missing --- frontmatter block`)
-
-  const fields = {}
-  for (const line of match[1].split(/\r?\n/)) {
-    if (!line.trim()) continue
-    const sep = line.indexOf(':')
-    if (sep === -1) throw new Error(`${filename}: bad frontmatter line "${line}"`)
-    fields[line.slice(0, sep).trim()] = line.slice(sep + 1).trim()
-  }
+  const { fields, body } = splitFrontmatter(filename, raw)
 
   for (const field of REQUIRED_FIELDS) {
     if (!fields[field]) throw new Error(`${filename}: frontmatter is missing "${field}"`)
@@ -52,7 +44,7 @@ function parseFrontmatter(filename, raw) {
     throw new Error(`${filename}: authorUrl must be an https:// link, got "${fields.authorUrl}"`)
   }
 
-  return { fields, body: match[2] }
+  return { fields, body }
 }
 
 export function parsePost(filename, raw) {

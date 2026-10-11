@@ -13,7 +13,8 @@ export const STOCK_DECK_FOLDERS = [
 
 // One list per named archetype: the card centroid duels.ink computed for
 // its most-played build variant (`centroidCounts`, cardId → copies). Grouped
-// by ink pair; pairs and the archetypes within them sorted by games played.
+// by ink pair; pairs sorted alphabetically by ink (the canonical order), and
+// the archetypes within a pair by games played.
 export function buildStockDecks(stats) {
   const totalGames = stats.activity.totalGames
   const pairs = new Map()
@@ -39,5 +40,5 @@ export function buildStockDecks(stats) {
   const byGames = (a, b) => b.gamesPlayed - a.gamesPlayed
   return [...pairs.values()]
     .map(pair => ({ ...pair, decks: pair.decks.sort(byGames) }))
-    .sort(byGames)
+    .sort((a, b) => a.key.localeCompare(b.key))
 }

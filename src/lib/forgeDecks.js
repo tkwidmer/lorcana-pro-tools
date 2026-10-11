@@ -43,5 +43,8 @@ const files = import.meta.glob('/content/forge-decks/*/*.txt', { eager: true, qu
 const FORGE_DECKS = Object.entries(files).map(([path, raw]) => parseForgeDeck(path, raw))
 
 export function forgeDecksFor(folderId) {
-  return FORGE_DECKS.filter(d => d.folderId === folderId)
+  // Ink pairs in alphabetical order (the canonical order), then by name.
+  return FORGE_DECKS
+    .filter(d => d.folderId === folderId)
+    .sort((a, b) => a.colors.join('/').localeCompare(b.colors.join('/')) || a.name.localeCompare(b.name))
 }

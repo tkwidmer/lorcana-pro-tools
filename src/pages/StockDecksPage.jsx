@@ -110,7 +110,7 @@ export function StockDecksPage() {
         <>
           <p className="text-sm text-gray-500 mb-6">
             From {stats.activity.totalGames.toLocaleString()} {stats.meta.queue.name} games on duels.ink
-            {era && ` since ${new Date(era.startedAt).toLocaleDateString()}`}.
+            {era && ` since ${new Date(era.startedAt).toLocaleDateString()}`}. duels.ink last updated these stats {new Date(stats.updatedAt).toLocaleString()}.
           </p>
           <div className="space-y-10">
             {pairs.map(pair => (

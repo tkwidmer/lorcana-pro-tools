@@ -1,5 +1,5 @@
 ---
-name: PG Tempo
+name: GP Retro
 inks: amethyst/emerald
 ---
 4 Prince Phillip - Vanquisher of Foes

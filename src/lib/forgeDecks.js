@@ -11,7 +11,8 @@
 //   4 Cinderella - Ballroom Sensation
 //   4 Miguel Rivera - Street Musician
 //
-// The card lines are the same `4 Card Name` text duels.ink exports. Adding a
+// The card lines are the same `4 Card Name` text duels.ink exports, with or
+// without its trailing `(set-number)` card ids. Adding a
 // file is all it takes to publish; a malformed one throws, failing the build.
 import { splitFrontmatter } from './frontmatter'
 import { parseDeckList } from './parseDeckList'
@@ -24,7 +25,8 @@ export function parseForgeDeck(path, raw) {
   if (!fields.inks) throw new Error(`${path}: frontmatter is missing "inks"`)
   const colors = resolveColors([fields.inks])
   if (colors.length === 0) throw new Error(`${path}: unknown inks "${fields.inks}"`)
-  const cards = parseDeckList(body)
+  // duels.ink exports may tag each line with a card id, e.g. "(13-PD1-3)".
+  const cards = parseDeckList(body.replace(/[ \t]*\([^)\n]*\)[ \t]*$/gm, ''))
   if (cards.length === 0) throw new Error(`${path}: no "<count> <card name>" lines`)
   return {
     folderId,

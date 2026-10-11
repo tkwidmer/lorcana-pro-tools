@@ -17,6 +17,14 @@ describe('parseForgeDeck', () => {
     })
   })
 
+  it("strips duels.ink's trailing card ids", () => {
+    const raw = '---\nname: A\ninks: amber\n---\n4 Pocahontas - Guiding the Tribe (13-PD1-3)\n2 Besties, Assemble! (13-34)\n'
+    expect(parseForgeDeck(PATH, raw).cards).toEqual([
+      { name: 'Pocahontas - Guiding the Tribe', count: 4 },
+      { name: 'Besties, Assemble!', count: 2 },
+    ])
+  })
+
   it('throws on a missing name, unknown inks, or no cards', () => {
     expect(() => parseForgeDeck(PATH, '---\ninks: amber\n---\n4 X\n')).toThrow('"name"')
     expect(() => parseForgeDeck(PATH, '---\nname: A\ninks: plaid\n---\n4 X\n')).toThrow('unknown inks')

@@ -30,6 +30,7 @@ const TITLES = {
   '/winrate-matrix': 'Winrate Matrix',
   '/meta-synthesis': 'Meta Synthesis',
   '/stock-decks': 'Stock Deck Lists',
+  '/forge-decks': 'The Forge Decklists',
   '/practice-plan': 'Practice Plan',
   '/tournament-lookup': 'Tournament Lookup',
   '/store-lookup': 'Store Lookup',
@@ -80,6 +81,7 @@ const DESCRIPTIONS = {
   '/winrate-matrix': 'A color-pair matchup matrix showing head-to-head Disney Lorcana win rates and first-player advantage.',
   '/meta-synthesis': 'A plain-language summary of the current Disney Lorcana meta — most-played and highest-winrate archetypes, centered on your own rank.',
   '/stock-decks': 'Stock Disney Lorcana deck lists for every archetype in the current meta, grouped by ink pair and organized by set.',
+  '/forge-decks': "InkbornForge's recommended Disney Lorcana deck lists for each format, organized by set.",
   '/lore-tracker': 'A mobile-friendly lore counter for tracking Disney Lorcana games in person, with tap controls and an audit log.',
 }
 

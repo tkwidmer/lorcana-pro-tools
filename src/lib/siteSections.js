@@ -44,6 +44,12 @@ export const SECTIONS = [
         icon: 'cards',
         description: 'A starting list for every archetype in the meta, grouped by ink pair and organized by set. Copy any list straight into duels.ink.',
       },
+      {
+        path: '/forge-decks',
+        name: 'The Forge Decklists',
+        icon: 'flame',
+        description: 'Our recommended deck lists for each format, organized by set. Copy any list straight into duels.ink.',
+      },
     ],
   },
   {

@@ -107,6 +107,8 @@ Defined in `src/App.jsx`:
 | `/analytics` | `AnalyticsPage.jsx` | Merged gamelog + team analytics — import your own games (.zip/.gz) or shared team exports; per-game drilldown (draw sequence, mulligans, leaks, challenge log), personal card/win-rate stats, and team-wide matchup matrix, metagame breakdown, and MMR/win-rate trends |
 | `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
 | `/meta-synthesis` | `MetaSynthesisPage.jsx` | Plain-English meta report from duels.ink `fetchStats`, centered on the user's rank band — see "Meta Synthesis" below |
+| `/stock-decks` | `StockDecksPage.jsx` | Stock deck lists — one starting list per archetype, grouped by ink pair, in folders per set/meta (see "Stock Deck Lists" below). Public |
+| `/forge-decks` | `ForgeDecksPage.jsx` | The Forge Decklists — the site's own recommended lists, in the same set folders as Stock Deck Lists (see "Stock Deck Lists" below). Public |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
 | `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis; clicking a pairing in the Matches tab opens cross-event history + head-to-head from the Tournament History archive (see below) |
 | `/lore-tracker` | `LoreTrackerPage.jsx` | Mobile in-game lore counter with tap controls and audit log |
@@ -158,6 +160,7 @@ In `src/components/`:
 | `PlayerTags.jsx` | Favorite/team-tag toggle buttons shared by `TournamentLookupPage` tabs and `EliminationBracket` |
 | `EliminationBracket.jsx` | `TournamentLookupPage`'s Bracket tab — reconstructs the top-cut bracket from RPH `round_number` + `table_number` (RPH has no explicit "advances to" link) |
 | `MetaTrendChart.jsx` | Multi-line weekly sparkline of archetype play/win rate (Okabe-Ito colors); used by `MetaSynthesisPage` |
+| `DeckListCard.jsx` | A decklist card (type buckets of `CardBar`s + Copy list button) shared by `StockDecksPage` and `ForgeDecksPage` |
 | `DecklistCardBar.jsx` | Card row with the inkwell cost emblem, shared by the Decklist Inspector and its overlay |
 | `PlayerProfileDetail.jsx` | Body of `PlayerProfilePage` — the unified opponent profile |
 | `analytics/*` | `AnalyticsPage` sub-views — `GamesList`, `GamelogDetail` (per-game drilldown), `StatTables` (card/mulligan tables), `MatchupViews` (matchup matrix, `CardImpactView` WAR + Kept/Sent %, `CardImpactTrendView`), `LeakReport` |
@@ -209,6 +212,8 @@ In `src/lib/`:
 | `drawOddsMath.js` / `monteCarloSim.js` | Exact hypergeometric odds (log-space) and the mulligan/scry/curve/quest-pressure simulations behind Deck Insights |
 | `tournamentLive.js` | `subscribeToTournamentLive()` — Pusher subscription to RPH's public `player-event-{id}` channel; wrapped by `hooks/useTournamentLiveUpdates.js` so `TournamentLookupPage` refetches on any broadcast |
 | `metaSynthesis.js` / `rankTiers.js` / `archetypeStats.js` | Meta Synthesis logic (see below), MMR → rank-tier mapping, and curation of duels.ink archetype profiles |
+| `stockDecks.js` | `STOCK_DECK_FOLDERS` + `buildStockDecks()` behind `StockDecksPage` (see "Stock Deck Lists" below) |
+| `forgeDecks.js` | `parseForgeDeck()` / `forgeDecksFor(folderId)` — The Forge's own recommended lists from `content/forge-decks/` (see "Stock Deck Lists" below) |
 | `storeTiers.js` | RPH store-tier rules for Store Lookup (see below) |
 | `decklistShared.js` | Decklist Inspector/overlay helpers — deck URL param encoding, ink fills, type/cost bucketing |
 | `rules/` | Rules browser — `registry.js` (document list), `index.js` (accessors), `diff.js` (word diff), `content/<doc>/<version>.js` (see "Rules Browser" below) |
@@ -424,6 +429,12 @@ The page's Archetypes table uses `aggregateArchetypes()` (`metaSynthesis.js`), s
 - `compareRankBands()` / `compareWeeks()` produce the "higher ranks vs lower" and "this week vs last" deltas.
 
 The page defaults to the user's own rank band (`fetchCurrentMmr` → `rankTiers.js`) and the latest week, offers Core/Infinity × Bo1/Bo3, persists filters in localStorage (`lorcana_meta_synthesis_filters`), and has a share image (`metaSynthesisShareImage.js`).
+
+### Stock Deck Lists
+
+`StockDecksPage` (`/stock-decks`) shows a starting list for every named duels.ink archetype, grouped by ink pair. Each folder in `STOCK_DECK_FOLDERS` (`stockDecks.js`) pins one duels.ink queue + era (`fetchEraStats()` in `duelsApi.js`, `period=all_time`), so an old set's folder keeps showing that set's lists; add a folder per new set or meta. A list is the `centroidCounts` (duels.ink's average build, cardId → copies) of the archetype's most-played variant (`representativeProfile()` in `metaSynthesis.js`). Centroids occasionally total 61–62 cards; the page shows the real total rather than trimming.
+
+`ForgeDecksPage` (`/forge-decks`) shows the site's own recommended lists in the same folders, one file each at `content/forge-decks/<folder id>/<slug>.txt`: a `name`/`inks`/optional `note` frontmatter block (`frontmatter.js`, shared with the blog) over `4 Card Name` lines. `forgeDecks.js` loads them at build time and throws on a malformed file; card names are matched to LorcanaJSON `fullName` at runtime, and unmatched names are listed under the list rather than hidden. Adding a file publishes it.
 
 ### Store Lookup
 

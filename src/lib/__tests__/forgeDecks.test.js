@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseForgeDeck } from '../forgeDecks'
+import { parseForgeDeck, forgeDecksFor } from '../forgeDecks'
 
 const PATH = '/content/forge-decks/set-14-core/amber-steel.txt'
 
@@ -29,5 +29,12 @@ describe('parseForgeDeck', () => {
     expect(() => parseForgeDeck(PATH, '---\ninks: amber\n---\n4 X\n')).toThrow('"name"')
     expect(() => parseForgeDeck(PATH, '---\nname: A\ninks: plaid\n---\n4 X\n')).toThrow('unknown inks')
     expect(() => parseForgeDeck(PATH, '---\nname: A\ninks: amber\n---\n')).toThrow('no "<count>')
+  })
+})
+
+describe('forgeDecksFor', () => {
+  it('lists a folder alphabetically by ink pair', () => {
+    const keys = forgeDecksFor('set-14-core').map(d => d.colors.join('/'))
+    expect(keys).toEqual([...keys].sort())
   })
 })

@@ -8,6 +8,7 @@ import { aggregateArchetypes, metaShare, representativeProfile } from './metaSyn
 // or meta.
 export const STOCK_DECK_FOLDERS = [
   { id: 'set-14-core', title: 'Set 14 Hyperia City · Core Constructed', queue: 'core-bo1', era: 'set-14-core' },
+  { id: 'set-14-infinity', title: 'Set 14 Hyperia City · Infinity Constructed', queue: 'infinity-bo1', era: 'set-14-infinity' },
 ]
 
 // One list per named archetype: the card centroid duels.ink computed for

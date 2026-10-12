@@ -5,7 +5,9 @@ import { Button } from './ui/Button'
 import { CardBar } from './DecklistCardBar'
 
 // One list: cards grouped by type with cost emblems, plus a Copy list button
-// that writes the `4 Card Name` text duels.ink imports. `entries` are
+// that writes the `4 Card Name` text duels.ink imports, and buttons that open
+// the same text in Deck Insights / the Decklist Inspector (both read their
+// deck from localStorage, the same hand-off Match History uses). `entries` are
 // { key, name, count, card }; `card` is null when LorcanaJSON has no match
 // (a card it hasn't published yet, or a misspelled name), so it's listed
 // on its own under the buckets.
@@ -14,21 +16,23 @@ export function DeckListCard({ title, subtitle, entries, children }) {
   const buckets = buildBuckets(entries.filter(e => e.card))
   const unknown = entries.filter(e => !e.card)
 
+  const listText = [...BUCKET_ORDER.flatMap(type => buckets[type]), ...unknown]
+    .map(e => `${e.count} ${e.name}`).join('\n')
+
   const copyList = async () => {
-    const ordered = [...BUCKET_ORDER.flatMap(type => buckets[type]), ...unknown]
-    await navigator.clipboard.writeText(ordered.map(e => `${e.count} ${e.name}`).join('\n'))
+    await navigator.clipboard.writeText(listText)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
 
   return (
     <Card className="p-4">
-      <div className="flex items-start gap-3 mb-3">
-        <div className="min-w-0">
-          <h3 className="font-display uppercase tracking-wide text-gray-900">{title}</h3>
-          {subtitle && <div className="text-xs text-gray-500">{subtitle}</div>}
-        </div>
-        <Button size="sm" className="ml-auto flex-shrink-0" onClick={copyList}>{copied ? 'Copied' : 'Copy list'}</Button>
+      <h3 className="font-display uppercase tracking-wide text-gray-900">{title}</h3>
+      {subtitle && <div className="text-xs text-gray-500">{subtitle}</div>}
+      <div className="flex flex-wrap gap-1 mt-2 mb-3">
+        <Button size="sm" onClick={copyList}>{copied ? 'Copied' : 'Copy list'}</Button>
+        <Button size="sm" to="/deck-insights" onClick={() => localStorage.setItem('drawOdds.deckText', listText)}>Deck Insights</Button>
+        <Button size="sm" to="/decklist-inspector" onClick={() => localStorage.setItem('decklistInspector.deckText', listText)}>Inspector</Button>
       </div>
       <div className="space-y-3">
         {BUCKET_ORDER.filter(type => buckets[type].length > 0).map(type => (

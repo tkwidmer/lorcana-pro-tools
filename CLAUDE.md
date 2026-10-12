@@ -160,7 +160,7 @@ In `src/components/`:
 | `PlayerTags.jsx` | Favorite/team-tag toggle buttons shared by `TournamentLookupPage` tabs and `EliminationBracket` |
 | `EliminationBracket.jsx` | `TournamentLookupPage`'s Bracket tab — reconstructs the top-cut bracket from RPH `round_number` + `table_number` (RPH has no explicit "advances to" link) |
 | `MetaTrendChart.jsx` | Multi-line weekly sparkline of archetype play/win rate (Okabe-Ito colors); used by `MetaSynthesisPage` |
-| `DeckListCard.jsx` | A decklist card (type buckets of `CardBar`s + Copy list button) shared by `StockDecksPage` and `ForgeDecksPage` |
+| `DeckListCard.jsx` | A decklist card (type buckets of `CardBar`s + Copy list, Deck Insights and Inspector buttons; the last two hand the list over through each page's localStorage deck key) shared by `StockDecksPage` and `ForgeDecksPage` |
 | `DecklistCardBar.jsx` | Card row with the inkwell cost emblem, shared by the Decklist Inspector and its overlay |
 | `PlayerProfileDetail.jsx` | Body of `PlayerProfilePage` — the unified opponent profile |
 | `analytics/*` | `AnalyticsPage` sub-views — `GamesList`, `GamelogDetail` (per-game drilldown), `StatTables` (card/mulligan tables), `MatchupViews` (matchup matrix, `CardImpactView` WAR + Kept/Sent %, `CardImpactTrendView`), `LeakReport` |

@@ -191,6 +191,7 @@ export const COCONUT_CARDS = [
     version: 'Mischievous Pals',
     baseFullName: 'Aladdin & Genie - Mischievous Pals',
     inks: ['amethyst', 'emerald'],
+    duelsId: 'coconut-023',
     ability: "Whenever you draw a card during your turn, if it's the third card you drew this turn, gain 2 lore.",
   },
   {
@@ -199,6 +200,7 @@ export const COCONUT_CARDS = [
     version: 'Certain as the Sun',
     baseFullName: 'Belle & Beast - Certain as the Sun',
     inks: ['ruby', 'sapphire'],
+    duelsId: 'coconut-020',
     ability: 'Whenever one of your characters with cost 5 or more readies, draw a card.',
   },
   {
@@ -207,6 +209,7 @@ export const COCONUT_CARDS = [
     version: "St. Canard's Finest",
     baseFullName: "Darkwing Duck & Launchpad - St. Canard's Finest",
     inks: ['sapphire', 'steel'],
+    duelsId: 'coconut-025',
     ability: 'During your turn, whenever an opposing character is banished in a challenge, gain 1 lore. If they were a Villain character, gain 3 lore instead.',
   },
   {
@@ -215,6 +218,7 @@ export const COCONUT_CARDS = [
     version: 'Fast Friends',
     baseFullName: 'Peter Pan & Tinker Bell - Fast Friends',
     inks: ['amethyst', 'ruby'],
+    duelsId: 'coconut-021',
     ability: 'Once during your turn, you may give chosen character Evasive until the start of your next turn. If they already had Evasive, they get +1 \u25c7 until the start of your next turn.',
   },
   {
@@ -223,6 +227,7 @@ export const COCONUT_CARDS = [
     version: 'Every Generation',
     baseFullName: 'The Madrigal Family - Every Generation',
     inks: ['amber', 'sapphire'],
+    duelsId: 'coconut-022',
     ability: "During your turn, whenever you remove 1 or more damage from one of your characters, you may ready them. They can't quest or challenge for the rest of the turn.",
   },
   {
@@ -231,6 +236,7 @@ export const COCONUT_CARDS = [
     version: 'Towering Stalk',
     baseFullName: 'The Vine - Towering Stalk',
     inks: ['steel'],
+    duelsId: 'coconut-024',
     ability: 'Once during your turn, for each Floodborn character you have in play, you may pay 1 ink less for the next Floodborn character you play this turn.',
   },
   {
@@ -239,6 +245,7 @@ export const COCONUT_CARDS = [
     version: 'Best Buddies',
     baseFullName: 'Woody & Buzz Lightyear - Best Buddies',
     inks: ['amber', 'emerald'],
+    duelsId: 'coconut-019',
     ability: 'Once during your turn, you may pay 1 ink less for the next Toy character you play. If you do and you have a character named Woody and a character named Buzz Lightyear in play, draw a card.',
   },
   {
@@ -247,6 +254,7 @@ export const COCONUT_CARDS = [
     version: 'Bad Guy',
     baseFullName: 'Pete - Bad Guy',
     inks: ['emerald'],
+    duelsId: 'coconut-026',
     ability: "Whenever you play an action, if it's the second action you played this turn, chosen opposing character gains Reckless and can't challenge your characters or locations until the start of your next turn.",
   },
   {
@@ -255,6 +263,7 @@ export const COCONUT_CARDS = [
     name: 'The Black Cauldron',
     baseFullName: 'The Black Cauldron',
     inks: ['amber'],
+    duelsId: 'coconut-027',
     ability: 'Whenever one of your characters is banished, you may put that card from your discard under one of your items named The Black Cauldron faceup.',
   },
   {
@@ -263,7 +272,17 @@ export const COCONUT_CARDS = [
     version: 'Wisp Conjurer',
     baseFullName: 'Merida - Wisp Conjurer',
     inks: ['amethyst'],
+    duelsId: 'coconut-028',
     ability: 'Once during your turn, you may have the next character you play this turn enter play exerted. Whenever a character of yours enters play exerted, you may pay 1 ink to gain 1 lore.',
+  },
+  {
+    id: 'judy-hopps-uncovering-clues',
+    name: 'Judy Hopps',
+    version: 'Uncovering Clues',
+    baseFullName: 'Judy Hopps - Uncovering Clues',
+    inks: ['sapphire'],
+    duelsId: 'coconut-029',
+    ability: 'Whenever one of your Detective characters quests, you may pay 2 ink to put the top card of your deck into your inkwell facedown and exerted.',
   },
 ]
 

@@ -124,18 +124,23 @@ the deck builder, so they read as a contradiction.
 ### 5. Find duels.ink's card id (optional field)
 
 duels.ink declares the Coconut card in a decklist with a `Coconut: <id>`
-header, ids matching `/^coconut-(\d+)$/`. Their ids come from their own client
-bundle, which lists the precon decks:
+header, ids matching `/^coconut-(\d+)$/`. The full catalog (what
+https://duels.ink/cards/coconut renders) lives in a **lazy-loaded
+`cards-data-<hash>.js` chunk**, not the main `index-<hash>.js` bundle. The main
+bundle only carries the precon decks' `coconutCardId`s, which lag the catalog
+by many cards — grepping it alone once made 11 carried cards look missing.
 
 ```bash
 curl -sS --compressed https://duels.ink/ -o /tmp/home.html
 grep -aoE 'src="/assets/index-[^"]*\.js"' /tmp/home.html      # hashed, changes
 curl -sS --compressed https://duels.ink/assets/index-XXXX.js -o /tmp/app.js
-grep -aoE '"id":"coconut-[a-z0-9-]+","name":"[^"]{0,60}".{0,200}?"coconutCardId":"coconut-[0-9]+"' /tmp/app.js
+grep -aoE 'assets/cards-data-[^"]+\.js' /tmp/app.js | head -1   # hashed, changes
+curl -sS --compressed https://duels.ink/assets/cards-data-XXXX.js -o /tmp/cards.js
+grep -aoE '"id":"coconut-[0-9]+","number":[0-9]+,"name":"[^"]*","subtitle":("[^"]*"|null),"full_name":"[^"]*","colors":\[[^]]*\]' /tmp/cards.js | sort -u
 ```
 
-Numbering follows the order cards appear on the official print sheet, which is
-a useful cross-check when a precon doesn't name one.
+Match on `full_name` against `baseFullName`; its `colors` are a free
+cross-check on `inks`.
 
 **duels.ink lags the releases.** If the new card isn't there, simply omit
 `duelsId` — the export falls back to the `# Coconut Card:` comment, which still
@@ -175,11 +180,10 @@ These are the easy ones to miss:
 | File | What |
 |---|---|
 | `src/lib/__tests__/coconutFormat.test.js` | `expect(COCONUT_CARDS.length).toBe(25)` |
-| `src/lib/__tests__/coconutDecklistText.test.js` | the two `toBe(18)` duels.ink id assertions — only if you set a `duelsId` |
+| `src/lib/__tests__/coconutDecklistText.test.js` | the two `toBe(29)` duels.ink id assertions — only if you set a `duelsId` |
 | `CLAUDE.md` | "all 25", "25 beta Coconut cards", "so all 25 are bundled", "Add all 25" |
 
-Also refresh CLAUDE.md's "catalog stops at `coconut-018`" line if duels.ink has
-extended its range.
+Also refresh CLAUDE.md's "catalog runs to `coconut-029`" line.
 
 ### 8. Verify
 

@@ -43,9 +43,10 @@ describe('generateCoconutDecklistText (duels.ink format)', () => {
     expect(text).toContain(`Coconut: ${nick.duelsId}`)
   })
 
-  it('omits the header for a duo card duels.ink has no id for', () => {
-    expect(belle.duelsId).toBeUndefined()
-    const text = generateCoconutDecklistText(deck, belle)
+  it('omits the header for a card duels.ink has no id for yet', () => {
+    // Every current card has an id; a fresh release may not until duels.ink adds it.
+    const uncarried = { ...belle, duelsId: undefined }
+    const text = generateCoconutDecklistText(deck, uncarried)
     expect(text).not.toMatch(/^Coconut:/m)
     // The base-card comment still identifies it for our own re-import.
     expect(text).toContain(`# Coconut Card: ${belle.baseFullName}`)
@@ -133,8 +134,8 @@ describe('duels.ink interop', () => {
 
   it('gives every duels.ink-carried card a distinct coconut-NNN id', () => {
     const ids = COCONUT_CARDS.map(c => c.duelsId).filter(Boolean)
-    expect(ids.length).toBe(18)
-    expect(new Set(ids).size).toBe(18)
+    expect(ids.length).toBe(29)
+    expect(new Set(ids).size).toBe(29)
     for (const id of ids) expect(id).toMatch(/^coconut-\d{3}$/)
   })
 })

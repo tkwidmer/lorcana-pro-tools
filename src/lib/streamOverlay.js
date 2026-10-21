@@ -9,11 +9,27 @@ export const OVERLAY_HEIGHT = 1080
 
 export const MAX_GAME_WINS = 2
 
+// The site's own look: ink black fill, forge gold accent (src/index.css).
+export const DEFAULT_THEME = { fill: '#17171a', accent: '#b5832a' }
+
+// Text on the fill: the site's paper white on a dark fill, ink on a light
+// one, by WCAG relative luminance so an organizer's pale theme still reads.
+export function themeTextColor(fillHex) {
+  const channel = h => {
+    const c = parseInt(h, 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  const [r, g, b] = [1, 3, 5].map(i => channel(fillHex.slice(i, i + 2)))
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  return luminance > 0.4 ? '#17171a' : '#f2f1ee'
+}
+
 // A row (from get_stream_table / the owner's select / a broadcast payload)
 // → what the pages render.
 export function rowToState(row) {
   return {
     mode: row.mode,
+    theme: { fill: row.theme_fill, accent: row.theme_accent, text: themeTextColor(row.theme_fill) },
     eventName: row.event_name,
     eventLogoUrl: row.event_logo_url,
     sponsorLogoUrl: row.sponsor_logo_url,

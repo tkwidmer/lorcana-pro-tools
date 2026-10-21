@@ -6,7 +6,7 @@ import {
   readSelectedTableId, storeSelectedTableId,
 } from '../lib/streamTables'
 import {
-  MAX_GAME_WINS, rowToState, swapSidesPatch, rphClockPatch,
+  MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock,
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
@@ -192,6 +192,15 @@ export function StreamOverlayPage() {
           <Labeled label="Round">
             <Input value={row.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" />
           </Labeled>
+          <div className="flex flex-wrap items-end gap-3">
+            <Labeled label="Theme fill">
+              <input type="color" value={row.theme_fill} onChange={e => setField('theme_fill', e.target.value)} className="h-9 w-14 cursor-pointer" />
+            </Labeled>
+            <Labeled label="Theme accent">
+              <input type="color" value={row.theme_accent} onChange={e => setField('theme_accent', e.target.value)} className="h-9 w-14 cursor-pointer" />
+            </Labeled>
+            <Button size="sm" onClick={() => write(row.id, { theme_fill: DEFAULT_THEME.fill, theme_accent: DEFAULT_THEME.accent })}>Reset to InkbornForge</Button>
+          </div>
           <p className="text-xs text-gray-500">
             To load a feature match, open the pairing in Tournament Lookup's Matches tab and click “Send to Stream Overlay”.
           </p>

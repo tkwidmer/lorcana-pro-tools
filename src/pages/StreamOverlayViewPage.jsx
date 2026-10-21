@@ -111,20 +111,21 @@ function SideColumn({ player, side, isWinner }) {
         ))}
       </div>
 
-      <div className="mt-auto text-center">
-        <div className="text-base uppercase tracking-[0.3em] text-(--on-fill)/60">Lore</div>
-        <div className="text-[9rem] leading-none text-(--accent) tabular-nums">{player.lore}</div>
-      </div>
-
-      {/* Fixed-height slot so both columns stay aligned whether or not there's a winner. */}
-      <div className="mt-4 h-10 flex items-center justify-center">
+      {/* Fixed-height slot just above the lore, so the lore block never moves
+          and both columns stay aligned whether or not there's a winner. */}
+      <div className="mt-auto h-10 flex items-center justify-center">
         {isWinner && (
           <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>
         )}
       </div>
 
+      <div className="mt-2 text-center">
+        <div className="text-base uppercase tracking-[0.3em] text-(--on-fill)/60">Lore</div>
+        <div className="text-[9rem] leading-none text-(--accent) tabular-nums">{player.lore}</div>
+      </div>
+
       {/* Brand lockup, bottom-right like the reference streams; mirrors Nav's. */}
-      <div className="mt-2 mb-5 h-8 flex items-center justify-center gap-2">
+      <div className="mt-6 mb-5 h-8 flex items-center justify-center gap-2">
         {side === 'right' && (
           <>
             <img src="/inkborn_forge_mark_64.png" alt="" className="h-8 w-8 rounded-sm" />

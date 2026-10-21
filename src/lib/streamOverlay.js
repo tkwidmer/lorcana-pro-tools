@@ -13,6 +13,7 @@ export const MAX_GAME_WINS = 2
 // → what the pages render.
 export function rowToState(row) {
   return {
+    mode: row.mode,
     eventName: row.event_name,
     eventLogoUrl: row.event_logo_url,
     sponsorLogoUrl: row.sponsor_logo_url,
@@ -29,6 +30,25 @@ export function rowToState(row) {
       gameWins: row[`p${n}_game_wins`],
     })),
   }
+}
+
+// The side (0 or 1) that has taken the match, or null while it's still on.
+// Derived from game wins alone, so resetting them for the next match clears it.
+export function winnerIndex(players) {
+  const i = players.findIndex(p => p.gameWins >= MAX_GAME_WINS)
+  return i === -1 ? null : i
+}
+
+// What the break screen is showing. The table holds the pair that just
+// played until the next pairing is published on RPH and sent over, so the
+// headline comes from the score: a decided match reads as the result, a fresh
+// pairing as the next match, anything else as a match paused between games.
+export function breakHeadline(players) {
+  const winner = winnerIndex(players)
+  const score = `${players[0].gameWins}-${players[1].gameWins}`
+  if (winner !== null) return { label: 'Final', score, winner }
+  if (players.every(p => p.gameWins === 0)) return { label: 'Next match', score: null, winner: null }
+  return { label: 'Match in progress', score, winner: null }
 }
 
 export function timerRemainingMs(state, now = Date.now()) {

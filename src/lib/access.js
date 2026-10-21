@@ -12,6 +12,7 @@ export const SUPPORTER_PATHS = new Set([
   '/library',
   '/game-scraper',
   '/decklist-inspector',
+  '/stream-overlay',
 ])
 
 export function isSupporterPath(path) {

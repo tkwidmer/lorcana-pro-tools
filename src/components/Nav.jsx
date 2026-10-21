@@ -188,7 +188,7 @@ export function Nav() {
   if (pathname === '/lore-tracker') return null
   // Hidden for the Decklist Inspector's OBS overlay view — a chrome-less,
   // transparent-background render meant to be cropped into a stream scene.
-  if (pathname === '/decklist-inspector/overlay') return null
+  if (pathname === '/decklist-inspector/overlay' || pathname === '/stream-overlay/view') return null
 
   const currentSection = findTool(pathname)?.section.title
   const openSection = NAV_SECTIONS.find(section => section.title === openMenu)

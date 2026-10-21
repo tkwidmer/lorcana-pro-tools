@@ -22,6 +22,8 @@ import { PlayerProfilePage } from './pages/PlayerProfilePage'
 import { DeckComparisonPage } from './pages/DeckComparisonPage'
 import { DecklistInspectorPage } from './pages/DecklistInspectorPage'
 import { DecklistOverlayPage } from './pages/DecklistOverlayPage'
+import { StreamOverlayPage } from './pages/StreamOverlayPage'
+import { StreamOverlayViewPage } from './pages/StreamOverlayViewPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { MatchHistoryPage } from './pages/MatchHistoryPage'
 import { GamelogViewerPage } from './pages/GamelogViewerPage'
@@ -86,6 +88,10 @@ function RoutedContent() {
             read-only view carries its decklist entirely in the URL — no
             account data is exposed. */}
         <Route path="/decklist-inspector/overlay" element={<DecklistOverlayPage />} />
+        <Route path="/stream-overlay" element={<SupporterRoute><StreamOverlayPage /></SupporterRoute>} />
+        {/* Unguarded for the same reason: the OBS Browser Source has no session,
+            and the view only renders what the control panel broadcasts. */}
+        <Route path="/stream-overlay/view" element={<StreamOverlayViewPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/match-history" element={<SupporterRoute><MatchHistoryPage /></SupporterRoute>} />
         <Route path="/gamelog" element={<GamelogViewerPage />} />

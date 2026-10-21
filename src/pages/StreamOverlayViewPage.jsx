@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { supabase } from '../lib/supabaseClient'
 import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
+import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, channelName, timerRemainingMs, formatClock,
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock,
 } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
@@ -13,30 +13,32 @@ const SIDE_WIDTH = 320
 const CAM_HEIGHT = SIDE_WIDTH
 
 // The single OBS Browser Source for a gameplay stream: a 1920×1080 frame with
-// opaque side columns (square player cam cutout, name, record, inks, game-win pips,
-// lore) and a top banner (event logo, round, timer), everything else
-// transparent so the gameplay cam and player cams sit behind it. It carries no
-// state of its own — the control panel at /stream-overlay publishes the whole
-// state over a Supabase Broadcast channel and this just renders the latest
-// payload. Unguarded (see App.jsx): a Browser Source has no Supabase session
-// and the view exposes nothing but what the panel operator typed in.
+// opaque side columns (square player cam cutout, name, record, inks, game-win
+// pips, lore) and a top banner (event logo, round, timer), everything else
+// transparent so the gameplay cam and player cams sit behind it. It reads
+// the stream table named in the link through the public function and then
+// renders every broadcast the row's trigger publishes. Unguarded (see
+// App.jsx): a Browser Source has no Supabase session, and the public shape
+// exposes nothing but what the panel operator typed in.
 export function StreamOverlayViewPage() {
   useTransparentBackground()
   const [searchParams] = useSearchParams()
-  const channelId = searchParams.get('channel') ?? ''
-  const [state, setState] = useState(null)
+  const tableId = searchParams.get('table') ?? ''
+  const [row, setRow] = useState(null)
+  const [error, setError] = useState(null)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
-    const channel = supabase.channel(channelName(channelId))
-    channel.on('broadcast', { event: 'state' }, ({ payload }) => setState(payload)).subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [channelId])
+    fetchPublicTable(tableId).then(setRow).catch(e => setError(e.message))
+    return subscribeToTable(tableId, setRow)
+  }, [tableId])
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 250)
     return () => clearInterval(id)
   }, [])
+
+  const state = row && rowToState(row)
 
   return (
     <div
@@ -45,7 +47,7 @@ export function StreamOverlayViewPage() {
     >
       {!state && (
         <div className="absolute inset-x-0 top-1/2 text-center text-2xl uppercase tracking-widest text-on-ink/70">
-          Waiting for the Stream Overlay control panel…
+          {error ?? 'Loading the stream table…'}
         </div>
       )}
       {state && (

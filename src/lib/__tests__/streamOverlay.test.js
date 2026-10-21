@@ -1,31 +1,58 @@
 import { describe, it, expect } from 'vitest'
 import {
-  defaultState, defaultPlayer, startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock,
-  clampLore, clampGameWins, channelName, newChannelId, swapSides, applyFeatureMatch, timerFromRph, syncRphClock,
+  rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch,
 } from '../streamOverlay'
+
+const row = (overrides = {}) => ({
+  id: 't1', name: 'Table 1', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16',
+  timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
+  p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0,
+  p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1,
+  ...overrides,
+})
+
+describe('streamOverlay row mapping', () => {
+  it('turns a row into the render shape, parsing the clock target', () => {
+    const s = rowToState(row({ timer_ends_at: '2026-05-24T23:38:39+00:00' }))
+    expect(s.timerEndsAt).toBe(Date.parse('2026-05-24T23:38:39+00:00'))
+    expect(s.players[0]).toEqual({ name: 'Ryan', record: '5-0-2', inks: ['amethyst', 'emerald'], lore: 12, gameWins: 0 })
+    expect(s.players[1].gameWins).toBe(1)
+    expect(rowToState(row()).timerEndsAt).toBeNull()
+  })
+
+  it('swaps every per-side column', () => {
+    const p = swapSidesPatch(row())
+    expect(p.p1_name).toBe('Dylan')
+    expect(p.p2_name).toBe('Ryan')
+    expect(p.p1_inks).toEqual(['amber'])
+    expect(p.p2_lore).toBe(12)
+    expect(p.p1_game_wins).toBe(1)
+  })
+})
 
 describe('streamOverlay timer', () => {
   it('starts from the paused remainder and counts down against wall time', () => {
-    const paused = resetTimer(defaultState(), 50)
+    const paused = rowToState(row())
     expect(timerRemainingMs(paused, 123)).toBe(50 * 60 * 1000)
-    const running = startTimer(paused, 1000)
-    expect(running.timerEndsAt).toBe(1000 + 50 * 60 * 1000)
+    const patch = startTimer(paused, 1000)
+    expect(patch.timer_ends_at).toBe(new Date(1000 + 50 * 60 * 1000).toISOString())
+    const running = rowToState(row(patch))
     expect(timerRemainingMs(running, 1000 + 60 * 1000)).toBe(49 * 60 * 1000)
   })
 
   it('pauses by freezing the remainder, and never goes below zero', () => {
-    const running = startTimer(resetTimer(defaultState(), 1), 0)
+    const running = rowToState(row(startTimer(rowToState(row(resetTimer(1))), 0)))
     const paused = pauseTimer(running, 20 * 1000)
-    expect(paused.timerEndsAt).toBeNull()
-    expect(paused.timerRemainingMs).toBe(40 * 1000)
+    expect(paused).toEqual({ timer_ends_at: null, timer_remaining_ms: 40 * 1000 })
     expect(timerRemainingMs(running, 5 * 60 * 1000)).toBe(0)
   })
 
   it('start and pause are no-ops when already in that state', () => {
-    const paused = defaultState()
-    expect(pauseTimer(paused)).toBe(paused)
-    const running = startTimer(paused, 0)
-    expect(startTimer(running, 99)).toBe(running)
+    const paused = rowToState(row())
+    expect(pauseTimer(paused)).toBeNull()
+    const running = rowToState(row(startTimer(paused, 0)))
+    expect(startTimer(running, 99)).toBeNull()
   })
 
   it('formats the clock like a tournament stream', () => {
@@ -36,64 +63,32 @@ describe('streamOverlay timer', () => {
   })
 })
 
-describe('streamOverlay counters and channel', () => {
-  it('clamps lore to 0–99 and game wins to 0–2', () => {
-    expect(clampLore(-1)).toBe(0)
-    expect(clampLore(100)).toBe(99)
-    expect(clampGameWins(3)).toBe(2)
-    expect(clampGameWins(-2)).toBe(0)
-  })
-
-  it('names a channel from a generated id and rejects junk ids', () => {
-    const id = newChannelId()
-    expect(channelName(id)).toBe(`stream-overlay:${id}`)
-    expect(() => channelName('../x')).toThrow()
-    expect(() => channelName('')).toThrow()
-  })
-})
-
-describe('streamOverlay feature match', () => {
-  it('loads names, records, event and round, resets scores, keeps inks', () => {
-    const before = { ...defaultState(), players: [{ name: 'A', record: '', inks: ['ruby'], lore: 9, gameWins: 1 }, defaultPlayer('B')] }
-    const after = applyFeatureMatch(before, {
-      eventName: 'Open', round: 'Top 16',
-      players: [{ name: 'Ryan', record: '5-2-0' }, { name: 'Dylan', record: '5-0-2' }],
-    })
-    expect(after.eventName).toBe('Open')
-    expect(after.round).toBe('Top 16')
-    expect(after.players[0]).toEqual({ name: 'Ryan', record: '5-2-0', inks: ['ruby'], lore: 0, gameWins: 0 })
-    expect(after.players[1].name).toBe('Dylan')
-  })
-
+describe('streamOverlay RPH', () => {
   it('maps a running RPH clock to a wall-time target', () => {
     const t = timerFromRph({ timerEndDatetime: '2026-05-24T23:38:39+00:00', timerIsRunning: true, timerPausedAtDatetime: null })
     expect(t).toEqual({ timerEndsAt: Date.parse('2026-05-24T23:38:39+00:00'), timerRemainingMs: 0 })
-    const after = applyFeatureMatch(defaultState(), { eventName: '', round: '', players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: t })
-    expect(after.timerEndsAt).toBe(t.timerEndsAt)
+    expect(timerPatch(t).timer_ends_at).toBe('2026-05-24T23:38:39.000Z')
   })
 
-  it('maps a paused RPH clock to its remainder, and no clock to no change', () => {
-    expect(timerFromRph({
+  it('maps a paused RPH clock to its remainder, and no clock to no patch', () => {
+    expect(rphClockPatch({
       timerEndDatetime: '2026-05-24T23:38:39+00:00', timerIsRunning: false, timerPausedAtDatetime: '2026-05-24T22:28:39+00:00',
-    })).toEqual({ timerEndsAt: null, timerRemainingMs: 70 * 60 * 1000 })
-    expect(timerFromRph({ timerEndDatetime: null, timerIsRunning: false, timerPausedAtDatetime: null })).toBeNull()
-    const before = resetTimer(defaultState(), 35)
-    const after = applyFeatureMatch(before, { eventName: '', round: '', players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null })
-    expect(after.timerRemainingMs).toBe(35 * 60 * 1000)
+    })).toEqual({ timer_ends_at: null, timer_remaining_ms: 70 * 60 * 1000 })
+    expect(rphClockPatch({ timerEndDatetime: null, timerIsRunning: false, timerPausedAtDatetime: null })).toBeNull()
   })
 
-  it('links the panel to the RPH event and syncs its clock on each poll', () => {
-    const linked = applyFeatureMatch(defaultState(), {
-      eventName: '', round: '', players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null, rphEventId: 528227,
+  it('builds the feature-match patch: names, records, event, round, clock, link; scores reset; inks untouched', () => {
+    const p = featureMatchPatch({
+      eventName: 'Open', round: 'Top 16', rphEventId: 528227,
+      players: [{ name: 'Ryan', record: '5-2-0' }, { name: 'Dylan', record: '5-0-2' }],
+      timer: { timerEndsAt: null, timerRemainingMs: 70 * 60 * 1000 },
     })
-    expect(linked.rphEventId).toBe(528227)
-    const synced = syncRphClock(linked, { timerEndDatetime: '2026-05-24T23:38:39+00:00', timerIsRunning: true, timerPausedAtDatetime: null })
-    expect(synced.timerEndsAt).toBe(Date.parse('2026-05-24T23:38:39+00:00'))
-    expect(syncRphClock(synced, { timerEndDatetime: null, timerIsRunning: false, timerPausedAtDatetime: null })).toBe(synced)
-  })
-
-  it('swaps the two sides', () => {
-    const s = swapSides({ ...defaultState(), players: [defaultPlayer('L'), defaultPlayer('R')] })
-    expect(s.players.map(p => p.name)).toEqual(['R', 'L'])
+    expect(p).toEqual({
+      timer_ends_at: null, timer_remaining_ms: 70 * 60 * 1000, rph_event_id: 528227, event_name: 'Open', round: 'Top 16',
+      p1_name: 'Ryan', p1_record: '5-2-0', p1_lore: 0, p1_game_wins: 0,
+      p2_name: 'Dylan', p2_record: '5-0-2', p2_lore: 0, p2_game_wins: 0,
+    })
+    expect(featureMatchPatch({ eventName: '', round: '', rphEventId: 1, players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null }))
+      .not.toHaveProperty('timer_ends_at')
   })
 })

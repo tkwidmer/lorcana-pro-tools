@@ -1,32 +1,33 @@
-// State shared between the Stream Overlay control panel (/stream-overlay) and
-// the OBS Browser Source view (/stream-overlay/view). The panel publishes the
-// whole state on a Supabase Realtime Broadcast channel (no table, nothing
-// stored server-side) and the view just renders the last payload it received.
+// Pure helpers shared by the Stream Overlay control panel, the OBS view and
+// the players' controller. The source of truth is a `stream_tables` row
+// (supabase/migrations/012_stream_tables.sql — one column per overlay
+// field); these turn a row into the render shape and panel actions into
+// column patches. Data access lives in streamTables.js.
 
 export const OVERLAY_WIDTH = 1920
 export const OVERLAY_HEIGHT = 1080
 
 export const MAX_GAME_WINS = 2
 
-export function defaultPlayer(name) {
-  return { name, record: '', inks: [], lore: 0, gameWins: 0 }
-}
-
-export function defaultState() {
+// A row (from get_stream_table / the owner's select / a broadcast payload)
+// → what the pages render.
+export function rowToState(row) {
   return {
-    eventName: '',
-    eventLogoUrl: '',
-    sponsorLogoUrl: '',
-    round: '',
-    // The clock is a wall-time target so the view ticks on its own and the
-    // panel can close without the timer stopping. Paused: `timerEndsAt` is
-    // null and `timerRemainingMs` holds what's left.
-    timerEndsAt: null,
-    timerRemainingMs: 50 * 60 * 1000,
-    // Set by a feature-match send: while non-null the panel polls this RPH
-    // event's clock and the manual timer controls give way to it.
-    rphEventId: null,
-    players: [defaultPlayer('Player 1'), defaultPlayer('Player 2')],
+    eventName: row.event_name,
+    eventLogoUrl: row.event_logo_url,
+    sponsorLogoUrl: row.sponsor_logo_url,
+    round: row.round,
+    // Wall-time target while running (ms since epoch), null while paused.
+    timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
+    timerRemainingMs: row.timer_remaining_ms,
+    rphEventId: row.rph_event_id,
+    players: [1, 2].map(n => ({
+      name: row[`p${n}_name`],
+      record: row[`p${n}_record`],
+      inks: row[`p${n}_inks`],
+      lore: row[`p${n}_lore`],
+      gameWins: row[`p${n}_game_wins`],
+    })),
   }
 }
 
@@ -35,18 +36,26 @@ export function timerRemainingMs(state, now = Date.now()) {
   return Math.max(0, state.timerEndsAt - now)
 }
 
+// Timer actions return the two timer columns to write.
 export function startTimer(state, now = Date.now()) {
-  if (state.timerEndsAt !== null) return state
-  return { ...state, timerEndsAt: now + state.timerRemainingMs }
+  if (state.timerEndsAt !== null) return null
+  return timerPatch({ timerEndsAt: now + state.timerRemainingMs, timerRemainingMs: state.timerRemainingMs })
 }
 
 export function pauseTimer(state, now = Date.now()) {
-  if (state.timerEndsAt === null) return state
-  return { ...state, timerEndsAt: null, timerRemainingMs: timerRemainingMs(state, now) }
+  if (state.timerEndsAt === null) return null
+  return timerPatch({ timerEndsAt: null, timerRemainingMs: timerRemainingMs(state, now) })
 }
 
-export function resetTimer(state, minutes) {
-  return { ...state, timerEndsAt: null, timerRemainingMs: Math.max(0, minutes) * 60 * 1000 }
+export function resetTimer(minutes) {
+  return timerPatch({ timerEndsAt: null, timerRemainingMs: Math.max(0, minutes) * 60 * 1000 })
+}
+
+export function timerPatch({ timerEndsAt, timerRemainingMs }) {
+  return {
+    timer_ends_at: timerEndsAt === null ? null : new Date(timerEndsAt).toISOString(),
+    timer_remaining_ms: timerRemainingMs,
+  }
 }
 
 // m:ss under an hour, h:mm:ss at or over it — matches the clocks on tournament streams.
@@ -58,27 +67,6 @@ export function formatClock(ms) {
   const mm = String(m).padStart(2, '0')
   const ss = String(s).padStart(2, '0')
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`
-}
-
-export function clampLore(lore) {
-  return Math.min(99, Math.max(0, lore))
-}
-
-export function clampGameWins(wins) {
-  return Math.min(MAX_GAME_WINS, Math.max(0, wins))
-}
-
-export function channelName(id) {
-  if (!/^[a-z0-9]{8,}$/.test(id)) throw new Error(`Invalid overlay channel id: ${id}`)
-  return `stream-overlay:${id}`
-}
-
-export function newChannelId() {
-  return crypto.randomUUID().replace(/-/g, '').slice(0, 12)
-}
-
-export function swapSides(state) {
-  return { ...state, players: [state.players[1], state.players[0]] }
 }
 
 // RPH's round clock as the event exposes it: `timer_end_datetime` with
@@ -93,44 +81,33 @@ export function timerFromRph({ timerEndDatetime, timerIsRunning, timerPausedAtDa
   return { timerEndsAt: null, timerRemainingMs: Math.max(0, endsAt - Date.parse(timerPausedAtDatetime)) }
 }
 
-// One poll of the linked RPH clock: a fresh structure (getTournamentStructure)
-// overwrites the timer; an event with no clock set changes nothing.
-export function syncRphClock(state, structure) {
+// One poll of a linked RPH clock → the timer columns, or null for no change.
+export function rphClockPatch(structure) {
   const timer = timerFromRph(structure)
-  return timer ? { ...state, ...timer } : state
+  return timer ? timerPatch(timer) : null
 }
 
-// Loads a feature match picked in Tournament Lookup: names, records and the
-// round clock come from RPH, lore and game wins start fresh, inks stay
-// whatever was set (RPH doesn't know decks).
-export function applyFeatureMatch(state, { eventName, round, players, timer, rphEventId }) {
+// A feature match picked in Tournament Lookup: names, records, the round
+// clock and the event link come from RPH; lore and game wins start fresh;
+// inks are left alone (RPH doesn't know decks).
+export function featureMatchPatch({ eventName, round, players, timer, rphEventId }) {
   return {
-    ...state,
-    ...timer,
-    rphEventId,
-    eventName,
+    ...(timer ? timerPatch(timer) : {}),
+    rph_event_id: rphEventId,
+    event_name: eventName,
     round,
-    players: state.players.map((p, i) => ({ ...p, name: players[i].name, record: players[i].record, lore: 0, gameWins: 0 })),
+    p1_name: players[0].name, p1_record: players[0].record, p1_lore: 0, p1_game_wins: 0,
+    p2_name: players[1].name, p2_record: players[1].record, p2_lore: 0, p2_game_wins: 0,
   }
 }
 
-// The control panel's saved state plus its channel id — the OBS link embeds
-// the id, so it has to survive a reload and a hand-off from Tournament Lookup.
-export const STORAGE_KEY = 'lorcana_stream_overlay'
+const SIDE_FIELDS = ['name', 'record', 'inks', 'lore', 'game_wins']
 
-export function loadSaved() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    if (saved?.channelId && saved?.state) return saved
-  } catch { /* fall through to a fresh setup */ }
-  return { channelId: newChannelId(), state: defaultState() }
-}
-
-export function storeSaved(saved) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)) } catch { /* noop */ }
-}
-
-export function saveFeatureMatch(match) {
-  const saved = loadSaved()
-  storeSaved({ ...saved, state: applyFeatureMatch(saved.state, match) })
+export function swapSidesPatch(row) {
+  const patch = {}
+  for (const f of SIDE_FIELDS) {
+    patch[`p1_${f}`] = row[`p2_${f}`]
+    patch[`p2_${f}`] = row[`p1_${f}`]
+  }
+  return patch
 }

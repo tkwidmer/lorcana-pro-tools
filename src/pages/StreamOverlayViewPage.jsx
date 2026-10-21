@@ -201,14 +201,15 @@ function BreakScreen({ state, now }) {
 function BreakPlayer({ player, isWinner }) {
   return (
     <div className="w-[560px] text-center">
+      {/* Fixed-height slot above the name, so nothing moves and both sides stay
+          aligned whether or not there's a winner. */}
+      <div className="mb-2 h-10 flex items-center justify-center">
+        {isWinner && <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>}
+      </div>
       <div className={`text-6xl uppercase tracking-wide leading-tight truncate ${isWinner ? 'text-(--accent)' : ''}`}>{player.name || ' '}</div>
       <div className="mt-2 text-3xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
       <div className="mt-5 flex justify-center gap-4">
         {player.inks.map(ink => <InkIcon key={ink} color={ink} size={72} />)}
-      </div>
-      {/* Fixed-height slot so both sides stay aligned whether or not there's a winner. */}
-      <div className="mt-5 h-10 flex items-center justify-center">
-        {isWinner && <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>}
       </div>
     </div>
   )

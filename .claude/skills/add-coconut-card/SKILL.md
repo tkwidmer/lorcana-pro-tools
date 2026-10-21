@@ -113,9 +113,10 @@ bg.paste(im, (0, 0), im)
 bg.save(f'public/coconut-cards/{id}.jpg', 'JPEG', quality=90, optimize=True, progressive=True)
 ```
 
-750x1050 (300 DPI at 2.5"x3.5") from the print sheet; 640x896 (~256 DPI)
-from the individual PNGs until a card reaches the sheet. Never upscale to hit
-a number. If the art is
+Every face is 750x1050 (300 DPI at 2.5"x3.5"). Take it from the print sheet
+when the card is there; otherwise Lanczos-upscale the 640x896 PNG to 750x1050
+(`bg.resize((750, 1050), Image.LANCZOS)` before saving) — that matches how the
+sheet's own faces were produced. Swap in the sheet's copy once it ships. If the art is
 already JPEG at the right size, copy it byte-for-byte rather than re-encoding.
 
 Reject a face stamped **"FOR BETA TEST ONLY"** or obviously greyed out — that's

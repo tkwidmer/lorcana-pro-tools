@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  defaultState, startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock,
-  clampLore, clampGameWins, channelName, newChannelId,
+  defaultState, defaultPlayer, startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock,
+  clampLore, clampGameWins, channelName, newChannelId, swapSides, applyFeatureMatch,
 } from '../streamOverlay'
 
 describe('streamOverlay timer', () => {
@@ -49,5 +49,24 @@ describe('streamOverlay counters and channel', () => {
     expect(channelName(id)).toBe(`stream-overlay:${id}`)
     expect(() => channelName('../x')).toThrow()
     expect(() => channelName('')).toThrow()
+  })
+})
+
+describe('streamOverlay feature match', () => {
+  it('loads names, records, event and round, resets scores, keeps inks', () => {
+    const before = { ...defaultState(), players: [{ name: 'A', record: '', inks: ['ruby'], lore: 9, gameWins: 1 }, defaultPlayer('B')] }
+    const after = applyFeatureMatch(before, {
+      eventName: 'Open', round: 'Top 16',
+      players: [{ name: 'Ryan', record: '5-2-0' }, { name: 'Dylan', record: '5-0-2' }],
+    })
+    expect(after.eventName).toBe('Open')
+    expect(after.round).toBe('Top 16')
+    expect(after.players[0]).toEqual({ name: 'Ryan', record: '5-2-0', inks: ['ruby'], lore: 0, gameWins: 0 })
+    expect(after.players[1].name).toBe('Dylan')
+  })
+
+  it('swaps the two sides', () => {
+    const s = swapSides({ ...defaultState(), players: [defaultPlayer('L'), defaultPlayer('R')] })
+    expect(s.players.map(p => p.name)).toEqual(['R', 'L'])
   })
 })

@@ -73,3 +73,40 @@ export function channelName(id) {
 export function newChannelId() {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 12)
 }
+
+export function swapSides(state) {
+  return { ...state, players: [state.players[1], state.players[0]] }
+}
+
+// Loads a feature match picked in Tournament Lookup: names and records come
+// from RPH, lore and game wins start fresh, inks stay whatever was set (RPH
+// doesn't know decks).
+export function applyFeatureMatch(state, { eventName, round, players }) {
+  return {
+    ...state,
+    eventName,
+    round,
+    players: state.players.map((p, i) => ({ ...p, name: players[i].name, record: players[i].record, lore: 0, gameWins: 0 })),
+  }
+}
+
+// The control panel's saved state plus its channel id — the OBS link embeds
+// the id, so it has to survive a reload and a hand-off from Tournament Lookup.
+export const STORAGE_KEY = 'lorcana_stream_overlay'
+
+export function loadSaved() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    if (saved?.channelId && saved?.state) return saved
+  } catch { /* fall through to a fresh setup */ }
+  return { channelId: newChannelId(), state: defaultState() }
+}
+
+export function storeSaved(saved) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)) } catch { /* noop */ }
+}
+
+export function saveFeatureMatch(match) {
+  const saved = loadSaved()
+  storeSaved({ ...saved, state: applyFeatureMatch(saved.state, match) })
+}

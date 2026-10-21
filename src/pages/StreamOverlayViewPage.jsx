@@ -8,10 +8,12 @@ import {
 } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
-const CAM_HEIGHT = 180
+// Square cutout: tall enough for a portrait player cam, and the operator
+// positions the camera source behind it in OBS.
+const CAM_HEIGHT = SIDE_WIDTH
 
 // The single OBS Browser Source for a gameplay stream: a 1920×1080 frame with
-// opaque side columns (player cam cutout, name, record, inks, game-win pips,
+// opaque side columns (square player cam cutout, name, record, inks, game-win pips,
 // lore) and a top banner (event logo, round, timer), everything else
 // transparent so the gameplay cam and player cams sit behind it. It carries no
 // state of its own — the control panel at /stream-overlay publishes the whole
@@ -70,7 +72,7 @@ function SideColumn({ player, side }) {
       className={`absolute top-0 bottom-0 flex flex-col ${side === 'left' ? 'left-0 border-r-4' : 'right-0 border-l-4'} border-forge`}
       style={{ width: SIDE_WIDTH }}
     >
-      {/* Transparent cutout: place this player's camera behind it in OBS. The
+      {/* Transparent square cutout: place this player's camera behind it in OBS. The
           dark fill starts below it, so nothing paints over the cam. */}
       <div className="w-full border-b-4 border-forge" style={{ height: CAM_HEIGHT }} />
 

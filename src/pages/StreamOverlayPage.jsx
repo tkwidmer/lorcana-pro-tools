@@ -7,43 +7,45 @@ import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import {
-  MAX_GAME_WINS, defaultState, newChannelId, channelName,
+  MAX_GAME_WINS, loadSaved, storeSaved, channelName, swapSides,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, clampLore, clampGameWins,
 } from '../lib/streamOverlay'
 
-const STORAGE_KEY = 'lorcana_stream_overlay'
 const HEARTBEAT_MS = 5000
 
-// Saved so a reload mid-tournament keeps the scores and, more importantly, the
-// channel id — the OBS link embeds it, so it must survive the panel closing.
-function load() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    if (saved?.channelId && saved?.state) return saved
-  } catch { /* fall through to a fresh setup */ }
-  return { channelId: newChannelId(), state: defaultState() }
-}
-
 // Control panel for the gameplay stream overlay. Every change (and a periodic
-// heartbeat, so a Browser Source that loads late or reconnects catches up)
-// publishes the full state on a Supabase Realtime Broadcast channel keyed by
-// a random id in the OBS link. Nothing is stored server-side.
+// heartbeat, so a Browser Source or player controller that loads late or
+// reconnects catches up) publishes the full state on a Supabase Realtime
+// Broadcast channel keyed by a random id in the OBS link, and is the only
+// publisher of state: the players' controller (/stream-overlay/control) sends
+// lore / game-win deltas that this panel applies and re-broadcasts. Nothing
+// is stored server-side.
 export function StreamOverlayPage() {
-  const [{ channelId, state }, setSaved] = useState(load)
+  const [{ channelId, state }, setSaved] = useState(loadSaved)
   const [connected, setConnected] = useState(false)
-  const [linkCopied, setLinkCopied] = useState(false)
+  const [copied, setCopied] = useState(null)
   const [now, setNow] = useState(() => Date.now())
+  const [minutes, setMinutes] = useState(50)
   const channelRef = useRef(null)
 
   const setState = updater => setSaved(prev => ({ ...prev, state: updater(prev.state) }))
 
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ channelId, state })) } catch { /* noop */ }
-  }, [channelId, state])
+  useEffect(() => { storeSaved({ channelId, state }) }, [channelId, state])
 
   useEffect(() => {
     const channel = supabase.channel(channelName(channelId))
-    channel.subscribe(status => setConnected(status === 'SUBSCRIBED'))
+    channel
+      // The players' controller never publishes state, only deltas; applying
+      // them here (functional update, so none are lost) keeps this panel the
+      // single source of truth and the only publisher. Keep one panel open.
+      .on('broadcast', { event: 'adjust' }, ({ payload: { player, field, delta } }) => {
+        const clamp = field === 'lore' ? clampLore : clampGameWins
+        setState(s => ({
+          ...s,
+          players: s.players.map((p, j) => (j === player ? { ...p, [field]: clamp(p[field] + delta) } : p)),
+        }))
+      })
+      .subscribe(status => setConnected(status === 'SUBSCRIBED'))
     channelRef.current = channel
     return () => { channelRef.current = null; supabase.removeChannel(channel) }
   }, [channelId])
@@ -63,12 +65,15 @@ export function StreamOverlayPage() {
     return () => clearInterval(id)
   }, [])
 
-  const overlayUrl = `${window.location.origin}/stream-overlay/view?channel=${channelId}`
-  async function copyOverlayLink() {
+  const links = {
+    overlay: `${window.location.origin}/stream-overlay/view?channel=${channelId}`,
+    control: `${window.location.origin}/stream-overlay/control?channel=${channelId}`,
+  }
+  async function copyLink(which) {
     try {
-      await navigator.clipboard.writeText(overlayUrl)
-      setLinkCopied(true)
-      setTimeout(() => setLinkCopied(false), 2000)
+      await navigator.clipboard.writeText(links[which])
+      setCopied(which)
+      setTimeout(() => setCopied(null), 2000)
     } catch { /* clipboard unavailable — noop */ }
   }
 
@@ -79,19 +84,19 @@ export function StreamOverlayPage() {
   }))
 
   const running = state.timerEndsAt !== null
-  const [minutes, setMinutes] = useState(50)
 
   return (
     <div className="w-full px-6 py-8">
       <PageHeader
         title="Stream Overlay"
-        description="Run a gameplay stream overlay from here. Add the overlay link as one OBS Browser Source (1920×1080) with the gameplay cam and player cams behind it — the cam areas are transparent."
+        description="Run a gameplay stream overlay from here. Add the overlay link as one OBS Browser Source (1920×1080) with the gameplay cam and player cams behind it — the cam areas are transparent. Open the player controller link on a tablet at the table so the players keep their own lore and game score."
         actions={
           <>
             <span className={`text-xs font-semibold uppercase tracking-widest ${connected ? 'text-emerald-600' : 'text-gray-400'}`}>
               {connected ? 'Live' : 'Connecting…'}
             </span>
-            <Button variant="primary" onClick={copyOverlayLink}>{linkCopied ? 'Link copied!' : 'Copy OBS overlay link'}</Button>
+            <Button onClick={() => copyLink('control')}>{copied === 'control' ? 'Link copied!' : 'Copy player controller link'}</Button>
+            <Button variant="primary" onClick={() => copyLink('overlay')}>{copied === 'overlay' ? 'Link copied!' : 'Copy OBS overlay link'}</Button>
           </>
         }
       />
@@ -110,6 +115,9 @@ export function StreamOverlayPage() {
           <Labeled label="Round">
             <Input value={state.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" />
           </Labeled>
+          <p className="text-xs text-gray-500">
+            To load a feature match, open the pairing in Tournament Lookup's Matches tab and click “Send to Stream Overlay”.
+          </p>
         </Card>
 
         <Card title="Round timer" className="p-5">
@@ -125,6 +133,10 @@ export function StreamOverlayPage() {
             <Button onClick={() => setState(s => resetTimer(s, minutes))}>Reset to {minutes} min</Button>
           </div>
         </Card>
+
+        <div className="lg:col-span-2 flex justify-end">
+          <Button size="sm" onClick={() => setState(swapSides)}>Swap sides</Button>
+        </div>
 
         {state.players.map((player, i) => (
           <Card key={i} title={`Player ${i + 1} (${i === 0 ? 'left' : 'right'})`} className="p-5 space-y-4">
@@ -168,9 +180,10 @@ export function StreamOverlayPage() {
         ))}
       </div>
 
-      <p className="mt-6 text-sm text-gray-500">
-        Overlay link: <code className="text-xs break-all">{overlayUrl}</code>
-      </p>
+      <div className="mt-6 text-sm text-gray-500 space-y-1">
+        <p>Overlay link: <code className="text-xs break-all">{links.overlay}</code></p>
+        <p>Player controller link: <code className="text-xs break-all">{links.control}</code></p>
+      </div>
     </div>
   )
 }

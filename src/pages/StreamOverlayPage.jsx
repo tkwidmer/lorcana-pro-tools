@@ -1,95 +1,119 @@
-import { useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
-import { fetchEventDetails, getTournamentStructure } from '../lib/tournamentApi'
+import { useEffect, useState } from 'react'
 import { VALID_INKS } from '../lib/inkColors'
+import { fetchEventDetails, getTournamentStructure } from '../lib/tournamentApi'
+import {
+  listMyTables, createTable, updateTable, deleteTable, adjustTable, subscribeToTable,
+  readSelectedTableId, storeSelectedTableId,
+} from '../lib/streamTables'
+import {
+  MAX_GAME_WINS, rowToState, swapSidesPatch, rphClockPatch,
+  startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock,
+} from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
-import { Input } from '../components/ui/Field'
+import { Input, Select } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
-import {
-  MAX_GAME_WINS, loadSaved, storeSaved, channelName, swapSides, syncRphClock,
-  startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, clampLore, clampGameWins,
-} from '../lib/streamOverlay'
 
-const HEARTBEAT_MS = 5000
 // RPH's live channel doesn't broadcast reliably (see the ravensburger-tournament-api
 // skill), so a linked clock is polled. The countdown stays exact between polls;
 // only an organizer's start/pause/reset lags by up to this long.
 const RPH_POLL_MS = 15000
 
-// Control panel for the gameplay stream overlay. Every change (and a periodic
-// heartbeat, so a Browser Source or player controller that loads late or
-// reconnects catches up) publishes the full state on a Supabase Realtime
-// Broadcast channel keyed by a random id in the OBS link, and is the only
-// publisher of state: the players' controller (/stream-overlay/control) sends
-// lore / game-win deltas that this panel applies and re-broadcasts. Nothing
-// is stored server-side.
+// Only the columns another writer (the players' controller) changes are taken
+// from broadcasts here; everything else on the panel is the owner's own typing,
+// and adopting the echo of a keystroke would clobber the next one.
+const SCORE_COLUMNS = ['p1_lore', 'p1_game_wins', 'p2_lore', 'p2_game_wins']
+
+// Control panel for the gameplay stream overlay. Each of the owner's tables
+// is a `stream_tables` row: edits here are column writes under RLS, the
+// row's trigger broadcasts every change to the OBS view and the players'
+// controller, and lore / game wins go through the same atomic increment the
+// controller uses. Nothing needs this tab open except the RPH clock poll.
 export function StreamOverlayPage() {
-  const [{ channelId, state }, setSaved] = useState(loadSaved)
-  const [connected, setConnected] = useState(false)
+  const [tables, setTables] = useState(null)
+  const [tableId, setTableId] = useState(readSelectedTableId)
+  const [error, setError] = useState(null)
   const [copied, setCopied] = useState(null)
   const [now, setNow] = useState(() => Date.now())
   const [minutes, setMinutes] = useState(50)
   const [rphError, setRphError] = useState(false)
-  const channelRef = useRef(null)
 
-  const setState = updater => setSaved(prev => ({ ...prev, state: updater(prev.state) }))
+  const row = tables?.find(t => t.id === tableId) ?? tables?.[0] ?? null
+  const patchLocal = (id, patch) => setTables(ts => ts.map(t => (t.id === id ? { ...t, ...patch } : t)))
 
-  useEffect(() => { storeSaved({ channelId, state }) }, [channelId, state])
+  // No auto-create on first visit: an effect can run twice (StrictMode did,
+  // and made two "Table 1"s), so the first table is an explicit click.
+  useEffect(() => {
+    listMyTables().then(setTables).catch(e => setError(e.message))
+  }, [])
 
   useEffect(() => {
-    const channel = supabase.channel(channelName(channelId))
-    channel
-      // The players' controller never publishes state, only deltas; applying
-      // them here (functional update, so none are lost) keeps this panel the
-      // single source of truth and the only publisher. Keep one panel open.
-      .on('broadcast', { event: 'adjust' }, ({ payload: { player, field, delta } }) => {
-        const clamp = field === 'lore' ? clampLore : clampGameWins
-        setState(s => ({
-          ...s,
-          players: s.players.map((p, j) => (j === player ? { ...p, [field]: clamp(p[field] + delta) } : p)),
-        }))
-      })
-      .subscribe(status => setConnected(status === 'SUBSCRIBED'))
-    channelRef.current = channel
-    return () => { channelRef.current = null; supabase.removeChannel(channel) }
-  }, [channelId])
+    if (row) storeSelectedTableId(row.id)
+  }, [row])
 
-  // Publish on every change, then keep re-sending as a heartbeat so a Browser
-  // Source that loads late or reconnects catches up without a request/reply.
+  const rowId = row?.id
   useEffect(() => {
-    if (!connected) return
-    const send = () => channelRef.current.send({ type: 'broadcast', event: 'state', payload: state })
-    send()
-    const id = setInterval(send, HEARTBEAT_MS)
-    return () => clearInterval(id)
-  }, [connected, state])
+    if (!rowId) return
+    return subscribeToTable(rowId, payload => {
+      patchLocal(rowId, Object.fromEntries(SCORE_COLUMNS.map(c => [c, payload[c]])))
+    })
+  }, [rowId])
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 250)
     return () => clearInterval(id)
   }, [])
 
-  const { rphEventId } = state
+  const rphEventId = row?.rph_event_id ?? null
   useEffect(() => {
-    if (!rphEventId) return
+    if (!rowId || !rphEventId) return
     let cancelled = false
     const poll = () => fetchEventDetails(rphEventId)
       .then(details => {
         if (cancelled) return
-        setState(s => syncRphClock(s, getTournamentStructure(details)))
+        const patch = rphClockPatch(getTournamentStructure(details))
+        if (patch) {
+          setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
+          updateTable(rowId, patch).catch(e => setError(e.message))
+        }
         setRphError(false)
       })
       .catch(() => { if (!cancelled) setRphError(true) })
     poll()
     const id = setInterval(poll, RPH_POLL_MS)
     return () => { cancelled = true; clearInterval(id) }
-  }, [rphEventId])
+  }, [rowId, rphEventId])
 
-  const links = {
-    overlay: `${window.location.origin}/stream-overlay/view?channel=${channelId}`,
-    control: `${window.location.origin}/stream-overlay/control?channel=${channelId}`,
+  // Optimistic local update, then the column write; a failed write surfaces.
+  function write(id, patch) {
+    patchLocal(id, patch)
+    updateTable(id, patch).catch(e => setError(e.message))
+  }
+  const setField = (key, value) => write(row.id, { [key]: value })
+  const setPlayer = (side, key, value) => write(row.id, { [`p${side}_${key}`]: value })
+  const adjust = (side, field, delta) => adjustTable(row.id, row.controller_key, side, field, delta).catch(e => setError(e.message))
+
+  async function addTable() {
+    try {
+      const t = await createTable(`Table ${tables.length + 1}`)
+      setTables(ts => [...ts, t])
+      setTableId(t.id)
+    } catch (e) { setError(e.message) }
+  }
+
+  async function removeTable() {
+    if (!window.confirm(`Delete "${row.name}"? Its OBS and controller links stop working.`)) return
+    try {
+      await deleteTable(row.id)
+      setTables(ts => ts.filter(t => t.id !== row.id))
+      setTableId(null)
+    } catch (e) { setError(e.message) }
+  }
+
+  const links = row && {
+    overlay: `${window.location.origin}/stream-overlay/view?table=${row.id}`,
+    control: `${window.location.origin}/stream-overlay/control?table=${row.id}&key=${row.controller_key}`,
   }
   async function copyLink(which) {
     try {
@@ -99,43 +123,64 @@ export function StreamOverlayPage() {
     } catch { /* clipboard unavailable — noop */ }
   }
 
-  const setField = (key, value) => setState(s => ({ ...s, [key]: value }))
-  const setPlayer = (i, patch) => setState(s => ({
-    ...s,
-    players: s.players.map((p, j) => (j === i ? { ...p, ...patch } : p)),
-  }))
-
-  const running = state.timerEndsAt !== null
+  const state = row && rowToState(row)
+  const running = state?.timerEndsAt !== null
 
   return (
     <div className="w-full px-6 py-8">
       <PageHeader
         title="Stream Overlay"
-        description="Run a gameplay stream overlay from here. Add the overlay link as one OBS Browser Source (1920×1080) with the gameplay cam and player cams behind it — the cam areas are transparent. Open the player controller link on a tablet at the table so the players keep their own lore and game score."
-        actions={
+        description="Run a gameplay stream overlay from here. Each table is one feature match: add its overlay link as one OBS Browser Source (1920×1080) with the gameplay cam and player cams behind it — the cam areas are transparent — and open its player controller link on a tablet at the table so the players keep their own lore and game score."
+        actions={row && (
           <>
-            <span className={`text-xs font-semibold uppercase tracking-widest ${connected ? 'text-emerald-600' : 'text-gray-400'}`}>
-              {connected ? 'Live' : 'Connecting…'}
-            </span>
             <Button onClick={() => copyLink('control')}>{copied === 'control' ? 'Link copied!' : 'Copy player controller link'}</Button>
             <Button variant="primary" onClick={() => copyLink('overlay')}>{copied === 'overlay' ? 'Link copied!' : 'Copy OBS overlay link'}</Button>
           </>
-        }
+        )}
       />
 
+      {error && <div className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
+
+      {tables && tables.length === 0 && (
+        <Card className="p-5 mb-6">
+          <p className="text-sm text-gray-500 mb-3">No tables yet. Each table is one feature match with its own OBS and controller links.</p>
+          <Button variant="primary" onClick={addTable}>Create your first table</Button>
+        </Card>
+      )}
+
+      {tables && tables.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-end gap-3">
+          <label className="block">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Table</span>
+            <Select value={row?.id ?? ''} onChange={e => setTableId(e.target.value)}>
+              {tables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
+          </label>
+          {row && (
+            <label className="block">
+              <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Name</span>
+              <Input value={row.name} onChange={e => setField('name', e.target.value)} />
+            </label>
+          )}
+          <Button size="sm" onClick={addTable}>New table</Button>
+          {row && <Button size="sm" variant="danger" onClick={removeTable}>Delete table</Button>}
+        </div>
+      )}
+
+      {row && (
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Event" className="p-5 space-y-3">
           <Labeled label="Event name (shown when there's no logo)">
-            <Input value={state.eventName} onChange={e => setField('eventName', e.target.value)} className="w-full" />
+            <Input value={row.event_name} onChange={e => setField('event_name', e.target.value)} className="w-full" />
           </Labeled>
           <Labeled label="Event logo URL">
-            <Input value={state.eventLogoUrl} onChange={e => setField('eventLogoUrl', e.target.value)} className="w-full" placeholder="https://…/logo.png" />
+            <Input value={row.event_logo_url} onChange={e => setField('event_logo_url', e.target.value)} className="w-full" placeholder="https://…/logo.png" />
           </Labeled>
           <Labeled label="Sponsor logo URL">
-            <Input value={state.sponsorLogoUrl} onChange={e => setField('sponsorLogoUrl', e.target.value)} className="w-full" placeholder="https://…/sponsor.png" />
+            <Input value={row.sponsor_logo_url} onChange={e => setField('sponsor_logo_url', e.target.value)} className="w-full" placeholder="https://…/sponsor.png" />
           </Labeled>
           <Labeled label="Round">
-            <Input value={state.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" />
+            <Input value={row.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" />
           </Labeled>
           <p className="text-xs text-gray-500">
             To load a feature match, open the pairing in Tournament Lookup's Matches tab and click “Send to Stream Overlay”.
@@ -149,34 +194,36 @@ export function StreamOverlayPage() {
               <span className={`text-xs font-semibold uppercase tracking-widest ${rphError ? 'text-red-600' : 'text-emerald-600'}`}>
                 {rphError ? 'RPH clock: last sync failed, retrying' : `Linked to RPH clock · event ${rphEventId}`}
               </span>
-              <Button size="sm" onClick={() => setField('rphEventId', null)}>Unlink</Button>
+              <Button size="sm" onClick={() => setField('rph_event_id', null)}>Unlink</Button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               {running
-                ? <Button variant="primary" onClick={() => setState(s => pauseTimer(s))}>Pause</Button>
-                : <Button variant="primary" onClick={() => setState(s => startTimer(s))}>Start</Button>}
+                ? <Button variant="primary" onClick={() => write(row.id, pauseTimer(state))}>Pause</Button>
+                : <Button variant="primary" onClick={() => write(row.id, startTimer(state))}>Start</Button>}
               <Input
                 type="number" min="0" value={minutes} onChange={e => setMinutes(Number(e.target.value))}
                 className="w-20" aria-label="Timer minutes"
               />
-              <Button onClick={() => setState(s => resetTimer(s, minutes))}>Reset to {minutes} min</Button>
+              <Button onClick={() => write(row.id, resetTimer(minutes))}>Reset to {minutes} min</Button>
             </div>
           )}
         </Card>
 
         <div className="lg:col-span-2 flex justify-end">
-          <Button size="sm" onClick={() => setState(swapSides)}>Swap sides</Button>
+          <Button size="sm" onClick={() => write(row.id, swapSidesPatch(row))}>Swap sides</Button>
         </div>
 
-        {state.players.map((player, i) => (
-          <Card key={i} title={`Player ${i + 1} (${i === 0 ? 'left' : 'right'})`} className="p-5 space-y-4">
+        {state.players.map((player, i) => {
+          const side = i + 1
+          return (
+          <Card key={side} title={`Player ${side} (${side === 1 ? 'left' : 'right'})`} className="p-5 space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <Labeled label="Name">
-                <Input value={player.name} onChange={e => setPlayer(i, { name: e.target.value })} className="w-full" />
+                <Input value={player.name} onChange={e => setPlayer(side, 'name', e.target.value)} className="w-full" />
               </Labeled>
               <Labeled label="Record">
-                <Input value={player.record} onChange={e => setPlayer(i, { record: e.target.value })} className="w-full" placeholder="5-0-2" />
+                <Input value={player.record} onChange={e => setPlayer(side, 'record', e.target.value)} className="w-full" placeholder="5-0-2" />
               </Labeled>
             </div>
 
@@ -187,7 +234,7 @@ export function StreamOverlayPage() {
                   return (
                     <button
                       key={ink} type="button" title={ink} aria-pressed={on}
-                      onClick={() => setPlayer(i, { inks: on ? player.inks.filter(x => x !== ink) : [...player.inks, ink] })}
+                      onClick={() => setPlayer(side, 'inks', on ? player.inks.filter(x => x !== ink) : [...player.inks, ink])}
                       className={`rounded border-2 p-1 transition-opacity ${on ? 'border-forge opacity-100' : 'border-transparent opacity-35 hover:opacity-70'}`}
                     >
                       <InkIcon color={ink} size={32} />
@@ -198,23 +245,21 @@ export function StreamOverlayPage() {
             </Labeled>
 
             <div className="grid grid-cols-2 gap-3">
-              <Counter
-                label="Lore" value={player.lore}
-                onChange={d => setPlayer(i, { lore: clampLore(player.lore + d) })}
-              />
-              <Counter
-                label={`Game wins (of ${MAX_GAME_WINS})`} value={player.gameWins}
-                onChange={d => setPlayer(i, { gameWins: clampGameWins(player.gameWins + d) })}
-              />
+              <Counter label="Lore" value={player.lore} onChange={d => adjust(side, 'lore', d)} />
+              <Counter label={`Game wins (of ${MAX_GAME_WINS})`} value={player.gameWins} onChange={d => adjust(side, 'game_wins', d)} />
             </div>
           </Card>
-        ))}
+          )
+        })}
       </div>
+      )}
 
-      <div className="mt-6 text-sm text-gray-500 space-y-1">
-        <p>Overlay link: <code className="text-xs break-all">{links.overlay}</code></p>
-        <p>Player controller link: <code className="text-xs break-all">{links.control}</code></p>
-      </div>
+      {links && (
+        <div className="mt-6 text-sm text-gray-500 space-y-1">
+          <p>Overlay link: <code className="text-xs break-all">{links.overlay}</code></p>
+          <p>Player controller link: <code className="text-xs break-all">{links.control}</code></p>
+        </div>
+      )}
     </div>
   )
 }

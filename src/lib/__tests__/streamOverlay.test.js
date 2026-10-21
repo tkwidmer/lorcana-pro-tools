@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16',
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16',
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
   p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0,
   p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1,
@@ -35,6 +35,15 @@ describe('streamOverlay row mapping', () => {
     expect(breakHeadline(decided)).toEqual({ label: 'Final', score: '1-2', winner: 1 })
     const midway = rowToState(row({ p1_game_wins: 1, p2_game_wins: 0 })).players
     expect(breakHeadline(midway)).toEqual({ label: 'Match in progress', score: '1-0', winner: null })
+  })
+
+  it('derives the text color from the fill, and carries the theme on the state', () => {
+    expect(themeTextColor(DEFAULT_THEME.fill)).toBe('#f2f1ee')
+    expect(themeTextColor('#b00020')).toBe('#f2f1ee')
+    expect(themeTextColor('#ffffff')).toBe('#17171a')
+    expect(themeTextColor('#f5e6b3')).toBe('#17171a')
+    expect(rowToState(row({ theme_fill: '#ffffff', theme_accent: '#b00020' })).theme)
+      .toEqual({ fill: '#ffffff', accent: '#b00020', text: '#17171a' })
   })
 
   it('swaps every per-side column', () => {

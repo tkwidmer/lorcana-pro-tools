@@ -4,10 +4,16 @@ import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline,
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor,
 } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
+
+// The event's theme as CSS variables on the frame: every fill, border, lore
+// number, pip and ribbon reads these, so one pair of colors restyles both the
+// live overlay and the break screen.
+const themeVars = theme => ({ '--fill': theme.fill, '--accent': theme.accent, '--on-fill': theme.text })
+const FALLBACK_THEME = { ...DEFAULT_THEME, text: themeTextColor(DEFAULT_THEME.fill) }
 // Square cutout: tall enough for a portrait player cam, and the operator
 // positions the camera source behind it in OBS.
 const CAM_HEIGHT = SIDE_WIDTH
@@ -47,11 +53,11 @@ export function StreamOverlayViewPage() {
 
   return (
     <div
-      className="relative overflow-hidden font-display text-on-ink select-none"
-      style={{ width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT }}
+      className="relative overflow-hidden font-display text-(--on-fill) select-none"
+      style={{ width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT, ...themeVars(state?.theme ?? FALLBACK_THEME) }}
     >
       {!state && (
-        <div className="absolute inset-x-0 top-1/2 text-center text-2xl uppercase tracking-widest text-on-ink/70">
+        <div className="absolute inset-x-0 top-1/2 text-center text-2xl uppercase tracking-widest text-(--on-fill)/70">
           {error ?? 'Loading the stream table…'}
         </div>
       )}
@@ -76,20 +82,17 @@ export function StreamOverlayViewPage() {
 function SideColumn({ player, side, isWinner }) {
   return (
     <div
-      className={`absolute top-0 bottom-0 flex flex-col ${side === 'left' ? 'left-0 border-r-4' : 'right-0 border-l-4'} border-forge`}
+      className={`absolute top-0 bottom-0 flex flex-col ${side === 'left' ? 'left-0 border-r-4' : 'right-0 border-l-4'} border-(--accent)`}
       style={{ width: SIDE_WIDTH }}
     >
       {/* Transparent square cutout: place this player's camera behind it in OBS. The
           dark fill starts below it, so nothing paints over the cam. */}
-      <div className="w-full border-b-4 border-forge" style={{ height: CAM_HEIGHT }} />
+      <div className="w-full border-b-4 border-(--accent)" style={{ height: CAM_HEIGHT }} />
 
-      <div className="flex-1 w-full bg-ink flex flex-col items-center">
+      <div className="flex-1 w-full bg-(--fill) flex flex-col items-center">
       <div className="mt-6 px-4 w-full text-center">
         <div className="text-4xl uppercase tracking-wide leading-tight truncate">{player.name || ' '}</div>
-        <div className="mt-1 text-2xl text-on-ink/70 tracking-widest">{player.record || ' '}</div>
-        {isWinner && (
-          <div className="mt-3 inline-block px-5 py-1 bg-forge text-on-forge text-xl uppercase tracking-[0.35em]">Winner</div>
-        )}
+        <div className="mt-1 text-2xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
       </div>
 
       <div className="mt-5 flex gap-3">
@@ -101,16 +104,24 @@ function SideColumn({ player, side, isWinner }) {
           <svg key={i} viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
             <path
               d="M12 2l10 10-10 10L2 12z"
-              className={i < player.gameWins ? 'fill-forge stroke-forge' : 'fill-transparent stroke-on-ink/60'}
+              className={i < player.gameWins ? 'fill-(--accent) stroke-(--accent)' : 'fill-transparent stroke-(--on-fill)/60'}
               strokeWidth="2"
             />
           </svg>
         ))}
       </div>
 
-      <div className="mt-auto text-center">
-        <div className="text-base uppercase tracking-[0.3em] text-on-ink/60">Lore</div>
-        <div className="text-[9rem] leading-none text-forge tabular-nums">{player.lore}</div>
+      {/* Fixed-height slot just above the lore, so the lore block never moves
+          and both columns stay aligned whether or not there's a winner. */}
+      <div className="mt-auto h-10 flex items-center justify-center">
+        {isWinner && (
+          <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>
+        )}
+      </div>
+
+      <div className="mt-2 text-center">
+        <div className="text-base uppercase tracking-[0.3em] text-(--on-fill)/60">Lore</div>
+        <div className="text-[9rem] leading-none text-(--accent) tabular-nums">{player.lore}</div>
       </div>
 
       {/* Brand lockup, bottom-right like the reference streams; mirrors Nav's. */}
@@ -131,7 +142,7 @@ function TopBanner({ state, now, winner }) {
   const remaining = timerRemainingMs(state, now)
   const result = winner === null ? null : `${state.players[winner].name} ${state.players[winner].gameWins}-${state.players[1 - winner].gameWins}`
   return (
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex items-center gap-8 px-8 py-3 bg-ink border-x-4 border-b-4 border-forge rounded-b-lg">
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex items-center gap-8 px-8 py-3 bg-(--fill) border-x-4 border-b-4 border-(--accent) rounded-b-lg">
       {state.eventLogoUrl
         ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-16 object-contain" />
         : <div className="text-3xl uppercase tracking-wide">{state.eventName || ' '}</div>}
@@ -151,27 +162,27 @@ function BreakScreen({ state, now }) {
   const remaining = timerRemainingMs(state, now)
   return (
     <div
-      className="relative overflow-hidden bg-ink font-display text-on-ink select-none flex flex-col items-center justify-center gap-10"
-      style={{ width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT }}
+      className="relative overflow-hidden bg-(--fill) font-display text-(--on-fill) select-none flex flex-col items-center justify-center gap-10"
+      style={{ width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT, ...themeVars(state.theme) }}
     >
       {state.eventLogoUrl
         ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-48 object-contain" />
         : <div className="text-7xl uppercase tracking-wide">{state.eventName || ' '}</div>}
 
       <div className="text-center">
-        <div className="text-2xl uppercase tracking-[0.4em] text-on-ink/60">{headline.label}</div>
-        {state.round && <div className="mt-1 text-3xl uppercase tracking-wide text-forge">{state.round}</div>}
+        <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">{headline.label}</div>
+        {state.round && <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">{state.round}</div>}
       </div>
 
       <div className="flex items-center gap-16">
         <BreakPlayer player={state.players[0]} isWinner={headline.winner === 0} />
-        <div className={`text-5xl tabular-nums ${headline.score ? 'text-on-ink' : 'text-on-ink/40'}`}>{headline.score ?? 'vs'}</div>
+        <div className={`text-5xl tabular-nums ${headline.score ? 'text-(--on-fill)' : 'text-(--on-fill)/40'}`}>{headline.score ?? 'vs'}</div>
         <BreakPlayer player={state.players[1]} isWinner={headline.winner === 1} />
       </div>
 
       {remaining > 0 && (
         <div className="text-center">
-          <div className="text-2xl uppercase tracking-[0.4em] text-on-ink/60">Time left in round</div>
+          <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">Time left in round</div>
           <div className="text-7xl leading-tight tabular-nums">{formatClock(remaining)}</div>
         </div>
       )}
@@ -190,9 +201,13 @@ function BreakScreen({ state, now }) {
 function BreakPlayer({ player, isWinner }) {
   return (
     <div className="w-[560px] text-center">
-      <div className={`text-6xl uppercase tracking-wide leading-tight truncate ${isWinner ? 'text-forge' : ''}`}>{player.name || ' '}</div>
-      {isWinner && <div className="mt-2 inline-block px-5 py-1 bg-forge text-on-forge text-xl uppercase tracking-[0.35em]">Winner</div>}
-      <div className="mt-2 text-3xl text-on-ink/70 tracking-widest">{player.record || ' '}</div>
+      {/* Fixed-height slot above the name, so nothing moves and both sides stay
+          aligned whether or not there's a winner. */}
+      <div className="mb-2 h-10 flex items-center justify-center">
+        {isWinner && <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>}
+      </div>
+      <div className={`text-6xl uppercase tracking-wide leading-tight truncate ${isWinner ? 'text-(--accent)' : ''}`}>{player.name || ' '}</div>
+      <div className="mt-2 text-3xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
       <div className="mt-5 flex justify-center gap-4">
         {player.inks.map(ink => <InkIcon key={ink} color={ink} size={72} />)}
       </div>
@@ -203,7 +218,7 @@ function BreakPlayer({ player, isWinner }) {
 function Stat({ label, value, warn = false }) {
   return (
     <div className="text-center">
-      <div className="text-sm uppercase tracking-[0.3em] text-on-ink/60">{label}</div>
+      <div className="text-sm uppercase tracking-[0.3em] text-(--on-fill)/60">{label}</div>
       <div className={`text-4xl leading-tight tabular-nums ${warn ? 'text-red-400' : ''}`}>{value}</div>
     </div>
   )

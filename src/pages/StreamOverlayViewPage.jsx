@@ -67,12 +67,14 @@ export function StreamOverlayViewPage() {
 function SideColumn({ player, side }) {
   return (
     <div
-      className={`absolute top-0 bottom-0 bg-ink flex flex-col items-center ${side === 'left' ? 'left-0 border-r-4' : 'right-0 border-l-4'} border-forge`}
+      className={`absolute top-0 bottom-0 flex flex-col ${side === 'left' ? 'left-0 border-r-4' : 'right-0 border-l-4'} border-forge`}
       style={{ width: SIDE_WIDTH }}
     >
-      {/* Transparent cutout: place this player's camera behind it in OBS. */}
-      <div className="w-full border-b-4 border-forge" style={{ height: CAM_HEIGHT, background: 'transparent' }} />
+      {/* Transparent cutout: place this player's camera behind it in OBS. The
+          dark fill starts below it, so nothing paints over the cam. */}
+      <div className="w-full border-b-4 border-forge" style={{ height: CAM_HEIGHT }} />
 
+      <div className="flex-1 w-full bg-ink flex flex-col items-center">
       <div className="mt-6 px-4 w-full text-center">
         <div className="text-4xl uppercase tracking-wide leading-tight truncate">{player.name || ' '}</div>
         <div className="mt-1 text-2xl text-on-ink/70 tracking-widest">{player.record || ' '}</div>
@@ -97,6 +99,7 @@ function SideColumn({ player, side }) {
       <div className="mt-auto mb-10 text-center">
         <div className="text-base uppercase tracking-[0.3em] text-on-ink/60">Lore</div>
         <div className="text-[9rem] leading-none text-forge tabular-nums">{player.lore}</div>
+      </div>
       </div>
     </div>
   )

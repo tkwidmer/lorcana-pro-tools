@@ -17,9 +17,28 @@ Read CLAUDE.md's "[Format Coconut] Deck Builder", "Coconut Decklist Text" and
 ## What you need from the user
 
 The card art. Anything works — an attached image, a zip, a link, or a
-print-ready PDF sheet. If they give a Google Drive folder link, the Drive
-connector may only surface some files; ask for a direct attachment if the art
-isn't there.
+print-ready PDF sheet.
+
+The canonical source is Nathan Trippe's Drive folder
+(`1HrVH8dCnaw2jCefvuVKn12Jf6wcy9SSe`). Prefer its print sheet,
+`coconut-lorcana-long-edge.pdf`: it embeds each front as a 750x1050 JPEG
+(extract with the PyMuPDF snippet below and copy byte-for-byte). Its
+**"Individual Coconuts"** subfolder (`1a5DEB1G-gmbDGzpQqJfNF01j31x94cMP`) has
+one 640x896 PNG per card, named by duels.ink number (`01-scar.png` …), and
+gets new cards before the sheet does — use it only for a card not yet on the
+sheet. Same revision either way; the sheet's 750 is an upscale of ~640
+masters, so there's no real detail to gain beyond it. The Drive connector
+can see these folders but can't list a link-shared folder's children; Drive's
+public folder view can, and files download without auth:
+
+```bash
+curl -sSL "https://drive.google.com/embeddedfolderview?id=<folder id>" -o list.html
+# file ids + names: 'file/d/<id>' ... 'flip-entry-title"><name>'
+curl -sSL "https://drive.usercontent.google.com/download?id=<file id>&export=download&confirm=t" -o <name>
+```
+
+When a wave ships, diff the existing faces against this folder too — it's
+where text revisions land (see step 4).
 
 If the art arrives as a **print-ready PDF** of the whole set, extract the
 fronts with PyMuPDF rather than screenshotting:
@@ -94,8 +113,10 @@ bg.paste(im, (0, 0), im)
 bg.save(f'public/coconut-cards/{id}.jpg', 'JPEG', quality=90, optimize=True, progressive=True)
 ```
 
-750x1050 is exactly 300 DPI at 2.5"x3.5" and is what the existing faces use;
-640x896 (~256 DPI) is acceptable. Never upscale to hit a number. If the art is
+Every face is 750x1050 (300 DPI at 2.5"x3.5"). Take it from the print sheet
+when the card is there; otherwise Lanczos-upscale the 640x896 PNG to 750x1050
+(`bg.resize((750, 1050), Image.LANCZOS)` before saving) — that matches how the
+sheet's own faces were produced. Swap in the sheet's copy once it ships. If the art is
 already JPEG at the right size, copy it byte-for-byte rather than re-encoding.
 
 Reject a face stamped **"FOR BETA TEST ONLY"** or obviously greyed out — that's

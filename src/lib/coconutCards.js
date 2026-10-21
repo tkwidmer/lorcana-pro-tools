@@ -61,7 +61,7 @@ export const COCONUT_CARDS = [
     baseFullName: 'Snow White - Merry as the Morning',
     inks: ['amethyst'],
     duelsId: 'coconut-009',
-    ability: 'Once per game during your turn, you may reveal your hand. If you have a Snow White and 7 or more Seven Dwarfs character cards with different names among the cards in your hand, in your discard, and in play, your characters get +2 ◇ for the rest of the game.',
+    ability: 'Once per game during your turn, you may reveal your hand. If you have a Snow White and 7 or more Seven Dwarfs character cards with different names among the cards in your hand, in your discard, and in play, this Coconut gains "Your characters get +2 ◇."',
   },
   {
     id: 'winnie-the-pooh-hunny-wizard',
@@ -151,7 +151,7 @@ export const COCONUT_CARDS = [
     baseFullName: 'Nick Wilde - Wily Fox',
     inks: ['sapphire'],
     duelsId: 'coconut-008',
-    ability: 'Once during your turn, you may banish 4 of your items. If you do, gain 4 lore.',
+    ability: 'You can have up to 4 copies of an item card named Pawpsicle in your deck. Once during your turn, you may banish 4 of your items. If you do, gain 4 lore.',
     extraCopy: { name: 'Pawpsicle', maxCopies: 4 },
   },
   {
@@ -228,7 +228,7 @@ export const COCONUT_CARDS = [
     baseFullName: 'The Madrigal Family - Every Generation',
     inks: ['amber', 'sapphire'],
     duelsId: 'coconut-022',
-    ability: "During your turn, whenever you remove 1 or more damage from one of your characters, you may ready them. They can't quest or challenge for the rest of the turn.",
+    ability: "During your turn, whenever you remove 1 or more damage from one of your characters, you may ready them. If you do, they can't quest or challenge for the rest of this turn.",
   },
   {
     id: 'the-vine-towering-stalk',
@@ -246,7 +246,7 @@ export const COCONUT_CARDS = [
     baseFullName: 'Woody & Buzz Lightyear - Best Buddies',
     inks: ['amber', 'emerald'],
     duelsId: 'coconut-019',
-    ability: 'Once during your turn, you may pay 1 ink less for the next Toy character you play. If you do and you have a character named Woody and a character named Buzz Lightyear in play, draw a card.',
+    ability: 'Once during your turn, you may pay 1 ink less for the next Toy character you play this turn. If you do and you have a character named Woody and a character named Buzz Lightyear in play, draw a card.',
   },
   {
     id: 'pete-bad-guy',

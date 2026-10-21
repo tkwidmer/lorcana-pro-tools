@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { saveFeatureMatch, timerFromRph } from '../lib/streamOverlay'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import { PlayerMatchHistory } from './PlayerMatchHistory'
 
@@ -69,8 +71,24 @@ function PlayerSummaryCard({ label, history, loading, error }) {
 // interesting enough to show.
 const MIN_RIVALRY_MEETINGS = 2
 
-export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, currentEventId }) {
+export function PairingHistoryPanel({ pairing, onClose, allMatches, allStandings, structure, currentEventId }) {
   const { p1, p2 } = pairing
+  const navigate = useNavigate()
+
+  // Hand this pairing to the Stream Overlay control panel: names and current
+  // records from the loaded standings, the event name, the current round, and
+  // RPH's round clock as it stands right now (a one-shot copy, not a feed).
+  function sendToStreamOverlay() {
+    const recordOf = (id) => allStandings.find((e) => String(e.player.id) === String(id))?.record ?? ''
+    saveFeatureMatch({
+      eventName: structure.eventName ?? '',
+      round: structure.isElimination && structure.eliminationPhaseName ? structure.eliminationPhaseName : `Round ${structure.currentRoundNumber}`,
+      players: [{ name: p1.name, record: recordOf(p1.id) }, { name: p2.name, record: recordOf(p2.id) }],
+      timer: timerFromRph(structure),
+      rphEventId: currentEventId,
+    })
+    navigate('/stream-overlay')
+  }
   const [historyA, setHistoryA] = useState(null)
   const [historyB, setHistoryB] = useState(null)
   const [headToHead, setHeadToHead] = useState(null)
@@ -123,7 +141,16 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
           <h2 className="text-sm font-semibold text-gray-900">{p1.name} vs {p2.name}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={sendToStreamOverlay}
+              className="text-xs font-medium text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              Send to Stream Overlay
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+          </div>
         </div>
 
         <div className="overflow-y-auto p-4 space-y-4">

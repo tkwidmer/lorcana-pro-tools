@@ -1478,6 +1478,7 @@ export function TournamentLookupPage() {
           pairing={selectedPairing}
           onClose={() => setSelectedPairing(null)}
           allMatches={allMatches}
+          allStandings={allStandings}
           structure={structure}
           currentEventId={currentEventId}
         />

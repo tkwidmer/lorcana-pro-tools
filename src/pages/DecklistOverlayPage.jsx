@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useCards } from '../hooks/useCards'
+import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { parseDeckList } from '../lib/parseDeckList'
 import { buildCardIndex, toSimpleName } from '../lib/cardAnalysis'
 import { BUCKET_ORDER, BUCKET_LABEL, decodeDeckParam, buildBuckets } from '../lib/decklistShared'
@@ -18,20 +19,7 @@ export function DecklistOverlayPage() {
   const [searchParams] = useSearchParams()
   const deckText = decodeDeckParam(searchParams.get('deck') ?? '') ?? ''
 
-  // OBS composites a Browser Source's page background as-is, so this view
-  // needs a genuinely transparent <html>/<body> rather than the app's normal
-  // light/dark surface color.
-  useEffect(() => {
-    const html = document.documentElement
-    const prevHtmlBg = html.style.background
-    const prevBodyBg = document.body.style.background
-    html.style.background = 'transparent'
-    document.body.style.background = 'transparent'
-    return () => {
-      html.style.background = prevHtmlBg
-      document.body.style.background = prevBodyBg
-    }
-  }, [])
+  useTransparentBackground()
 
   const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
   const parsed = useMemo(() => parseDeckList(deckText), [deckText])

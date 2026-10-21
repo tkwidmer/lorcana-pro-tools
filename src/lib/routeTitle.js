@@ -23,6 +23,7 @@ const TITLES = {
   '/library': 'Scouting Library',
   '/deck-comparison': 'Deck Comparison',
   '/decklist-inspector': 'Decklist Inspector',
+  '/stream-overlay': 'Stream Overlay',
   '/settings': 'Settings',
   '/match-history': 'Match History',
   '/gamelog': 'Gamelog Viewer',

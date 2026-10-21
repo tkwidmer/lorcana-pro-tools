@@ -101,6 +101,9 @@ Defined in `src/App.jsx`:
 | `/deck-comparison` | `DeckComparisonPage.jsx` | Paste two decklists to highlight differences |
 | `/decklist-inspector` | `DecklistInspectorPage.jsx` | Content-creator decklist view — browse by type/cost, pin up to 4 cards' full art beside stat charts, copy an OBS overlay link |
 | `/decklist-inspector/overlay` | `DecklistOverlayPage.jsx` | Chrome-less, read-only render of a decklist for an OBS Browser Source. Deck comes entirely from the `?deck=` param (`decklistShared.js` `encodeDeckParam`/`decodeDeckParam`). **Deliberately not supporter-gated** — a Browser Source has no Supabase session, and the view exposes only what's in the link. `Nav`/`Footer` are hidden here |
+| `/stream-overlay` | `StreamOverlayPage.jsx` | Control panel for a tournament gameplay stream overlay — event/sponsor logos, round, round timer, and per player name, record, deck inks, game-win pips and lore. Publishes state over a Supabase Broadcast channel (see "Stream Overlay" below) |
+| `/stream-overlay/view` | `StreamOverlayViewPage.jsx` | The single OBS Browser Source for that overlay: a 1920×1080 frame, transparent where the gameplay cam and player cams go. State comes entirely from the `?channel=` Broadcast channel. **Deliberately not supporter-gated** for the same reason as the decklist overlay. `Nav`/`Footer` are hidden here |
+| `/stream-overlay/control` | `StreamOverlayControlPage.jsx` | The players' controller for that overlay — a tablet at the table with lore and game-win taps per player. Sends `adjust` deltas on the same `?channel=`; shows the panel's state. Unguarded, `Nav`/`Footer` hidden |
 | `/settings` | `SettingsPage.jsx` | Auth management and preferences — including the Appearance (dark mode) toggle |
 | `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
 | `/gamelog` | `GamelogViewerPage.jsx` | Bare single-gamelog view for `?id=<gamelog id>` (fetched via `fetchGamelogBuffer`, needs a duels.ink token) — opening hand plus per-player played/inked/discarded/destroyed, and a raw structure inspector. No in-app links point here |
@@ -118,7 +121,7 @@ Defined in `src/App.jsx`:
 
 **Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
 
-**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/tournament-lookup`, `/meta-synthesis`, `/decklist-inspector`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
+**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/tournament-lookup`, `/meta-synthesis`, `/decklist-inspector`, `/stream-overlay`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
 
 All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname`) so a render-time throw in one tool shows a fallback instead of white-screening the SPA; `Nav` sits outside the boundary and stays usable.
 
@@ -138,7 +141,7 @@ In `src/components/`:
 
 | File | Purpose |
 |---|---|
-| `Nav.jsx` | Ink-black top bar — one dropdown per `siteSections.js` section (tools + the newest blog post), Blog link, ⌘K tool search, settings link, username dropdown (logout, plus an Admin link for admins); below `xl` the sections collapse into a hamburger menu. Hidden on `/lore-tracker` and `/decklist-inspector/overlay` |
+| `Nav.jsx` | Ink-black top bar — one dropdown per `siteSections.js` section (tools + the newest blog post), Blog link, ⌘K tool search, settings link, username dropdown (logout, plus an Admin link for admins); below `xl` the sections collapse into a hamburger menu. Hidden on `/lore-tracker`, `/decklist-inspector/overlay` and every `/stream-overlay/*` sub-route |
 | `ToolSearch.jsx` | The ⌘K / Ctrl+K quick switcher over the tool catalog, opened from `Nav` |
 | `ToolIcon.jsx` | Renders a catalog tool's glyph from `lib/toolIcons.js` by the tool's `icon` name |
 | `ui/Button.jsx`, `ui/Card.jsx`, `ui/PageHeader.jsx`, `ui/Field.jsx` (`Input`/`Textarea`/`Select`), `ui/Tabs.jsx` (`Tabs`/`Tab`), `ui/Badge.jsx` | Shared UI building blocks — see "Design System" below |
@@ -153,7 +156,7 @@ In `src/components/`:
 | `PlayerMatchHistory.jsx` | Round-by-round match history table for one player within a single loaded tournament event (opponent, result, score, user-annotated opp colors/play-draw, share card). Used by `TournamentLookupPage`'s player detail view and reused by `PairingHistoryPanel` for either side of a clicked pairing |
 | `SessionInsights.jsx` | Match History's collapsible "Sessions & Tilt" card: session summary, a stop-loss callout, and win-rate tables by game number in session, after a losing streak, time of day, and day of week. Renders `sessionStats.js` over the page's `filteredGames` |
 | `PostByline.jsx` | "By <author> · <date>" line for blog posts, author linked to their profile (`authorUrl`). Used by `BlogIndexPage` and `BlogPostPage` |
-| `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below |
+| `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below. Its header's "Send to Stream Overlay" hands the pairing (names, records from `allStandings`, event name, round) to the Stream Overlay control panel via `saveFeatureMatch()` |
 
 | `InkIcons.jsx` | Shared ink icons — `InkIcon` (one ink) and `InkIcons` (a list, order-preserving and de-duplicated via `resolveInkName()`). Some pages alias it locally (`ColorPairIcons`, `InkImg`); `MatchHistoryPage` wraps it in a small local `InkIcons` with its own sizing/fallback |
 | `StatCard.jsx` | Small label/value stat card (compact and large `size` variants) |
@@ -176,6 +179,7 @@ In `src/hooks/`:
 | `useCards.js` | `{ cards, loading, error }` | Fetches card data from `/api/cards`, falls back to IndexedDB cache via `cardsCache.js` |
 | `useTournamentLiveUpdates.js` | Pusher connection status | Subscribes to RPH live updates for an event (via `tournamentLive.js`) and calls a debounced `onMessage` so `TournamentLookupPage` silently refetches |
 | `usePairingBadges.js` | badge cache + `ensureBadges`/`hasPedigree`/`hasRivalry` | Shared cache for Tournament Lookup's "pedigree" (made top cut at a Challenge-tier event) and "rivalry" (met before) badges from `/api/tournament-history`, batched to the server's 500-per-request cap |
+| `useTransparentBackground.js` | — | Makes `<html>`/`<body>` transparent while mounted, so OBS composites a Browser Source view over the scene; used by both overlay views |
 | `useTheme.js` | `{ theme, resolvedTheme, setTheme }` | Reads the dark-mode preference from `ThemeProvider` — `theme` is the stored choice (`light`/`dark`/`system`), `resolvedTheme` is what's applied |
 
 ### Shared Libraries
@@ -216,6 +220,7 @@ In `src/lib/`:
 | `forgeDecks.js` | `parseForgeDeck()` / `forgeDecksFor(folderId)` — The Forge's own recommended lists from `content/forge-decks/` (see "Stock Deck Lists" below) |
 | `storeTiers.js` | RPH store-tier rules for Store Lookup (see below) |
 | `decklistShared.js` | Decklist Inspector/overlay helpers — deck URL param encoding, ink fills, type/cost bucketing |
+| `streamOverlay.js` | Stream Overlay state shared by the control panel and the OBS view — `defaultState()`, the wall-time round timer (`startTimer`/`pauseTimer`/`resetTimer`/`timerRemainingMs`/`formatClock`), lore and game-win clamps, Broadcast `channelName()`/`newChannelId()`, `swapSides()`, and `applyFeatureMatch()`/`saveFeatureMatch()` for the Tournament Lookup hand-off (see "Stream Overlay" below) |
 | `rules/` | Rules browser — `registry.js` (document list), `index.js` (accessors), `diff.js` (word diff), `content/<doc>/<version>.js` (see "Rules Browser" below) |
 | `cardImpact.js` | `computeCardImpact()` — per-card "wins above replacement" (WAR) for a deck's games; `computeCardImpactTrend()` — the same logic bucketed by calendar month, powering `CardImpactTrendView`'s WAR-over-time chart |
 | `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
@@ -323,6 +328,7 @@ A prior Patreon OAuth integration (`api/patreon.ts` + friends) was fully removed
 | IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `AnalyticsPage` |
 | localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
 | localStorage `lorcana_theme` | — | Dark-mode preference: `light` \| `dark` \| `system` (see Dark Mode) |
+| localStorage `lorcana_stream_overlay` | — | Stream Overlay control-panel state plus its Broadcast channel id, so the OBS link survives a reload (see "Stream Overlay") |
 | localStorage (various) | — | Form state for `DrawOddsPage`, filter state, lore tracker (`lorcana_lore_tracker`), etc. |
 | `chrome.storage.local` | `lorcana_active_games` | Active game states captured by the Chrome extension (2-hour TTL) |
 | Supabase `auth` | session | Google OAuth user session |
@@ -494,6 +500,20 @@ Adding a file is all it takes to publish; there's no registry to update. An opti
 - This is independent of `prerender.js` on purpose: that step needs Chromium, and production evidence (every route, including `/proxy/index.html`, returns the identical bare shell) shows it currently emits nothing on Vercel.
 
 Client-side, `routeTitle()`/`routeDescription()` resolve a `/blog/<slug>` path to its post's title/description so in-app navigation updates the tab title too. Post bodies are styled by the `.blog-prose` rules in `src/index.css`, which use palette variables so dark mode works without `dark:` variants.
+
+### Stream Overlay
+
+A tournament gameplay overlay for OBS, in the same control-page + chrome-less-view shape as the Decklist Inspector, plus a players' controller. Three routes share one Broadcast channel:
+
+- `StreamOverlayPage` (`/stream-overlay`, supporter-gated, Content Creators) is the control panel and the **only publisher of state**: event logo/name, sponsor logo, round, round timer, Swap sides, and per player name, record, inks, game-win pips, lore. "Copy OBS overlay link" / "Copy player controller link" give the two other URLs.
+- `StreamOverlayViewPage` (`/stream-overlay/view?channel=<id>`, unguarded) is the one Browser Source: a fixed 1920×1080 frame with opaque ink-black side columns (a transparent **square** cutout at the top of each — the operator positions that player's camera behind it in OBS — then name, record, ink icons, game-win pips, lore) and a top banner (event logo or name, round, timer); everything else is transparent so the gameplay cam sits behind it. An optional sponsor logo sits bottom-center.
+- `StreamOverlayControlPage` (`/stream-overlay/control?channel=<id>`, unguarded) is the players' controller for a tablet at the table: one half per player with big lore ±1 and game-win ±1 taps. It renders the panel's state and **never publishes state** — each tap sends an `adjust` delta `{ player, field, delta }` that the panel applies with a functional update and re-broadcasts. That one-authority design is deliberate: an earlier peer-to-peer version (every client publishing full state) lost taps, because the panel echoed each adopted state back and the tablet overwrote its newer local count with a stale echo. Consequence: the controller needs the panel open (it shows "Waiting for the control panel…" until the heartbeat arrives), and only one panel should be open per channel.
+
+State never touches a table. The panel publishes the whole state object on a **Supabase Realtime Broadcast** channel (`stream-overlay:<id>`, anon key, no auth — verified to work on this project with two plain clients) on every change and again every 5 s as a heartbeat, so a view or controller that loads late or reconnects catches up without any request/reply. The channel id is random, minted once and kept in localStorage with the state (`lorcana_stream_overlay`, `loadSaved()`/`storeSaved()`), because the OBS link embeds it. The round timer is a wall-time target (`timerEndsAt`; paused = `null` + `timerRemainingMs`), so the view ticks on its own and the panel can be closed mid-round. Logos are plain image URLs typed into the panel; nothing is uploaded.
+
+**Feature match from RPH:** rather than a second event loader, Tournament Lookup's pairing modal (`PairingHistoryPanel`) has a "Send to Stream Overlay" button. It writes the two names, their current records (from the loaded standings), the event name, the current round (elimination phase name when in top cut, else "Round N") and RPH's round clock (`timerFromRph()`: the event's `timer_end_datetime` becomes the wall-time target when `timer_is_running`, otherwise end minus `timer_paused_at_datetime` is the paused remainder; no clock set leaves the timer alone) into the saved panel state through `saveFeatureMatch()`, and records the event id as `rphEventId`. **While `rphEventId` is set the clock is linked:** the panel polls `fetchEventDetails` every 15 s and applies `syncRphClock()`, and the Timer card shows "Linked to RPH clock" with an Unlink button in place of Start / Pause / Reset, so there's one source of truth for the clock. Polling, not push, because RPH's Pusher channel was never observed to broadcast (see the `ravensburger-tournament-api` skill); the countdown stays exact between polls since it's a wall-time target, only an organizer's start/pause/reset lags by up to one interval. Unlink (or a send from a different event) is the only way the manual controls come back. Polling stops with the panel tab, like the heartbeat — the same localStorage hand-off `DeckListCard` uses for Deck Insights — resets lore and game wins, keeps inks (RPH doesn't know decks), and navigates to `/stream-overlay`. "Swap sides" there mirrors which side of the table each player sits on.
+
+Deliberately not included (cheap to add): the featured-card art some broadcast overlays show, and any layout other than 1920×1080.
 
 ### Ink Color Icons
 

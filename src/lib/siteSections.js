@@ -146,6 +146,12 @@ export const SECTIONS = [
         icon: 'video',
         description: 'Paste a decklist and browse it by type and cost, then pin up to 4 cards to show their full art alongside deck stat charts — built for making Lorcana videos.',
       },
+      {
+        path: '/stream-overlay',
+        name: 'Stream Overlay',
+        icon: 'broadcast',
+        description: 'Run a tournament gameplay overlay for OBS — player names, deck inks, records, game wins, lore, round and timer, event and sponsor logos — as one browser source with transparent camera areas.',
+      },
     ],
   },
 ]

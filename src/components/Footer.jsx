@@ -9,7 +9,7 @@ const METAFY_URL = 'https://metafy.gg/@inkbornforge'
 export function Footer() {
   const { pathname } = useLocation()
   if (pathname === '/lore-tracker') return null
-  if (pathname === '/decklist-inspector/overlay') return null
+  if (pathname === '/decklist-inspector/overlay' || pathname.startsWith('/stream-overlay/')) return null
 
   return (
     <footer className="no-print border-t-2 border-gray-900 mt-16">

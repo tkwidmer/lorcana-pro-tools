@@ -78,12 +78,25 @@ export function swapSides(state) {
   return { ...state, players: [state.players[1], state.players[0]] }
 }
 
-// Loads a feature match picked in Tournament Lookup: names and records come
-// from RPH, lore and game wins start fresh, inks stay whatever was set (RPH
-// doesn't know decks).
-export function applyFeatureMatch(state, { eventName, round, players }) {
+// RPH's round clock as the event exposes it: `timer_end_datetime` with
+// `timer_is_running`, and when paused, `timer_paused_at_datetime` (end minus
+// paused-at is what's left). Returns the overlay's timer fields, or null when
+// the event has no clock set.
+export function timerFromRph({ timerEndDatetime, timerIsRunning, timerPausedAtDatetime }) {
+  if (!timerEndDatetime) return null
+  const endsAt = Date.parse(timerEndDatetime)
+  if (timerIsRunning) return { timerEndsAt: endsAt, timerRemainingMs: 0 }
+  if (!timerPausedAtDatetime) return null
+  return { timerEndsAt: null, timerRemainingMs: Math.max(0, endsAt - Date.parse(timerPausedAtDatetime)) }
+}
+
+// Loads a feature match picked in Tournament Lookup: names, records and the
+// round clock come from RPH, lore and game wins start fresh, inks stay
+// whatever was set (RPH doesn't know decks).
+export function applyFeatureMatch(state, { eventName, round, players, timer }) {
   return {
     ...state,
+    ...timer,
     eventName,
     round,
     players: state.players.map((p, i) => ({ ...p, name: players[i].name, record: players[i].record, lore: 0, gameWins: 0 })),

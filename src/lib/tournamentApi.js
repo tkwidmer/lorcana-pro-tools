@@ -194,6 +194,7 @@ export function getTournamentStructure(eventDetails) {
     startingPlayerCount: eventDetails.starting_player_count ?? null,
     timerEndDatetime: eventDetails.timer_end_datetime ?? null,
     timerIsRunning: eventDetails.timer_is_running ?? false,
+    timerPausedAtDatetime: eventDetails.timer_paused_at_datetime ?? null,
     gameplayFormat: eventDetails.gameplay_format?.name ?? null,
     eventStore: eventDetails.store
       ? { name: eventDetails.store.name, address: eventDetails.full_address ?? null }

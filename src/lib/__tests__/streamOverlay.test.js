@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   defaultState, defaultPlayer, startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock,
-  clampLore, clampGameWins, channelName, newChannelId, swapSides, applyFeatureMatch,
+  clampLore, clampGameWins, channelName, newChannelId, swapSides, applyFeatureMatch, timerFromRph,
 } from '../streamOverlay'
 
 describe('streamOverlay timer', () => {
@@ -63,6 +63,23 @@ describe('streamOverlay feature match', () => {
     expect(after.round).toBe('Top 16')
     expect(after.players[0]).toEqual({ name: 'Ryan', record: '5-2-0', inks: ['ruby'], lore: 0, gameWins: 0 })
     expect(after.players[1].name).toBe('Dylan')
+  })
+
+  it('maps a running RPH clock to a wall-time target', () => {
+    const t = timerFromRph({ timerEndDatetime: '2026-05-24T23:38:39+00:00', timerIsRunning: true, timerPausedAtDatetime: null })
+    expect(t).toEqual({ timerEndsAt: Date.parse('2026-05-24T23:38:39+00:00'), timerRemainingMs: 0 })
+    const after = applyFeatureMatch(defaultState(), { eventName: '', round: '', players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: t })
+    expect(after.timerEndsAt).toBe(t.timerEndsAt)
+  })
+
+  it('maps a paused RPH clock to its remainder, and no clock to no change', () => {
+    expect(timerFromRph({
+      timerEndDatetime: '2026-05-24T23:38:39+00:00', timerIsRunning: false, timerPausedAtDatetime: '2026-05-24T22:28:39+00:00',
+    })).toEqual({ timerEndsAt: null, timerRemainingMs: 70 * 60 * 1000 })
+    expect(timerFromRph({ timerEndDatetime: null, timerIsRunning: false, timerPausedAtDatetime: null })).toBeNull()
+    const before = resetTimer(defaultState(), 35)
+    const after = applyFeatureMatch(before, { eventName: '', round: '', players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null })
+    expect(after.timerRemainingMs).toBe(35 * 60 * 1000)
   })
 
   it('swaps the two sides', () => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { saveFeatureMatch } from '../lib/streamOverlay'
+import { saveFeatureMatch, timerFromRph } from '../lib/streamOverlay'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import { PlayerMatchHistory } from './PlayerMatchHistory'
 
@@ -76,13 +76,15 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, allStandings
   const navigate = useNavigate()
 
   // Hand this pairing to the Stream Overlay control panel: names and current
-  // records from the loaded standings, the event name and the current round.
+  // records from the loaded standings, the event name, the current round, and
+  // RPH's round clock as it stands right now (a one-shot copy, not a feed).
   function sendToStreamOverlay() {
     const recordOf = (id) => allStandings.find((e) => String(e.player.id) === String(id))?.record ?? ''
     saveFeatureMatch({
       eventName: structure.eventName ?? '',
       round: structure.isElimination && structure.eliminationPhaseName ? structure.eliminationPhaseName : `Round ${structure.currentRoundNumber}`,
       players: [{ name: p1.name, record: recordOf(p1.id) }, { name: p2.name, record: recordOf(p2.id) }],
+      timer: timerFromRph(structure),
     })
     navigate('/stream-overlay')
   }

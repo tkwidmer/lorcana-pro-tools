@@ -93,9 +93,6 @@ function SideColumn({ player, side, isWinner }) {
       <div className="mt-6 px-4 w-full text-center">
         <div className="text-4xl uppercase tracking-wide leading-tight truncate">{player.name || ' '}</div>
         <div className="mt-1 text-2xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
-        {isWinner && (
-          <div className="mt-3 inline-block px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>
-        )}
       </div>
 
       <div className="mt-5 flex gap-3">
@@ -119,8 +116,15 @@ function SideColumn({ player, side, isWinner }) {
         <div className="text-[9rem] leading-none text-(--accent) tabular-nums">{player.lore}</div>
       </div>
 
+      {/* Fixed-height slot so both columns stay aligned whether or not there's a winner. */}
+      <div className="mt-4 h-10 flex items-center justify-center">
+        {isWinner && (
+          <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>
+        )}
+      </div>
+
       {/* Brand lockup, bottom-right like the reference streams; mirrors Nav's. */}
-      <div className="mt-6 mb-5 h-8 flex items-center justify-center gap-2">
+      <div className="mt-2 mb-5 h-8 flex items-center justify-center gap-2">
         {side === 'right' && (
           <>
             <img src="/inkborn_forge_mark_64.png" alt="" className="h-8 w-8 rounded-sm" />
@@ -197,10 +201,13 @@ function BreakPlayer({ player, isWinner }) {
   return (
     <div className="w-[560px] text-center">
       <div className={`text-6xl uppercase tracking-wide leading-tight truncate ${isWinner ? 'text-(--accent)' : ''}`}>{player.name || ' '}</div>
-      {isWinner && <div className="mt-2 inline-block px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>}
       <div className="mt-2 text-3xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
       <div className="mt-5 flex justify-center gap-4">
         {player.inks.map(ink => <InkIcon key={ink} color={ink} size={72} />)}
+      </div>
+      {/* Fixed-height slot so both sides stay aligned whether or not there's a winner. */}
+      <div className="mt-5 h-10 flex items-center justify-center">
+        {isWinner && <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>}
       </div>
     </div>
   )

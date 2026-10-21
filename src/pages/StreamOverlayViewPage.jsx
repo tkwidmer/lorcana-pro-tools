@@ -98,9 +98,19 @@ function SideColumn({ player, side }) {
         ))}
       </div>
 
-      <div className="mt-auto mb-10 text-center">
+      <div className="mt-auto text-center">
         <div className="text-base uppercase tracking-[0.3em] text-on-ink/60">Lore</div>
         <div className="text-[9rem] leading-none text-forge tabular-nums">{player.lore}</div>
+      </div>
+
+      {/* Brand lockup, bottom-right like the reference streams; mirrors Nav's. */}
+      <div className="mt-6 mb-5 h-8 flex items-center justify-center gap-2">
+        {side === 'right' && (
+          <>
+            <img src="/inkborn_forge_mark_64.png" alt="" className="h-8 w-8 rounded-sm" />
+            <span className="text-xl uppercase tracking-[0.12em]">InkbornForge</span>
+          </>
+        )}
       </div>
       </div>
     </div>

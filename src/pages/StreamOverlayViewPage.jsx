@@ -43,7 +43,7 @@ export function StreamOverlayViewPage() {
   const state = row && rowToState(row)
   const winner = state && winnerIndex(state.players)
 
-  if (state?.mode === 'break') return <BreakScreen state={state} />
+  if (state?.mode === 'break') return <BreakScreen state={state} now={now} />
 
   return (
     <div
@@ -143,9 +143,12 @@ function TopBanner({ state, now, winner }) {
 
 // Between matches: opaque, the event up top, then whatever the table holds —
 // the result of the match that just ended until the next pairing is published
-// on RPH and sent over, then the next match (breakHeadline decides).
-function BreakScreen({ state }) {
+// on RPH and sent over, then the next match (breakHeadline decides). A feature
+// match often ends early, so while the round clock has time left it counts
+// down here too, so viewers know roughly when the next round starts.
+function BreakScreen({ state, now }) {
   const headline = breakHeadline(state.players)
+  const remaining = timerRemainingMs(state, now)
   return (
     <div
       className="relative overflow-hidden bg-ink font-display text-on-ink select-none flex flex-col items-center justify-center gap-10"
@@ -165,6 +168,13 @@ function BreakScreen({ state }) {
         <div className={`text-5xl tabular-nums ${headline.score ? 'text-on-ink' : 'text-on-ink/40'}`}>{headline.score ?? 'vs'}</div>
         <BreakPlayer player={state.players[1]} isWinner={headline.winner === 1} />
       </div>
+
+      {remaining > 0 && (
+        <div className="text-center">
+          <div className="text-2xl uppercase tracking-[0.4em] text-on-ink/60">Time left in round</div>
+          <div className="text-7xl leading-tight tabular-nums">{formatClock(remaining)}</div>
+        </div>
+      )}
 
       {state.sponsorLogoUrl && (
         <img src={state.sponsorLogoUrl} alt="" className="absolute bottom-6 left-1/2 -translate-x-1/2 h-20 object-contain" />

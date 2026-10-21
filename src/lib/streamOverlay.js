@@ -13,6 +13,7 @@ export const MAX_GAME_WINS = 2
 // → what the pages render.
 export function rowToState(row) {
   return {
+    mode: row.mode,
     eventName: row.event_name,
     eventLogoUrl: row.event_logo_url,
     sponsorLogoUrl: row.sponsor_logo_url,
@@ -29,6 +30,13 @@ export function rowToState(row) {
       gameWins: row[`p${n}_game_wins`],
     })),
   }
+}
+
+// The side (0 or 1) that has taken the match, or null while it's still on.
+// Derived from game wins alone, so resetting them for the next match clears it.
+export function winnerIndex(players) {
+  const i = players.findIndex(p => p.gameWins >= MAX_GAME_WINS)
+  return i === -1 ? null : i
 }
 
 export function timerRemainingMs(state, now = Date.now()) {

@@ -43,9 +43,13 @@ export function StreamOverlayPage() {
   const patchLocal = (id, patch) => setTables(ts => ts.map(t => (t.id === id ? { ...t, ...patch } : t)))
 
   // No auto-create on first visit: an effect can run twice (StrictMode did,
-  // and made two "Table 1"s), so the first table is an explicit click.
+  // and made two "Table 1"s), so the first table is an explicit click. The
+  // cancelled flag keeps a superseded fetch from overwriting an edit made
+  // before it resolved (StrictMode's second run did exactly that).
   useEffect(() => {
-    listMyTables().then(setTables).catch(e => setError(e.message))
+    let cancelled = false
+    listMyTables().then(ts => { if (!cancelled) setTables(ts) }).catch(e => { if (!cancelled) setError(e.message) })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -130,7 +134,7 @@ export function StreamOverlayPage() {
     <div className="w-full px-6 py-8">
       <PageHeader
         title="Stream Overlay"
-        description="Run a gameplay stream overlay from here. Each table is one feature match: add its overlay link as one OBS Browser Source (1920×1080) with the gameplay cam and player cams behind it — the cam areas are transparent — and open its player controller link on a tablet at the table so the players keep their own lore and game score."
+        description="Run a gameplay stream overlay from here. Each table is one feature match: add its overlay link as one OBS Browser Source (1920×1080) with the gameplay cam and player cams behind it — the cam areas are transparent — and open its player controller link on a tablet at the table so the players keep their own lore and game score. Break shows the next pairing full-screen between matches; a side on 2 game wins is marked the winner."
         actions={row && (
           <>
             <Button onClick={() => copyLink('control')}>{copied === 'control' ? 'Link copied!' : 'Copy player controller link'}</Button>
@@ -164,6 +168,12 @@ export function StreamOverlayPage() {
           )}
           <Button size="sm" onClick={addTable}>New table</Button>
           {row && <Button size="sm" variant="danger" onClick={removeTable}>Delete table</Button>}
+          {row && (
+            <div className="ml-auto flex items-center gap-2" role="group" aria-label="Overlay mode">
+              <Button size="sm" variant={row.mode === 'live' ? 'primary' : 'secondary'} aria-pressed={row.mode === 'live'} onClick={() => setField('mode', 'live')}>Live</Button>
+              <Button size="sm" variant={row.mode === 'break' ? 'primary' : 'secondary'} aria-pressed={row.mode === 'break'} onClick={() => setField('mode', 'break')}>Break</Button>
+            </div>
+          )}
         </div>
       )}
 

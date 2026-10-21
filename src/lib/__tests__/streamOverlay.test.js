@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16',
+  id: 't1', name: 'Table 1', mode: 'live', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16',
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
   p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0,
   p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1,
@@ -19,6 +19,13 @@ describe('streamOverlay row mapping', () => {
     expect(s.players[0]).toEqual({ name: 'Ryan', record: '5-0-2', inks: ['amethyst', 'emerald'], lore: 12, gameWins: 0 })
     expect(s.players[1].gameWins).toBe(1)
     expect(rowToState(row()).timerEndsAt).toBeNull()
+  })
+
+  it('names the winner only once a side reaches the match win count', () => {
+    expect(winnerIndex(rowToState(row()).players)).toBeNull()
+    expect(winnerIndex(rowToState(row({ p2_game_wins: 2 })).players)).toBe(1)
+    expect(winnerIndex(rowToState(row({ p1_game_wins: 2, p2_game_wins: 1 })).players)).toBe(0)
+    expect(rowToState(row({ mode: 'break' })).mode).toBe('break')
   })
 
   it('swaps every per-side column', () => {

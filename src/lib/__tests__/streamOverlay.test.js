@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   defaultState, defaultPlayer, startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock,
-  clampLore, clampGameWins, channelName, newChannelId, swapSides, applyFeatureMatch, timerFromRph,
+  clampLore, clampGameWins, channelName, newChannelId, swapSides, applyFeatureMatch, timerFromRph, syncRphClock,
 } from '../streamOverlay'
 
 describe('streamOverlay timer', () => {
@@ -80,6 +80,16 @@ describe('streamOverlay feature match', () => {
     const before = resetTimer(defaultState(), 35)
     const after = applyFeatureMatch(before, { eventName: '', round: '', players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null })
     expect(after.timerRemainingMs).toBe(35 * 60 * 1000)
+  })
+
+  it('links the panel to the RPH event and syncs its clock on each poll', () => {
+    const linked = applyFeatureMatch(defaultState(), {
+      eventName: '', round: '', players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null, rphEventId: 528227,
+    })
+    expect(linked.rphEventId).toBe(528227)
+    const synced = syncRphClock(linked, { timerEndDatetime: '2026-05-24T23:38:39+00:00', timerIsRunning: true, timerPausedAtDatetime: null })
+    expect(synced.timerEndsAt).toBe(Date.parse('2026-05-24T23:38:39+00:00'))
+    expect(syncRphClock(synced, { timerEndDatetime: null, timerIsRunning: false, timerPausedAtDatetime: null })).toBe(synced)
   })
 
   it('swaps the two sides', () => {

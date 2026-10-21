@@ -23,6 +23,9 @@ export function defaultState() {
     // null and `timerRemainingMs` holds what's left.
     timerEndsAt: null,
     timerRemainingMs: 50 * 60 * 1000,
+    // Set by a feature-match send: while non-null the panel polls this RPH
+    // event's clock and the manual timer controls give way to it.
+    rphEventId: null,
     players: [defaultPlayer('Player 1'), defaultPlayer('Player 2')],
   }
 }
@@ -90,13 +93,21 @@ export function timerFromRph({ timerEndDatetime, timerIsRunning, timerPausedAtDa
   return { timerEndsAt: null, timerRemainingMs: Math.max(0, endsAt - Date.parse(timerPausedAtDatetime)) }
 }
 
+// One poll of the linked RPH clock: a fresh structure (getTournamentStructure)
+// overwrites the timer; an event with no clock set changes nothing.
+export function syncRphClock(state, structure) {
+  const timer = timerFromRph(structure)
+  return timer ? { ...state, ...timer } : state
+}
+
 // Loads a feature match picked in Tournament Lookup: names, records and the
 // round clock come from RPH, lore and game wins start fresh, inks stay
 // whatever was set (RPH doesn't know decks).
-export function applyFeatureMatch(state, { eventName, round, players, timer }) {
+export function applyFeatureMatch(state, { eventName, round, players, timer, rphEventId }) {
   return {
     ...state,
     ...timer,
+    rphEventId,
     eventName,
     round,
     players: state.players.map((p, i) => ({ ...p, name: players[i].name, record: players[i].record, lore: 0, gameWins: 0 })),

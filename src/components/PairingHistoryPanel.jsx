@@ -85,6 +85,7 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, allStandings
       round: structure.isElimination && structure.eliminationPhaseName ? structure.eliminationPhaseName : `Round ${structure.currentRoundNumber}`,
       players: [{ name: p1.name, record: recordOf(p1.id) }, { name: p2.name, record: recordOf(p2.id) }],
       timer: timerFromRph(structure),
+      rphEventId: currentEventId,
     })
     navigate('/stream-overlay')
   }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { fetchEventDetails, getTournamentStructure } from '../lib/tournamentApi'
 import { VALID_INKS } from '../lib/inkColors'
 import { InkIcon } from '../components/InkIcons'
 import { Button } from '../components/ui/Button'
@@ -7,11 +8,15 @@ import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import {
-  MAX_GAME_WINS, loadSaved, storeSaved, channelName, swapSides,
+  MAX_GAME_WINS, loadSaved, storeSaved, channelName, swapSides, syncRphClock,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, clampLore, clampGameWins,
 } from '../lib/streamOverlay'
 
 const HEARTBEAT_MS = 5000
+// RPH's live channel doesn't broadcast reliably (see the ravensburger-tournament-api
+// skill), so a linked clock is polled. The countdown stays exact between polls;
+// only an organizer's start/pause/reset lags by up to this long.
+const RPH_POLL_MS = 15000
 
 // Control panel for the gameplay stream overlay. Every change (and a periodic
 // heartbeat, so a Browser Source or player controller that loads late or
@@ -26,6 +31,7 @@ export function StreamOverlayPage() {
   const [copied, setCopied] = useState(null)
   const [now, setNow] = useState(() => Date.now())
   const [minutes, setMinutes] = useState(50)
+  const [rphError, setRphError] = useState(false)
   const channelRef = useRef(null)
 
   const setState = updater => setSaved(prev => ({ ...prev, state: updater(prev.state) }))
@@ -64,6 +70,22 @@ export function StreamOverlayPage() {
     const id = setInterval(() => setNow(Date.now()), 250)
     return () => clearInterval(id)
   }, [])
+
+  const { rphEventId } = state
+  useEffect(() => {
+    if (!rphEventId) return
+    let cancelled = false
+    const poll = () => fetchEventDetails(rphEventId)
+      .then(details => {
+        if (cancelled) return
+        setState(s => syncRphClock(s, getTournamentStructure(details)))
+        setRphError(false)
+      })
+      .catch(() => { if (!cancelled) setRphError(true) })
+    poll()
+    const id = setInterval(poll, RPH_POLL_MS)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [rphEventId])
 
   const links = {
     overlay: `${window.location.origin}/stream-overlay/view?channel=${channelId}`,
@@ -122,16 +144,25 @@ export function StreamOverlayPage() {
 
         <Card title="Round timer" className="p-5">
           <div className="font-display text-6xl tabular-nums text-gray-900 mb-4">{formatClock(timerRemainingMs(state, now))}</div>
-          <div className="flex flex-wrap items-center gap-2">
-            {running
-              ? <Button variant="primary" onClick={() => setState(s => pauseTimer(s))}>Pause</Button>
-              : <Button variant="primary" onClick={() => setState(s => startTimer(s))}>Start</Button>}
-            <Input
-              type="number" min="0" value={minutes} onChange={e => setMinutes(Number(e.target.value))}
-              className="w-20" aria-label="Timer minutes"
-            />
-            <Button onClick={() => setState(s => resetTimer(s, minutes))}>Reset to {minutes} min</Button>
-          </div>
+          {rphEventId ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={`text-xs font-semibold uppercase tracking-widest ${rphError ? 'text-red-600' : 'text-emerald-600'}`}>
+                {rphError ? 'RPH clock: last sync failed, retrying' : `Linked to RPH clock · event ${rphEventId}`}
+              </span>
+              <Button size="sm" onClick={() => setField('rphEventId', null)}>Unlink</Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              {running
+                ? <Button variant="primary" onClick={() => setState(s => pauseTimer(s))}>Pause</Button>
+                : <Button variant="primary" onClick={() => setState(s => startTimer(s))}>Start</Button>}
+              <Input
+                type="number" min="0" value={minutes} onChange={e => setMinutes(Number(e.target.value))}
+                className="w-20" aria-label="Timer minutes"
+              />
+              <Button onClick={() => setState(s => resetTimer(s, minutes))}>Reset to {minutes} min</Button>
+            </div>
+          )}
         </Card>
 
         <div className="lg:col-span-2 flex justify-end">

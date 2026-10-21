@@ -17,9 +17,22 @@ Read CLAUDE.md's "[Format Coconut] Deck Builder", "Coconut Decklist Text" and
 ## What you need from the user
 
 The card art. Anything works — an attached image, a zip, a link, or a
-print-ready PDF sheet. If they give a Google Drive folder link, the Drive
-connector may only surface some files; ask for a direct attachment if the art
-isn't there.
+print-ready PDF sheet.
+
+The canonical source is Nathan Trippe's **"Individual Coconuts"** Drive folder
+(`1a5DEB1G-gmbDGzpQqJfNF01j31x94cMP`), one PNG per card named by its duels.ink
+number (`01-scar.png` … plus a few unnumbered, e.g. `judy-hopps.png`). The
+Drive connector can see the folder but can't list a link-shared folder's
+children; Drive's public folder view can, and files download without auth:
+
+```bash
+curl -sSL "https://drive.google.com/embeddedfolderview?id=<folder id>" -o list.html
+# file ids + names: 'file/d/<id>' ... 'flip-entry-title"><name>'
+curl -sSL "https://drive.usercontent.google.com/download?id=<file id>&export=download&confirm=t" -o <name>
+```
+
+When a wave ships, diff the existing faces against this folder too — it's
+where text revisions land (see step 4).
 
 If the art arrives as a **print-ready PDF** of the whole set, extract the
 fronts with PyMuPDF rather than screenshotting:
@@ -94,8 +107,9 @@ bg.paste(im, (0, 0), im)
 bg.save(f'public/coconut-cards/{id}.jpg', 'JPEG', quality=90, optimize=True, progressive=True)
 ```
 
-750x1050 is exactly 300 DPI at 2.5"x3.5" and is what the existing faces use;
-640x896 (~256 DPI) is acceptable. Never upscale to hit a number. If the art is
+Every face is 640x896 (~256 DPI at 2.5"x3.5"), the size the source folder
+ships. An earlier batch was 750x1050 but carried outdated rules text; current
+text beats extra pixels. Never upscale to hit a number. If the art is
 already JPEG at the right size, copy it byte-for-byte rather than re-encoding.
 
 Reject a face stamped **"FOR BETA TEST ONLY"** or obviously greyed out — that's

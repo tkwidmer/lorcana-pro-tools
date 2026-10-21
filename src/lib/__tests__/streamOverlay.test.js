@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -26,6 +26,15 @@ describe('streamOverlay row mapping', () => {
     expect(winnerIndex(rowToState(row({ p2_game_wins: 2 })).players)).toBe(1)
     expect(winnerIndex(rowToState(row({ p1_game_wins: 2, p2_game_wins: 1 })).players)).toBe(0)
     expect(rowToState(row({ mode: 'break' })).mode).toBe('break')
+  })
+
+  it('headlines the break screen from the score alone', () => {
+    const fresh = rowToState(row({ p1_game_wins: 0, p2_game_wins: 0 })).players
+    expect(breakHeadline(fresh)).toEqual({ label: 'Next match', score: null, winner: null })
+    const decided = rowToState(row({ p1_game_wins: 1, p2_game_wins: 2 })).players
+    expect(breakHeadline(decided)).toEqual({ label: 'Final', score: '1-2', winner: 1 })
+    const midway = rowToState(row({ p1_game_wins: 1, p2_game_wins: 0 })).players
+    expect(breakHeadline(midway)).toEqual({ label: 'Match in progress', score: '1-0', winner: null })
   })
 
   it('swaps every per-side column', () => {

@@ -39,6 +39,18 @@ export function winnerIndex(players) {
   return i === -1 ? null : i
 }
 
+// What the break screen is showing. The table holds the pair that just
+// played until the next pairing is published on RPH and sent over, so the
+// headline comes from the score: a decided match reads as the result, a fresh
+// pairing as the next match, anything else as a match paused between games.
+export function breakHeadline(players) {
+  const winner = winnerIndex(players)
+  const score = `${players[0].gameWins}-${players[1].gameWins}`
+  if (winner !== null) return { label: 'Final', score, winner }
+  if (players.every(p => p.gameWins === 0)) return { label: 'Next match', score: null, winner: null }
+  return { label: 'Match in progress', score, winner: null }
+}
+
 export function timerRemainingMs(state, now = Date.now()) {
   if (state.timerEndsAt === null) return state.timerRemainingMs
   return Math.max(0, state.timerEndsAt - now)

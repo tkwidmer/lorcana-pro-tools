@@ -4,7 +4,7 @@ import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock, winnerIndex,
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline,
 } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
@@ -141,9 +141,11 @@ function TopBanner({ state, now, winner }) {
   )
 }
 
-// Between matches: opaque, the event up top, the next pairing (whatever the
-// table holds — "Send to Stream Overlay" loads the next one), the round.
+// Between matches: opaque, the event up top, then whatever the table holds —
+// the result of the match that just ended until the next pairing is published
+// on RPH and sent over, then the next match (breakHeadline decides).
 function BreakScreen({ state }) {
+  const headline = breakHeadline(state.players)
   return (
     <div
       className="relative overflow-hidden bg-ink font-display text-on-ink select-none flex flex-col items-center justify-center gap-10"
@@ -154,14 +156,14 @@ function BreakScreen({ state }) {
         : <div className="text-7xl uppercase tracking-wide">{state.eventName || ' '}</div>}
 
       <div className="text-center">
-        <div className="text-2xl uppercase tracking-[0.4em] text-on-ink/60">Next match</div>
+        <div className="text-2xl uppercase tracking-[0.4em] text-on-ink/60">{headline.label}</div>
         {state.round && <div className="mt-1 text-3xl uppercase tracking-wide text-forge">{state.round}</div>}
       </div>
 
       <div className="flex items-center gap-16">
-        <BreakPlayer player={state.players[0]} />
-        <div className="text-5xl text-on-ink/40">vs</div>
-        <BreakPlayer player={state.players[1]} />
+        <BreakPlayer player={state.players[0]} isWinner={headline.winner === 0} />
+        <div className={`text-5xl tabular-nums ${headline.score ? 'text-on-ink' : 'text-on-ink/40'}`}>{headline.score ?? 'vs'}</div>
+        <BreakPlayer player={state.players[1]} isWinner={headline.winner === 1} />
       </div>
 
       {state.sponsorLogoUrl && (
@@ -175,10 +177,11 @@ function BreakScreen({ state }) {
   )
 }
 
-function BreakPlayer({ player }) {
+function BreakPlayer({ player, isWinner }) {
   return (
     <div className="w-[560px] text-center">
-      <div className="text-6xl uppercase tracking-wide leading-tight truncate">{player.name || ' '}</div>
+      <div className={`text-6xl uppercase tracking-wide leading-tight truncate ${isWinner ? 'text-forge' : ''}`}>{player.name || ' '}</div>
+      {isWinner && <div className="mt-2 inline-block px-5 py-1 bg-forge text-on-forge text-xl uppercase tracking-[0.35em]">Winner</div>}
       <div className="mt-2 text-3xl text-on-ink/70 tracking-widest">{player.record || ' '}</div>
       <div className="mt-5 flex justify-center gap-4">
         {player.inks.map(ink => <InkIcon key={ink} color={ink} size={72} />)}

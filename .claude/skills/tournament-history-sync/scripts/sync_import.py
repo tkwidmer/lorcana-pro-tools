@@ -44,6 +44,7 @@ from pathlib import Path
 RAVEN_BASE = "https://api.ravensburgerplay.com/api/v2"
 GAME_SLUG = "disney-lorcana"
 DLC_TEMPLATE_ID = "a1b77361-c19e-4942-8741-f6b96bb24a80"  # "Disney Lorcana Challenge" event-configuration-template
+LCQ_TEMPLATE_ID = "4881658d-a6ef-4f98-9c2a-1baf9ef12b82"  # "Last Chance Qualifier" — the ~500-player LCQs at a Championship weekend
 APP_BASE = "https://lorcana-pro-tools.vercel.app"
 
 # Verified against every one of the game's official templates via
@@ -115,6 +116,14 @@ def discover_dlc():
     return list(seen.values())
 
 
+def discover_lcq():
+    # Last Chance Qualifiers at a Championship weekend (NACC, EUCC) run on
+    # their own official template and draw ~500 players each — found by a
+    # full-attendance crawl (2026-10-22) after the EU Championship's two LCQs
+    # turned up missing while the NA ones had been imported by hand.
+    return paginate_events({"game_slug": GAME_SLUG, "event_configuration_template_id": LCQ_TEMPLATE_ID})
+
+
 def discover_ccq():
     # "name=CCQ" is a contains-match on the upstream API, not an exact match
     # (confirmed empirically) — it's the only working text-search filter
@@ -127,7 +136,13 @@ def discover_acq():
     # Thailand, Malaysia, Hong Kong, ...) run by the Saka Saka network, same
     # shape as a CCQ but never caught by the "CCQ" name search since it's
     # branded "ACQ" instead. No shared template either.
-    return paginate_events({"game_slug": GAME_SLUG, "name": "Asia Championship Qualifier"})
+    # Saka Saka Taiwan names its stop in Chinese (亞洲冠軍資格賽 = Asia
+    # Championship Qualifier), so that spelling is searched too.
+    seen = {}
+    for term in ("Asia Championship Qualifier", "亞洲冠軍資格賽"):
+        for e in paginate_events({"game_slug": GAME_SLUG, "name": term}):
+            seen[e["id"]] = e
+    return list(seen.values())
 
 
 def discover_ccq_full_name():
@@ -199,6 +214,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Discover and diff only, don't call the import endpoint")
     ap.add_argument("--force", action="store_true", help="Re-import events already in imported_cache.json")
     ap.add_argument("--force-dead", action="store_true", help="Retry events already in dead_cache.json")
+    ap.add_argument("--event", action="append", default=[], metavar="ID", help="Also import this RPH event id (repeatable) — for an event discovery can't find, e.g. a misspelled CCQ")
     args = ap.parse_args()
 
     if not args.dry_run and not args.token:
@@ -211,6 +227,10 @@ def main():
     print("Discovering DLC events...", file=sys.stderr)
     dlc_events = discover_dlc()
     print(f"  found {len(dlc_events)} total DLC-template events", file=sys.stderr)
+
+    print("Discovering Last Chance Qualifier events...", file=sys.stderr)
+    lcq_events = discover_lcq()
+    print(f"  found {len(lcq_events)} total LCQ-template events", file=sys.stderr)
 
     print("Discovering CCQ events...", file=sys.stderr)
     ccq_events = discover_ccq()
@@ -231,6 +251,8 @@ def main():
     all_events = {}
     for e in dlc_events:
         all_events[e["id"]] = ("DLC", e)
+    for e in lcq_events:
+        all_events.setdefault(e["id"], ("LCQ", e))
     for e in ccq_events:
         # a CCQ template event could theoretically also match the DLC template;
         # DLC label wins if so, since dict insertion order already set it above
@@ -243,6 +265,11 @@ def main():
         # same precedence rule: DLC/CCQ/ACQ label wins if a big-money event
         # also happens to match one of those name searches
         all_events.setdefault(e["id"], ("PRIZE", e))
+    for eid in args.event:
+        # an event named on the command line: fetched directly, so a
+        # misspelled or oddly named event discovery can't match still imports
+        e = http_get_json(f"{RAVEN_BASE}/events/{eid}/")
+        all_events[e["id"]] = ("MANUAL", e)
 
     candidates = []
     skipped_not_complete = 0

@@ -76,6 +76,10 @@ Useful flags:
 - `--force-dead` — retry events already in `dead_cache.json`, in case a
   store retroactively entered results into the Play Hub after previously
   leaving the event empty.
+- `--event <id>` (repeatable) — also import this one event, fetched by id,
+  for an event discovery can't match: a misspelled name ("Challenege
+  Championship Qualifier", id 520475, a real 70-player CCQ at Pastimes),
+  or a one-off a user names. Recorded in `imported_cache.json` as `MANUAL`.
 
 ## State files (committed alongside this skill)
 
@@ -115,6 +119,13 @@ is an offline discovery script rather than a browser-facing feature.
   turned up a DLC the template filter alone never would have (id 456247,
   "Jeudisney Lorcana Challenge... @ Ikigai Manga Shop") — treat this
   backstop as load-bearing, not optional.
+- **LCQ** (`discover_lcq()`): filter by
+  `event_configuration_template_id=4881658d-a6ef-4f98-9c2a-1baf9ef12b82`
+  (the official "Last Chance Qualifier" template). The two LCQs at a
+  Championship weekend (NACC, EUCC) draw ~500 players each and have a top
+  cut, so they're pedigree in their own right. Added after the 2026-10-22
+  attendance crawl found the EU Championship's two LCQs missing while the
+  NA ones had only been imported by hand.
 - **CCQ** (`discover_ccq()`): filter by `name=CCQ`. This param is a
   **contains-match**, not an exact match, despite the plain name suggesting
   otherwise (confirmed empirically — `name=CCQ` returns "CCQ - PlayInk
@@ -126,7 +137,10 @@ is an offline discovery script rather than a browser-facing feature.
   named something else entirely (no "CCQ" substring) will not be found this
   way. If the user reports a known CCQ missing from the archive, check its
   name first before assuming a script bug.
-- **ACQ** (`discover_acq()`): filter by `name=Asia Championship Qualifier`.
+- **ACQ** (`discover_acq()`): filter by `name=Asia Championship Qualifier`
+  and by `name=亞洲冠軍資格賽`, the same words in Chinese — Saka Saka
+  Taiwan names its stop that way (id 773496, 84 players), which the English
+  search never saw.
   Same shape as a CCQ — a regional qualifier series (Singapore, Philippines,
   Thailand, Malaysia, Hong Kong, ...) run by the Saka Saka store network —
   but branded "ACQ" instead of "CCQ", so the CCQ name search never caught
@@ -255,7 +269,25 @@ following this shape:
    plausible for a recurring local weekly — cross-check against the
    store's other data quality (had this store produced other suspicious
    rows before?) rather than taking the number at face value.
-6. Lowering the threshold much below ~50 stops being useful — a threshold
+6. **What the 2026-10-22 crawl found, so the next one needn't re-decide
+   it.** At threshold 50: 428 kept, 282 completed and not yet archived, of
+   which 122 were side events of a DLC/Championship weekend (the Fanfinity
+   6-round and Double-Up events at Ghent/Dortmund/NACC/EUCC, the Pastimes
+   Indy "Pregame Ticket Quest" at 1,293, Milwaukee's "Infinity
+   Spectacular" at 798). Of the 160 "main" rows, the real misses were the
+   two EU LCQs, the Chinese-named Taiwan ACQ and the misspelled Pastimes
+   CCQ — all now covered above. Everything else was local: prereleases,
+   Set Championships, store cups, case tournaments and weeklies. Left out
+   on purpose, as judgment calls for the owner: Saka Saka's **"Asia
+   Circuit"** series (Jan 2026 main events in Thailand 86, Singapore 60,
+   Philippines 53, Malaysia 48, HK 32, Taiwan 31 — the ACQ's predecessor),
+   **Iconic Tour Vienna** (91; a later stop of that series was a CCQ), and
+   cash events below the 5K line (SCG CON Las Vegas $1K at 94, Namur "8K
+   PRIZE POOL" at 99, Road To Nationals $4k at 78, several $2K–$3K
+   case events). DLC Melbourne's own side events (157 and 72 players) are
+   not excluded by the weekend windows because its parent is mistagged (see
+   the DLC bullet), so they show up as "main" rows every time; skip them.
+7. Lowering the threshold much below ~50 stops being useful — a threshold
    of 15 returned 6,715 events, overwhelmingly ordinary Set Championships,
    prereleases, and local weeklies (the kind of event a user chasing "high
    profile" tournaments has already said not to bother with). Below ~50,

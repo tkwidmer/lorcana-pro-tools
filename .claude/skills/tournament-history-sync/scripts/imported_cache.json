@@ -622,6 +622,13 @@
     "name": "Disney Lorcana Challenge: São Paulo",
     "standingsImported": 441
   },
+  "520475": {
+    "imported_at": "2026-10-22T22:42:06Z",
+    "label": "MANUAL",
+    "matchesImported": 215,
+    "name": "Sat - 1pm - Challenege Championship Qualifier",
+    "standingsImported": 70
+  },
   "528227": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "CCQ",
@@ -783,6 +790,13 @@
     "name": "Tournament Lorcana Core - possible CCQ",
     "standingsImported": 13
   },
+  "757799": {
+    "imported_at": "2026-10-22T22:42:02Z",
+    "label": "ACQ",
+    "matchesImported": 53,
+    "name": "【兔妞桌遊】Disney Lorcana 亞洲冠軍資格賽 - 熱身賽",
+    "standingsImported": 20
+  },
   "767749": {
     "imported_at": "2026-10-22T21:45:33Z",
     "label": "ACQ",
@@ -796,6 +810,13 @@
     "matchesImported": 504,
     "name": "The Cauldron Cup CCQ - $5,000 Challenge Championship Qualifier",
     "standingsImported": 138
+  },
+  "773496": {
+    "imported_at": "2026-10-22T22:42:04Z",
+    "label": "ACQ",
+    "matchesImported": 260,
+    "name": "Disney Lorcana 亞洲冠軍資格賽",
+    "standingsImported": 84
   },
   "783426": {
     "imported_at": "2026-10-22T21:45:31Z",
@@ -895,12 +916,40 @@
     "name": "Lorcana X Brainwash Cards 2K CCQ",
     "standingsImported": 121
   },
+  "886050": {
+    "imported_at": "2026-10-22T22:41:49Z",
+    "label": "LCQ",
+    "matchesImported": 499,
+    "name": "Last Chance Qualifier # 1 - NA Championship Friday 9am",
+    "standingsImported": 495
+  },
+  "886069": {
+    "imported_at": "2026-10-22T22:41:43Z",
+    "label": "LCQ",
+    "matchesImported": 501,
+    "name": "Last Chance Qualifier #2 - NA Championship Friday 9am",
+    "standingsImported": 495
+  },
   "886104": {
     "imported_at": "2026-10-22T21:44:51Z",
     "label": "DLC",
     "matchesImported": 592,
     "name": "Disney Lorcana Challenge North American Championship",
     "standingsImported": 136
+  },
+  "924485": {
+    "imported_at": "2026-10-22T22:41:55Z",
+    "label": "LCQ",
+    "matchesImported": 503,
+    "name": "European Championship Last Chance Qualifier #1",
+    "standingsImported": 506
+  },
+  "924486": {
+    "imported_at": "2026-10-22T22:41:59Z",
+    "label": "LCQ",
+    "matchesImported": 503,
+    "name": "European Championship Last Chance Qualifier #2",
+    "standingsImported": 508
   },
   "943122": {
     "imported_at": "2026-10-22T21:44:36Z",

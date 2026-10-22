@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -20,6 +20,19 @@ describe('streamOverlay row mapping', () => {
     expect(s.players[1].gameWins).toBe(1)
     expect(s.note).toBe('Top 8 at 5pm')
     expect(rowToState(row()).timerEndsAt).toBeNull()
+  })
+
+  it('maps operator hotkeys, and ignores them while typing or with a modifier held', () => {
+    const key = (k, extra = {}) => ({ key: k, target: { tagName: 'BODY' }, ...extra })
+    expect(hotkeyAction(key('q'))).toEqual({ side: 1, field: 'lore', delta: 1 })
+    expect(hotkeyAction(key('S'))).toEqual({ side: 1, field: 'game_wins', delta: -1 })
+    expect(hotkeyAction(key('k'))).toEqual({ side: 2, field: 'lore', delta: -1 })
+    expect(hotkeyAction(key('o'))).toEqual({ side: 2, field: 'game_wins', delta: 1 })
+    expect(hotkeyAction(key('b'))).toEqual({ toggleMode: true })
+    expect(hotkeyAction(key('x'))).toBeNull()
+    expect(hotkeyAction(key('q', { ctrlKey: true }))).toBeNull()
+    expect(hotkeyAction(key('q', { target: { tagName: 'INPUT' } }))).toBeNull()
+    expect(hotkeyAction(key('q', { target: { tagName: 'DIV', isContentEditable: true } }))).toBeNull()
   })
 
   it('steps a name down a size class as it outgrows the slot', () => {

@@ -161,3 +161,22 @@ export function swapSidesPatch(row) {
   }
   return patch
 }
+
+// Operator hotkeys on the control panel (and so a Stream Deck sending keys):
+// left-hand keys for the left player, right-hand keys for the right player,
+// B flips Live / Break. Letters only, so any key sender can produce them.
+export const HOTKEYS = {
+  q: { side: 1, field: 'lore', delta: 1 }, a: { side: 1, field: 'lore', delta: -1 },
+  w: { side: 1, field: 'game_wins', delta: 1 }, s: { side: 1, field: 'game_wins', delta: -1 },
+  i: { side: 2, field: 'lore', delta: 1 }, k: { side: 2, field: 'lore', delta: -1 },
+  o: { side: 2, field: 'game_wins', delta: 1 }, l: { side: 2, field: 'game_wins', delta: -1 },
+  b: { toggleMode: true },
+}
+
+// The action for a keydown, or null: a plain key with no modifier, and never
+// while the operator is typing in a field.
+export function hotkeyAction(e) {
+  if (e.altKey || e.ctrlKey || e.metaKey) return null
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return null
+  return HOTKEYS[e.key.toLowerCase()] ?? null
+}

@@ -7,7 +7,7 @@ import {
 } from '../lib/streamTables'
 import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
-  startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock,
+  startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction,
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
 import { Button } from '../components/ui/Button'
@@ -88,6 +88,29 @@ export function StreamOverlayPage() {
     const id = setInterval(poll, RPH_POLL_MS)
     return () => { cancelled = true; clearInterval(id) }
   }, [rowId, rphEventId])
+
+  // Operator hotkeys (HOTKEYS in streamOverlay.js): scores go through the
+  // same atomic RPC as the buttons and come back on the broadcast; the mode
+  // flip is an optimistic column write like the Live / Break buttons.
+  const controllerKey = row?.controller_key ?? null
+  const mode = row?.mode ?? null
+  useEffect(() => {
+    if (!rowId) return
+    const onKey = e => {
+      const action = hotkeyAction(e)
+      if (!action) return
+      e.preventDefault()
+      if (action.toggleMode) {
+        const next = mode === 'break' ? 'live' : 'break'
+        setTables(ts => ts.map(t => (t.id === rowId ? { ...t, mode: next } : t)))
+        updateTable(rowId, { mode: next }).catch(e => setError(e.message))
+      } else {
+        adjustTable(rowId, controllerKey, action.side, action.field, action.delta).catch(e => setError(e.message))
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [rowId, controllerKey, mode])
 
   // Optimistic local update, then the column write; a failed write surfaces.
   function write(id, patch) {
@@ -228,7 +251,10 @@ export function StreamOverlayPage() {
           )}
         </Card>
 
-        <div className="lg:col-span-2 flex justify-end">
+        <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-gray-500">
+            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break. Click outside any field first.
+          </p>
           <Button size="sm" onClick={() => write(row.id, swapSidesPatch(row))}>Swap sides</Button>
         </div>
 
@@ -302,6 +328,10 @@ function LogoField({ label, value, onChange, onError }) {
       {busy && <span className="mt-1 block text-xs text-gray-500">Uploading…</span>}
     </Labeled>
   )
+}
+
+function Kbd({ children }) {
+  return <kbd className="rounded border border-gray-300 bg-gray-50 px-1 font-mono text-[11px] text-gray-700">{children}</kbd>
 }
 
 function Labeled({ label, children }) {

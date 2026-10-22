@@ -75,7 +75,8 @@ export function StreamOverlayViewPage() {
         <>
           <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} />
           <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} />
-          {state.deckShown > 0 && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
+          {state.deckShown > 0 && !state.cardShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
+          {state.cardShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} />}
           <TopBanner state={state} now={now} winner={winner} />
         </>
       )}
@@ -178,6 +179,90 @@ function DeckPanel({ player, cardIndex }) {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+const ordinal = n => `${n}${(n % 100 > 10 && n % 100 < 14) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
+
+// The pair's archive history over the gameplay cam while the panel has it
+// shown (between games): each player's majors, top cuts, Day 2s and best
+// finishes on their own side, the head-to-head at majors between. The data
+// is the row's `player_card` (buildPlayerCard), written by Tournament
+// Lookup's send — the view has no session to query the archive itself.
+function PlayerCardPanel({ state, card }) {
+  const { wins, draws, matches } = card.headToHead
+  const [a, b] = state.players
+  const lead = wins[0] === wins[1] ? (wins[0] + draws === 0 ? 'First meeting' : 'Series tied') : `${(wins[0] > wins[1] ? a : b).name} leads`
+  return (
+    <div className="absolute flex bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden" style={{ left: SIDE_WIDTH + 40, right: SIDE_WIDTH + 40, top: 170, bottom: 40 }}>
+      <PlayerHalf player={a} history={card.players[0]} align="left" />
+      <div className="w-[300px] shrink-0 border-x-4 border-(--accent) flex flex-col items-center px-5 py-8 text-center">
+        <div className="text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Head to head</div>
+        <div className="mt-1 text-sm uppercase tracking-[0.2em] text-(--on-fill)/50">at majors</div>
+        <div className="mt-6 text-7xl leading-none tabular-nums text-(--accent)">
+          {wins[0]}<span className="text-(--on-fill)/40 mx-2">–</span>{wins[1]}
+        </div>
+        {draws > 0 && <div className="mt-2 text-base uppercase tracking-[0.2em] text-(--on-fill)/50">{draws} draw{draws === 1 ? '' : 's'}</div>}
+        <div className="mt-3 text-xl uppercase tracking-wide">{lead}</div>
+        <div className="mt-8 w-full space-y-4">
+          {matches.map((m, i) => (
+            <div key={i}>
+              <div className="text-lg leading-tight">{m.event} {m.year && <span className="text-(--on-fill)/50">{m.year}</span>}</div>
+              <div className="text-base text-(--on-fill)/60 uppercase tracking-wide">{m.phase}</div>
+              <div className="text-xl text-(--accent)">{m.winner === null ? 'Draw' : `${state.players[m.winner].name}${m.score ? ` ${m.score}` : ''}`}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <PlayerHalf player={b} history={card.players[1]} align="right" />
+    </div>
+  )
+}
+
+const TIER_LABEL = { cut: 'Top cut', day2: 'Day 2' }
+
+function PlayerHalf({ player, history, align }) {
+  const right = align === 'right'
+  return (
+    <div className={`flex-1 min-w-0 flex flex-col px-8 py-7 ${right ? 'items-end text-right' : 'items-start text-left'}`}>
+      <div className="text-5xl uppercase tracking-wide leading-none truncate max-w-full">{player.name}</div>
+      <div className={`mt-2 flex items-center gap-3 ${right ? 'flex-row-reverse' : ''}`}>
+        <span className="text-2xl text-(--on-fill)/70 tracking-widest">{player.record}</span>
+        <span className="flex gap-1.5">{player.inks.map(ink => <InkIcon key={ink} color={ink} size={30} />)}</span>
+      </div>
+      <div className="mt-7 flex gap-10">
+        <Tile label="Majors" value={history.eventsPlayed} align={align} />
+        <Tile label="Top cuts" value={history.topCutCount} align={align} />
+        <Tile label="Day 2s" value={history.dayTwoCount} align={align} />
+      </div>
+      <div className="mt-7 text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Best finishes at majors</div>
+      <div className="mt-2 w-full space-y-2">
+        {history.finishes.map((f, i) => (
+          <div key={i} className={`flex items-baseline gap-4 ${right ? 'flex-row-reverse' : ''}`}>
+            <span className="text-3xl text-(--accent) tabular-nums w-16 shrink-0" style={{ textAlign: align }}>{ordinal(f.rank)}</span>
+            <span className="min-w-0">
+              <span className="text-2xl leading-tight block truncate">
+                {f.event}
+                {f.tier && <span className="ml-3 align-middle text-sm uppercase tracking-[0.2em] px-2 py-0.5 bg-(--accent) text-(--fill)">{TIER_LABEL[f.tier]}</span>}
+              </span>
+              <span className="text-base text-(--on-fill)/60 uppercase tracking-wide">
+                {[f.year, f.players && `${f.players} players`, f.tier === 'cut' && f.topCutSize && `top ${f.topCutSize}`].filter(Boolean).join(' · ')}
+              </span>
+            </span>
+          </div>
+        ))}
+        {history.finishes.length === 0 && <div className="text-2xl text-(--on-fill)/50">No majors on record</div>}
+      </div>
+    </div>
+  )
+}
+
+function Tile({ label, value, align }) {
+  return (
+    <div style={{ textAlign: align }}>
+      <div className="text-5xl leading-none tabular-nums text-(--accent)">{value}</div>
+      <div className="mt-1 text-sm uppercase tracking-[0.3em] text-(--on-fill)/60">{label}</div>
     </div>
   )
 }

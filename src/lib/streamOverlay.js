@@ -65,6 +65,10 @@ export function rowToState(row) {
     note: row.note,
     // 0 = no deck over the gameplay cam, else the side (1 or 2) being shown.
     deckShown: row.deck_shown,
+    // The archive card for the pair (buildPlayerCard), or null; and whether
+    // the live view is showing it over the cam.
+    playerCard: row.player_card,
+    cardShown: row.card_shown,
     // Wall-time target while running (ms since epoch), null while paused.
     timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
     timerRemainingMs: row.timer_remaining_ms,
@@ -159,10 +163,12 @@ export function rphClockPatch(structure) {
 // clock and the event link come from RPH; lore, game wins and decklists
 // start fresh (the old pair's lists would be wrong) and no deck is shown;
 // inks are left alone (RPH doesn't know decks).
-export function featureMatchPatch({ eventName, round, players, timer, rphEventId }) {
+export function featureMatchPatch({ eventName, round, players, timer, rphEventId, playerCard = null }) {
   return {
     ...(timer ? timerPatch(timer) : {}),
     rph_event_id: rphEventId,
+    player_card: playerCard,
+    card_shown: false,
     event_name: eventName,
     round,
     p1_name: players[0].name, p1_record: players[0].record, p1_lore: 0, p1_game_wins: 0, p1_decklist: '',
@@ -173,9 +179,80 @@ export function featureMatchPatch({ eventName, round, players, timer, rphEventId
 
 const SIDE_FIELDS = ['name', 'record', 'inks', 'lore', 'game_wins', 'decklist']
 
+// The player card is per side too: its halves and the head-to-head record
+// mirror with the players.
+function swapPlayerCard(card) {
+  if (!card) return card
+  return {
+    players: [card.players[1], card.players[0]],
+    headToHead: {
+      wins: [card.headToHead.wins[1], card.headToHead.wins[0]],
+      draws: card.headToHead.draws,
+      matches: card.headToHead.matches.map(m => ({ ...m, winner: m.winner === null ? null : 1 - m.winner })),
+    },
+  }
+}
+
+// RPH event names as a stream caption: the long official forms become the
+// names players use. Leaves anything else alone.
+export function shortEventName(name) {
+  return (name ?? '')
+    .replace(/Disney Lorcana(?: TCG)? Challenge/i, 'DLC')
+    .replace(/Challenge Championship Qualifier/i, 'CCQ')
+    .replace(/\s*\((CCQ)\)/i, '')
+    .replace(/\s*[-:–]\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export const PLAYER_CARD_FINISHES = 8
+export const PLAYER_CARD_MEETINGS = 5
+
+// The pair's archive history as the view renders it, from the two
+// player-history responses and the head-to-head response that Tournament
+// Lookup's pairing panel already holds. Finishes: every top cut and Day 2
+// first (best rank first within each), then the rest by rank, capped at
+// what the card fits. Meetings: newest first, winner as a side index.
+export function buildPlayerCard({ histories, headToHead, playerIds }) {
+  const tier = e => (e.madeTopCut ? 0 : e.madeDayTwo ? 1 : 2)
+  const players = histories.map(h => ({
+    eventsPlayed: h.eventsPlayed,
+    topCutCount: h.topCutCount,
+    dayTwoCount: h.dayTwoCount ?? 0,
+    finishes: [...h.events]
+      .filter(e => e.rank != null)
+      .sort((a, b) => tier(a) - tier(b) || a.rank - b.rank || Date.parse(b.eventDate ?? 0) - Date.parse(a.eventDate ?? 0))
+      .slice(0, PLAYER_CARD_FINISHES)
+      .map(e => ({
+        event: shortEventName(e.eventName), year: e.eventDate ? new Date(e.eventDate).getUTCFullYear() : null,
+        rank: e.rank, players: e.startingPlayerCount, topCutSize: e.topCutSize,
+        tier: ['cut', 'day2', null][tier(e)],
+      })),
+  }))
+  const matches = [...headToHead.matches]
+    .filter(m => !m.isBye)
+    .sort((a, b) => Date.parse(b.eventDate ?? 0) - Date.parse(a.eventDate ?? 0) || b.roundNumber - a.roundNumber)
+    .slice(0, PLAYER_CARD_MEETINGS)
+    .map(m => ({
+      event: shortEventName(m.eventName), year: m.eventDate ? new Date(m.eventDate).getUTCFullYear() : null,
+      phase: m.phaseName && !/swiss|phase 1/i.test(m.phaseName) ? m.phaseName : `Round ${m.roundNumber}`,
+      winner: m.isDraw || !m.winnerId ? null : m.winnerId === playerIds[0] ? 0 : m.winnerId === playerIds[1] ? 1 : null,
+      score: m.gamesWonByWinner != null ? `${m.gamesWonByWinner}-${m.gamesWonByLoser ?? 0}` : null,
+    }))
+  const wins = [0, 0]
+  let draws = 0
+  for (const m of headToHead.matches) {
+    if (m.isBye) continue
+    if (m.isDraw || !m.winnerId) draws += 1
+    else if (m.winnerId === playerIds[0]) wins[0] += 1
+    else if (m.winnerId === playerIds[1]) wins[1] += 1
+  }
+  return { players, headToHead: { wins, draws, matches } }
+}
+
 // Mirrors which side each player sits on; a shown deck follows its player.
 export function swapSidesPatch(row) {
-  const patch = { deck_shown: [0, 2, 1][row.deck_shown] }
+  const patch = { deck_shown: [0, 2, 1][row.deck_shown], player_card: swapPlayerCard(row.player_card) }
   for (const f of SIDE_FIELDS) {
     patch[`p1_${f}`] = row[`p2_${f}`]
     patch[`p2_${f}`] = row[`p1_${f}`]
@@ -193,6 +270,7 @@ export const HOTKEYS = {
   o: { side: 2, field: 'game_wins', delta: 1 }, l: { side: 2, field: 'game_wins', delta: -1 },
   b: { toggleMode: true },
   1: { toggleDeck: 1 }, 2: { toggleDeck: 2 },
+  3: { toggleCard: true },
 }
 
 // The action for a keydown, or null: a plain key with no modifier, and never

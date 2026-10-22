@@ -101,16 +101,23 @@ export function StreamOverlayPage() {
   const controllerKey = row?.controller_key ?? null
   const mode = row?.mode ?? null
   const deckShown = row?.deck_shown ?? 0
+  const cardShown = row?.card_shown ?? false
+  const hasCard = Boolean(row?.player_card)
   useEffect(() => {
     if (!rowId) return
     const onKey = e => {
       const action = hotkeyAction(e)
       if (!action) return
       e.preventDefault()
-      if (action.toggleMode || action.toggleDeck) {
+      if (action.toggleMode || action.toggleDeck || action.toggleCard) {
+        if (action.toggleCard && !hasCard) return
+        // The deck and the player card share the slot over the cam: showing
+        // one hides the other.
         const patch = action.toggleMode
           ? { mode: mode === 'break' ? 'live' : 'break' }
-          : { deck_shown: deckShown === action.toggleDeck ? 0 : action.toggleDeck }
+          : action.toggleCard
+            ? { card_shown: !cardShown, deck_shown: 0 }
+            : { deck_shown: deckShown === action.toggleDeck ? 0 : action.toggleDeck, card_shown: false }
         setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
         updateTable(rowId, patch).catch(e => setError(e.message))
       } else {
@@ -119,7 +126,7 @@ export function StreamOverlayPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [rowId, controllerKey, mode, deckShown])
+  }, [rowId, controllerKey, mode, deckShown, cardShown, hasCard])
 
   // Optimistic local update, then the column write; a failed write surfaces.
   function write(id, patch) {
@@ -260,9 +267,22 @@ export function StreamOverlayPage() {
           )}
         </Card>
 
+        <Card title="Player card" description="Both players' majors history and head-to-head from the Tournament History archive, laid over the gameplay cam between games. Comes with the pairing when it's sent from Tournament Lookup." className="p-5 lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm text-gray-600">
+              {row.player_card
+                ? `${state.players[0].name || 'Left'}: ${row.player_card.players[0].eventsPlayed} majors, ${row.player_card.players[0].topCutCount} top cuts, ${row.player_card.players[0].dayTwoCount} Day 2s · ${state.players[1].name || 'Right'}: ${row.player_card.players[1].eventsPlayed} majors, ${row.player_card.players[1].topCutCount} top cuts, ${row.player_card.players[1].dayTwoCount} Day 2s · head-to-head ${row.player_card.headToHead.wins[0]}-${row.player_card.headToHead.wins[1]}`
+                : 'No player card for this pairing yet. Send the pairing from Tournament Lookup once its history has loaded.'}
+            </span>
+            <Button size="sm" variant={row.card_shown ? 'primary' : 'secondary'} aria-pressed={row.card_shown} disabled={!row.player_card} onClick={() => write(row.id, { card_shown: !row.card_shown, deck_shown: 0 })}>
+              {row.card_shown ? 'Hide from stream' : 'Show on stream'}
+            </Button>
+          </div>
+        </Card>
+
         <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
-            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck. Click outside any field first.
+            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck · <Kbd>3</Kbd> player card. Click outside any field first.
           </p>
           <Button size="sm" onClick={() => write(row.id, swapSidesPatch(row))}>Swap sides</Button>
         </div>
@@ -303,7 +323,7 @@ export function StreamOverlayPage() {
                 const inks = deckInks(matchDeckList(text, cardIndex))
                 write(row.id, { [`p${side}_decklist`]: text, ...(inks.length ? { [`p${side}_inks`]: inks } : {}) })
               }}
-              onToggleShow={() => setField('deck_shown', row.deck_shown === side ? 0 : side)}
+              onToggleShow={() => write(row.id, { deck_shown: row.deck_shown === side ? 0 : side, card_shown: false })}
             />
 
             <div className="grid grid-cols-2 gap-3">

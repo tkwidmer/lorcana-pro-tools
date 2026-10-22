@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchPublicTable, subscribeToTable, adjustTable, resetLore } from '../lib/streamTables'
-import { MAX_GAME_WINS, rowToState } from '../lib/streamOverlay'
+import { MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock } from '../lib/streamOverlay'
 
 // The players' controller: a tablet at the table, one half per player, that
 // only moves lore and game wins. Each tap calls adjust_stream_table, an
@@ -16,6 +16,13 @@ export function StreamOverlayControlPage() {
   const key = searchParams.get('key') ?? ''
   const [row, setRow] = useState(null)
   const [error, setError] = useState(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  // The round clock is a wall-time target on the row, so it ticks here too.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     fetchPublicTable(tableId).then(setRow).catch(e => setError(e.message))
@@ -48,19 +55,26 @@ export function StreamOverlayControlPage() {
     )
   }
 
-  const { players } = rowToState(row)
+  const state = rowToState(row)
+  const { players } = state
+  const remaining = timerRemainingMs(state, now)
 
   return (
     <div className="h-screen flex flex-col select-none">
       {error && <div className="shrink-0 bg-red-50 text-red-700 text-sm text-center py-1">{error}</div>}
-      <div className="shrink-0 flex justify-center py-3 border-b border-gray-200">
+      <div className="shrink-0 grid grid-cols-3 items-center px-6 py-3 border-b border-gray-200">
+        <div className="font-display uppercase tracking-wide text-gray-500 truncate">{state.round}</div>
         <button
           type="button"
           onClick={nextGame}
-          className={`font-display uppercase tracking-wider text-lg px-8 py-3 rounded border ${armed ? 'bg-forge text-on-forge border-forge' : 'bg-white text-gray-900 border-gray-300 hover:bg-gray-100 active:bg-gray-200'}`}
+          className={`justify-self-center font-display uppercase tracking-wider text-lg px-8 py-3 rounded border ${armed ? 'bg-forge text-on-forge border-forge' : 'bg-white text-gray-900 border-gray-300 hover:bg-gray-100 active:bg-gray-200'}`}
         >
           {armed ? 'Tap again to reset lore to 0' : 'Next game'}
         </button>
+        <div className="text-right">
+          <span className="font-display uppercase tracking-[0.3em] text-xs text-gray-500 mr-3">Time left</span>
+          <span className={`font-display text-3xl tabular-nums ${state.timerEndsAt !== null && remaining < 5 * 60 * 1000 ? 'text-red-600' : 'text-gray-900'}`}>{formatClock(remaining)}</span>
+        </div>
       </div>
       <div className="flex-1 flex min-h-0">
       {players.map((player, i) => (

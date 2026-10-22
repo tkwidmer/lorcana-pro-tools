@@ -63,6 +63,21 @@ describe('getTournamentStructure', () => {
     expect(structure.currentRoundNumber).toBe(2)
   })
 
+  it('reports the active round even before its standings are generated', () => {
+    const details = makeEventDetails({
+      tournament_phases: [{
+        round_type: 'SWISS', phase_name: 'Swiss', number_of_rounds: 6,
+        rounds: [roundComplete('r1', 1), roundComplete('r2', 2), { id: 'r3', round_number: 3, status: 'IN_PROGRESS', standings_status: 'PENDING' }, { id: 'r4', round_number: 4, status: 'UPCOMING' }],
+      }],
+    })
+    const structure = getTournamentStructure(details)
+    expect(structure.currentRoundId).toBe('r2')
+    expect(structure.activeRoundId).toBe('r3')
+    expect(structure.activeRoundNumber).toBe(3)
+    expect(structure.activePhaseType).toBe('SWISS')
+    expect(getTournamentStructure(makeEventDetails({ tournament_phases: [{ round_type: 'SWISS', phase_name: 'Swiss', number_of_rounds: 6, rounds: [{ id: 'r1', round_number: 1, status: 'UPCOMING' }] }] })).activeRoundId).toBeNull()
+  })
+
   it('reports swiss rounds remaining', () => {
     const structure = getTournamentStructure(makeEventDetails())
     // 6 total, current = 3 → 3 remaining

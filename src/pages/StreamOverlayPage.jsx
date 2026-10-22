@@ -13,7 +13,7 @@ import {
 import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks, clearTablePatch,
-  roundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot,
+  activeRoundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot,
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
 import { StreamPairingPicker } from '../components/StreamPairingPicker'
@@ -172,7 +172,7 @@ export function StreamOverlayPage() {
     write(row.id, featureMatchPatch({
       // The operator's own event name wins; RPH's only fills a blank one.
       eventName: row.event_name || (rphStructure.eventName ?? ''),
-      round: roundLabel(rphStructure),
+      round: activeRoundLabel(rphStructure),
       players: pairing.players.map(p => ({ name: p.name, record: p.record })),
       timer: timerFromRph(rphStructure),
       rphEventId,
@@ -284,7 +284,7 @@ export function StreamOverlayPage() {
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm text-gray-900">
                   {rphStructure
-                    ? `${rphStructure.eventName} · ${roundLabel(rphStructure)}${rphStructure.isElimination ? '' : ` of ${rphStructure.totalSwissRounds}`} · ${rphStructure.startingPlayerCount ?? '?'} players`
+                    ? `${rphStructure.eventName} · ${rphStructure.activeRoundId ? activeRoundLabel(rphStructure) : 'Not started'}${rphStructure.activePhaseType === 'SWISS' ? ` of ${rphStructure.totalSwissRounds}` : ''} · ${rphStructure.startingPlayerCount ?? '?'} players`
                     : rphError ? `Event ${rphEventId}: last sync failed, retrying` : `Event ${rphEventId}…`}
                 </span>
                 <span className={`text-xs font-semibold uppercase tracking-widest ${rphError ? 'text-red-600' : 'text-emerald-600'}`}>Linked</span>
@@ -298,7 +298,7 @@ export function StreamOverlayPage() {
             )}
           </Labeled>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="primary" disabled={!rphStructure?.currentRoundId} onClick={() => setPicker(true)}>Pick pairing…</Button>
+            <Button size="sm" variant="primary" disabled={!rphStructure?.activeRoundId} onClick={() => setPicker(true)}>Pick pairing…</Button>
             <Button size="sm" disabled={!rphStructure?.currentRoundId || sending !== null} onClick={sendStandings}>{sending === 'standings' ? 'Sending…' : 'Send standings'}</Button>
             <Button size="sm" disabled={!rphStructure?.eliminationPhaseName || sending !== null} onClick={sendBracket}>{sending === 'bracket' ? 'Sending…' : 'Send bracket'}</Button>
           </div>

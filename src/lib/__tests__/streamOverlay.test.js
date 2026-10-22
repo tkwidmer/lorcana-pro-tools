@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, roundLabel, currentRoundPairings,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, roundLabel, activeRoundLabel, currentRoundPairings,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -86,6 +86,8 @@ describe('streamOverlay row mapping', () => {
   it('captions the round: the elimination phase in top cut, else Round N', () => {
     expect(roundLabel({ isElimination: false, currentRoundNumber: 4, eliminationPhaseName: 'Top 8' })).toBe('Round 4')
     expect(roundLabel({ isElimination: true, currentRoundNumber: 9, eliminationPhaseName: 'Top 8' })).toBe('Top 8')
+    expect(activeRoundLabel({ activePhaseType: 'SWISS', activePhaseName: 'Swiss', activeRoundNumber: 7 })).toBe('Round 7')
+    expect(activeRoundLabel({ activePhaseType: 'RANKED_SINGLE_ELIMINATION', activePhaseName: 'Top 8', activeRoundNumber: 9 })).toBe('Top 8')
   })
 
   it('lists the current round\'s pairings in table order with records, byes left out', () => {

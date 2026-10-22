@@ -172,9 +172,16 @@ export function roundLabel(structure) {
   return structure.isElimination && structure.eliminationPhaseName ? structure.eliminationPhaseName : `Round ${structure.currentRoundNumber}`
 }
 
-// The current round's pairings as the panel's picker lists them, from the
-// round's matches and standings: table order, both players with their id,
-// name and current record. Byes are left out — a bye is no feature match.
+// The active round (the latest that has started, standings or not) as the
+// overlay captions it — what a pairing picked from it is sent with.
+export function activeRoundLabel(structure) {
+  return structure.activePhaseType === 'RANKED_SINGLE_ELIMINATION' ? structure.activePhaseName : `Round ${structure.activeRoundNumber}`
+}
+
+// The active round's pairings as the panel's picker lists them, from the
+// round's matches and the latest standings: table order, both players with
+// their id, name and current record. Byes are left out — a bye is no
+// feature match.
 export function currentRoundPairings(matches, standings) {
   const recordOf = id => standings.find(e => String(e.player.id) === String(id))?.record ?? ''
   const side = p => ({ id: p.player.id, name: p.user_event_status?.best_identifier ?? p.player.best_identifier ?? '', record: recordOf(p.player.id) })

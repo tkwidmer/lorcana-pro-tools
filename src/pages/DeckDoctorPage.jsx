@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
-import { getToken, fetchAllMatchHistory, fetchStats, fetchPersonalStats } from '../lib/duelsApi'
+import { getToken, subscribeTokens, fetchAllMatchHistory, fetchStats, fetchPersonalStats } from '../lib/duelsApi'
 import { getAllGamelogs } from '../lib/gamelogHistory'
 import { computeCardImpact } from '../lib/cardImpact'
 import { useCards } from '../hooks/useCards'
@@ -56,13 +56,15 @@ const entriesFrom = (counts, cardById, nameOf) =>
   [...counts].map(([id, count]) => ({ key: id, name: nameOf(id), count, card: cardById[id] ?? null }))
 
 export function DeckDoctorPage() {
-  const hasToken = !!getToken()
+  // Tokens load from Supabase after sign-in, possibly after first render.
+  const hasToken = !!useSyncExternalStore(subscribeTokens, getToken)
   const [prefs] = useState(() => readJson(PREFS_KEY, {}))
   const [queueOverride, setQueueOverride] = useState(prefs.queue ?? null)
   const [deckKey, setDeckKey] = useState(prefs.deckKey ?? null)
-  const [mode, setMode] = useState(hasToken ? 'deck' : 'paste')
+  const [modeChoice, setModeChoice] = useState(null)
+  const mode = modeChoice ?? (hasToken ? 'deck' : 'paste')
   const [pasted, setPasted] = useState('')
-  const [games, setGames] = useState(hasToken ? null : [])
+  const [games, setGames] = useState(null)
   const [gamesError, setGamesError] = useState(null)
   const [statsState, setStatsState] = useState({ queue: null, data: null, error: null })
   const [gamelogs, setGamelogs] = useState([])
@@ -109,7 +111,11 @@ export function DeckDoctorPage() {
       .catch(() => setDeckVersionsByDeckId((prev) => ({ ...prev, [deckId]: [] })))
   }, [deckId, deckVersionsByDeckId])
 
-  const pastedEntries = useMemo(() => (mode === 'paste' ? matchDeckList(pasted, cardIndex) : []), [mode, pasted, cardIndex])
+  // duels.ink's own export appends "(set-number)" to each line; match by name.
+  const pastedEntries = useMemo(
+    () => (mode === 'paste' ? matchDeckList(pasted.replace(/\s*\([^)]*\)\s*$/gm, ''), cardIndex) : []),
+    [mode, pasted, cardIndex],
+  )
   const knownIds = useMemo(() => fieldCardIds(stats), [stats])
   const myCounts = useMemo(
     () => (mode === 'paste' ? countsFromPasted(pastedEntries, cards, knownIds) : countsFromDecklist(deck?.latestDecklist)),
@@ -194,7 +200,7 @@ export function DeckDoctorPage() {
             </label>
           )}
           {(hasToken || mode === 'deck') && (
-            <Button variant="quiet" onClick={() => setMode(mode === 'deck' ? 'paste' : 'deck')}>
+            <Button variant="quiet" onClick={() => setModeChoice(mode === 'deck' ? 'paste' : 'deck')}>
               {mode === 'deck' ? 'Paste a list instead' : 'Use my decks'}
             </Button>
           )}

@@ -53,11 +53,11 @@ describe('streamOverlay row mapping', () => {
   it('builds the player card: cuts and Day 2s first, meetings newest first, head-to-head by side', () => {
     const ev = (eventName, eventDate, rank, o = {}) => ({ eventName, eventDate, rank, startingPlayerCount: 500, topCutSize: 32, madeTopCut: false, madeDayTwo: false, ...o })
     const histories = [
-      { eventsPlayed: 4, topCutCount: 1, dayTwoCount: 1, events: [
+      { eventsPlayed: 4, majorsPlayed: 3, topCutCount: 1, dayTwoCount: 1, events: [
         ev('Open A', '2026-01-01', 40), ev('Disney Lorcana Challenge: Milwaukee', '2026-03-01', 150, { madeDayTwo: true }),
-        ev('CCQ B', '2026-05-01', 3, { madeTopCut: true, madeDayTwo: true }), ev('Open C', '2026-06-01', 9),
+        ev('CCQ B', '2026-05-01', 3, { madeTopCut: true, madeDayTwo: true }), ev('Open C', '2026-06-01', 9, { sideEvent: true }),
       ] },
-      { eventsPlayed: 1, topCutCount: 0, dayTwoCount: 0, events: [ev('Open A', '2026-01-01', 77)] },
+      { eventsPlayed: 1, majorsPlayed: 1, topCutCount: 0, dayTwoCount: 0, events: [ev('Open A', '2026-01-01', 77)] },
     ]
     const headToHead = { matches: [
       { eventName: 'Open A', eventDate: '2026-01-01', roundNumber: 4, phaseName: 'Phase 1', winnerId: 'b', isDraw: false, isBye: false, gamesWonByWinner: 2, gamesWonByLoser: 0 },
@@ -69,6 +69,8 @@ describe('streamOverlay row mapping', () => {
       ['CCQ B', 3, 'cut'], ['DLC Milwaukee', 150, 'day2'], ['Open C', 9, null], ['Open A', 40, null],
     ])
     expect(card.players[0].finishes[0].year).toBe(2026)
+    expect(card.players[0].majorsPlayed).toBe(3)
+    expect(card.players[0].finishes.map(f => f.side)).toEqual([false, false, true, false])
     expect(card.players[1].finishes).toHaveLength(1)
     expect(card.headToHead.wins).toEqual([1, 1])
     expect(card.headToHead.draws).toBe(1)

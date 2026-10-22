@@ -558,6 +558,8 @@ Two display details in the view: a player's name steps down a size class as it o
 
 **Day 2 in the archive:** `tournament_history_standings.made_day_two` (same migration), precomputed at import like `made_top_cut`: a player made Day 2 if they played a match in the event's second Swiss phase (a DLC's "Day Two Swiss"; matches carry `phase_name`), counted only when that phase holds fewer players than started — a few side events run everyone through two Swiss phases. The migration's UPDATE backfills already-imported events from their matches. `player-history` returns `madeDayTwo` per event and `dayTwoCount`.
 
+**Majors vs side events in the archive:** the archive's `event_tier` is the official template (`challenge`, `challenge_championship`, `lcq`, or a generic tier), and CCQs and the large side events of a DLC weekend both sit on generic templates, so `api/_lib/sideEvents.ts` decides: an event at the same `store_name` as a `challenge`/`challenge_championship` event within three days of it, not on a major template itself, is a side event. `player-history` flags each event `sideEvent` and returns `majorsPlayed` beside `eventsPlayed`; `topCutCount`/`dayTwoCount` count majors only. The player card's "Majors" tile and `PairingHistoryPanel`'s "Majors played" read `majorsPlayed`; side-event finishes still appear in the card's list with a "Side event" tag.
+
 Deliberately not included (cheap to add): the featured-card art some broadcast overlays show, and any layout other than 1920×1080.
 
 ### Ink Color Icons

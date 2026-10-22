@@ -301,7 +301,7 @@ export const PLAYER_CARD_MEETINGS = 5
 export function buildPlayerCard({ histories, headToHead, playerIds }) {
   const tier = e => (e.madeTopCut ? 0 : e.madeDayTwo ? 1 : 2)
   const players = histories.map(h => ({
-    eventsPlayed: h.eventsPlayed,
+    majorsPlayed: h.majorsPlayed,
     topCutCount: h.topCutCount,
     dayTwoCount: h.dayTwoCount ?? 0,
     finishes: [...h.events]
@@ -312,6 +312,7 @@ export function buildPlayerCard({ histories, headToHead, playerIds }) {
         event: shortEventName(e.eventName), year: e.eventDate ? new Date(e.eventDate).getUTCFullYear() : null,
         rank: e.rank, players: e.startingPlayerCount, topCutSize: e.topCutSize,
         tier: ['cut', 'day2', null][tier(e)],
+        side: Boolean(e.sideEvent),
       })),
   }))
   const matches = [...headToHead.matches]

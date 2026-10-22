@@ -193,6 +193,17 @@ export async function searchPlayers(query: string, limit = 20) {
 // All rph_event_ids already in the archive — used to filter suggested
 // discovery candidates down to ones actually worth showing. There are only
 // ~100-200 rows here, so a single unfiltered select is fine.
+// The DLC / Championship events a side event can hang off (sideEvents.ts).
+export async function getMajorParents(): Promise<Array<{ store_name: string | null; event_date: string | null; event_tier: string | null }>> {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_events')
+    .select('store_name, event_date, event_tier')
+    .in('event_tier', ['challenge', 'challenge_championship'])
+  if (error) throw error
+  return data ?? []
+}
+
 export async function getAllImportedEventIds(): Promise<Set<string>> {
   const supabase = getSupabaseServiceClient()
   const { data, error } = await supabase.from('tournament_history_events').select('rph_event_id')

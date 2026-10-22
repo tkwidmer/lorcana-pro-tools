@@ -362,7 +362,7 @@ export function StreamOverlayPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-gray-600">
               {row.player_card
-                ? `${state.players[0].name || 'Left'}: ${row.player_card.players[0].eventsPlayed} majors, ${row.player_card.players[0].topCutCount} top cuts, ${row.player_card.players[0].dayTwoCount} Day 2s · ${state.players[1].name || 'Right'}: ${row.player_card.players[1].eventsPlayed} majors, ${row.player_card.players[1].topCutCount} top cuts, ${row.player_card.players[1].dayTwoCount} Day 2s · head-to-head ${row.player_card.headToHead.wins[0]}-${row.player_card.headToHead.wins[1]}`
+                ? `${state.players[0].name || 'Left'}: ${row.player_card.players[0].majorsPlayed} majors, ${row.player_card.players[0].topCutCount} top cuts, ${row.player_card.players[0].dayTwoCount} Day 2s · ${state.players[1].name || 'Right'}: ${row.player_card.players[1].majorsPlayed} majors, ${row.player_card.players[1].topCutCount} top cuts, ${row.player_card.players[1].dayTwoCount} Day 2s · head-to-head ${row.player_card.headToHead.wins[0]}-${row.player_card.headToHead.wins[1]}`
                 : 'No player card for this pairing yet. It comes with a pairing picked from the linked event.'}
             </span>
             <Button size="sm" variant={row.card_shown ? 'primary' : 'secondary'} aria-pressed={row.card_shown} disabled={!row.player_card} onClick={() => write(row.id, { card_shown: !row.card_shown, deck_shown: 0 })}>

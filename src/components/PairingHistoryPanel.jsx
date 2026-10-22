@@ -49,7 +49,7 @@ function PlayerSummaryCard({ label, playerId, history, loading, error }) {
           <>
             <div className="flex gap-4 mb-2">
               <div>
-                <div className="text-lg font-bold text-gray-900">{history.eventsPlayed}</div>
+                <div className="text-lg font-bold text-gray-900">{history.majorsPlayed}</div>
                 <div className="text-xs text-gray-500">Majors played</div>
               </div>
               <div>

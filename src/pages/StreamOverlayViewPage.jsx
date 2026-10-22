@@ -233,19 +233,20 @@ function PlayerHalf({ player, history, align }) {
         <span className="flex gap-1.5">{player.inks.map(ink => <InkIcon key={ink} color={ink} size={30} />)}</span>
       </div>
       <div className="mt-7 flex gap-10">
-        <Tile label="Majors" value={history.eventsPlayed} align={align} />
+        <Tile label="Majors" value={history.majorsPlayed} align={align} />
         <Tile label="Top cuts" value={history.topCutCount} align={align} />
         <Tile label="Day 2s" value={history.dayTwoCount} align={align} />
       </div>
-      <div className="mt-7 text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Best finishes at majors</div>
+      <div className="mt-7 text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Best finishes</div>
       <div className="mt-2 w-full space-y-2">
         {history.finishes.map((f, i) => (
           <div key={i} className={`flex items-baseline gap-4 ${right ? 'flex-row-reverse' : ''}`}>
             <span className="text-3xl text-(--accent) tabular-nums w-16 shrink-0" style={{ textAlign: align }}>{ordinal(f.rank)}</span>
             <span className="min-w-0">
-              <span className="text-2xl leading-tight block truncate">
-                {f.event}
-                {f.tier && <span className="ml-3 align-middle text-sm uppercase tracking-[0.2em] px-2 py-0.5 bg-(--accent) text-(--fill)">{TIER_LABEL[f.tier]}</span>}
+              <span className={`flex items-center gap-3 ${right ? 'flex-row-reverse' : ''}`}>
+                <span className="text-2xl leading-tight truncate min-w-0">{f.event}</span>
+                {f.tier && <span className="shrink-0 text-sm uppercase tracking-[0.2em] px-2 py-0.5 bg-(--accent) text-(--fill)">{TIER_LABEL[f.tier]}</span>}
+                {f.side && <span className="shrink-0 text-sm uppercase tracking-[0.2em] px-2 py-0.5 border border-(--on-fill)/40 text-(--on-fill)/70">Side event</span>}
               </span>
               <span className="text-base text-(--on-fill)/60 uppercase tracking-wide">
                 {[f.year, f.players && `${f.players} players`, f.tier === 'cut' && f.topCutSize && `top ${f.topCutSize}`].filter(Boolean).join(' · ')}

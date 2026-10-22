@@ -243,14 +243,16 @@ function PlayerHalf({ player, history, align }) {
           <div key={i} className={`flex items-baseline gap-4 ${right ? 'flex-row-reverse' : ''}`}>
             <span className="text-3xl text-(--accent) tabular-nums w-16 shrink-0" style={{ textAlign: align }}>{ordinal(f.rank)}</span>
             <span className="min-w-0">
-              <span className={`flex items-center gap-3 ${right ? 'flex-row-reverse' : ''}`}>
-                <span className="text-2xl leading-tight truncate min-w-0">{f.event}</span>
-                {f.tier && <span className="shrink-0 text-sm uppercase tracking-[0.2em] px-2 py-0.5 bg-(--accent) text-(--fill)">{TIER_LABEL[f.tier]}</span>}
-                {f.side && <span className="shrink-0 text-sm uppercase tracking-[0.2em] px-2 py-0.5 border border-(--on-fill)/40 text-(--on-fill)/70">Side event</span>}
-              </span>
-              <span className="text-base text-(--on-fill)/60 uppercase tracking-wide">
+              <span className="text-2xl leading-tight block truncate">{f.event}</span>
+              <span className="text-base text-(--on-fill)/60 uppercase tracking-wide block">
                 {[f.year, f.players && `${f.players} players`, f.tier === 'cut' && f.topCutSize && `top ${f.topCutSize}`].filter(Boolean).join(' · ')}
               </span>
+              {(f.tier || f.side) && (
+                <span className={`mt-1 flex gap-2 ${right ? 'flex-row-reverse' : ''}`}>
+                  {f.tier && <span className="text-xs uppercase tracking-[0.2em] px-1.5 py-0.5 bg-(--accent) text-(--fill)">{TIER_LABEL[f.tier]}</span>}
+                  {f.side && <span className="text-xs uppercase tracking-[0.2em] px-1.5 py-0.5 border border-(--on-fill)/40 text-(--on-fill)/70">Side event</span>}
+                </span>
+              )}
             </span>
           </div>
         ))}

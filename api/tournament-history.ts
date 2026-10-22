@@ -7,6 +7,7 @@ import {
   fetchFinalStandings,
   fetchAllRoundMatchesServer,
   eventDateOf,
+  eliminationPhaseName,
 } from './_lib/tournamentImport.js'
 import {
   upsertEvent,
@@ -18,6 +19,13 @@ import {
   listRecentImports,
   getAllImportedEventIds,
   getPairingBadges,
+  listEvents,
+  getWinners,
+  getEventByRphId,
+  getEventStandings,
+  getEventMatches,
+  getEventPlayerMatches,
+  getPlayerMatches,
 } from './_lib/tournamentHistorySupabase.js'
 import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournamentDiscovery.js'
 
@@ -26,8 +34,18 @@ import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournament
 // into one function dispatched by `?endpoint=` rather than one route per
 // endpoint — same reason as api/duels.ts: Vercel's Hobby plan caps a
 // deployment at 12 serverless functions.
+//
+// Auth: the archive reads (`events`, `event`, `event-player`, `player`,
+// `player-history`, `head-to-head`, `search-players`) are public and
+// edge-cached — the data only changes on admin import, so the cache is the
+// abuse/cost control. `import`, `recent-imports` and `suggested-imports` are
+// admin-only; `pairing-badges` needs any signed-in session.
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+const PUBLIC_CACHE = 'public, s-maxage=300, stale-while-revalidate=3600'
+const SEARCH_CACHE = 'public, s-maxage=60, stale-while-revalidate=300'
+const SEARCH_MIN_CHARS = 3
 
 function str(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
@@ -145,9 +163,6 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
-  const userId = await requireSession(req, res)
-  if (!userId) return
-
   const playerId = str(req.query.playerId)
   if (!playerId) return res.status(400).json({ error: 'Missing playerId' })
 
@@ -165,6 +180,7 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
       topCutSize: r.event?.top_cut_size ?? null,
       startingPlayerCount: r.event?.starting_player_count ?? null,
     }))
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
     return res.status(200).json({
       playerId,
       playerName: rows[0]?.player_name ?? null,
@@ -179,9 +195,6 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleHeadToHead(req: VercelRequest, res: VercelResponse) {
-  const userId = await requireSession(req, res)
-  if (!userId) return
-
   const playerA = str(req.query.playerA)
   const playerB = str(req.query.playerB)
   if (!playerA || !playerB) return res.status(400).json({ error: 'playerA and playerB are required' })
@@ -211,6 +224,7 @@ async function handleHeadToHead(req: VercelRequest, res: VercelResponse) {
       { playerAWins: 0, playerBWins: 0, draws: 0 }
     )
 
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
     return res.status(200).json({ playerAId: playerA, playerBId: playerB, matches, metRecord })
   } catch (err) {
     console.error('tournament-history head-to-head failed:', err instanceof Error ? err.message : err)
@@ -219,18 +233,141 @@ async function handleHeadToHead(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleSearchPlayers(req: VercelRequest, res: VercelResponse) {
-  const userId = await requireSession(req, res)
-  if (!userId) return
-
   const q = str(req.query.q)
-  if (!q || q.trim().length === 0) return res.status(200).json({ players: [] })
+  if (!q || q.trim().length < SEARCH_MIN_CHARS) return res.status(200).json({ players: [] })
 
   try {
     const players = await searchPlayers(q.trim())
+    res.setHeader('Cache-Control', SEARCH_CACHE)
     return res.status(200).json({ players })
   } catch (err) {
     console.error('tournament-history search-players failed:', err instanceof Error ? err.message : err)
     return res.status(500).json({ error: 'Failed to search players' })
+  }
+}
+
+function eventShape(r: any) {
+  return {
+    eventId: r.rph_event_id,
+    eventName: r.event_name,
+    eventUrl: r.event_url ?? null,
+    eventDate: r.event_date ?? null,
+    storeName: r.store_name ?? null,
+    gameplayFormat: r.gameplay_format ?? null,
+    startingPlayerCount: r.starting_player_count ?? null,
+    topCutSize: r.top_cut_size ?? null,
+    hasElimination: Boolean(r.has_elimination),
+    totalSwissRounds: r.total_swiss_rounds ?? 0,
+    eventTier: r.event_tier ?? null,
+  }
+}
+
+function matchShape(r: any, eventId: string | null) {
+  return {
+    eventId,
+    roundNumber: r.round_number,
+    phaseName: r.phase_name ?? null,
+    tableNumber: r.table_number ?? null,
+    player1: { id: r.player1_id, name: r.player1_name ?? null },
+    player2: r.player2_id ? { id: r.player2_id, name: r.player2_name ?? null } : null,
+    winnerId: r.winner_id ?? null,
+    isBye: Boolean(r.is_bye),
+    isDraw: Boolean(r.is_draw),
+    gamesWonByWinner: r.games_won_by_winner ?? null,
+    gamesWonByLoser: r.games_won_by_loser ?? null,
+  }
+}
+
+async function handleEvents(_req: VercelRequest, res: VercelResponse) {
+  try {
+    const [rows, winners] = await Promise.all([listEvents(), getWinners()])
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
+    return res.status(200).json({
+      events: rows.map((r: any) => ({ ...eventShape(r), winner: winners.get(r.id) ?? null })),
+    })
+  } catch (err) {
+    console.error('tournament-history events failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to load events' })
+  }
+}
+
+async function handleEvent(req: VercelRequest, res: VercelResponse) {
+  const eventId = str(req.query.eventId)
+  if (!eventId || !ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
+  try {
+    const row = await getEventByRphId(eventId)
+    if (!row) return res.status(404).json({ error: 'Event not found' })
+    const phase = eliminationPhaseName(row.raw_event_details)
+    const [standings, bracketRows] = await Promise.all([
+      getEventStandings(row.id),
+      phase ? getEventMatches(row.id, phase) : Promise.resolve([]),
+    ])
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
+    return res.status(200).json({
+      event: eventShape(row),
+      standings: standings.map((s: any) => ({
+        playerId: s.rph_player_id,
+        playerName: s.player_name,
+        rank: s.rank,
+        matchPoints: s.match_points,
+        record: s.record,
+        madeTopCut: Boolean(s.made_top_cut),
+      })),
+      bracket: bracketRows.map((m: any) => matchShape(m, eventId)),
+    })
+  } catch (err) {
+    console.error('tournament-history event failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to load event' })
+  }
+}
+
+async function handleEventPlayer(req: VercelRequest, res: VercelResponse) {
+  const eventId = str(req.query.eventId)
+  const playerId = str(req.query.playerId)
+  if (!eventId || !ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
+  if (!playerId || !ID_RE.test(playerId)) return res.status(400).json({ error: 'Invalid playerId' })
+  try {
+    const row = await getEventByRphId(eventId)
+    if (!row) return res.status(404).json({ error: 'Event not found' })
+    const rows = await getEventPlayerMatches(row.id, playerId)
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
+    return res.status(200).json({ matches: rows.map((m: any) => matchShape(m, eventId)) })
+  } catch (err) {
+    console.error('tournament-history event-player failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to load player matches' })
+  }
+}
+
+async function handlePlayer(req: VercelRequest, res: VercelResponse) {
+  const playerId = str(req.query.playerId)
+  if (!playerId || !ID_RE.test(playerId)) return res.status(400).json({ error: 'Invalid playerId' })
+  try {
+    const [history, matchRows] = await Promise.all([getPlayerHistory(playerId), getPlayerMatches(playerId)])
+    if (history.length === 0) return res.status(404).json({ error: 'Player not found' })
+    const events = history.map((r: any) => ({
+      eventId: r.event?.rph_event_id ?? null,
+      eventName: r.event?.event_name ?? null,
+      eventDate: r.event?.event_date ?? null,
+      storeName: r.event?.store_name ?? null,
+      gameplayFormat: r.event?.gameplay_format ?? null,
+      eventTier: r.event?.event_tier ?? null,
+      rank: r.rank,
+      matchPoints: r.match_points,
+      record: r.record,
+      madeTopCut: Boolean(r.made_top_cut),
+      topCutSize: r.event?.top_cut_size ?? null,
+      startingPlayerCount: r.event?.starting_player_count ?? null,
+    }))
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
+    return res.status(200).json({
+      playerId,
+      playerName: history[0].player_name, // getPlayerHistory sorts newest first
+      events,
+      matches: matchRows.map((m: any) => matchShape(m, m.event?.rph_event_id ?? null)),
+    })
+  } catch (err) {
+    console.error('tournament-history player failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to load player' })
   }
 }
 
@@ -349,6 +486,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handlePairingBadges(req, res)
     case 'suggested-imports':
       return handleSuggestedImports(req, res)
+    case 'events':
+      return handleEvents(req, res)
+    case 'event':
+      return handleEvent(req, res)
+    case 'event-player':
+      return handleEventPlayer(req, res)
+    case 'player':
+      return handlePlayer(req, res)
     default:
       return res.status(400).json({ error: 'Missing or invalid endpoint param' })
   }

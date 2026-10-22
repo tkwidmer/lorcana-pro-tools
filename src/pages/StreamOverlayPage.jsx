@@ -271,6 +271,20 @@ export function StreamOverlayPage() {
           )}
         </Card>
 
+        <Card title="Break screen" description="What the break screen shows: the pairing (with the last result or the next match), or a standings or bracket snapshot sent from Tournament Lookup's Standings and Bracket tabs. Sending one switches to it; re-send after each round." className="p-5 lg:col-span-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              ['', 'Pairing', true, ''],
+              ['standings', 'Standings', Boolean(row.standings), row.standings ? `after ${row.standings.round} · ${row.standings.players} players` : 'none sent'],
+              ['bracket', 'Bracket', Boolean(row.bracket), row.bracket ? `${row.bracket.phase} · ${row.bracket.rounds.length} rounds` : 'none sent'],
+            ].map(([value, label, available, sub]) => (
+              <Button key={value} size="sm" variant={row.break_panel === value ? 'primary' : 'secondary'} aria-pressed={row.break_panel === value} disabled={!available} onClick={() => setField('break_panel', value)}>
+                {label}{sub && <span className="normal-case tracking-normal font-sans opacity-70">· {sub}</span>}
+              </Button>
+            ))}
+          </div>
+        </Card>
+
         <Card title="Player card" description="Both players' majors history and head-to-head from the Tournament History archive, laid over the gameplay cam between games. Comes with the pairing when it's sent from Tournament Lookup." className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-gray-600">

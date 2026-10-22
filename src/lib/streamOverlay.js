@@ -5,6 +5,7 @@
 // column patches. Data access lives in streamTables.js.
 
 import { resolveColors } from './inkColors'
+import { bracketRoundLabel } from './bracket'
 
 export const OVERLAY_WIDTH = 1920
 export const OVERLAY_HEIGHT = 1080
@@ -69,6 +70,12 @@ export function rowToState(row) {
     // the live view is showing it over the cam.
     playerCard: row.player_card,
     cardShown: row.card_shown,
+    // Break-screen content sent from Tournament Lookup (buildStandingsSnapshot /
+    // buildBracketSnapshot), and which of them the break screen shows: '' is
+    // the pairing, else 'standings' or 'bracket'.
+    standings: row.standings,
+    bracket: row.bracket,
+    breakPanel: row.break_panel,
     // Wall-time target while running (ms since epoch), null while paused.
     timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
     timerRemainingMs: row.timer_remaining_ms,
@@ -183,7 +190,7 @@ const SIDE_FIELDS = ['name', 'record', 'inks', 'lore', 'game_wins', 'decklist']
 // RPH link and anything shown over the cam. The event name, logos, theme
 // and timer stay — they're the operator's setup, not the pairing's.
 export function clearTablePatch() {
-  const patch = { round: '', note: '', rph_event_id: null, mode: 'live', deck_shown: 0, card_shown: false, player_card: null }
+  const patch = { round: '', note: '', rph_event_id: null, mode: 'live', deck_shown: 0, card_shown: false, player_card: null, standings: null, bracket: null, break_panel: '' }
   for (const n of [1, 2]) {
     Object.assign(patch, { [`p${n}_name`]: '', [`p${n}_record`]: '', [`p${n}_inks`]: [], [`p${n}_lore`]: 0, [`p${n}_game_wins`]: 0, [`p${n}_decklist`]: '' })
   }
@@ -214,6 +221,46 @@ export function shortEventName(name) {
     .replace(/\s*[-:–]\s*/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+export const STANDINGS_ROWS = 16
+
+// The top of the standings as the break screen shows them, from Tournament
+// Lookup's loaded standings and event structure.
+export function buildStandingsSnapshot(allStandings, structure) {
+  const round = structure.isElimination && structure.eliminationPhaseName ? structure.eliminationPhaseName : `Round ${structure.currentRoundNumber}`
+  const rows = [...allStandings]
+    .filter(e => e.rank != null)
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, STANDINGS_ROWS)
+    .map(e => ({ rank: e.rank, name: e.user_event_status?.best_identifier ?? e.player?.best_identifier ?? '', record: e.record ?? '', points: e.match_points ?? null }))
+  return { round, players: allStandings.length, rows }
+}
+
+// The top cut as the break screen shows it, from Tournament Lookup's loaded
+// matches: the elimination phase's rounds in order, each match's two names,
+// the winner as a side index, and the game score. Table order is bracket
+// order, as in EliminationBracket.
+export function buildBracketSnapshot(allMatches, phaseName) {
+  const inPhase = (allMatches ?? []).filter(m => m.phase_name === phaseName)
+  const roundNumbers = [...new Set(inPhase.map(m => m.round_number))].sort((a, b) => a - b)
+  const rounds = roundNumbers.map(roundNum => {
+    const matches = inPhase
+      .filter(m => m.round_number === roundNum)
+      .sort((a, b) => (a.table_number ?? 0) - (b.table_number ?? 0))
+      .map(m => {
+        const [p1, p2] = [...(m.player_match_relationships ?? [])].sort((a, b) => a.player_order - b.player_order)
+        const name = p => p?.user_event_status?.best_identifier ?? p?.player?.best_identifier ?? null
+        const winner = m.winning_player == null ? null : m.winning_player === p1?.player?.id ? 0 : m.winning_player === p2?.player?.id ? 1 : null
+        return {
+          p1: name(p1), p2: m.match_is_bye ? null : name(p2),
+          winner, bye: Boolean(m.match_is_bye),
+          score: m.games_won_by_winner != null ? `${m.games_won_by_winner}-${m.games_won_by_loser ?? 0}` : null,
+        }
+      })
+    return { label: bracketRoundLabel(matches.length, roundNum, phaseName), matches }
+  })
+  return { phase: phaseName, rounds }
 }
 
 export const PLAYER_CARD_FINISHES = 8

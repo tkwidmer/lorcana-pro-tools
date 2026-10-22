@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { featureMatchPatch, timerFromRph, buildPlayerCard } from '../lib/streamOverlay'
-import { listMyTables, createTable, updateTable, storeSelectedTableId } from '../lib/streamTables'
+import { Link } from 'react-router-dom'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import { PlayerMatchHistory } from './PlayerMatchHistory'
 
@@ -77,49 +75,8 @@ function PlayerSummaryCard({ label, playerId, history, loading, error }) {
 // interesting enough to show.
 const MIN_RIVALRY_MEETINGS = 2
 
-export function PairingHistoryPanel({ pairing, onClose, allMatches, allStandings, structure, currentEventId }) {
+export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, currentEventId }) {
   const { p1, p2 } = pairing
-  const navigate = useNavigate()
-
-  // Hand this pairing to one of the operator's Stream Overlay tables: names
-  // and current records from the loaded standings, the event name, the
-  // current round, and RPH's round clock, with the table linked to this
-  // event so the panel keeps the clock in step. With one table it goes
-  // straight there (creating "Table 1" on a first use); with several, a
-  // picker appears first.
-  const [streamTables, setStreamTables] = useState(null)
-  const [streamTableId, setStreamTableId] = useState('')
-  const [sendError, setSendError] = useState(null)
-
-  async function sendToStreamOverlay(tableId) {
-    try {
-      let tables = streamTables ?? await listMyTables()
-      if (tables.length === 0) tables = [await createTable('Table 1')]
-      if (tables.length > 1 && !tableId) {
-        setStreamTables(tables)
-        setStreamTableId(tables[0].id)
-        return
-      }
-      const target = tableId ?? tables[0].id
-      const recordOf = (id) => allStandings.find((e) => String(e.player.id) === String(id))?.record ?? ''
-      await updateTable(target, featureMatchPatch({
-        eventName: structure.eventName ?? '',
-        round: structure.isElimination && structure.eliminationPhaseName ? structure.eliminationPhaseName : `Round ${structure.currentRoundNumber}`,
-        players: [{ name: p1.name, record: recordOf(p1.id) }, { name: p2.name, record: recordOf(p2.id) }],
-        timer: timerFromRph(structure),
-        rphEventId: Number(currentEventId),
-        // The archive card rides along when both histories and the
-        // head-to-head have loaded; otherwise the table gets no card.
-        playerCard: historyA && historyB && headToHead
-          ? buildPlayerCard({ histories: [historyA, historyB], headToHead, playerIds: [String(p1.id), String(p2.id)] })
-          : null,
-      }))
-      storeSelectedTableId(target)
-      navigate('/stream-overlay')
-    } catch (e) {
-      setSendError(e.message)
-    }
-  }
   const [historyA, setHistoryA] = useState(null)
   const [historyB, setHistoryB] = useState(null)
   const [headToHead, setHeadToHead] = useState(null)
@@ -173,24 +130,6 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, allStandings
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
           <h2 className="text-sm font-semibold text-gray-900">{p1.name} vs {p2.name}</h2>
           <div className="flex items-center gap-3">
-            {streamTables && (
-              <select
-                value={streamTableId}
-                onChange={(e) => setStreamTableId(e.target.value)}
-                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white text-gray-900"
-                aria-label="Stream table"
-              >
-                {streamTables.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            )}
-            {sendError && <span className="text-xs text-red-600">{sendError}</span>}
-            <button
-              type="button"
-              onClick={() => sendToStreamOverlay(streamTables ? streamTableId : undefined)}
-              className="text-xs font-medium text-gray-500 hover:text-gray-900 underline underline-offset-2"
-            >
-              Send to Stream Overlay
-            </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
           </div>
         </div>

@@ -246,3 +246,10 @@ describe('deckDoctorVerdict with archetype and pair lift lists combined', () => 
     expect(missing.text).toContain('+0.7 pp')
   })
 })
+
+describe('deckDoctorVerdict for a pasted list', () => {
+  it('says nothing about matchups when there are no personal results (matchups: null)', () => {
+    const blocks = deckDoctorVerdict({ archetype: { name: 'A', shared: 1, total: 2 }, lifts: [], impact: [], matchups: null })
+    expect(blocks).toHaveLength(1)
+  })
+})

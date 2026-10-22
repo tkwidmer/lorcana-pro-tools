@@ -251,9 +251,9 @@ export function defaultQueueFor(queueName) {
 }
 
 const text = (t) => ({ type: 'text', text: t })
-const fmtPp = (n) => `${n > 0 ? '+' : ''}${n.toFixed(1)} pp`
+export const fmtPp = (n) => `${n > 0 ? '+' : ''}${n.toFixed(1)} pp`
 const fmtPct = (n) => `${Math.round(n)}%`
-const pairLabel = (colors) => colors.map(titleCase).join('/')
+export const pairLabel = (colors) => colors.map(titleCase).join('/')
 
 // The verdict: three to five sentences, every optional one omitted when its
 // input is empty. `nameOf` resolves a duels.ink card id to a display name.
@@ -274,6 +274,8 @@ export function deckDoctorVerdict({ eraName, archetype, noProfiles = false, lift
   const weakest = impact.filter((c) => c.war != null && !c.lowSample).sort((a, b) => a.war - b.war)[0]
   if (weakest && weakest.war < 0) blocks.push(text(`Over your own games, ${weakest.name} is your weakest card by wins above replacement (${weakest.war.toFixed(1)} WAR across ${weakest.gamesWith} games with it).`))
 
+  // matchups: null means no personal results (a pasted list): no sentence.
+  if (matchups == null) return blocks
   const worst = matchups.filter((m) => m.significant && m.gap < 0).sort((a, b) => a.gap - b.gap)[0]
   if (worst) blocks.push(text(`Your worst matchup relative to the field: vs ${pairLabel(worst.oppColors)}, ${fmtPct(worst.shrunkWinRate)} over ${worst.games} games where the field wins ${fmtPct(worst.fieldWinRate)}.`))
   else blocks.push(text('No matchup where your results differ from the field’s beyond sample noise.'))

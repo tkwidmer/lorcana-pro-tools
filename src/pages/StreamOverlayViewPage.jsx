@@ -28,7 +28,7 @@ const CAM_HEIGHT = SIDE_WIDTH
 
 // The single OBS Browser Source for a gameplay stream: a 1920×1080 frame with
 // opaque side columns (square player cam cutout, name, record, inks, game-win
-// pips, lore) and a top banner (event logo, round, timer), everything else
+// pips, lore) and a top banner (event and sponsor logos, round, timer), everything else
 // transparent so the gameplay cam and player cams sit behind it. Once a side
 // reaches the match win count it's marked the winner; on `break` the same
 // source renders an opaque full-frame screen with the next pairing. It reads
@@ -77,13 +77,6 @@ export function StreamOverlayViewPage() {
           <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} />
           {state.deckShown > 0 && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
           <TopBanner state={state} now={now} winner={winner} />
-          {state.sponsorLogoUrl && (
-            <img
-              src={state.sponsorLogoUrl}
-              alt=""
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 h-20 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]"
-            />
-          )}
         </>
       )}
     </div>
@@ -198,6 +191,7 @@ function TopBanner({ state, now, winner }) {
         {state.eventLogoUrl
           ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-16 object-contain" />
           : <div className="text-3xl uppercase tracking-wide">{state.eventName || ' '}</div>}
+        {state.sponsorLogoUrl && <img src={state.sponsorLogoUrl} alt="" className="h-16 object-contain -ml-4" />}
         {result ? <Stat label="Winner" value={result} /> : <Stat label="Round" value={state.round || '—'} />}
         <Stat label="Time" value={formatClock(remaining)} warn={state.timerEndsAt !== null && remaining < 5 * 60 * 1000} />
       </div>
@@ -219,9 +213,12 @@ function BreakScreen({ state, now }) {
       className="relative overflow-hidden bg-(--fill) font-display text-(--on-fill) select-none flex flex-col items-center justify-center gap-10"
       style={{ width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT, ...themeVars(state.theme) }}
     >
-      {state.eventLogoUrl
-        ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-48 object-contain" />
-        : <div className="text-7xl uppercase tracking-wide">{state.eventName || ' '}</div>}
+      <div className="flex items-center gap-10">
+        {state.eventLogoUrl
+          ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-48 object-contain" />
+          : <div className="text-7xl uppercase tracking-wide">{state.eventName || ' '}</div>}
+        {state.sponsorLogoUrl && <img src={state.sponsorLogoUrl} alt="" className="h-36 object-contain" />}
+      </div>
 
       <div className="text-center">
         <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">{headline.label}</div>
@@ -242,9 +239,6 @@ function BreakScreen({ state, now }) {
         </div>
       )}
 
-      {state.sponsorLogoUrl && (
-        <img src={state.sponsorLogoUrl} alt="" className="absolute bottom-6 left-1/2 -translate-x-1/2 h-20 object-contain" />
-      )}
       <div className="absolute bottom-6 right-8 flex items-center gap-2">
         <img src="/inkborn_forge_mark_64.png" alt="" className="h-8 w-8 rounded-sm" />
         <span className="text-xl uppercase tracking-[0.12em]">InkbornForge</span>

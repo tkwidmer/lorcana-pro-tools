@@ -192,6 +192,9 @@ export function StreamOverlayPage() {
           <Labeled label="Round">
             <Input value={row.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" />
           </Labeled>
+          <Labeled label="Banner note (one line under the round, blank to hide)">
+            <Input value={row.note} onChange={e => setField('note', e.target.value)} className="w-full" placeholder="Top 8 starts at 5pm · 128 players · #MandosBounty" />
+          </Labeled>
           <div className="flex flex-wrap items-end gap-3">
             <Labeled label="Theme fill">
               <input type="color" value={row.theme_fill} onChange={e => setField('theme_fill', e.target.value)} className="h-9 w-14 cursor-pointer" />

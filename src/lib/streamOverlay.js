@@ -9,6 +9,19 @@ export const OVERLAY_HEIGHT = 1080
 
 export const MAX_GAME_WINS = 2
 
+// A game of Lorcana is won at 20 lore: the view pulses the number there as a
+// cue to tap the game win (never automatic — a mis-tap shouldn't flip the
+// screen to Winner).
+export const WINNING_LORE = 20
+
+// The size class for a name in a fixed-width slot: the largest of `sizes`
+// (ordered big → small) whose character budget the name fits, so a long RPH
+// name shrinks instead of truncating. Budgets are per slot, measured for
+// Oswald caps at that slot's width.
+export function nameSizeClass(name, sizes) {
+  return (sizes.find(([, maxChars]) => name.length <= maxChars) ?? sizes[sizes.length - 1])[0]
+}
+
 // The site's own look: ink black fill, forge gold accent (src/index.css).
 export const DEFAULT_THEME = { fill: '#17171a', accent: '#b5832a' }
 
@@ -34,6 +47,7 @@ export function rowToState(row) {
     eventLogoUrl: row.event_logo_url,
     sponsorLogoUrl: row.sponsor_logo_url,
     round: row.round,
+    note: row.note,
     // Wall-time target while running (ms since epoch), null while paused.
     timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
     timerRemainingMs: row.timer_remaining_ms,

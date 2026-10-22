@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16',
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16', note: 'Top 8 at 5pm',
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
   p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0,
   p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1,
@@ -18,7 +18,17 @@ describe('streamOverlay row mapping', () => {
     expect(s.timerEndsAt).toBe(Date.parse('2026-05-24T23:38:39+00:00'))
     expect(s.players[0]).toEqual({ name: 'Ryan', record: '5-0-2', inks: ['amethyst', 'emerald'], lore: 12, gameWins: 0 })
     expect(s.players[1].gameWins).toBe(1)
+    expect(s.note).toBe('Top 8 at 5pm')
     expect(rowToState(row()).timerEndsAt).toBeNull()
+  })
+
+  it('steps a name down a size class as it outgrows the slot', () => {
+    const sizes = [['text-4xl', 13], ['text-3xl', 17], ['text-2xl', 22]]
+    expect(nameSizeClass('Ryan', sizes)).toBe('text-4xl')
+    expect(nameSizeClass('Jonathan Reyes', sizes)).toBe('text-3xl')
+    expect(nameSizeClass('Christopher Lee', sizes)).toBe('text-3xl')
+    expect(nameSizeClass('Christopher Montgomery', sizes)).toBe('text-2xl')
+    expect(nameSizeClass('Maximilian Featherstonehaugh', sizes)).toBe('text-2xl')
   })
 
   it('names the winner only once a side reaches the match win count', () => {

@@ -4,10 +4,14 @@ import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor,
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass,
 } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
+// Name size classes per slot, big → small, with the character budget each
+// fits in Oswald caps at that slot's width; beyond the last it still truncates.
+const COLUMN_NAME_SIZES = [['text-4xl', 13], ['text-3xl', 17], ['text-2xl', 22], ['text-xl', 27]]
+const BREAK_NAME_SIZES = [['text-6xl', 16], ['text-5xl', 21], ['text-4xl', 28]]
 
 // The event's theme as CSS variables on the frame: every fill, border, lore
 // number, pip and ribbon reads these, so one pair of colors restyles both the
@@ -91,7 +95,10 @@ function SideColumn({ player, side, isWinner }) {
 
       <div className="flex-1 w-full bg-(--fill) flex flex-col items-center">
       <div className="mt-6 px-4 w-full text-center">
-        <div className="text-4xl uppercase tracking-wide leading-tight truncate">{player.name || ' '}</div>
+        {/* Fixed-height line so a shrunken name doesn't move what's below it. */}
+        <div className={`h-10 flex items-center justify-center uppercase tracking-wide leading-tight ${nameSizeClass(player.name, COLUMN_NAME_SIZES)}`}>
+          <span className="truncate">{player.name || ' '}</span>
+        </div>
         <div className="mt-1 text-2xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
       </div>
 
@@ -121,7 +128,7 @@ function SideColumn({ player, side, isWinner }) {
 
       <div className="mt-2 text-center">
         <div className="text-base uppercase tracking-[0.3em] text-(--on-fill)/60">Lore</div>
-        <div className="text-[9rem] leading-none text-(--accent) tabular-nums">{player.lore}</div>
+        <div className={`text-[9rem] leading-none text-(--accent) tabular-nums ${player.lore >= WINNING_LORE ? 'animate-pulse' : ''}`}>{player.lore}</div>
       </div>
 
       {/* Brand lockup, bottom-right like the reference streams; mirrors Nav's. */}
@@ -142,12 +149,15 @@ function TopBanner({ state, now, winner }) {
   const remaining = timerRemainingMs(state, now)
   const result = winner === null ? null : `${state.players[winner].name} ${state.players[winner].gameWins}-${state.players[1 - winner].gameWins}`
   return (
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex items-center gap-8 px-8 py-3 bg-(--fill) border-x-4 border-b-4 border-(--accent) rounded-b-lg">
-      {state.eventLogoUrl
-        ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-16 object-contain" />
-        : <div className="text-3xl uppercase tracking-wide">{state.eventName || ' '}</div>}
-      {result ? <Stat label="Winner" value={result} /> : <Stat label="Round" value={state.round || '—'} />}
-      <Stat label="Time" value={formatClock(remaining)} warn={state.timerEndsAt !== null && remaining < 5 * 60 * 1000} />
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center px-8 py-3 bg-(--fill) border-x-4 border-b-4 border-(--accent) rounded-b-lg">
+      <div className="flex items-center gap-8">
+        {state.eventLogoUrl
+          ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-16 object-contain" />
+          : <div className="text-3xl uppercase tracking-wide">{state.eventName || ' '}</div>}
+        {result ? <Stat label="Winner" value={result} /> : <Stat label="Round" value={state.round || '—'} />}
+        <Stat label="Time" value={formatClock(remaining)} warn={state.timerEndsAt !== null && remaining < 5 * 60 * 1000} />
+      </div>
+      {state.note && <div className="mt-2 text-xl uppercase tracking-[0.3em] text-(--on-fill)/70 max-w-[1100px] truncate">{state.note}</div>}
     </div>
   )
 }
@@ -172,6 +182,7 @@ function BreakScreen({ state, now }) {
       <div className="text-center">
         <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">{headline.label}</div>
         {state.round && <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">{state.round}</div>}
+        {state.note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{state.note}</div>}
       </div>
 
       <div className="flex items-center gap-16">
@@ -206,7 +217,9 @@ function BreakPlayer({ player, isWinner }) {
       <div className="mb-2 h-10 flex items-center justify-center">
         {isWinner && <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>}
       </div>
-      <div className={`text-6xl uppercase tracking-wide leading-tight truncate ${isWinner ? 'text-(--accent)' : ''}`}>{player.name || ' '}</div>
+      <div className={`h-16 flex items-center justify-center uppercase tracking-wide leading-tight ${nameSizeClass(player.name, BREAK_NAME_SIZES)} ${isWinner ? 'text-(--accent)' : ''}`}>
+        <span className="truncate">{player.name || ' '}</span>
+      </div>
       <div className="mt-2 text-3xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
       <div className="mt-5 flex justify-center gap-4">
         {player.inks.map(ink => <InkIcon key={ink} color={ink} size={72} />)}

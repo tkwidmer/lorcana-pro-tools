@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false,
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '',
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
   p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0, p1_decklist: '4 Elsa',
   p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1, p2_decklist: '',
@@ -20,6 +20,7 @@ describe('streamOverlay row mapping', () => {
     expect(s.deckShown).toBe(0)
     expect(s.playerCard).toBeNull()
     expect(s.cardShown).toBe(false)
+    expect(s.breakPanel).toBe('')
     expect(s.players[1].gameWins).toBe(1)
     expect(s.note).toBe('Top 8 at 5pm')
     expect(rowToState(row()).timerEndsAt).toBeNull()
@@ -34,6 +35,7 @@ describe('streamOverlay row mapping', () => {
     expect(hotkeyAction(key('b'))).toEqual({ toggleMode: true })
     expect(hotkeyAction(key('2'))).toEqual({ toggleDeck: 2 })
     expect(hotkeyAction(key('3'))).toEqual({ toggleCard: true })
+    expect(hotkeyAction(key('N'))).toEqual({ nextGame: true })
     expect(hotkeyAction(key('x'))).toBeNull()
     expect(hotkeyAction(key('q', { ctrlKey: true }))).toBeNull()
     expect(hotkeyAction(key('q', { target: { tagName: 'INPUT' } }))).toBeNull()
@@ -73,6 +75,36 @@ describe('streamOverlay row mapping', () => {
     expect(card.headToHead.matches.map(m => [m.event, m.phase, m.winner, m.score])).toEqual([
       ['Open C', 'Round 2', null, null], ['CCQ B', 'Top 8', 0, '2-1'], ['Open A', 'Round 4', 1, '2-0'],
     ])
+  })
+
+  it('clears the pairing but keeps the event setup', () => {
+    const p = clearTablePatch()
+    expect(p).toMatchObject({ p1_name: '', p2_name: '', p1_inks: [], p2_lore: 0, p1_game_wins: 0, p2_decklist: '', round: '', note: '', rph_event_id: null, deck_shown: 0, card_shown: false, player_card: null, mode: 'live', standings: null, bracket: null, break_panel: '' })
+    for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'theme_fill', 'theme_accent', 'timer_ends_at', 'timer_remaining_ms']) expect(p).not.toHaveProperty(kept)
+  })
+
+  it('snapshots the top of the standings with the round', () => {
+    const entry = (rank, name, record, pts) => ({ rank, record, match_points: pts, player: { id: name, best_identifier: name }, user_event_status: { best_identifier: name } })
+    const standings = [entry(3, 'Cy', '2-1-0', 6), entry(1, 'Ann', '3-0-0', 9), entry(2, 'Bo', '2-0-1', 7), { rank: null, player: { id: 'x' }, user_event_status: { best_identifier: 'Dropped' } }]
+    const snap = buildStandingsSnapshot(standings, { isElimination: false, currentRoundNumber: 3 })
+    expect(snap.round).toBe('Round 3')
+    expect(snap.players).toBe(4)
+    expect(snap.rows.map(r => [r.rank, r.name, r.record, r.points])).toEqual([[1, 'Ann', '3-0-0', 9], [2, 'Bo', '2-0-1', 7], [3, 'Cy', '2-1-0', 6]])
+    expect(buildStandingsSnapshot([], { isElimination: true, eliminationPhaseName: 'Top 8', currentRoundNumber: 9 }).round).toBe('Top 8')
+  })
+
+  it('snapshots the top-cut bracket in table order with winners and scores', () => {
+    const rel = (order, id) => ({ player_order: order, player: { id, best_identifier: id }, user_event_status: { best_identifier: id } })
+    const m = (round, table, a, b, winner, extra = {}) => ({ phase_name: 'Top 4', round_number: round, table_number: table, player_match_relationships: [rel(2, b), rel(1, a)], winning_player: winner, games_won_by_winner: winner ? 2 : null, games_won_by_loser: winner ? 1 : null, ...extra })
+    const matches = [
+      m(10, 2, 'Cy', 'Di', 'Di'), m(10, 1, 'Ann', 'Bo', 'Ann'),
+      m(11, 1, 'Ann', 'Di', null),
+      { phase_name: 'Day 1 Swiss', round_number: 1, table_number: 1, player_match_relationships: [rel(1, 'Ann'), rel(2, 'Bo')], winning_player: 'Bo' },
+    ]
+    const snap = buildBracketSnapshot(matches, 'Top 4')
+    expect(snap.rounds.map(r => r.label)).toEqual(['Semifinals', 'Final'])
+    expect(snap.rounds[0].matches.map(x => [x.p1, x.p2, x.winner, x.score])).toEqual([['Ann', 'Bo', 0, '2-1'], ['Cy', 'Di', 1, '2-1']])
+    expect(snap.rounds[1].matches[0]).toEqual({ p1: 'Ann', p2: 'Di', winner: null, score: null, bye: false })
   })
 
   it('swaps the player card with the sides', () => {

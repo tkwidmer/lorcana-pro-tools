@@ -1,22 +1,12 @@
 import { useEffect, useMemo } from 'react'
 import { pairKeyOf } from '../lib/tournamentHistoryApi'
 import { FavoriteStar, TeamBadge } from './PlayerTags'
+import { bracketRoundLabel } from '../lib/bracket'
 
 // RPH's match data has no explicit "advances to" link between rounds — the
 // bracket is reconstructed purely from round_number + table_number, sorted
 // within each round. That matches the standard seeded-bracket convention
 // (table order = bracket slot) that RPH's own elimination pairings follow.
-function roundLabel(matchCount, roundNum, phaseName) {
-  switch (matchCount) {
-    case 1: return 'Final'
-    case 2: return 'Semifinals'
-    case 4: return 'Quarterfinals'
-    case 8: return 'Round of 16'
-    case 16: return 'Round of 32'
-    case 32: return 'Round of 64'
-    default: return `${phaseName ?? 'Bracket'} · Round ${roundNum}`
-  }
-}
 
 function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleFavorite, toggleTeam, currentEventId }) {
   const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
@@ -137,7 +127,7 @@ export function EliminationBracket({ allMatches, phaseName, onSelectPairing, bad
         {rounds.map(({ roundNum, matches }, roundIndex) => (
           <div key={roundNum} className="flex flex-col w-48 shrink-0">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 text-center">
-              {roundLabel(matches.length, roundNum, phaseName)}
+              {bracketRoundLabel(matches.length, roundNum, phaseName)}
             </p>
             <div className="flex-1 flex flex-col justify-around gap-4">
               {matches.map((match) => (

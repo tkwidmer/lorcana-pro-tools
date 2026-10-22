@@ -221,6 +221,7 @@ function PlayerCardPanel({ state, card }) {
 }
 
 const TIER_LABEL = { cut: 'Top cut', day2: 'Day 2' }
+const BRACKET_MAX_MATCHES = 8
 
 function PlayerHalf({ player, history, align }) {
   const right = align === 'right'
@@ -305,17 +306,25 @@ function BreakScreen({ state, now }) {
         {state.sponsorLogoUrl && <img src={state.sponsorLogoUrl} alt="" className="h-36 object-contain" />}
       </div>
 
-      <div className="text-center">
-        <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">{headline.label}</div>
-        {state.round && <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">{state.round}</div>}
-        {state.note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{state.note}</div>}
-      </div>
+      {state.breakPanel === 'standings' && state.standings ? (
+        <StandingsPanel standings={state.standings} note={state.note} />
+      ) : state.breakPanel === 'bracket' && state.bracket ? (
+        <BracketPanel bracket={state.bracket} note={state.note} />
+      ) : (
+        <>
+          <div className="text-center">
+            <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">{headline.label}</div>
+            {state.round && <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">{state.round}</div>}
+            {state.note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{state.note}</div>}
+          </div>
 
-      <div className="flex items-center gap-16">
-        <BreakPlayer player={state.players[0]} isWinner={headline.winner === 0} />
-        <div className={`text-5xl tabular-nums ${headline.score ? 'text-(--on-fill)' : 'text-(--on-fill)/40'}`}>{headline.score ?? 'vs'}</div>
-        <BreakPlayer player={state.players[1]} isWinner={headline.winner === 1} />
-      </div>
+          <div className="flex items-center gap-16">
+            <BreakPlayer player={state.players[0]} isWinner={headline.winner === 0} />
+            <div className={`text-5xl tabular-nums ${headline.score ? 'text-(--on-fill)' : 'text-(--on-fill)/40'}`}>{headline.score ?? 'vs'}</div>
+            <BreakPlayer player={state.players[1]} isWinner={headline.winner === 1} />
+          </div>
+        </>
+      )}
 
       {remaining > 0 && (
         <div className="text-center">
@@ -329,6 +338,76 @@ function BreakScreen({ state, now }) {
         <span className="text-xl uppercase tracking-[0.12em]">InkbornForge</span>
       </div>
     </div>
+  )
+}
+
+// Standings snapshot on the break screen: the top of the field in two
+// columns, rank / name / record / points.
+function StandingsPanel({ standings, note }) {
+  const half = Math.ceil(standings.rows.length / 2)
+  const columns = [standings.rows.slice(0, half), standings.rows.slice(half)].filter(c => c.length)
+  return (
+    <>
+      <div className="text-center">
+        <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">Standings</div>
+        <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">After {standings.round} · {standings.players} players</div>
+        {note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{note}</div>}
+      </div>
+      <div className="flex gap-16">
+        {columns.map((rows, c) => (
+          <div key={c} className="w-[620px] space-y-1.5">
+            {rows.map(r => (
+              <div key={r.rank} className="flex items-baseline gap-4 border-b border-(--on-fill)/10 pb-1">
+                <span className="w-12 text-3xl text-(--accent) tabular-nums text-right">{r.rank}</span>
+                <span className="flex-1 min-w-0 text-3xl uppercase tracking-wide truncate">{r.name}</span>
+                <span className="text-2xl text-(--on-fill)/70 tabular-nums tracking-widest">{r.record}</span>
+                <span className="w-14 text-2xl tabular-nums text-right">{r.points ?? ''}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+// Bracket snapshot on the break screen: one column per round, boxes sized
+// so the biggest round fits the frame; the winner of each match in accent.
+function BracketPanel({ bracket, note }) {
+  // Rounds of more than eight matches don't fit legibly, so a Top 32 opens
+  // at the Round of 16 and a Top 64 at the quarterfinals' grandparent.
+  const rounds = bracket.rounds.filter(r => r.matches.length <= BRACKET_MAX_MATCHES)
+  const maxMatches = Math.max(...rounds.map(r => r.matches.length), 1)
+  const boxH = Math.min(96, Math.floor(600 / maxMatches) - 10)
+  const size = boxH >= 80 ? 'text-2xl' : boxH >= 56 ? 'text-xl' : 'text-base'
+  return (
+    <>
+      <div className="text-center">
+        <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">{bracket.phase}</div>
+        {note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{note}</div>}
+      </div>
+      <div className="flex gap-10 items-stretch" style={{ height: 620 }}>
+        {rounds.map((round, ri) => (
+          <div key={ri} className="flex flex-col w-[320px]">
+            <div className="text-base uppercase tracking-[0.3em] text-(--on-fill)/60 text-center mb-3">{round.label}</div>
+            <div className="flex-1 flex flex-col justify-around gap-2">
+              {round.matches.map((m, mi) => (
+                <div key={mi} style={{ flexGrow: 2 ** ri }} className="flex items-center">
+                  <div className={`w-full border-2 border-(--accent)/60 rounded overflow-hidden ${size} uppercase tracking-wide`} style={{ height: boxH }}>
+                    {[m.p1, m.p2].map((name, side) => (
+                      <div key={side} className={`h-1/2 px-3 flex items-center justify-between gap-2 ${m.winner === side ? 'bg-(--accent) text-(--fill)' : side === 0 ? 'border-b border-(--on-fill)/15' : ''}`}>
+                        <span className="truncate">{name ?? (m.bye ? 'Bye' : '—')}</span>
+                        {m.winner === side && m.score && <span className="tabular-nums shrink-0">{m.score}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   )
 }
 

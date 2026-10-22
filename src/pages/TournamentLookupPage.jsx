@@ -13,6 +13,8 @@ import {
 import { PlayerMatchHistory } from '../components/PlayerMatchHistory'
 import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
 import { EliminationBracket } from '../components/EliminationBracket'
+import { SendToOverlayButton } from '../components/SendToOverlayButton'
+import { buildStandingsSnapshot, buildBracketSnapshot } from '../lib/streamOverlay'
 import { FavoriteStar, TeamBadge } from '../components/PlayerTags'
 import { usePairingBadges } from '../hooks/usePairingBadges'
 import { pairKeyOf } from '../lib/tournamentHistoryApi'
@@ -1136,6 +1138,9 @@ export function TournamentLookupPage() {
       {/* Standings table */}
       {allStandings && !player && activeTab === 'standings' && (
         <div className="space-y-3">
+          <div className="flex justify-end">
+            <SendToOverlayButton label="Send standings to Stream Overlay" buildPatch={() => ({ standings: buildStandingsSnapshot(allStandings, structure), break_panel: 'standings' })} />
+          </div>
           <Input
             type="text"
             placeholder="Search by name…"
@@ -1235,17 +1240,22 @@ export function TournamentLookupPage() {
 
       {/* Bracket tab (elimination phase, visualized as a bracket) */}
       {allStandings && !player && activeTab === 'bracket' && (
-        <EliminationBracket
-          allMatches={allMatches}
-          phaseName={structure?.eliminationPhaseName}
-          onSelectPairing={setSelectedPairing}
-          badges={pairingBadges}
-          favorites={favorites}
-          team={team}
-          toggleFavorite={toggleFavorite}
-          toggleTeam={toggleTeam}
-          currentEventId={currentEventId}
-        />
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <SendToOverlayButton label="Send bracket to Stream Overlay" buildPatch={() => ({ bracket: buildBracketSnapshot(allMatches, structure?.eliminationPhaseName), break_panel: 'bracket' })} />
+          </div>
+          <EliminationBracket
+            allMatches={allMatches}
+            phaseName={structure?.eliminationPhaseName}
+            onSelectPairing={setSelectedPairing}
+            badges={pairingBadges}
+            favorites={favorites}
+            team={team}
+            toggleFavorite={toggleFavorite}
+            toggleTeam={toggleTeam}
+            currentEventId={currentEventId}
+          />
+        </div>
       )}
 
       {/* Roster tab (pre-tournament — no standings yet) */}

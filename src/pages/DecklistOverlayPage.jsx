@@ -2,9 +2,8 @@ import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useCards } from '../hooks/useCards'
 import { useTransparentBackground } from '../hooks/useTransparentBackground'
-import { parseDeckList } from '../lib/parseDeckList'
-import { buildCardIndex, toSimpleName } from '../lib/cardAnalysis'
-import { BUCKET_ORDER, BUCKET_LABEL, decodeDeckParam, buildBuckets } from '../lib/decklistShared'
+import { buildCardIndex } from '../lib/cardAnalysis'
+import { BUCKET_ORDER, BUCKET_LABEL, decodeDeckParam, buildBuckets, matchDeckList } from '../lib/decklistShared'
 import { CardBar } from '../components/DecklistCardBar'
 
 // A chrome-less, read-only render of a decklist meant to be added as an OBS
@@ -22,12 +21,7 @@ export function DecklistOverlayPage() {
   useTransparentBackground()
 
   const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
-  const parsed = useMemo(() => parseDeckList(deckText), [deckText])
-  const matchedEntries = useMemo(() => {
-    return parsed
-      .map(({ name, count }) => ({ key: name, name, count, card: cardIndex.get(toSimpleName(name)) }))
-      .filter(e => e.card)
-  }, [parsed, cardIndex])
+  const matchedEntries = useMemo(() => matchDeckList(deckText, cardIndex), [deckText, cardIndex])
   const buckets = useMemo(() => buildBuckets(matchedEntries), [matchedEntries])
 
   return (

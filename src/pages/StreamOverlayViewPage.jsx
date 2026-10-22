@@ -1,13 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useCards } from '../hooks/useCards'
+import { buildCardIndex } from '../lib/cardAnalysis'
+import { BUCKET_ORDER, BUCKET_LABEL, buildBuckets, matchDeckList } from '../lib/decklistShared'
+import { CardBar } from '../components/DecklistCardBar'
 import { useSearchParams } from 'react-router-dom'
 import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor,
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass,
 } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
+// Name size classes per slot, big → small, with the character budget each
+// fits in Oswald caps at that slot's width; beyond the last it still truncates.
+const COLUMN_NAME_SIZES = [['text-4xl', 13], ['text-3xl', 17], ['text-2xl', 22], ['text-xl', 27]]
+const BREAK_NAME_SIZES = [['text-6xl', 16], ['text-5xl', 21], ['text-4xl', 28]]
 
 // The event's theme as CSS variables on the frame: every fill, border, lore
 // number, pip and ribbon reads these, so one pair of colors restyles both the
@@ -35,6 +43,8 @@ export function StreamOverlayViewPage() {
   const [row, setRow] = useState(null)
   const [error, setError] = useState(null)
   const [now, setNow] = useState(() => Date.now())
+  const { cards } = useCards()
+  const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
 
   useEffect(() => {
     fetchPublicTable(tableId).then(setRow).catch(e => setError(e.message))
@@ -65,6 +75,7 @@ export function StreamOverlayViewPage() {
         <>
           <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} />
           <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} />
+          {state.deckShown > 0 && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
           <TopBanner state={state} now={now} winner={winner} />
           {state.sponsorLogoUrl && (
             <img
@@ -91,7 +102,10 @@ function SideColumn({ player, side, isWinner }) {
 
       <div className="flex-1 w-full bg-(--fill) flex flex-col items-center">
       <div className="mt-6 px-4 w-full text-center">
-        <div className="text-4xl uppercase tracking-wide leading-tight truncate">{player.name || ' '}</div>
+        {/* Fixed-height line so a shrunken name doesn't move what's below it. */}
+        <div className={`h-10 flex items-center justify-center uppercase tracking-wide leading-tight ${nameSizeClass(player.name, COLUMN_NAME_SIZES)}`}>
+          <span className="truncate">{player.name || ' '}</span>
+        </div>
         <div className="mt-1 text-2xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
       </div>
 
@@ -121,7 +135,7 @@ function SideColumn({ player, side, isWinner }) {
 
       <div className="mt-2 text-center">
         <div className="text-base uppercase tracking-[0.3em] text-(--on-fill)/60">Lore</div>
-        <div className="text-[9rem] leading-none text-(--accent) tabular-nums">{player.lore}</div>
+        <div className={`text-[9rem] leading-none text-(--accent) tabular-nums ${player.lore >= WINNING_LORE ? 'animate-pulse' : ''}`}>{player.lore}</div>
       </div>
 
       {/* Brand lockup, bottom-right like the reference streams; mirrors Nav's. */}
@@ -138,16 +152,56 @@ function SideColumn({ player, side, isWinner }) {
   )
 }
 
+// A player's decklist laid over the gameplay cam while the panel has it
+// shown: the Decklist Inspector's own card rows (CardBar), bucketed by type,
+// zoomed up to read at 1080p and flowed into two columns. The frame's theme
+// colors the chrome; the rows keep their ink colors.
+function DeckPanel({ player, cardIndex }) {
+  const buckets = buildBuckets(matchDeckList(player.decklist, cardIndex))
+  // Zoom so two columns always hold the deck: the body is ~770px tall inside
+  // the frame, a CardBar row ~34.5px and a bucket header ~32px before zoom.
+  // ponytail: estimated heights, not measured; re-measure if CardBar changes.
+  const rows = Object.values(buckets).reduce((s, b) => s + b.length, 0)
+  const headers = BUCKET_ORDER.filter(t => buckets[t].length).length
+  const zoom = Math.min(1.4, (2 * 770 * 0.95) / (rows * 34.5 + headers * 32))
+  return (
+    <div
+      className="absolute flex flex-col bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden"
+      style={{ left: SIDE_WIDTH + 40, right: SIDE_WIDTH + 40, top: 170, bottom: 40 }}
+    >
+      <div className="flex items-center justify-center gap-4 px-6 py-3 border-b-4 border-(--accent)">
+        <span className="text-3xl uppercase tracking-wide">{player.name || ' '}</span>
+        <span className="flex gap-2">{player.inks.map(ink => <InkIcon key={ink} color={ink} size={36} />)}</span>
+      </div>
+      <div className="flex-1 min-h-0 px-4 py-3 columns-2 gap-4" style={{ zoom }}>
+        {BUCKET_ORDER.map(type => buckets[type].length > 0 && (
+          <div key={type} className="mb-3">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-(--on-fill)/60 mb-1">
+              {BUCKET_LABEL[type]} ({buckets[type].reduce((s, e) => s + e.count, 0)})
+            </h3>
+            <div className="space-y-0.5">
+              {buckets[type].map(entry => <CardBar key={entry.key} entry={entry} />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function TopBanner({ state, now, winner }) {
   const remaining = timerRemainingMs(state, now)
   const result = winner === null ? null : `${state.players[winner].name} ${state.players[winner].gameWins}-${state.players[1 - winner].gameWins}`
   return (
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex items-center gap-8 px-8 py-3 bg-(--fill) border-x-4 border-b-4 border-(--accent) rounded-b-lg">
-      {state.eventLogoUrl
-        ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-16 object-contain" />
-        : <div className="text-3xl uppercase tracking-wide">{state.eventName || ' '}</div>}
-      {result ? <Stat label="Winner" value={result} /> : <Stat label="Round" value={state.round || '—'} />}
-      <Stat label="Time" value={formatClock(remaining)} warn={state.timerEndsAt !== null && remaining < 5 * 60 * 1000} />
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center px-8 py-3 bg-(--fill) border-x-4 border-b-4 border-(--accent) rounded-b-lg">
+      <div className="flex items-center gap-8">
+        {state.eventLogoUrl
+          ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-16 object-contain" />
+          : <div className="text-3xl uppercase tracking-wide">{state.eventName || ' '}</div>}
+        {result ? <Stat label="Winner" value={result} /> : <Stat label="Round" value={state.round || '—'} />}
+        <Stat label="Time" value={formatClock(remaining)} warn={state.timerEndsAt !== null && remaining < 5 * 60 * 1000} />
+      </div>
+      {state.note && <div className="mt-2 text-xl uppercase tracking-[0.3em] text-(--on-fill)/70 max-w-[1100px] truncate">{state.note}</div>}
     </div>
   )
 }
@@ -172,6 +226,7 @@ function BreakScreen({ state, now }) {
       <div className="text-center">
         <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">{headline.label}</div>
         {state.round && <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">{state.round}</div>}
+        {state.note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{state.note}</div>}
       </div>
 
       <div className="flex items-center gap-16">
@@ -206,7 +261,9 @@ function BreakPlayer({ player, isWinner }) {
       <div className="mb-2 h-10 flex items-center justify-center">
         {isWinner && <div className="px-5 py-1 bg-(--accent) text-(--fill) text-xl uppercase tracking-[0.35em]">Winner</div>}
       </div>
-      <div className={`text-6xl uppercase tracking-wide leading-tight truncate ${isWinner ? 'text-(--accent)' : ''}`}>{player.name || ' '}</div>
+      <div className={`h-16 flex items-center justify-center uppercase tracking-wide leading-tight ${nameSizeClass(player.name, BREAK_NAME_SIZES)} ${isWinner ? 'text-(--accent)' : ''}`}>
+        <span className="truncate">{player.name || ' '}</span>
+      </div>
       <div className="mt-2 text-3xl text-(--on-fill)/70 tracking-widest">{player.record || ' '}</div>
       <div className="mt-5 flex justify-center gap-4">
         {player.inks.map(ink => <InkIcon key={ink} color={ink} size={72} />)}

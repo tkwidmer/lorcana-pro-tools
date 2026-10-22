@@ -59,3 +59,12 @@ export function readSelectedTableId() {
 export function storeSelectedTableId(id) {
   try { localStorage.setItem(SELECTED_KEY, id) } catch { /* noop */ }
 }
+
+// Upload a logo to the public `stream-logos` bucket (migration 016) under the
+// owner's own folder and return its public URL, ready for a logo column.
+export async function uploadLogo(file) {
+  const user = await getCurrentUser()
+  const path = `${user.id}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, '_')}`
+  unwrap(await supabase.storage.from('stream-logos').upload(path, file, { contentType: file.type }))
+  return supabase.storage.from('stream-logos').getPublicUrl(path).data.publicUrl
+}

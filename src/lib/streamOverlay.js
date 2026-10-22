@@ -166,7 +166,28 @@ export function rphClockPatch(structure) {
   return timer ? timerPatch(timer) : null
 }
 
-// A feature match picked in Tournament Lookup: names, records, the round
+// The round as the overlay captions it: the elimination phase's name in top
+// cut, else "Round N".
+export function roundLabel(structure) {
+  return structure.isElimination && structure.eliminationPhaseName ? structure.eliminationPhaseName : `Round ${structure.currentRoundNumber}`
+}
+
+// The current round's pairings as the panel's picker lists them, from the
+// round's matches and standings: table order, both players with their id,
+// name and current record. Byes are left out — a bye is no feature match.
+export function currentRoundPairings(matches, standings) {
+  const recordOf = id => standings.find(e => String(e.player.id) === String(id))?.record ?? ''
+  const side = p => ({ id: p.player.id, name: p.user_event_status?.best_identifier ?? p.player.best_identifier ?? '', record: recordOf(p.player.id) })
+  return matches
+    .filter(m => !m.match_is_bye && (m.player_match_relationships ?? []).length === 2)
+    .sort((a, b) => (a.table_number ?? 0) - (b.table_number ?? 0))
+    .map(m => {
+      const [p1, p2] = [...m.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
+      return { id: m.id, table: m.table_number ?? null, players: [side(p1), side(p2)] }
+    })
+}
+
+// A feature match picked in the panel: names, records, the round
 // clock and the event link come from RPH; lore, game wins and decklists
 // start fresh (the old pair's lists would be wrong) and no deck is shown;
 // inks are left alone (RPH doesn't know decks).
@@ -225,10 +246,10 @@ export function shortEventName(name) {
 
 export const STANDINGS_ROWS = 16
 
-// The top of the standings as the break screen shows them, from Tournament
-// Lookup's loaded standings and event structure.
+// The top of the standings as the break screen shows them, from the round's
+// standings and the event structure.
 export function buildStandingsSnapshot(allStandings, structure) {
-  const round = structure.isElimination && structure.eliminationPhaseName ? structure.eliminationPhaseName : `Round ${structure.currentRoundNumber}`
+  const round = roundLabel(structure)
   const rows = [...allStandings]
     .filter(e => e.rank != null)
     .sort((a, b) => a.rank - b.rank)
@@ -237,8 +258,7 @@ export function buildStandingsSnapshot(allStandings, structure) {
   return { round, players: allStandings.length, rows }
 }
 
-// The top cut as the break screen shows it, from Tournament Lookup's loaded
-// matches: the elimination phase's rounds in order, each match's two names,
+// The top cut as the break screen shows it, from the event's matches: the elimination phase's rounds in order, each match's two names,
 // the winner as a side index, and the game score. Table order is bracket
 // order, as in EliminationBracket.
 export function buildBracketSnapshot(allMatches, phaseName) {

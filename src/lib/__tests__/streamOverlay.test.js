@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, roundLabel, currentRoundPairings,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -81,6 +81,25 @@ describe('streamOverlay row mapping', () => {
     const p = clearTablePatch()
     expect(p).toMatchObject({ p1_name: '', p2_name: '', p1_inks: [], p2_lore: 0, p1_game_wins: 0, p2_decklist: '', round: '', note: '', rph_event_id: null, deck_shown: 0, card_shown: false, player_card: null, mode: 'live', standings: null, bracket: null, break_panel: '' })
     for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'theme_fill', 'theme_accent', 'timer_ends_at', 'timer_remaining_ms']) expect(p).not.toHaveProperty(kept)
+  })
+
+  it('captions the round: the elimination phase in top cut, else Round N', () => {
+    expect(roundLabel({ isElimination: false, currentRoundNumber: 4, eliminationPhaseName: 'Top 8' })).toBe('Round 4')
+    expect(roundLabel({ isElimination: true, currentRoundNumber: 9, eliminationPhaseName: 'Top 8' })).toBe('Top 8')
+  })
+
+  it('lists the current round\'s pairings in table order with records, byes left out', () => {
+    const rel = (order, id) => ({ player_order: order, player: { id, best_identifier: id }, user_event_status: { best_identifier: id } })
+    const matches = [
+      { id: 'm2', table_number: 2, player_match_relationships: [rel(2, 'Di'), rel(1, 'Cy')] },
+      { id: 'm1', table_number: 1, player_match_relationships: [rel(1, 'Ann'), rel(2, 'Bo')] },
+      { id: 'bye', table_number: null, match_is_bye: true, player_match_relationships: [rel(1, 'Ed')] },
+    ]
+    const standings = [{ player: { id: 'Ann' }, record: '3-0-0' }, { player: { id: 'Bo' }, record: '2-1-0' }, { player: { id: 'Cy' }, record: '2-1-0' }]
+    expect(currentRoundPairings(matches, standings)).toEqual([
+      { id: 'm1', table: 1, players: [{ id: 'Ann', name: 'Ann', record: '3-0-0' }, { id: 'Bo', name: 'Bo', record: '2-1-0' }] },
+      { id: 'm2', table: 2, players: [{ id: 'Cy', name: 'Cy', record: '2-1-0' }, { id: 'Di', name: 'Di', record: '' }] },
+    ])
   })
 
   it('snapshots the top of the standings with the round', () => {

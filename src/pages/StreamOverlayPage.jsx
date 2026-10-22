@@ -4,7 +4,8 @@ import { buildCardIndex } from '../lib/cardAnalysis'
 import { parseDeckList } from '../lib/parseDeckList'
 import { matchDeckList } from '../lib/decklistShared'
 import { VALID_INKS } from '../lib/inkColors'
-import { fetchEventDetails, getTournamentStructure } from '../lib/tournamentApi'
+import { fetchEventDetails, getTournamentStructure, extractEventId, fetchAllStandings, fetchAllRoundMatches } from '../lib/tournamentApi'
+import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import {
   listMyTables, createTable, updateTable, deleteTable, adjustTable, subscribeToTable, uploadLogo, resetLore,
   readSelectedTableId, storeSelectedTableId,
@@ -12,8 +13,10 @@ import {
 import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks, clearTablePatch,
+  roundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot,
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
+import { StreamPairingPicker } from '../components/StreamPairingPicker'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input, Select, Textarea } from '../components/ui/Field'
@@ -42,6 +45,10 @@ export function StreamOverlayPage() {
   const [now, setNow] = useState(() => Date.now())
   const [minutes, setMinutes] = useState(50)
   const [rphError, setRphError] = useState(false)
+  const [rphStructure, setRphStructure] = useState(null)
+  const [eventUrl, setEventUrl] = useState('')
+  const [picker, setPicker] = useState(false)
+  const [sending, setSending] = useState(null)
   const { cards } = useCards()
   const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
 
@@ -75,6 +82,9 @@ export function StreamOverlayPage() {
     return () => clearInterval(id)
   }, [])
 
+  // A linked event is polled for its clock and its structure (the round,
+  // field size and current round id the pairing picker and the standings
+  // and bracket sends work from).
   const rphEventId = row?.rph_event_id ?? null
   useEffect(() => {
     if (!rowId || !rphEventId) return
@@ -82,7 +92,9 @@ export function StreamOverlayPage() {
     const poll = () => fetchEventDetails(rphEventId)
       .then(details => {
         if (cancelled) return
-        const patch = rphClockPatch(getTournamentStructure(details))
+        const structure = getTournamentStructure(details)
+        setRphStructure(structure)
+        const patch = rphClockPatch(structure)
         if (patch) {
           setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
           updateTable(rowId, patch).catch(e => setError(e.message))
@@ -92,7 +104,7 @@ export function StreamOverlayPage() {
       .catch(() => { if (!cancelled) setRphError(true) })
     poll()
     const id = setInterval(poll, RPH_POLL_MS)
-    return () => { cancelled = true; clearInterval(id) }
+    return () => { cancelled = true; clearInterval(id); setRphStructure(null) }
   }, [rowId, rphEventId])
 
   // Operator hotkeys (HOTKEYS in streamOverlay.js): scores go through the
@@ -140,6 +152,50 @@ export function StreamOverlayPage() {
   const setField = (key, value) => write(row.id, { [key]: value })
   const setPlayer = (side, key, value) => write(row.id, { [`p${side}_${key}`]: value })
   const adjust = (side, field, delta) => adjustTable(row.id, row.controller_key, side, field, delta).catch(e => setError(e.message))
+
+  function linkEvent() {
+    const id = extractEventId(eventUrl)
+    if (!id) { setError('Paste a Play Hub event link, like https://tcg.ravensburgerplay.com/events/12345'); return }
+    setError(null)
+    setEventUrl('')
+    write(row.id, { rph_event_id: Number(id) })
+  }
+
+  // A pairing from the picker: the feature-match patch, with the archive
+  // player card when both histories and the head-to-head load (best-effort:
+  // a failed archive call sends the pairing without a card).
+  async function sendPairing(pairing) {
+    const [a, b] = pairing.players
+    const playerCard = await Promise.all([fetchPlayerTournamentHistory(a.id), fetchPlayerTournamentHistory(b.id), fetchHeadToHead(a.id, b.id)])
+      .then(([historyA, historyB, headToHead]) => buildPlayerCard({ histories: [historyA, historyB], headToHead, playerIds: [String(a.id), String(b.id)] }))
+      .catch(() => null)
+    write(row.id, featureMatchPatch({
+      // The operator's own event name wins; RPH's only fills a blank one.
+      eventName: row.event_name || (rphStructure.eventName ?? ''),
+      round: roundLabel(rphStructure),
+      players: pairing.players.map(p => ({ name: p.name, record: p.record })),
+      timer: timerFromRph(rphStructure),
+      rphEventId,
+      playerCard,
+    }))
+    setPicker(false)
+  }
+
+  async function sendStandings() {
+    setSending('standings')
+    try {
+      write(row.id, { standings: buildStandingsSnapshot(await fetchAllStandings(rphStructure.currentRoundId), rphStructure), break_panel: 'standings' })
+    } catch (e) { setError(e.message) } finally { setSending(null) }
+  }
+
+  async function sendBracket() {
+    setSending('bracket')
+    try {
+      const bracket = buildBracketSnapshot(await fetchAllRoundMatches(rphEventId, await fetchEventDetails(rphEventId)), rphStructure.eliminationPhaseName)
+      if (bracket.rounds.length === 0) throw new Error('No top-cut matches posted yet.')
+      write(row.id, { bracket, break_panel: 'bracket' })
+    } catch (e) { setError(e.message) } finally { setSending(null) }
+  }
 
   async function addTable() {
     try {
@@ -223,6 +279,29 @@ export function StreamOverlayPage() {
       {row && (
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Event" className="p-5 space-y-3">
+          <Labeled label="RPH event (paste the Play Hub link; links the round clock, pairings, standings and bracket)">
+            {rphEventId ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm text-gray-900">
+                  {rphStructure
+                    ? `${rphStructure.eventName} · ${roundLabel(rphStructure)}${rphStructure.isElimination ? '' : ` of ${rphStructure.totalSwissRounds}`} · ${rphStructure.startingPlayerCount ?? '?'} players`
+                    : rphError ? `Event ${rphEventId}: last sync failed, retrying` : `Event ${rphEventId}…`}
+                </span>
+                <span className={`text-xs font-semibold uppercase tracking-widest ${rphError ? 'text-red-600' : 'text-emerald-600'}`}>Linked</span>
+                <Button size="sm" className="ml-auto" onClick={() => setField('rph_event_id', null)}>Unlink</Button>
+              </div>
+            ) : (
+              <form className="flex items-center gap-3" onSubmit={e => { e.preventDefault(); linkEvent() }}>
+                <Input value={eventUrl} onChange={e => setEventUrl(e.target.value)} className="w-full" placeholder="https://tcg.ravensburgerplay.com/events/…" />
+                <Button size="sm" variant="primary" onClick={linkEvent}>Link</Button>
+              </form>
+            )}
+          </Labeled>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="primary" disabled={!rphStructure?.currentRoundId} onClick={() => setPicker(true)}>Pick pairing…</Button>
+            <Button size="sm" disabled={!rphStructure?.currentRoundId || sending !== null} onClick={sendStandings}>{sending === 'standings' ? 'Sending…' : 'Send standings'}</Button>
+            <Button size="sm" disabled={!rphStructure?.eliminationPhaseName || sending !== null} onClick={sendBracket}>{sending === 'bracket' ? 'Sending…' : 'Send bracket'}</Button>
+          </div>
           <Labeled label="Event name (shown when there's no logo)">
             <Input value={row.event_name} onChange={e => setField('event_name', e.target.value)} className="w-full" />
           </Labeled>
@@ -243,20 +322,14 @@ export function StreamOverlayPage() {
             </Labeled>
             <Button size="sm" onClick={() => write(row.id, { theme_fill: DEFAULT_THEME.fill, theme_accent: DEFAULT_THEME.accent })}>Reset to InkbornForge</Button>
           </div>
-          <p className="text-xs text-gray-500">
-            To load a feature match, open the pairing in Tournament Lookup's Matches tab and click “Send to Stream Overlay”.
-          </p>
         </Card>
 
         <Card title="Round timer" className="p-5">
           <div className="font-display text-6xl tabular-nums text-gray-900 mb-4">{formatClock(timerRemainingMs(state, now))}</div>
           {rphEventId ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <span className={`text-xs font-semibold uppercase tracking-widest ${rphError ? 'text-red-600' : 'text-emerald-600'}`}>
-                {rphError ? 'RPH clock: last sync failed, retrying' : `Linked to RPH clock · event ${rphEventId}`}
-              </span>
-              <Button size="sm" onClick={() => setField('rph_event_id', null)}>Unlink</Button>
-            </div>
+            <span className={`text-xs font-semibold uppercase tracking-widest ${rphError ? 'text-red-600' : 'text-emerald-600'}`}>
+              {rphError ? 'RPH clock: last sync failed, retrying' : 'Following the RPH round clock'}
+            </span>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               {running
@@ -271,7 +344,7 @@ export function StreamOverlayPage() {
           )}
         </Card>
 
-        <Card title="Break screen" description="What the break screen shows: the pairing (with the last result or the next match), or a standings or bracket snapshot sent from Tournament Lookup's Standings and Bracket tabs. Sending one switches to it; re-send after each round." className="p-5 lg:col-span-2">
+        <Card title="Break screen" description="What the break screen shows: the pairing (with the last result or the next match), or a standings or bracket snapshot from the linked event (Send standings / Send bracket in the Event card). Sending one switches to it; re-send after each round." className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center gap-2">
             {[
               ['', 'Pairing', true, ''],
@@ -285,12 +358,12 @@ export function StreamOverlayPage() {
           </div>
         </Card>
 
-        <Card title="Player card" description="Both players' majors history and head-to-head from the Tournament History archive, laid over the gameplay cam between games. Comes with the pairing when it's sent from Tournament Lookup." className="p-5 lg:col-span-2">
+        <Card title="Player card" description="Both players' majors history and head-to-head from the Tournament History archive, laid over the gameplay cam between games. Comes with a pairing picked from the linked event." className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-gray-600">
               {row.player_card
                 ? `${state.players[0].name || 'Left'}: ${row.player_card.players[0].eventsPlayed} majors, ${row.player_card.players[0].topCutCount} top cuts, ${row.player_card.players[0].dayTwoCount} Day 2s · ${state.players[1].name || 'Right'}: ${row.player_card.players[1].eventsPlayed} majors, ${row.player_card.players[1].topCutCount} top cuts, ${row.player_card.players[1].dayTwoCount} Day 2s · head-to-head ${row.player_card.headToHead.wins[0]}-${row.player_card.headToHead.wins[1]}`
-                : 'No player card for this pairing yet. Send the pairing from Tournament Lookup once its history has loaded.'}
+                : 'No player card for this pairing yet. It comes with a pairing picked from the linked event.'}
             </span>
             <Button size="sm" variant={row.card_shown ? 'primary' : 'secondary'} aria-pressed={row.card_shown} disabled={!row.player_card} onClick={() => write(row.id, { card_shown: !row.card_shown, deck_shown: 0 })}>
               {row.card_shown ? 'Hide from stream' : 'Show on stream'}
@@ -356,6 +429,10 @@ export function StreamOverlayPage() {
           )
         })}
       </div>
+      )}
+
+      {picker && row && rphStructure && (
+        <StreamPairingPicker eventId={rphEventId} structure={rphStructure} onStream={[row.p1_name, row.p2_name]} onSend={sendPairing} onClose={() => setPicker(false)} />
       )}
 
       {links && (

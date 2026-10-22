@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getTournamentStructure, formatTiebreakers, analyzeAdvancement, analyzeId } from '../tournamentApi'
+import { getTournamentStructure, formatTiebreakers, analyzeAdvancement, analyzeId, extractEventId } from '../tournamentApi'
 
 const roundComplete = (id, n) => ({ id, round_number: n, status: 'COMPLETE', standings_status: 'GENERATED' })
 const roundInProgress = (id, n) => ({ id, round_number: n, status: 'IN_PROGRESS', standings_status: 'GENERATED' })
@@ -17,6 +17,14 @@ const makeEventDetails = (overrides = {}) => ({
   top_cut_size: 8,
   tiebreakers: [],
   ...overrides,
+})
+
+describe('extractEventId', () => {
+  it('reads the numeric id from a Play Hub event link', () => {
+    expect(extractEventId('https://tcg.ravensburgerplay.com/events/12345/standings')).toBe('12345')
+    expect(extractEventId('12345')).toBe(null)
+    expect(extractEventId(null)).toBe(null)
+  })
 })
 
 describe('getTournamentStructure', () => {

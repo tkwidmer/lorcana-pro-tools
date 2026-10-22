@@ -1,3 +1,9 @@
+// The numeric event id from a Play Hub event URL, or null.
+export function extractEventId(url) {
+  const match = String(url ?? '').match(/\/events\/(\d+)/)
+  return match ? match[1] : null
+}
+
 export async function fetchEventDetails(eventId) {
   try {
     const response = await fetch(`/api/tournament?type=event&eventId=${eventId}`)
@@ -232,6 +238,21 @@ function extractMatches(data) {
   return { matches: [], nextPage: null }
 }
 
+// Every page of one round's matches.
+export async function fetchRoundMatches(eventId, roundId) {
+  const all = []
+  let page = 1
+  let hasMore = true
+  while (hasMore) {
+    const data = await fetchEventMatches(eventId, roundId, page, 100)
+    const { matches, nextPage } = extractMatches(data)
+    all.push(...matches)
+    hasMore = nextPage !== null
+    page = nextPage || page + 1
+  }
+  return all
+}
+
 // Fetches all matches for every round in the event, in parallel, with pagination.
 // Returns flat array of match objects with `round_number` and `phase_name` injected.
 export async function fetchAllRoundMatches(eventId, eventDetails) {
@@ -254,16 +275,8 @@ export async function fetchAllRoundMatches(eventId, eventDetails) {
   await Promise.all(
     rounds.map(async ({ roundId, roundNumber, phaseName }) => {
       try {
-        let page = 1
-        let hasMore = true
-        while (hasMore) {
-          const data = await fetchEventMatches(eventId, roundId, page, 100)
-          const { matches, nextPage } = extractMatches(data)
-          for (const match of matches) {
-            allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
-          }
-          hasMore = nextPage !== null
-          page = nextPage || page + 1
+        for (const match of await fetchRoundMatches(eventId, roundId)) {
+          allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
         }
       } catch {
         // Skip rounds that fail; don't block the rest
@@ -297,6 +310,24 @@ export async function fetchAllRegistrations(eventId) {
   }
 
   return allResults
+}
+
+// Every page of a round's standings, with match_points normalized to the
+// current total — the standings snapshot field is stale mid-event.
+export async function fetchAllStandings(roundId) {
+  const all = []
+  let page = 1
+  let hasMore = true
+  while (hasMore) {
+    const data = await fetchTournamentStandings(roundId, page, 50)
+    all.push(...data.results)
+    hasMore = data.next_page_number !== null
+    page = data.next_page_number || page + 1
+  }
+  return all.map((entry) => ({
+    ...entry,
+    match_points: entry.user_event_status?.total_match_points ?? entry.match_points,
+  }))
 }
 
 export async function fetchTournamentStandings(roundId, page = 1, pageSize = 10) {

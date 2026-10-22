@@ -33,6 +33,7 @@ const TITLES = {
   '/stock-decks': 'Stock Deck Lists',
   '/forge-decks': 'The Forge Decklists',
   '/practice-plan': 'Practice Plan',
+  '/deck-doctor': 'Deck Doctor',
   '/tournament-lookup': 'Tournament Lookup',
   '/results': 'Tournament Results',
   '/store-lookup': 'Store Lookup',

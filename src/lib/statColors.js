@@ -39,6 +39,13 @@ export function deltaColor(delta) {
   return 'text-gray-500'
 }
 
+// Text color by sign alone, for small deltas such as a card's lift
+// (usually under ±3 pp, where deltaColor's ±5 bands would all read gray).
+export function signColor(delta) {
+  if (delta == null || delta === 0) return 'text-gray-500'
+  return delta > 0 ? 'text-green-700' : 'text-red-700'
+}
+
 // Text color for a draw-odds probability (0-1).
 export function oddsColor(p) {
   if (p >= 0.75) return 'text-green-700'

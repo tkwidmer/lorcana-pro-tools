@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { getToken, fetchMatchHistory, fetchStats } from '../lib/duelsApi'
+import { getToken, fetchAllMatchHistory, fetchStats } from '../lib/duelsApi'
 import { resolveColors } from '../lib/inkColors'
 import { getAllGamelogs } from '../lib/gamelogHistory'
 import { parseGamelog } from '../lib/parseGamelog'
@@ -103,15 +103,7 @@ export function PracticePlanPage() {
       setLoadingGames(true)
       setGamesError(null)
       try {
-        let cursor
-        let all = []
-        for (let i = 0; i < 20; i++) { // cap at 20 pages (~2000 games)
-          const data = await fetchMatchHistory({ cursor, limit: 100 })
-          if (cancelled) return
-          all = all.concat(data.games ?? [])
-          cursor = data.next_cursor
-          if (!cursor) break
-        }
+        const all = await fetchAllMatchHistory()
         if (!cancelled) setGames(all)
       } catch (err) {
         if (!cancelled) setGamesError(err.message)

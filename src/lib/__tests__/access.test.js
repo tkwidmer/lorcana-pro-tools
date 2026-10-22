@@ -6,6 +6,7 @@ describe('access', () => {
     expect(isSupporterPath('/deck-insights')).toBe(true)
     expect(isSupporterPath('/library')).toBe(true)
     expect(isSupporterPath('/game-scraper')).toBe(true)
+    expect(isSupporterPath('/deck-doctor')).toBe(true)
   })
 
   it('does not flag public paths', () => {

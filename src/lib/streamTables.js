@@ -40,6 +40,12 @@ export async function adjustTable(id, key, side, field, delta) {
   unwrap(await supabase.rpc('adjust_stream_table', { p_id: id, p_key: key, p_side: side, p_field: field, p_delta: delta }))
 }
 
+// "Next game": both players' lore to zero in one call, gated by the
+// controller key like a tap (migration 019).
+export async function resetLore(id, key) {
+  unwrap(await supabase.rpc('reset_stream_table_lore', { p_id: id, p_key: key }))
+}
+
 // Live updates: the row's trigger broadcasts its public shape on every
 // change. Returns an unsubscribe function.
 export function subscribeToTable(id, onRow) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { fetchPublicTable, subscribeToTable, adjustTable } from '../lib/streamTables'
+import { fetchPublicTable, subscribeToTable, adjustTable, resetLore } from '../lib/streamTables'
 import { MAX_GAME_WINS, rowToState } from '../lib/streamOverlay'
 
 // The players' controller: a tablet at the table, one half per player, that
@@ -26,6 +26,20 @@ export function StreamOverlayControlPage() {
     adjustTable(tableId, key, side, field, delta).catch(e => setError(e.message))
   }
 
+  // "Next game" zeroes both lore counts, so it takes two taps within a few
+  // seconds: a stray tap mid-game shouldn't wipe the score.
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (!armed) return
+    const id = setTimeout(() => setArmed(false), 4000)
+    return () => clearTimeout(id)
+  }, [armed])
+  function nextGame() {
+    if (!armed) { setArmed(true); return }
+    setArmed(false)
+    resetLore(tableId, key).catch(e => setError(e.message))
+  }
+
   if (!row) {
     return (
       <div className="h-screen grid place-items-center font-display text-2xl uppercase tracking-widest text-gray-500 text-center px-6">
@@ -39,6 +53,15 @@ export function StreamOverlayControlPage() {
   return (
     <div className="h-screen flex flex-col select-none">
       {error && <div className="shrink-0 bg-red-50 text-red-700 text-sm text-center py-1">{error}</div>}
+      <div className="shrink-0 flex justify-center py-3 border-b border-gray-200">
+        <button
+          type="button"
+          onClick={nextGame}
+          className={`font-display uppercase tracking-wider text-lg px-8 py-3 rounded border ${armed ? 'bg-forge text-on-forge border-forge' : 'bg-white text-gray-900 border-gray-300 hover:bg-gray-100 active:bg-gray-200'}`}
+        >
+          {armed ? 'Tap again to reset lore to 0' : 'Next game'}
+        </button>
+      </div>
       <div className="flex-1 flex min-h-0">
       {players.map((player, i) => (
         <div key={i} className={`flex-1 flex flex-col items-center p-4 gap-4 ${i === 0 ? 'border-r border-gray-200' : ''}`}>

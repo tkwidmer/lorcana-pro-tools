@@ -6,12 +6,12 @@ import { matchDeckList } from '../lib/decklistShared'
 import { VALID_INKS } from '../lib/inkColors'
 import { fetchEventDetails, getTournamentStructure } from '../lib/tournamentApi'
 import {
-  listMyTables, createTable, updateTable, deleteTable, adjustTable, subscribeToTable, uploadLogo,
+  listMyTables, createTable, updateTable, deleteTable, adjustTable, subscribeToTable, uploadLogo, resetLore,
   readSelectedTableId, storeSelectedTableId,
 } from '../lib/streamTables'
 import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
-  startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks,
+  startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks, clearTablePatch,
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
 import { Button } from '../components/ui/Button'
@@ -109,6 +109,10 @@ export function StreamOverlayPage() {
       const action = hotkeyAction(e)
       if (!action) return
       e.preventDefault()
+      if (action.nextGame) {
+        resetLore(rowId, controllerKey).catch(e => setError(e.message))
+        return
+      }
       if (action.toggleMode || action.toggleDeck || action.toggleCard) {
         if (action.toggleCard && !hasCard) return
         // The deck and the player card share the slot over the cam: showing
@@ -282,9 +286,13 @@ export function StreamOverlayPage() {
 
         <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
-            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck · <Kbd>3</Kbd> player card. Click outside any field first.
+            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck · <Kbd>3</Kbd> player card · <Kbd>N</Kbd> next game (lore to 0). Click outside any field first.
           </p>
-          <Button size="sm" onClick={() => write(row.id, swapSidesPatch(row))}>Swap sides</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="primary" onClick={() => resetLore(row.id, row.controller_key).catch(e => setError(e.message))}>Next game: lore to 0</Button>
+            <Button size="sm" onClick={() => write(row.id, swapSidesPatch(row))}>Swap sides</Button>
+            <Button size="sm" variant="danger" onClick={() => { if (window.confirm('Clear both players, the round, the note, the decklists and the player card? The event name, logos, theme and timer stay.')) write(row.id, clearTablePatch()) }}>Clear table</Button>
+          </div>
         </div>
 
         {state.players.map((player, i) => {

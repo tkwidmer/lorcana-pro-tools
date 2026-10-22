@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -34,6 +34,7 @@ describe('streamOverlay row mapping', () => {
     expect(hotkeyAction(key('b'))).toEqual({ toggleMode: true })
     expect(hotkeyAction(key('2'))).toEqual({ toggleDeck: 2 })
     expect(hotkeyAction(key('3'))).toEqual({ toggleCard: true })
+    expect(hotkeyAction(key('N'))).toEqual({ nextGame: true })
     expect(hotkeyAction(key('x'))).toBeNull()
     expect(hotkeyAction(key('q', { ctrlKey: true }))).toBeNull()
     expect(hotkeyAction(key('q', { target: { tagName: 'INPUT' } }))).toBeNull()
@@ -73,6 +74,12 @@ describe('streamOverlay row mapping', () => {
     expect(card.headToHead.matches.map(m => [m.event, m.phase, m.winner, m.score])).toEqual([
       ['Open C', 'Round 2', null, null], ['CCQ B', 'Top 8', 0, '2-1'], ['Open A', 'Round 4', 1, '2-0'],
     ])
+  })
+
+  it('clears the pairing but keeps the event setup', () => {
+    const p = clearTablePatch()
+    expect(p).toMatchObject({ p1_name: '', p2_name: '', p1_inks: [], p2_lore: 0, p1_game_wins: 0, p2_decklist: '', round: '', note: '', rph_event_id: null, deck_shown: 0, card_shown: false, player_card: null, mode: 'live' })
+    for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'theme_fill', 'theme_accent', 'timer_ends_at', 'timer_remaining_ms']) expect(p).not.toHaveProperty(kept)
   })
 
   it('swaps the player card with the sides', () => {

@@ -1,10 +1,59 @@
 {
+  "1007231": {
+    "imported_at": "2026-10-22T21:45:16Z",
+    "label": "CCQ",
+    "matchesImported": 800,
+    "name": "Iconic Tour - CCQ",
+    "standingsImported": 205
+  },
+  "1016280": {
+    "imported_at": "2026-10-22T21:45:18Z",
+    "label": "CCQ",
+    "matchesImported": 319,
+    "name": "Game Grid Open - CCQ",
+    "standingsImported": 95
+  },
+  "1063390": {
+    "imported_at": "2026-10-22T21:45:23Z",
+    "label": "CCQ",
+    "matchesImported": 2,
+    "name": "Coconut [CCQ-Side-Event]",
+    "standingsImported": 4
+  },
+  "166711": {
+    "imported_at": "2026-10-22T21:46:37Z",
+    "label": "PRIZE",
+    "matchesImported": 31,
+    "name": "Road To 50k QRO Team Tlacuache",
+    "standingsImported": 13
+  },
+  "170069": {
+    "imported_at": "2026-10-22T21:46:11Z",
+    "label": "PRIZE",
+    "matchesImported": 65,
+    "name": "Fabled Weekend $5K",
+    "standingsImported": 67
+  },
+  "180195": {
+    "imported_at": "2026-10-22T21:46:13Z",
+    "label": "PRIZE",
+    "matchesImported": 114,
+    "name": "Lorcana - Fabled $5k",
+    "standingsImported": 42
+  },
   "180914": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "CCQ",
     "matchesImported": 12,
     "name": "Core Constructed Tournament Win FREE Entry to CCQ @ Game Grid Open",
     "standingsImported": 0
+  },
+  "192489": {
+    "imported_at": "2026-10-22T21:46:33Z",
+    "label": "PRIZE",
+    "matchesImported": 49,
+    "name": "Lonestar Open 10k Weekend Qualifier",
+    "standingsImported": 18
   },
   "199148": {
     "imported_at": "2026-08-26T21:34:45Z",
@@ -68,6 +117,13 @@
     "matchesImported": 7799,
     "name": "Disney Lorcana Challenge - Bologna",
     "standingsImported": 2043
+  },
+  "210570": {
+    "imported_at": "2026-10-22T21:45:57Z",
+    "label": "CCQ",
+    "matchesImported": 268,
+    "name": "Game Grid Open Challenge Championship Qualifier",
+    "standingsImported": 94
   },
   "216587": {
     "imported_at": "2026-08-26T21:34:45Z",
@@ -202,6 +258,13 @@
     "name": "FALL LEAGUE - CCQ",
     "standingsImported": 442
   },
+  "264848": {
+    "imported_at": "2026-10-22T21:46:40Z",
+    "label": "PRIZE",
+    "matchesImported": 367,
+    "name": "Tormenta de Tinta 50K",
+    "standingsImported": 95
+  },
   "266796": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "CCQ",
@@ -237,6 +300,20 @@
     "name": "Top Cut Games CCQ",
     "standingsImported": 176
   },
+  "319723": {
+    "imported_at": "2026-10-22T21:46:34Z",
+    "label": "PRIZE",
+    "matchesImported": 184,
+    "name": "World Class Cards 10k Weekend Saturday Infinity",
+    "standingsImported": 62
+  },
+  "319745": {
+    "imported_at": "2026-10-22T21:46:36Z",
+    "label": "PRIZE",
+    "matchesImported": 139,
+    "name": "World Class Cards 10k Weekend Sunday Infinity",
+    "standingsImported": 49
+  },
   "328953": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "DLC",
@@ -250,6 +327,20 @@
     "matchesImported": 949,
     "name": "Ink Inc Open: Winterspell CCQ",
     "standingsImported": 274
+  },
+  "338974": {
+    "imported_at": "2026-10-22T21:46:16Z",
+    "label": "PRIZE",
+    "matchesImported": 283,
+    "name": "Collectors Expo 5K Tournament",
+    "standingsImported": 95
+  },
+  "349325": {
+    "imported_at": "2026-10-22T21:46:20Z",
+    "label": "PRIZE",
+    "matchesImported": 158,
+    "name": "Glass City Showdown Lorcana Winterspell $2.5k Cash Tournament",
+    "standingsImported": 57
   },
   "349881": {
     "imported_at": "2026-08-26T21:34:45Z",
@@ -293,6 +384,13 @@
     "name": "Lorcana CCQ PL Trial nr 3 - Infinity Constructed 30.01.2026 g. 16:00",
     "standingsImported": 7
   },
+  "358968": {
+    "imported_at": "2026-10-22T21:46:26Z",
+    "label": "PRIZE",
+    "matchesImported": 175,
+    "name": "Down the Inkwell Win-a-Case 1.5K Tournament",
+    "standingsImported": 48
+  },
   "366143": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "CCQ",
@@ -328,6 +426,13 @@
     "name": "CCQ : Occitan'ink Tome II",
     "standingsImported": 171
   },
+  "390096": {
+    "imported_at": "2026-10-22T21:46:22Z",
+    "label": "PRIZE",
+    "matchesImported": 237,
+    "name": "Lorcana Core 5K",
+    "standingsImported": 74
+  },
   "395846": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "CCQ",
@@ -341,6 +446,20 @@
     "matchesImported": 119,
     "name": "Tournoi core side-event CCQ Occitan'ink",
     "standingsImported": 42
+  },
+  "402587": {
+    "imported_at": "2026-10-22T21:44:42Z",
+    "label": "DLC",
+    "matchesImported": 1764,
+    "name": "Disney Lorcana Challenge - Melbourne VIC - 21st - 22nd February",
+    "standingsImported": 399
+  },
+  "406930": {
+    "imported_at": "2026-10-22T21:46:17Z",
+    "label": "PRIZE",
+    "matchesImported": 9,
+    "name": "Torneo Express 5K / Judge's Gavel",
+    "standingsImported": 7
   },
   "413990": {
     "imported_at": "2026-08-26T21:34:45Z",
@@ -377,12 +496,33 @@
     "name": "Woodzshacktcg multi case  ccq",
     "standingsImported": 128
   },
+  "448163": {
+    "imported_at": "2026-10-22T21:46:24Z",
+    "label": "PRIZE",
+    "matchesImported": 199,
+    "name": "Glimmer Games Infinity 5k",
+    "standingsImported": 77
+  },
+  "448653": {
+    "imported_at": "2026-10-22T21:44:46Z",
+    "label": "DLC",
+    "matchesImported": 1356,
+    "name": "Disney Lorcana Challenge Taipei 2026",
+    "standingsImported": 365
+  },
   "448707": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "CCQ",
     "matchesImported": 456,
     "name": "Lowlands Lore Quest Infinity CCQ",
     "standingsImported": 134
+  },
+  "456247": {
+    "imported_at": "2026-10-22T21:44:48Z",
+    "label": "DLC",
+    "matchesImported": 9,
+    "name": "Jeudisney Lorcana Challenge - Double-Up Constructed @ Ikigai Manga Shop",
+    "standingsImported": 6
   },
   "460893": {
     "imported_at": "2026-08-26T21:34:45Z",
@@ -404,6 +544,13 @@
     "matchesImported": 106,
     "name": "RUNIK TS 01 - Warm Up - CCQ Bordeaux",
     "standingsImported": 54
+  },
+  "483324": {
+    "imported_at": "2026-10-22T21:46:30Z",
+    "label": "PRIZE",
+    "matchesImported": 50,
+    "name": "FPG & ATG PRESENT LORCANA 5K",
+    "standingsImported": 17
   },
   "492131": {
     "imported_at": "2026-08-26T21:34:45Z",
@@ -503,12 +650,33 @@
     "name": "Van's Comics Cards and Games CCQ",
     "standingsImported": 96
   },
+  "612452": {
+    "imported_at": "2026-10-22T21:46:01Z",
+    "label": "CCQ",
+    "matchesImported": 859,
+    "name": "Challenge Championship Qualifier - UK Games Expo",
+    "standingsImported": 261
+  },
+  "612922": {
+    "imported_at": "2026-10-22T21:46:08Z",
+    "label": "CCQ",
+    "matchesImported": 339,
+    "name": "GenCon - Fri - 12pm - Challenge Championship Qualifier",
+    "standingsImported": 122
+  },
   "636740": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "CCQ",
     "matchesImported": 727,
     "name": "ETB 15K Infinity CCQ Oakville",
     "standingsImported": 212
+  },
+  "638095": {
+    "imported_at": "2026-10-22T21:46:29Z",
+    "label": "PRIZE",
+    "matchesImported": 442,
+    "name": "ETB Redemption Arc Core Constructed 5k",
+    "standingsImported": 148
   },
   "648791": {
     "imported_at": "2026-08-26T21:34:45Z",
@@ -601,11 +769,207 @@
     "name": "Pro-Play Summit: Dallas - $10k CCQ",
     "standingsImported": 98
   },
+  "729615": {
+    "imported_at": "2026-10-22T21:45:51Z",
+    "label": "ACQ",
+    "matchesImported": 151,
+    "name": "Asia Championship Qualifier Malaysia",
+    "standingsImported": 47
+  },
+  "729985": {
+    "imported_at": "2026-10-22T21:44:55Z",
+    "label": "CCQ",
+    "matchesImported": 28,
+    "name": "Tournament Lorcana Core - possible CCQ",
+    "standingsImported": 13
+  },
+  "767749": {
+    "imported_at": "2026-10-22T21:45:33Z",
+    "label": "ACQ",
+    "matchesImported": 268,
+    "name": "Asia Championship Qualifiers - Philippines",
+    "standingsImported": 77
+  },
+  "770995": {
+    "imported_at": "2026-10-22T21:45:29Z",
+    "label": "CCQ",
+    "matchesImported": 504,
+    "name": "The Cauldron Cup CCQ - $5,000 Challenge Championship Qualifier",
+    "standingsImported": 138
+  },
+  "783426": {
+    "imported_at": "2026-10-22T21:45:31Z",
+    "label": "ACQ",
+    "matchesImported": 525,
+    "name": "Asia Championship Qualifiers 2026 - Singapore",
+    "standingsImported": 172
+  },
+  "783427": {
+    "imported_at": "2026-10-22T21:45:35Z",
+    "label": "ACQ",
+    "matchesImported": 134,
+    "name": "Asia Championship Qualifiers 2026 - Singapore Side Event",
+    "standingsImported": 67
+  },
+  "788877": {
+    "imported_at": "2026-10-22T21:45:43Z",
+    "label": "ACQ",
+    "matchesImported": 752,
+    "name": "Asia Championship Qualifier Thailand — Main Event (2 Aug 2026)",
+    "standingsImported": 224
+  },
+  "798924": {
+    "imported_at": "2026-10-22T21:45:38Z",
+    "label": "ACQ",
+    "matchesImported": 13,
+    "name": "Asia Championship Qualifiers PH - Side Event 2 (Sealed Set 13)",
+    "standingsImported": 8
+  },
+  "798928": {
+    "imported_at": "2026-10-22T21:45:40Z",
+    "label": "ACQ",
+    "matchesImported": 24,
+    "name": "Asia Championship Qualifiers PH - Side Event 3 (Core Constructed)",
+    "standingsImported": 11
+  },
+  "799550": {
+    "imported_at": "2026-10-22T21:46:03Z",
+    "label": "CCQ",
+    "matchesImported": 365,
+    "name": "Lorcana Challenge Championship Qualifier",
+    "standingsImported": 116
+  },
+  "800496": {
+    "imported_at": "2026-10-22T21:45:37Z",
+    "label": "ACQ",
+    "matchesImported": 16,
+    "name": "Asia Championship Qualifiers PH - Side Event 1 (Pack Rush Set 13) (Copy)",
+    "standingsImported": 8
+  },
+  "816596": {
+    "imported_at": "2026-10-22T21:45:47Z",
+    "label": "ACQ",
+    "matchesImported": 298,
+    "name": "Asia Championship Qualifier Thailand — Side Event (2 Aug 2026)",
+    "standingsImported": 129
+  },
+  "820995": {
+    "imported_at": "2026-10-22T21:45:45Z",
+    "label": "ACQ",
+    "matchesImported": 15,
+    "name": "Side Event Asia Championship Qualifier",
+    "standingsImported": 16
+  },
+  "822903": {
+    "imported_at": "2026-10-22T21:45:49Z",
+    "label": "ACQ",
+    "matchesImported": 15,
+    "name": "Side Event Asia Championship Qualifier Wave 3",
+    "standingsImported": 16
+  },
+  "838766": {
+    "imported_at": "2026-10-22T21:45:09Z",
+    "label": "CCQ",
+    "matchesImported": 608,
+    "name": "Charlie's Collectible Show $10,000 Weekend & Official CCQ",
+    "standingsImported": 177
+  },
   "845499": {
     "imported_at": "2026-08-26T21:34:45Z",
     "label": "CCQ",
     "matchesImported": 357,
     "name": "D23 - Sat - 10am - Challenge Championship Qualifier (CCQ)",
     "standingsImported": 128
+  },
+  "846907": {
+    "imported_at": "2026-10-22T21:45:55Z",
+    "label": "ACQ",
+    "matchesImported": 636,
+    "name": "Asia Championship Qualifier Hong Kong - 2026",
+    "standingsImported": 172
+  },
+  "853992": {
+    "imported_at": "2026-10-22T21:44:57Z",
+    "label": "CCQ",
+    "matchesImported": 357,
+    "name": "Lorcana X Brainwash Cards 2K CCQ",
+    "standingsImported": 121
+  },
+  "886104": {
+    "imported_at": "2026-10-22T21:44:51Z",
+    "label": "DLC",
+    "matchesImported": 592,
+    "name": "Disney Lorcana Challenge North American Championship",
+    "standingsImported": 136
+  },
+  "943122": {
+    "imported_at": "2026-10-22T21:44:36Z",
+    "label": "DLC",
+    "matchesImported": 109,
+    "name": "Disney Lorcana Challenge - Championship Brazil 2026",
+    "standingsImported": 34
+  },
+  "943174": {
+    "imported_at": "2026-10-22T21:44:53Z",
+    "label": "CCQ",
+    "matchesImported": 413,
+    "name": "Disney Lorcana: CCQ Essen 2026",
+    "standingsImported": 128
+  },
+  "943395": {
+    "imported_at": "2026-10-22T21:45:00Z",
+    "label": "CCQ",
+    "matchesImported": 446,
+    "name": "CCQ - SENIGALLIA",
+    "standingsImported": 130
+  },
+  "945682": {
+    "imported_at": "2026-10-22T21:45:25Z",
+    "label": "CCQ",
+    "matchesImported": 87,
+    "name": "CCQ - PARALELO Heroinas + D23  [10/10/26]",
+    "standingsImported": 35
+  },
+  "951374": {
+    "imported_at": "2026-10-22T21:45:05Z",
+    "label": "CCQ",
+    "matchesImported": 543,
+    "name": "[CCQ] MGW Lorcana Open #3",
+    "standingsImported": 136
+  },
+  "968705": {
+    "imported_at": "2026-10-22T21:45:10Z",
+    "label": "CCQ",
+    "matchesImported": 5,
+    "name": "Coconut Party [RHS-CCQ-SIDE)",
+    "standingsImported": 10
+  },
+  "968710": {
+    "imported_at": "2026-10-22T21:45:12Z",
+    "label": "CCQ",
+    "matchesImported": 7,
+    "name": "\"Infinity Pack Rush\" The Great Hunny Rescue Celebration (RHS-CCQ-SIDE)",
+    "standingsImported": 14
+  },
+  "968762": {
+    "imported_at": "2026-10-22T21:45:20Z",
+    "label": "CCQ",
+    "matchesImported": 29,
+    "name": "Sunday Core Constructed (RHS-CCQ-SIDE)",
+    "standingsImported": 15
+  },
+  "968763": {
+    "imported_at": "2026-10-22T21:45:21Z",
+    "label": "CCQ",
+    "matchesImported": 70,
+    "name": "Chaos Sealed (RHS-CCQ-SIDE)",
+    "standingsImported": 25
+  },
+  "979840": {
+    "imported_at": "2026-10-22T21:45:03Z",
+    "label": "CCQ",
+    "matchesImported": 45,
+    "name": "Thursday Afternoon CCQ",
+    "standingsImported": 18
   }
 }

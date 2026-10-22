@@ -2,6 +2,8 @@
 // DecklistOverlayPage (the read-only OBS Browser Source view) so the two
 // stay visually identical without duplicating the grouping/encoding logic.
 import { INK_HEX, INK_TEXT_ON } from './inkColors'
+import { parseDeckList } from './parseDeckList'
+import { toSimpleName } from './cardAnalysis'
 
 export const BUCKET_ORDER = ['Character', 'Action', 'Item', 'Location']
 export const BUCKET_LABEL = {
@@ -32,6 +34,15 @@ export function inkFill(colors) {
 export function textColorFor(colors) {
   const first = colors[0]
   return INK_TEXT_ON[first] || '#ffffff'
+}
+
+// Pasted decklist text → the entries the Inspector, its overlay and the Stream
+// Overlay render: each line matched to a card by simplified name, unmatched
+// lines dropped. `cardIndex` is buildCardIndex(cards).
+export function matchDeckList(text, cardIndex) {
+  return parseDeckList(text)
+    .map(({ name, count }) => ({ key: name, name, count, card: cardIndex.get(toSimpleName(name)) }))
+    .filter(e => e.card)
 }
 
 // Groups matched decklist entries into the 4 card-type buckets, sorted by

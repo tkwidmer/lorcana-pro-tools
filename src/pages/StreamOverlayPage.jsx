@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useCards } from '../hooks/useCards'
+import { buildCardIndex } from '../lib/cardAnalysis'
+import { parseDeckList } from '../lib/parseDeckList'
+import { matchDeckList } from '../lib/decklistShared'
 import { VALID_INKS } from '../lib/inkColors'
 import { fetchEventDetails, getTournamentStructure } from '../lib/tournamentApi'
 import {
@@ -7,12 +11,12 @@ import {
 } from '../lib/streamTables'
 import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
-  startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction,
+  startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks,
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
-import { Input, Select } from '../components/ui/Field'
+import { Input, Select, Textarea } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 
 // RPH's live channel doesn't broadcast reliably (see the ravensburger-tournament-api
@@ -38,6 +42,8 @@ export function StreamOverlayPage() {
   const [now, setNow] = useState(() => Date.now())
   const [minutes, setMinutes] = useState(50)
   const [rphError, setRphError] = useState(false)
+  const { cards } = useCards()
+  const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
 
   const row = tables?.find(t => t.id === tableId) ?? tables?.[0] ?? null
   const patchLocal = (id, patch) => setTables(ts => ts.map(t => (t.id === id ? { ...t, ...patch } : t)))
@@ -94,23 +100,26 @@ export function StreamOverlayPage() {
   // flip is an optimistic column write like the Live / Break buttons.
   const controllerKey = row?.controller_key ?? null
   const mode = row?.mode ?? null
+  const deckShown = row?.deck_shown ?? 0
   useEffect(() => {
     if (!rowId) return
     const onKey = e => {
       const action = hotkeyAction(e)
       if (!action) return
       e.preventDefault()
-      if (action.toggleMode) {
-        const next = mode === 'break' ? 'live' : 'break'
-        setTables(ts => ts.map(t => (t.id === rowId ? { ...t, mode: next } : t)))
-        updateTable(rowId, { mode: next }).catch(e => setError(e.message))
+      if (action.toggleMode || action.toggleDeck) {
+        const patch = action.toggleMode
+          ? { mode: mode === 'break' ? 'live' : 'break' }
+          : { deck_shown: deckShown === action.toggleDeck ? 0 : action.toggleDeck }
+        setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
+        updateTable(rowId, patch).catch(e => setError(e.message))
       } else {
         adjustTable(rowId, controllerKey, action.side, action.field, action.delta).catch(e => setError(e.message))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [rowId, controllerKey, mode])
+  }, [rowId, controllerKey, mode, deckShown])
 
   // Optimistic local update, then the column write; a failed write surfaces.
   function write(id, patch) {
@@ -253,7 +262,7 @@ export function StreamOverlayPage() {
 
         <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
-            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break. Click outside any field first.
+            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck. Click outside any field first.
           </p>
           <Button size="sm" onClick={() => write(row.id, swapSidesPatch(row))}>Swap sides</Button>
         </div>
@@ -287,6 +296,15 @@ export function StreamOverlayPage() {
                 })}
               </div>
             </Labeled>
+
+            <DecklistField
+              text={player.decklist} cardIndex={cardIndex} shown={row.deck_shown === side}
+              onChange={text => {
+                const inks = deckInks(matchDeckList(text, cardIndex))
+                write(row.id, { [`p${side}_decklist`]: text, ...(inks.length ? { [`p${side}_inks`]: inks } : {}) })
+              }}
+              onToggleShow={() => setField('deck_shown', row.deck_shown === side ? 0 : side)}
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <Counter label="Lore" value={player.lore} onChange={d => adjust(side, 'lore', d)} />
@@ -326,6 +344,29 @@ function LogoField({ label, value, onChange, onError }) {
         {value && <img src={value} alt="" className="h-9 w-16 object-contain bg-gray-900 rounded shrink-0" />}
       </div>
       {busy && <span className="mt-1 block text-xs text-gray-500">Uploading…</span>}
+    </Labeled>
+  )
+}
+
+// A side's decklist: pasted "4 Card Name" lines, matched against the card
+// database to report what matched and to set that side's inks on paste.
+// "Show on stream" lays the deck over the gameplay cam on the live overlay.
+function DecklistField({ text, cardIndex, shown, onChange, onToggleShow }) {
+  const lines = parseDeckList(text)
+  const matched = matchDeckList(text, cardIndex)
+  const unmatched = lines.length - matched.length
+  const copies = matched.reduce((s, e) => s + e.count, 0)
+  return (
+    <Labeled label="Decklist (paste “4 Card Name” lines; sets the inks)">
+      <Textarea value={text} onChange={e => onChange(e.target.value)} rows={4} className="w-full font-mono text-xs" placeholder={'4 Elsa - Spirit of Winter\n3 Let It Go\n…'} />
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <span className="text-xs text-gray-500">
+          {text.trim() ? `${copies} cards matched${unmatched ? ` · ${unmatched} line${unmatched === 1 ? '' : 's'} not recognised` : ''}` : 'No decklist'}
+        </span>
+        <Button size="sm" variant={shown ? 'primary' : 'secondary'} aria-pressed={shown} disabled={!matched.length} onClick={onToggleShow}>
+          {shown ? 'Hide from stream' : 'Show on stream'}
+        </Button>
+      </div>
     </Labeled>
   )
 }

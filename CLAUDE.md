@@ -527,6 +527,8 @@ Two display details in the view: a player's name steps down a size class as it o
 
 **While `rph_event_id` is set the clock is linked:** the panel polls `fetchEventDetails` every 15 s and writes `rphClockPatch()`, and the Timer card shows "Linked to RPH clock" with an Unlink button in place of Start / Pause / Reset, so there's one source of truth for the clock. Polling, not push, because RPH's Pusher channel was never observed to broadcast (see the `ravensburger-tournament-api` skill); the countdown stays exact between polls since it's a wall-time target, only an organizer's start/pause/reset lags by up to one interval. Unlink (or a send from a different event) is the only way the manual controls come back.
 
+**Decklists** (migration `017_stream_tables_decklists.sql`): each side's list is pasted into the panel's player card as `4 Card Name` lines (`p1_decklist`/`p2_decklist`, the Decklist Inspector's format) and matched against the card database with `matchDeckList()` (`decklistShared.js`, shared with the Inspector's overlay); a paste also sets that side's inks from the matched cards (`deckInks()`, most copies first). `deck_shown` (0, 1 or 2) is which deck the live view lays over the gameplay cam — the panel's "Show on stream" button or the 1 / 2 hotkeys — rendered by `DeckPanel` with the Inspector's own `CardBar` rows zoomed to read at 1080p in two columns. Swap sides carries a shown deck with its player; a feature match from RPH clears both lists and hides the deck. The view loads card data through `useCards()` (the public `/api/cards` rewrite, so no session needed).
+
 Deliberately not included (cheap to add): the featured-card art some broadcast overlays show, and any layout other than 1920×1080.
 
 ### Ink Color Icons

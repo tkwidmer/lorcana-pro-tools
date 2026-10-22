@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16', note: 'Top 8 at 5pm',
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0,
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
-  p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0,
-  p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1,
+  p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0, p1_decklist: '4 Elsa',
+  p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1, p2_decklist: '',
   ...overrides,
 })
 
@@ -16,7 +16,8 @@ describe('streamOverlay row mapping', () => {
   it('turns a row into the render shape, parsing the clock target', () => {
     const s = rowToState(row({ timer_ends_at: '2026-05-24T23:38:39+00:00' }))
     expect(s.timerEndsAt).toBe(Date.parse('2026-05-24T23:38:39+00:00'))
-    expect(s.players[0]).toEqual({ name: 'Ryan', record: '5-0-2', inks: ['amethyst', 'emerald'], lore: 12, gameWins: 0 })
+    expect(s.players[0]).toEqual({ name: 'Ryan', record: '5-0-2', inks: ['amethyst', 'emerald'], lore: 12, gameWins: 0, decklist: '4 Elsa' })
+    expect(s.deckShown).toBe(0)
     expect(s.players[1].gameWins).toBe(1)
     expect(s.note).toBe('Top 8 at 5pm')
     expect(rowToState(row()).timerEndsAt).toBeNull()
@@ -29,10 +30,22 @@ describe('streamOverlay row mapping', () => {
     expect(hotkeyAction(key('k'))).toEqual({ side: 2, field: 'lore', delta: -1 })
     expect(hotkeyAction(key('o'))).toEqual({ side: 2, field: 'game_wins', delta: 1 })
     expect(hotkeyAction(key('b'))).toEqual({ toggleMode: true })
+    expect(hotkeyAction(key('2'))).toEqual({ toggleDeck: 2 })
     expect(hotkeyAction(key('x'))).toBeNull()
     expect(hotkeyAction(key('q', { ctrlKey: true }))).toBeNull()
     expect(hotkeyAction(key('q', { target: { tagName: 'INPUT' } }))).toBeNull()
     expect(hotkeyAction(key('q', { target: { tagName: 'DIV', isContentEditable: true } }))).toBeNull()
+  })
+
+  it('lists a deck\'s inks from its matched cards, most copies first', () => {
+    const entries = [
+      { count: 4, card: { color: 'Steel' } },
+      { count: 4, card: { colors: ['Amethyst', 'Steel'] } },
+      { count: 2, card: { color: 'Amethyst' } },
+      { count: 1, card: { color: 'Ruby' } },
+    ]
+    expect(deckInks(entries)).toEqual(['steel', 'amethyst', 'ruby'])
+    expect(deckInks([])).toEqual([])
   })
 
   it('steps a name down a size class as it outgrows the slot', () => {
@@ -69,8 +82,12 @@ describe('streamOverlay row mapping', () => {
       .toEqual({ fill: '#ffffff', accent: '#b00020', text: '#17171a' })
   })
 
-  it('swaps every per-side column', () => {
-    const p = swapSidesPatch(row())
+  it('swaps every per-side column, and a shown deck follows its player', () => {
+    const p = swapSidesPatch(row({ deck_shown: 1 }))
+    expect(p.deck_shown).toBe(2)
+    expect(swapSidesPatch(row()).deck_shown).toBe(0)
+    expect(p.p1_decklist).toBe('')
+    expect(p.p2_decklist).toBe('4 Elsa')
     expect(p.p1_name).toBe('Dylan')
     expect(p.p2_name).toBe('Ryan')
     expect(p.p1_inks).toEqual(['amber'])
@@ -133,8 +150,9 @@ describe('streamOverlay RPH', () => {
     })
     expect(p).toEqual({
       timer_ends_at: null, timer_remaining_ms: 70 * 60 * 1000, rph_event_id: 528227, event_name: 'Open', round: 'Top 16',
-      p1_name: 'Ryan', p1_record: '5-2-0', p1_lore: 0, p1_game_wins: 0,
-      p2_name: 'Dylan', p2_record: '5-0-2', p2_lore: 0, p2_game_wins: 0,
+      p1_name: 'Ryan', p1_record: '5-2-0', p1_lore: 0, p1_game_wins: 0, p1_decklist: '',
+      p2_name: 'Dylan', p2_record: '5-0-2', p2_lore: 0, p2_game_wins: 0, p2_decklist: '',
+      deck_shown: 0,
     })
     expect(featureMatchPatch({ eventName: '', round: '', rphEventId: 1, players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null }))
       .not.toHaveProperty('timer_ends_at')

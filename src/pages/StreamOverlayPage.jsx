@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { VALID_INKS } from '../lib/inkColors'
 import { fetchEventDetails, getTournamentStructure } from '../lib/tournamentApi'
 import {
-  listMyTables, createTable, updateTable, deleteTable, adjustTable, subscribeToTable,
+  listMyTables, createTable, updateTable, deleteTable, adjustTable, subscribeToTable, uploadLogo,
   readSelectedTableId, storeSelectedTableId,
 } from '../lib/streamTables'
 import {
@@ -183,12 +183,8 @@ export function StreamOverlayPage() {
           <Labeled label="Event name (shown when there's no logo)">
             <Input value={row.event_name} onChange={e => setField('event_name', e.target.value)} className="w-full" />
           </Labeled>
-          <Labeled label="Event logo URL">
-            <Input value={row.event_logo_url} onChange={e => setField('event_logo_url', e.target.value)} className="w-full" placeholder="https://…/logo.png" />
-          </Labeled>
-          <Labeled label="Sponsor logo URL">
-            <Input value={row.sponsor_logo_url} onChange={e => setField('sponsor_logo_url', e.target.value)} className="w-full" placeholder="https://…/sponsor.png" />
-          </Labeled>
+          <LogoField label="Event logo" value={row.event_logo_url} onChange={v => setField('event_logo_url', v)} onError={setError} />
+          <LogoField label="Sponsor logo" value={row.sponsor_logo_url} onChange={v => setField('sponsor_logo_url', v)} onError={setError} />
           <Labeled label="Round">
             <Input value={row.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" />
           </Labeled>
@@ -283,6 +279,28 @@ export function StreamOverlayPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// A logo column: paste a URL, or upload a file (uploadLogo) and the public
+// URL lands in the same field. The current logo previews beside the input.
+function LogoField({ label, value, onChange, onError }) {
+  const [busy, setBusy] = useState(false)
+  const upload = async e => {
+    const file = e.target.files[0]
+    if (!file) return
+    setBusy(true)
+    try { onChange(await uploadLogo(file)) } catch (err) { onError(err.message) } finally { setBusy(false); e.target.value = '' }
+  }
+  return (
+    <Labeled label={`${label} (URL, or upload a PNG up to 2 MB)`}>
+      <div className="flex items-center gap-3">
+        <Input value={value} onChange={e => onChange(e.target.value)} className="w-full" placeholder="https://…/logo.png" />
+        <input type="file" accept="image/*" onChange={upload} disabled={busy} className="text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-900 file:bg-transparent file:px-3 file:py-1.5 file:font-display file:uppercase file:tracking-wider file:text-xs file:text-gray-900 disabled:opacity-40" />
+        {value && <img src={value} alt="" className="h-9 w-16 object-contain bg-gray-900 rounded shrink-0" />}
+      </div>
+      {busy && <span className="mt-1 block text-xs text-gray-500">Uploading…</span>}
+    </Labeled>
   )
 }
 

@@ -170,7 +170,8 @@ export function StreamOverlayPage() {
       .then(([historyA, historyB, headToHead]) => buildPlayerCard({ histories: [historyA, historyB], headToHead, playerIds: [String(a.id), String(b.id)] }))
       .catch(() => null)
     write(row.id, featureMatchPatch({
-      eventName: rphStructure.eventName ?? '',
+      // The operator's own event name wins; RPH's only fills a blank one.
+      eventName: row.event_name || (rphStructure.eventName ?? ''),
       round: roundLabel(rphStructure),
       players: pairing.players.map(p => ({ name: p.name, record: p.record })),
       timer: timerFromRph(rphStructure),

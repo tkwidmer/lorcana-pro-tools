@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0,
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false,
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
   p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0, p1_decklist: '4 Elsa',
   p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1, p2_decklist: '',
@@ -18,6 +18,8 @@ describe('streamOverlay row mapping', () => {
     expect(s.timerEndsAt).toBe(Date.parse('2026-05-24T23:38:39+00:00'))
     expect(s.players[0]).toEqual({ name: 'Ryan', record: '5-0-2', inks: ['amethyst', 'emerald'], lore: 12, gameWins: 0, decklist: '4 Elsa' })
     expect(s.deckShown).toBe(0)
+    expect(s.playerCard).toBeNull()
+    expect(s.cardShown).toBe(false)
     expect(s.players[1].gameWins).toBe(1)
     expect(s.note).toBe('Top 8 at 5pm')
     expect(rowToState(row()).timerEndsAt).toBeNull()
@@ -31,10 +33,55 @@ describe('streamOverlay row mapping', () => {
     expect(hotkeyAction(key('o'))).toEqual({ side: 2, field: 'game_wins', delta: 1 })
     expect(hotkeyAction(key('b'))).toEqual({ toggleMode: true })
     expect(hotkeyAction(key('2'))).toEqual({ toggleDeck: 2 })
+    expect(hotkeyAction(key('3'))).toEqual({ toggleCard: true })
     expect(hotkeyAction(key('x'))).toBeNull()
     expect(hotkeyAction(key('q', { ctrlKey: true }))).toBeNull()
     expect(hotkeyAction(key('q', { target: { tagName: 'INPUT' } }))).toBeNull()
     expect(hotkeyAction(key('q', { target: { tagName: 'DIV', isContentEditable: true } }))).toBeNull()
+  })
+
+  it('shortens RPH event names for the stream', () => {
+    expect(shortEventName('Disney Lorcana Challenge: Milwaukee')).toBe('DLC Milwaukee')
+    expect(shortEventName('Disney Lorcana Challenge - Bologna')).toBe('DLC Bologna')
+    expect(shortEventName('The Cauldron Cup CCQ - $5,000 Challenge Championship Qualifier')).toBe('The Cauldron Cup CCQ $5,000 CCQ')
+    expect(shortEventName('D23 - Sat - 10am - Challenge Championship Qualifier (CCQ)')).toBe('D23 Sat 10am CCQ')
+    expect(shortEventName('Quest Coast III')).toBe('Quest Coast III')
+  })
+
+  it('builds the player card: cuts and Day 2s first, meetings newest first, head-to-head by side', () => {
+    const ev = (eventName, eventDate, rank, o = {}) => ({ eventName, eventDate, rank, startingPlayerCount: 500, topCutSize: 32, madeTopCut: false, madeDayTwo: false, ...o })
+    const histories = [
+      { eventsPlayed: 4, topCutCount: 1, dayTwoCount: 1, events: [
+        ev('Open A', '2026-01-01', 40), ev('Disney Lorcana Challenge: Milwaukee', '2026-03-01', 150, { madeDayTwo: true }),
+        ev('CCQ B', '2026-05-01', 3, { madeTopCut: true, madeDayTwo: true }), ev('Open C', '2026-06-01', 9),
+      ] },
+      { eventsPlayed: 1, topCutCount: 0, dayTwoCount: 0, events: [ev('Open A', '2026-01-01', 77)] },
+    ]
+    const headToHead = { matches: [
+      { eventName: 'Open A', eventDate: '2026-01-01', roundNumber: 4, phaseName: 'Phase 1', winnerId: 'b', isDraw: false, isBye: false, gamesWonByWinner: 2, gamesWonByLoser: 0 },
+      { eventName: 'CCQ B', eventDate: '2026-05-01', roundNumber: 9, phaseName: 'Top 8', winnerId: 'a', isDraw: false, isBye: false, gamesWonByWinner: 2, gamesWonByLoser: 1 },
+      { eventName: 'Open C', eventDate: '2026-06-01', roundNumber: 2, phaseName: 'Swiss', winnerId: null, isDraw: true, isBye: false, gamesWonByWinner: null, gamesWonByLoser: null },
+    ] }
+    const card = buildPlayerCard({ histories, headToHead, playerIds: ['a', 'b'] })
+    expect(card.players[0].finishes.map(f => [f.event, f.rank, f.tier])).toEqual([
+      ['CCQ B', 3, 'cut'], ['DLC Milwaukee', 150, 'day2'], ['Open C', 9, null], ['Open A', 40, null],
+    ])
+    expect(card.players[0].finishes[0].year).toBe(2026)
+    expect(card.players[1].finishes).toHaveLength(1)
+    expect(card.headToHead.wins).toEqual([1, 1])
+    expect(card.headToHead.draws).toBe(1)
+    expect(card.headToHead.matches.map(m => [m.event, m.phase, m.winner, m.score])).toEqual([
+      ['Open C', 'Round 2', null, null], ['CCQ B', 'Top 8', 0, '2-1'], ['Open A', 'Round 4', 1, '2-0'],
+    ])
+  })
+
+  it('swaps the player card with the sides', () => {
+    const card = { players: [{ eventsPlayed: 1 }, { eventsPlayed: 2 }], headToHead: { wins: [2, 1], draws: 0, matches: [{ winner: 0 }, { winner: null }] } }
+    const p = swapSidesPatch(row({ player_card: card }))
+    expect(p.player_card.players.map(x => x.eventsPlayed)).toEqual([2, 1])
+    expect(p.player_card.headToHead.wins).toEqual([1, 2])
+    expect(p.player_card.headToHead.matches.map(m => m.winner)).toEqual([1, null])
+    expect(swapSidesPatch(row()).player_card).toBeNull()
   })
 
   it('lists a deck\'s inks from its matched cards, most copies first', () => {
@@ -152,7 +199,7 @@ describe('streamOverlay RPH', () => {
       timer_ends_at: null, timer_remaining_ms: 70 * 60 * 1000, rph_event_id: 528227, event_name: 'Open', round: 'Top 16',
       p1_name: 'Ryan', p1_record: '5-2-0', p1_lore: 0, p1_game_wins: 0, p1_decklist: '',
       p2_name: 'Dylan', p2_record: '5-0-2', p2_lore: 0, p2_game_wins: 0, p2_decklist: '',
-      deck_shown: 0,
+      deck_shown: 0, player_card: null, card_shown: false,
     })
     expect(featureMatchPatch({ eventName: '', round: '', rphEventId: 1, players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null }))
       .not.toHaveProperty('timer_ends_at')

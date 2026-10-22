@@ -20,6 +20,36 @@ export function countsFromDecklist(yourDecklist) {
   return m
 }
 
+// Every card id the field data names: centroids, archetype lift, pair lift.
+export function fieldCardIds(stats) {
+  const ids = new Set()
+  for (const p of stats?.profiles ?? []) {
+    for (const id of Object.keys(p.centroidCounts ?? {})) ids.add(id)
+    for (const e of p.cardLift ?? []) ids.add(e.cardId)
+  }
+  for (const list of Object.values(stats?.pairCardLift ?? {})) for (const e of list ?? []) ids.add(e.cardId)
+  return ids
+}
+
+// Paste mode: matchDeckList entries → Map<cardId, count>. LorcanaJSON lists a
+// reprint under each printing's id and duels.ink names only one, so a pasted
+// card takes the printing the field data uses (`knownIds`, fieldCardIds),
+// else the matched card's own id.
+export function countsFromPasted(entries, cards, knownIds) {
+  const idsByName = new Map()
+  for (const c of cards ?? []) {
+    const ids = idsByName.get(c.fullName) ?? []
+    ids.push(`${c.setCode}-${c.number}`)
+    idsByName.set(c.fullName, ids)
+  }
+  const m = new Map()
+  for (const { card, count } of entries) {
+    const id = (idsByName.get(card.fullName) ?? []).find((i) => knownIds.has(i)) ?? `${card.setCode}-${card.number}`
+    m.set(id, (m.get(id) ?? 0) + count)
+  }
+  return m
+}
+
 function isLimited(g) {
   const s = `${g.queue_id ?? ''} ${g.queue_name ?? ''}`.toLowerCase()
   return s.includes('sealed') || s.includes('draft')
@@ -233,6 +263,9 @@ export function deckDoctorVerdict({ eraName, archetype, noProfiles = false, lift
   else if (noProfiles) blocks.push(text(`duels.ink hasn't published ${eraName ?? 'this set'}'s archetype builds yet, so there is no field build to compare against. Your own results below still apply.`))
   else blocks.push(text(`Your list doesn't match any ${eraName ?? 'current'} archetype closely, so the comparison uses the field for your colours instead.`))
 
+  // Archetype and pair lift lists can name the same card; the first wins.
+  const seen = new Set()
+  lifts = lifts.filter((l) => !seen.has(l.cardId) && seen.add(l.cardId))
   const missing = lifts.filter((l) => l.flag === 'missing-positive')
   if (missing.length) blocks.push(text(`You're missing ${missing.length} of the field's win-rate-lift cards: ${missing.slice(0, 4).map((l) => `${nameOf(l.cardId)} (${fmtPp(l.lift)}${l.presence != null ? `, in ${fmtPct(l.presence * 100)} of lists` : ''})`).join(', ')}.`))
   const negative = lifts.filter((l) => l.flag === 'present-negative')

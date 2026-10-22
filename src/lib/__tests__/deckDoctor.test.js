@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   MIN_ARCHETYPE_OVERLAP, countsFromDecklist, constructedDecks, deckVersions, archetypeCandidates, assignArchetype,
   diffBuild, liftChecklist, archetypeVsColorPairs, colorPairField, personalMatchups, matchupTable, defaultQueueFor,
-  deckDoctorVerdict,
+  deckDoctorVerdict, countsFromPasted, fieldCardIds,
 } from '../deckDoctor'
 import { matchupKey } from '../inkColors'
 
@@ -218,5 +218,31 @@ describe('deckDoctorVerdict', () => {
     expect(blocks).toHaveLength(2)
     expect(blocks[0].text).toContain("hasn't published")
     expect(blocks[1].text).toContain('sample noise')
+  })
+})
+
+describe('countsFromPasted', () => {
+  // LorcanaJSON lists a reprint under every printing's id; duels.ink names
+  // one of them. A pasted card takes whichever printing the feed uses.
+  const card = (setCode, number, fullName) => ({ setCode, number, fullName })
+  const cards = [card('3', 96, 'Strike a Good Match'), card('11', 94, 'Strike a Good Match'), card('1', 1, 'Simba')]
+  const entries = [{ count: 4, card: cards[1] }, { count: 2, card: cards[2] }]
+  it('uses the printing the field data knows, else the matched card', () => {
+    const stats = { profiles: [{ centroidCounts: { '3-96': 4 }, cardLift: [] }], pairCardLift: { 'amber/emerald': [{ cardId: '9-9' }] } }
+    expect(fieldCardIds(stats)).toEqual(new Set(['3-96', '9-9']))
+    expect([...countsFromPasted(entries, cards, fieldCardIds(stats))]).toEqual([['3-96', 4], ['1-1', 2]])
+    expect([...countsFromPasted(entries, cards, new Set())]).toEqual([['11-94', 4], ['1-1', 2]])
+    expect(fieldCardIds(null).size).toBe(0)
+  })
+})
+
+describe('deckDoctorVerdict with archetype and pair lift lists combined', () => {
+  it('names a card that is in both lists once, archetype figure first', () => {
+    const mine = countsFromDecklist(list([['1-1', 4]]))
+    const lifts = [...liftChecklist([{ cardId: '1-3', lift: 0.7, presence: 0.27 }], mine), ...liftChecklist([{ cardId: '1-3', lift: 2.2, presence: 0.15 }, { cardId: '1-9', lift: 1, presence: 0.1 }], mine)]
+    const [, missing] = deckDoctorVerdict({ archetype: { name: 'A', shared: 1, total: 2 }, lifts, nameOf: (id) => id })
+    expect(missing.text).toContain('missing 2 ')
+    expect(missing.text.match(/1-3/g)).toHaveLength(1)
+    expect(missing.text).toContain('+0.7 pp')
   })
 })

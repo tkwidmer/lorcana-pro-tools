@@ -6,6 +6,7 @@ import {
   deriveEventTier,
   fetchFinalStandings,
   fetchAllRoundMatchesServer,
+  eventDateOf,
 } from './_lib/tournamentImport.js'
 import {
   upsertEvent,
@@ -82,7 +83,7 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
       totalSwissRounds: structure.totalSwissRounds,
       hasElimination: structure.hasElimination,
       startingPlayerCount: structure.startingPlayerCount,
-      eventDate: eventDetails?.start_date ?? eventDetails?.event_date ?? null,
+      eventDate: eventDateOf(eventDetails),
       rawEventDetails: eventDetails,
       importedBy: userId,
       eventConfigurationTemplate: templateId,

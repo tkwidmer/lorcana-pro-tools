@@ -9,6 +9,7 @@ describe('routeTitle', () => {
   it('suffixes known pages with the site name', () => {
     expect(routeTitle('/deck-insights')).toBe('Deck Insights · InkbornForge')
     expect(routeTitle('/analytics')).toBe('Analytics · InkbornForge')
+    expect(routeTitle('/deck-doctor')).toBe('Deck Doctor · InkbornForge')
   })
 
   it('matches dynamic routes by prefix', () => {

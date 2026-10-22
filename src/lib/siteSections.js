@@ -99,6 +99,12 @@ export const SECTIONS = [
         description: 'Pre-event prep: pick your deck and the expected meta, then see which matchups to focus on based on your personal win rates vs the public matrix.',
       },
       {
+        path: '/deck-doctor',
+        name: 'Deck Doctor',
+        icon: 'stethoscope',
+        description: 'Your list beside the field\'s average build for your archetype, the cards that lift or sink its win rate, your own card performance, and where your matchups lag the field.',
+      },
+      {
         path: '/game-scraper',
         name: 'Game Scraper',
         icon: 'eye',

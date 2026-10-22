@@ -106,6 +106,17 @@ is an offline discovery script rather than a browser-facing feature.
   cut, so they're pedigree in their own right. Added after the 2026-10-22
   attendance crawl found the EU Championship's two LCQs missing while the
   NA ones had only been imported by hand.
+- **Side events** (the store pass): every event at a DLC / Championship
+  parent's store within ±3 days of the parent with 200+ players
+  (`max(registered_user_count, starting_player_count)`), labeled `Side`.
+  Owner's call (2026-10-22): the big side events — Fanfinity's 6-round and
+  Double-Up events (200–500), Pastimes' Indy "Pregame Ticket Quest" (1,293),
+  Milwaukee's "Infinity Spectacular" (798) — draw strong fields of players
+  who aren't in the main event; the drafts, sealed and Ink Sprints under the
+  line don't. One `store=<id>` fetch per parent store (Fanfinity and Pastimes
+  host many weekends), `page_size=250`, matched against every parent there.
+  DLC Melbourne's side events are missed because its parent is mistagged
+  (see the DLC bullet) and so isn't a parent here.
 - **CCQ** (`name=CCQ`): filter by `name=CCQ`. This param is a
   **contains-match**, not an exact match, despite the plain name suggesting
   otherwise (confirmed empirically — `name=CCQ` returns "CCQ - PlayInk
@@ -254,15 +265,17 @@ following this shape:
    Indy "Pregame Ticket Quest" at 1,293, Milwaukee's "Infinity
    Spectacular" at 798). Of the 160 "main" rows, the real misses were the
    two EU LCQs, the Chinese-named Taiwan ACQ and the misspelled Pastimes
-   CCQ (imported by URL) — all now covered above. Everything else was local: prereleases,
+   CCQ (imported by URL) — all now covered above; the 200+ side events
+   became the `Side` category. Everything else was local: prereleases,
    Set Championships, store cups, case tournaments and weeklies. Left out
    on purpose, as judgment calls for the owner: Saka Saka's **"Asia
    Circuit"** series (Jan 2026 main events in Thailand 86, Singapore 60,
    Philippines 53, Malaysia 48, HK 32, Taiwan 31 — the ACQ's predecessor),
-   **Iconic Tour Vienna** (91; a later stop of that series was a CCQ), and
+   **Iconic Tour Vienna** (91; a later stop of that series was a CCQ),
    cash events below the 5K line (SCG CON Las Vegas $1K at 94, Namur "8K
    PRIZE POOL" at 99, Road To Nationals $4k at 78, several $2K–$3K
-   case events). DLC Melbourne's own side events (157 and 72 players) are
+   case events), and DLC-weekend side events under 200 players (37 in the
+   100–199 band, 66 in 50–99). DLC Melbourne's own side events (157 and 72 players) are
    not excluded by the weekend windows because its parent is mistagged (see
    the DLC bullet), so they show up as "main" rows every time; skip them.
 7. Lowering the threshold much below ~50 stops being useful — a threshold

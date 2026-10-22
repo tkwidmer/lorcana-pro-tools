@@ -18,11 +18,19 @@ const DLC_TEMPLATE_ID = 'a1b77361-c19e-4942-8741-f6b96bb24a80' // "Disney Lorcan
 const CHALLENGE_CHAMPIONSHIP_TEMPLATE_ID = 'b8c2e34b-2ff2-45b6-b725-18528c56a7cc' // NACC etc.
 const LCQ_TEMPLATE_ID = '4881658d-a6ef-4f98-9c2a-1baf9ef12b82' // the ~500-player Last Chance Qualifiers at a Championship weekend
 
+// Side events of a DLC / Championship weekend: same store, within this many
+// days of the parent, at least this many players. The big ones (Fanfinity's
+// 6-round and Double-Up events, Pastimes' Indy "Pregame Ticket Quest" at
+// 1,293) draw strong fields of players who aren't in the main event; the
+// drafts, sealed and Ink Sprints below the line don't.
+const SIDE_EVENT_WINDOW_DAYS = 3
+const MIN_SIDE_EVENT_PLAYERS = 200
+
 // Ravensburger's own internal QA/test fixtures show up at these obviously-fake
 // stores with huge fake attendee counts — confirmed in a manual crawl.
 const FAKE_STORE_NAMES = new Set(['Ravensburger HQ', 'Totally Legit Card Shack'])
 
-export type DiscoveryLabel = 'DLC' | 'Championship' | 'LCQ' | 'CCQ' | 'ACQ' | 'PRIZE'
+export type DiscoveryLabel = 'DLC' | 'Championship' | 'LCQ' | 'CCQ' | 'ACQ' | 'PRIZE' | 'Side'
 
 // `name=` is a case-insensitive contains-match upstream. Order is precedence
 // when an event matches more than one search (cosmetic: the label shown).
@@ -72,6 +80,7 @@ export interface DiscoveredEvent {
   start_datetime: string | null
   display_status: string | null
   starting_player_count: number | null
+  registered_user_count?: number | null
   store: { id: number; name: string } | null
   tournament_phases?: Array<{ rounds?: Array<{ status: string; standings_status: string }> }>
 }
@@ -94,12 +103,33 @@ export async function discoverCandidateEvents(): Promise<DiscoveredEvent[]> {
     for (const e of results) seen.set(e.id, { ...e, label: templates[i][1] })
   })
 
-  const nameSearches = await Promise.all(
-    NAME_SEARCH_TERMS.map(([term]) => paginateEvents({ game_slug: GAME_SLUG, name: term }))
+  // Name searches and the side-event store pass only need the template
+  // results, so they run together: the function has a 10 s budget on Hobby.
+  const parents = Array.from(seen.values()).filter(
+    (e) => (e.label === 'DLC' || e.label === 'Championship') && e.store?.id && e.start_datetime
   )
+  const storeIds = Array.from(new Set(parents.map((e) => e.store!.id)))
+  const [nameSearches, storeEvents] = await Promise.all([
+    Promise.all(NAME_SEARCH_TERMS.map(([term]) => paginateEvents({ game_slug: GAME_SLUG, name: term }))),
+    Promise.all(storeIds.map((id) => paginateEvents({ game_slug: GAME_SLUG, store: String(id) }, 250))),
+  ])
   nameSearches.forEach((results, i) => {
     for (const e of results) {
       if (!seen.has(e.id)) seen.set(e.id, { ...e, label: NAME_SEARCH_TERMS[i][1] })
+    }
+  })
+
+  // Large side events: every event at a DLC / Championship parent's store
+  // within the weekend window and over the player line. One fetch per store
+  // (Fanfinity and Pastimes host many weekends), matched against each parent.
+  storeIds.forEach((storeId, i) => {
+    const weekends = parents.filter((p) => p.store!.id === storeId).map((p) => Date.parse(p.start_datetime!))
+    for (const e of storeEvents[i]) {
+      if (seen.has(e.id) || !e.start_datetime) continue
+      const players = Math.max(e.registered_user_count ?? 0, e.starting_player_count ?? 0)
+      if (players < MIN_SIDE_EVENT_PLAYERS) continue
+      const t = Date.parse(e.start_datetime)
+      if (weekends.some((w) => Math.abs(t - w) <= SIDE_EVENT_WINDOW_DAYS * 86_400_000)) seen.set(e.id, { ...e, label: 'Side' })
     }
   })
 

@@ -457,10 +457,10 @@ async function handleSuggestedImports(req: VercelRequest, res: VercelResponse) {
     const suggestions = filterRealCandidates(candidates)
       .filter((e) => !importedIds.has(String(e.id)))
       .sort((a, b) => new Date(b.start_datetime ?? 0).getTime() - new Date(a.start_datetime ?? 0).getTime())
-      .slice(0, 30)
       .map((e) => ({
         eventId: String(e.id),
         eventName: e.name,
+        label: e.label,
         eventUrl: `https://tcg.ravensburgerplay.com/events/${e.id}`,
         storeName: e.store?.name ?? null,
         startDatetime: e.start_datetime,

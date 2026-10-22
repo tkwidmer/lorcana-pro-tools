@@ -19,12 +19,14 @@ const CHALLENGE_CHAMPIONSHIP_TEMPLATE_ID = 'b8c2e34b-2ff2-45b6-b725-18528c56a7cc
 const LCQ_TEMPLATE_ID = '4881658d-a6ef-4f98-9c2a-1baf9ef12b82' // the ~500-player Last Chance Qualifiers at a Championship weekend
 
 // Side events of a DLC / Championship weekend: same store, within this many
-// days of the parent, at least this many players. The big ones (Fanfinity's
-// 6-round and Double-Up events, Pastimes' Indy "Pregame Ticket Quest" at
-// 1,293) draw strong fields of players who aren't in the main event; the
-// drafts, sealed and Ink Sprints below the line don't.
+// days of the parent, at least this many players and this many rounds. The
+// big ones (Fanfinity's 6-round and Double-Up events, Pastimes' Indy
+// "Pregame Ticket Quest" at 1,293) draw strong fields of players who aren't
+// in the main event; the drafts, sealed, Ink Sprints and short-format
+// events below the lines don't.
 const SIDE_EVENT_WINDOW_DAYS = 3
 const MIN_SIDE_EVENT_PLAYERS = 200
+const MIN_SIDE_EVENT_ROUNDS = 5
 
 // Ravensburger's own internal QA/test fixtures show up at these obviously-fake
 // stores with huge fake attendee counts — confirmed in a manual crawl.
@@ -85,6 +87,11 @@ export interface DiscoveredEvent {
   tournament_phases?: Array<{ rounds?: Array<{ status: string; standings_status: string }> }>
 }
 
+// Rounds actually run, across every phase (Swiss and top cut).
+function roundCount(e: DiscoveredEvent): number {
+  return (e.tournament_phases ?? []).reduce((n, p) => n + (p.rounds?.length ?? 0), 0)
+}
+
 // Fetches every event matching a known DLC/Championship/CCQ/ACQ/prize-pool
 // naming convention, deduped by event id. Does not filter by
 // display_status/already-imported/fake-store — callers apply those.
@@ -127,7 +134,7 @@ export async function discoverCandidateEvents(): Promise<DiscoveredEvent[]> {
     for (const e of storeEvents[i]) {
       if (seen.has(e.id) || !e.start_datetime) continue
       const players = Math.max(e.registered_user_count ?? 0, e.starting_player_count ?? 0)
-      if (players < MIN_SIDE_EVENT_PLAYERS) continue
+      if (players < MIN_SIDE_EVENT_PLAYERS || roundCount(e) < MIN_SIDE_EVENT_ROUNDS) continue
       const t = Date.parse(e.start_datetime)
       if (weekends.some((w) => Math.abs(t - w) <= SIDE_EVENT_WINDOW_DAYS * 86_400_000)) seen.set(e.id, { ...e, label: 'Side' })
     }

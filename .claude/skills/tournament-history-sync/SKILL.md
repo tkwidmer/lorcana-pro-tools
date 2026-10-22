@@ -108,7 +108,12 @@ is an offline discovery script rather than a browser-facing feature.
   NA ones had only been imported by hand.
 - **Side events** (the store pass): every event at a DLC / Championship
   parent's store within ±3 days of the parent with 200+ players
-  (`max(registered_user_count, starting_player_count)`), labeled `Side`.
+  (`max(registered_user_count, starting_player_count)`) and 5+ rounds run
+  (`tournament_phases[].rounds` summed across phases — the list carries
+  them), labeled `Side`. The round line keeps out the big short-format
+  events: of the 18 side events over 200 players on 2026-10-22, the NACC
+  and EUCC Double-Ups and Milwaukee's Amethyst/Amber Core Constructed ran
+  under five rounds and dropped; the 10 left run 6–11 rounds.
   Owner's call (2026-10-22): the big side events — Fanfinity's 6-round and
   Double-Up events (200–500), Pastimes' Indy "Pregame Ticket Quest" (1,293),
   Milwaukee's "Infinity Spectacular" (798) — draw strong fields of players

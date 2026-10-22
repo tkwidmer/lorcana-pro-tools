@@ -188,7 +188,7 @@ export function AdminTournamentImportPage() {
           </div>
           <p className="text-xs text-gray-500 mb-4">
             DLCs, Championships, Last Chance Qualifiers, CCQs, ACQs, independently-run big-money events, and
-            200+ player side events of a DLC weekend — on the Play Hub with results posted, not in the archive yet. Name-based discovery — a
+            200+ player, 5+ round side events of a DLC weekend — on the Play Hub with results posted, not in the archive yet. Name-based discovery — a
             floor, not a ceiling; a real event with an unrelated name won't show up here.
           </p>
 

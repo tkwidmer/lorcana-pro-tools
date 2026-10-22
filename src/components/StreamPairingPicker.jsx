@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { fetchAllStandings, fetchRoundMatches } from '../lib/tournamentApi'
-import { currentRoundPairings, roundLabel } from '../lib/streamOverlay'
+import { currentRoundPairings, activeRoundLabel } from '../lib/streamOverlay'
 import { Button } from './ui/Button'
 import { Input } from './ui/Field'
 
-// The Stream Overlay panel's pairing picker: the linked event's current
-// round, one row per table with both names and records, a Send per row.
-// Loads the round's matches and standings when opened, so the list is as
-// fresh as RPH. `onStream` is the pair of names already on the table.
+// The Stream Overlay panel's pairing picker: the linked event's active
+// round (the latest that has started — its pairings post before RPH
+// generates its standings), one row per table with both names and their
+// records from the latest generated standings, a Send per row. Loads both
+// when opened, so the list is as fresh as RPH. `onStream` is the pair of
+// names already on the table.
 export function StreamPairingPicker({ eventId, structure, onStream, onSend, onClose }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState(null)
@@ -16,11 +18,11 @@ export function StreamPairingPicker({ eventId, structure, onStream, onSend, onCl
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchRoundMatches(eventId, structure.currentRoundId), fetchAllStandings(structure.currentRoundId)])
+    Promise.all([fetchRoundMatches(eventId, structure.activeRoundId), structure.currentRoundId ? fetchAllStandings(structure.currentRoundId) : []])
       .then(([matches, standings]) => { if (!cancelled) setRows(currentRoundPairings(matches, standings)) })
       .catch(e => { if (!cancelled) setError(e.message) })
     return () => { cancelled = true }
-  }, [eventId, structure.currentRoundId])
+  }, [eventId, structure.activeRoundId, structure.currentRoundId])
 
   const q = query.trim().toLowerCase()
   const shown = rows?.filter(r => !q || String(r.table) === q || r.players.some(p => p.name.toLowerCase().includes(q)))
@@ -35,7 +37,7 @@ export function StreamPairingPicker({ eventId, structure, onStream, onSend, onCl
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white w-full max-w-2xl rounded-xl border border-gray-200 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()} role="dialog" aria-label="Pairings">
         <div className="flex items-center gap-3 p-4 border-b border-gray-200 shrink-0">
-          <h2 className="font-display text-base font-medium uppercase tracking-wide text-gray-900">{roundLabel(structure)} pairings</h2>
+          <h2 className="font-display text-base font-medium uppercase tracking-wide text-gray-900">{activeRoundLabel(structure)} pairings</h2>
           <Input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter by name or table" className="ml-auto w-64" aria-label="Filter pairings" />
           <Button size="sm" variant="quiet" onClick={onClose}>Close</Button>
         </div>

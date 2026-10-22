@@ -119,6 +119,24 @@ export function getTournamentStructure(eventDetails) {
   let currentPhaseName = null
   let currentPhaseIndex = -1
 
+  // The active round is the latest one that has started, whether or not its
+  // standings exist yet: RPH posts a round's pairings before it generates
+  // that round's standings, and the current-round logic below waits for the
+  // standings. Pairings come from this round; records from the current one.
+  let activeRoundId = null
+  let activeRoundNumber = null
+  let activePhaseType = null
+  let activePhaseName = null
+  for (const phase of phases) {
+    for (const r of phase.rounds ?? []) {
+      if (r.status === 'UPCOMING') continue
+      activeRoundId = r.id
+      activeRoundNumber = r.round_number
+      activePhaseType = phase.round_type
+      activePhaseName = phase.phase_name
+    }
+  }
+
   for (let i = 0; i < phases.length; i++) {
     const phase = phases[i]
     if (!phase.rounds) continue
@@ -187,6 +205,10 @@ export function getTournamentStructure(eventDetails) {
     currentRoundNumber,
     currentPhaseType,
     currentPhaseName,
+    activeRoundId,
+    activeRoundNumber,
+    activePhaseType,
+    activePhaseName,
     // The elimination phase's own phase_name, present whenever the event has
     // a top-cut bracket at all — regardless of whether Swiss or the bracket
     // is the *currently* displayed phase. Used to pick out bracket matches

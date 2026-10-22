@@ -60,6 +60,7 @@ export interface StandingRow {
   matchPoints: number | null
   record: string | null
   madeTopCut: boolean
+  madeDayTwo: boolean
 }
 
 export async function upsertStandings(eventId: string, rows: StandingRow[]): Promise<number> {
@@ -74,6 +75,7 @@ export async function upsertStandings(eventId: string, rows: StandingRow[]): Pro
       match_points: r.matchPoints,
       record: r.record,
       made_top_cut: r.madeTopCut,
+      made_day_two: r.madeDayTwo,
       updated_at: new Date().toISOString(),
     })),
     { onConflict: 'event_id,rph_player_id' }
@@ -142,7 +144,7 @@ export async function getPlayerHistory(rphPlayerId: string) {
   const { data, error } = await supabase
     .from('tournament_history_standings')
     .select(
-      'player_name, rank, match_points, record, made_top_cut, event:tournament_history_events(rph_event_id, event_name, event_date, store_name, top_cut_size, starting_player_count, gameplay_format, event_tier, event_url)'
+      'player_name, rank, match_points, record, made_top_cut, made_day_two, event:tournament_history_events(rph_event_id, event_name, event_date, store_name, top_cut_size, starting_player_count, gameplay_format, event_tier, event_url)'
     )
     .eq('rph_player_id', rphPlayerId)
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { featureMatchPatch, timerFromRph } from '../lib/streamOverlay'
+import { featureMatchPatch, timerFromRph, buildPlayerCard } from '../lib/streamOverlay'
 import { listMyTables, createTable, updateTable, storeSelectedTableId } from '../lib/streamTables'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import { PlayerMatchHistory } from './PlayerMatchHistory'
@@ -108,6 +108,11 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, allStandings
         players: [{ name: p1.name, record: recordOf(p1.id) }, { name: p2.name, record: recordOf(p2.id) }],
         timer: timerFromRph(structure),
         rphEventId: Number(currentEventId),
+        // The archive card rides along when both histories and the
+        // head-to-head have loaded; otherwise the table gets no card.
+        playerCard: historyA && historyB && headToHead
+          ? buildPlayerCard({ histories: [historyA, historyB], headToHead, playerIds: [String(p1.id), String(p2.id)] })
+          : null,
       }))
       storeSelectedTableId(target)
       navigate('/stream-overlay')

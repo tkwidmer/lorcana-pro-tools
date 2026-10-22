@@ -108,6 +108,23 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
       eventTier: tier,
     })
 
+    // Day 2: a player who played a match in the event's second Swiss phase
+    // (a DLC's "Day Two Swiss"). Only counts when that phase holds fewer
+    // players than started — a few side events run everyone through two
+    // Swiss phases, and that isn't a cut.
+    const swissPhases = (eventDetails?.tournament_phases ?? []).filter((p: any) => p.round_type === 'SWISS')
+    const dayTwoPhase = swissPhases[1]?.phase_name ?? null
+    const dayTwoPlayers = new Set<string>()
+    if (dayTwoPhase) {
+      for (const match of matches) {
+        if (match.phase_name !== dayTwoPhase) continue
+        for (const rel of match.player_match_relationships ?? []) {
+          if (rel?.player?.id != null) dayTwoPlayers.add(String(rel.player.id))
+        }
+      }
+    }
+    const dayTwoIsCut = dayTwoPlayers.size > 0 && dayTwoPlayers.size < (structure.startingPlayerCount ?? 0)
+
     const standingsImported = await upsertStandings(
       dbEventId,
       standingsRaw.map((entry: any) => ({
@@ -119,6 +136,7 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
         madeTopCut: Boolean(
           structure.hasElimination && structure.topCutSize && entry.rank != null && entry.rank <= structure.topCutSize
         ),
+        madeDayTwo: dayTwoIsCut && dayTwoPlayers.has(String(entry.player.id)),
       }))
     )
 
@@ -177,6 +195,7 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
       matchPoints: r.match_points,
       record: r.record,
       madeTopCut: r.made_top_cut,
+      madeDayTwo: r.made_day_two,
       topCutSize: r.event?.top_cut_size ?? null,
       startingPlayerCount: r.event?.starting_player_count ?? null,
     }))
@@ -186,6 +205,7 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
       playerName: rows[0]?.player_name ?? null,
       events,
       topCutCount: events.filter((e) => e.madeTopCut).length,
+      dayTwoCount: events.filter((e) => e.madeDayTwo).length,
       eventsPlayed: events.length,
     })
   } catch (err) {

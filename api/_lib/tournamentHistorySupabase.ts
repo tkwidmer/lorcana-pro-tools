@@ -144,7 +144,7 @@ export async function getPlayerHistory(rphPlayerId: string) {
   const { data, error } = await supabase
     .from('tournament_history_standings')
     .select(
-      'player_name, rank, match_points, record, made_top_cut, made_day_two, event:tournament_history_events(rph_event_id, event_name, event_date, store_name, top_cut_size, starting_player_count)'
+      'player_name, rank, match_points, record, made_top_cut, made_day_two, event:tournament_history_events(rph_event_id, event_name, event_date, store_name, top_cut_size, starting_player_count, gameplay_format, event_tier, event_url)'
     )
     .eq('rph_player_id', rphPlayerId)
 
@@ -257,4 +257,116 @@ export async function listRecentImports(limit = 20) {
 
   if (error) throw error
   return data ?? []
+}
+
+// ---- Public results archive reads (/results/*) ----
+
+const PAGE = 1000 // PostgREST's default max-rows; .range() pages past it.
+
+// Pages a query in PAGE-row ranges until a short page comes back. `build`
+// must return a fresh query each call (a PostgREST builder is single-use).
+async function fetchAllRanges<T>(build: () => any): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1)
+    if (error) throw error
+    rows.push(...(data ?? []))
+    if ((data ?? []).length < PAGE) return rows
+  }
+}
+
+const EVENT_COLUMNS =
+  'id, rph_event_id, event_name, event_url, event_date, store_name, gameplay_format, starting_player_count, top_cut_size, has_elimination, total_swiss_rounds, event_tier'
+
+export async function listEvents() {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_events')
+    .select(EVENT_COLUMNS)
+    .order('event_date', { ascending: false, nullsFirst: false })
+    .order('starting_player_count', { ascending: false, nullsFirst: false })
+  if (error) throw error
+  return data ?? []
+}
+
+// rank-1 standing per event, keyed by the event's db id.
+export async function getWinners(): Promise<Map<string, { playerId: string; playerName: string }>> {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_standings')
+    .select('event_id, rph_player_id, player_name')
+    .eq('rank', 1)
+  if (error) throw error
+  const out = new Map<string, { playerId: string; playerName: string }>()
+  for (const r of data ?? []) out.set(r.event_id, { playerId: r.rph_player_id, playerName: r.player_name })
+  return out
+}
+
+// The one place raw_event_details is read back: the event page needs the
+// elimination phase's name to pick out the bracket.
+export async function getEventByRphId(rphEventId: string) {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_events')
+    .select(`${EVENT_COLUMNS}, raw_event_details`)
+    .eq('rph_event_id', rphEventId)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export function getEventStandings(eventDbId: string) {
+  const supabase = getSupabaseServiceClient()
+  return fetchAllRanges<any>(() =>
+    supabase
+      .from('tournament_history_standings')
+      .select('rph_player_id, player_name, rank, match_points, record, made_top_cut')
+      .eq('event_id', eventDbId)
+      .order('rank', { ascending: true, nullsFirst: false })
+      .order('id') // stable order across .range() pages
+  )
+}
+
+const MATCH_COLUMNS =
+  'round_number, phase_name, table_number, player1_id, player1_name, player2_id, player2_name, winner_id, is_bye, is_draw, games_won_by_winner, games_won_by_loser'
+
+export async function getEventMatches(eventDbId: string, phaseName: string) {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_matches')
+    .select(MATCH_COLUMNS)
+    .eq('event_id', eventDbId)
+    .eq('phase_name', phaseName)
+    .order('round_number')
+    .order('table_number')
+  if (error) throw error
+  return data ?? []
+}
+
+// `playerId` must already be validated (ID_RE in the route): it is
+// interpolated into PostgREST's .or() filter syntax.
+export async function getEventPlayerMatches(eventDbId: string, playerId: string) {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_matches')
+    .select(MATCH_COLUMNS)
+    .eq('event_id', eventDbId)
+    .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+    .order('round_number')
+  if (error) throw error
+  return data ?? []
+}
+
+// Every archived match a player appears in, joined to the event id. A
+// frequent player across ~20 majors is a few hundred rows; paged anyway.
+// Same validation requirement on `playerId` as above.
+export function getPlayerMatches(playerId: string) {
+  const supabase = getSupabaseServiceClient()
+  return fetchAllRanges<any>(() =>
+    supabase
+      .from('tournament_history_matches')
+      .select(`${MATCH_COLUMNS}, event:tournament_history_events(rph_event_id, event_date)`)
+      .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+      .order('id') // stable order across .range() pages
+  )
 }

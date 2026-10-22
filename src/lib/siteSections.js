@@ -117,6 +117,12 @@ export const SECTIONS = [
     navLabel: 'Tournaments',
     tools: [
       {
+        path: '/results',
+        name: 'Tournament Results',
+        icon: 'podium',
+        description: 'Browse final standings, top-cut brackets and every player\'s record across imported Disney Lorcana Challenges, qualifiers and other major events.',
+      },
+      {
         path: '/tournament-lookup',
         name: 'Tournament Lookup',
         icon: 'trophy',

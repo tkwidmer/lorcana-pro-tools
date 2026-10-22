@@ -34,6 +34,7 @@ const TITLES = {
   '/forge-decks': 'The Forge Decklists',
   '/practice-plan': 'Practice Plan',
   '/tournament-lookup': 'Tournament Lookup',
+  '/results': 'Tournament Results',
   '/store-lookup': 'Store Lookup',
   '/lore-tracker': 'Lore Tracker',
   '/admin': 'Admin',
@@ -44,6 +45,7 @@ const PREFIXES = [
   ['/players/', 'Player Profile'],
   ['/scouting/game/', 'Scouted Game'],
   ['/rules/', 'Rules'],
+  ['/results/', 'Tournament Results'],
 ]
 
 // A blog post's route resolves to that post, or undefined for any other path.
@@ -83,6 +85,7 @@ const DESCRIPTIONS = {
   '/meta-synthesis': 'A plain-language summary of the current Disney Lorcana meta — most-played and highest-winrate archetypes, centered on your own rank.',
   '/stock-decks': 'Stock Disney Lorcana deck lists for every archetype in the current meta, grouped by ink pair and organized by set.',
   '/forge-decks': "InkbornForge's recommended Disney Lorcana deck lists for each format, organized by set.",
+  '/results': 'Final standings, top-cut brackets and cross-event player records from Disney Lorcana Challenges, qualifiers and other major events.',
   '/lore-tracker': 'A mobile-friendly lore counter for tracking Disney Lorcana games in person, with tap controls and an audit log.',
 }
 

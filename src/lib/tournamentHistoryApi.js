@@ -2,8 +2,10 @@ import { supabase } from './supabaseClient'
 
 // Client for the caster-history archive of admin-imported RPH major events
 // (api/tournament-history.ts + supabase/migrations/008_tournament_history.sql).
-// Every call attaches the caller's Supabase session JWT — the server verifies
-// it (see api/_lib/requireAdmin.js) rather than trusting a client-supplied id.
+// The archive reads are public (publicFetch); only the import/admin and
+// pairing-badge calls attach the caller's Supabase session JWT, which the
+// server verifies (see api/_lib/requireAdmin.ts) rather than trusting a
+// client-supplied id.
 
 async function authHeaders() {
   const { data } = await supabase.auth.getSession()
@@ -12,28 +14,60 @@ async function authHeaders() {
   return { Authorization: `Bearer ${accessToken}` }
 }
 
-async function apiFetch(query, opts = {}) {
-  const headers = { ...(await authHeaders()), ...(opts.headers ?? {}) }
-  const res = await fetch(`/api/tournament-history${query}`, { ...opts, headers })
+// Throws an Error carrying `.status`, so pages can tell a 404 ("not found")
+// from a failed request.
+async function readJson(res) {
   if (!res.ok) {
     const error = await res.json().catch(() => ({}))
-    throw new Error(error.error || `Request failed (${res.status})`)
+    const err = new Error(error.error || `Request failed (${res.status})`)
+    err.status = res.status
+    throw err
   }
   return res.json()
 }
 
+async function apiFetch(query, opts = {}) {
+  const headers = { ...(await authHeaders()), ...(opts.headers ?? {}) }
+  return readJson(await fetch(`/api/tournament-history${query}`, { ...opts, headers }))
+}
+
+// Public, edge-cached reads (see api/tournament-history.ts). No session
+// header on purpose: none is required, and an Authorization header on the
+// request would also bypass the edge cache that stands in for auth here.
+async function publicFetch(query) {
+  return readJson(await fetch(`/api/tournament-history${query}`))
+}
+
+export async function fetchArchiveEvents() {
+  return publicFetch('?endpoint=events')
+}
+
+export async function fetchArchiveEvent(eventId) {
+  return publicFetch(`?endpoint=event&eventId=${encodeURIComponent(eventId)}`)
+}
+
+export async function fetchArchiveEventPlayer(eventId, playerId) {
+  return publicFetch(
+    `?endpoint=event-player&eventId=${encodeURIComponent(eventId)}&playerId=${encodeURIComponent(playerId)}`
+  )
+}
+
+export async function fetchArchivePlayer(playerId) {
+  return publicFetch(`?endpoint=player&playerId=${encodeURIComponent(playerId)}`)
+}
+
 export async function fetchPlayerTournamentHistory(playerId) {
-  return apiFetch(`?endpoint=player-history&playerId=${encodeURIComponent(playerId)}`)
+  return publicFetch(`?endpoint=player-history&playerId=${encodeURIComponent(playerId)}`)
 }
 
 export async function fetchHeadToHead(playerAId, playerBId) {
-  return apiFetch(
+  return publicFetch(
     `?endpoint=head-to-head&playerA=${encodeURIComponent(playerAId)}&playerB=${encodeURIComponent(playerBId)}`
   )
 }
 
 export async function searchTournamentPlayers(query) {
-  return apiFetch(`?endpoint=search-players&q=${encodeURIComponent(query)}`)
+  return publicFetch(`?endpoint=search-players&q=${encodeURIComponent(query)}`)
 }
 
 export async function fetchRecentTournamentImports() {

@@ -35,6 +35,9 @@ import { StockDecksPage } from './pages/StockDecksPage'
 import { ForgeDecksPage } from './pages/ForgeDecksPage'
 import { PracticePlanPage } from './pages/PracticePlanPage'
 import { TournamentLookupPage } from './pages/TournamentLookupPage'
+import { ResultsPage } from './pages/ResultsPage'
+import { ResultsEventPage } from './pages/ResultsEventPage'
+import { ResultsPlayerPage } from './pages/ResultsPlayerPage'
 import { StoreLookupPage } from './pages/StoreLookupPage'
 import { LoreTrackerPage } from './pages/LoreTrackerPage'
 import { LoginPage } from './pages/LoginPage'
@@ -104,6 +107,9 @@ function RoutedContent() {
         <Route path="/meta-synthesis" element={<SupporterRoute><MetaSynthesisPage /></SupporterRoute>} />
         <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />
         <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />
+        <Route path="/results" element={<ResultsPage />} />
+        <Route path="/results/events/:eventId" element={<ResultsEventPage />} />
+        <Route path="/results/players/:playerId" element={<ResultsPlayerPage />} />
         <Route path="/store-lookup" element={<StoreLookupPage />} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />

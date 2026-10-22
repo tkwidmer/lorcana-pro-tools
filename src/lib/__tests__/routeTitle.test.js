@@ -22,6 +22,11 @@ describe('routeTitle', () => {
     expect(routeTitle('/blog/no-such-post')).toBe('InkbornForge')
   })
 
+  it('titles the results archive and its sub-routes', () => {
+    expect(routeTitle('/results')).toBe('Tournament Results · InkbornForge')
+    expect(routeTitle('/results/players/123')).toBe('Tournament Results · InkbornForge')
+  })
+
   it('falls back to the bare site name for unknown routes', () => {
     expect(routeTitle('/nope')).toBe('InkbornForge')
   })

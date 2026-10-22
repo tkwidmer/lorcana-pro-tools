@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { featureMatchPatch, timerFromRph } from '../lib/streamOverlay'
 import { listMyTables, createTable, updateTable, storeSelectedTableId } from '../lib/streamTables'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
@@ -37,7 +37,7 @@ function TopCutList({ events }) {
 // one side — more top-cut lines, wrapped event names — can't push only that
 // column's "Match History" table down; each grid row sizes to its tallest
 // cell independently.
-function PlayerSummaryCard({ label, history, loading, error }) {
+function PlayerSummaryCard({ label, playerId, history, loading, error }) {
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-bold text-gray-900">{label}</h3>
@@ -60,6 +60,11 @@ function PlayerSummaryCard({ label, history, loading, error }) {
               </div>
             </div>
             <TopCutList events={history.events} />
+            {history.eventsPlayed > 0 && (
+              <Link to={`/results/players/${playerId}`} className="inline-block mt-2 text-xs text-forge-ink hover:underline">
+                Full history →
+              </Link>
+            )}
           </>
         )}
       </div>
@@ -221,12 +226,14 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, allStandings
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <PlayerSummaryCard
               label={p1.name}
+              playerId={p1.id}
               history={historyA}
               loading={!historyA && !errorA}
               error={errorA}
             />
             <PlayerSummaryCard
               label={p2.name}
+              playerId={p2.id}
               history={historyB}
               loading={!historyB && !errorB}
               error={errorB}

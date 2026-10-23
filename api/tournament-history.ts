@@ -29,7 +29,7 @@ import {
   getMajorParents,
 } from './_lib/tournamentHistorySupabase.js'
 import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournamentDiscovery.js'
-import { isSideEvent } from './_lib/sideEvents.js'
+import { isMajor, isSideEvent } from './_lib/sideEvents.js'
 
 // Single consolidated route for the caster-history archive of imported RPH
 // major events (see supabase/migrations/008_tournament_history.sql), folded
@@ -200,11 +200,11 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
       madeDayTwo: r.made_day_two,
       topCutSize: r.event?.top_cut_size ?? null,
       startingPlayerCount: r.event?.starting_player_count ?? null,
-      // A large side event of a DLC weekend: shown as a finish, not counted
-      // as a major (sideEvents.ts).
+      // Shown as a finish either way; only majors are counted (sideEvents.ts).
       sideEvent: isSideEvent(r.event ?? {}, parents),
+      major: isMajor(r.event ?? {}, parents),
     }))
-    const majors = events.filter((e) => !e.sideEvent)
+    const majors = events.filter((e) => e.major)
     res.setHeader('Cache-Control', PUBLIC_CACHE)
     return res.status(200).json({
       playerId,

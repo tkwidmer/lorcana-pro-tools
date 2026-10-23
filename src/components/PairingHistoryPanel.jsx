@@ -146,7 +146,7 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
             </div>
           ) : priorMatches.length === 0 ? (
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700">
-              First meeting — no prior matches found in imported majors.
+              First meeting — no prior matches found in imported events.
             </div>
           ) : priorMatches.length >= MIN_RIVALRY_MEETINGS ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">

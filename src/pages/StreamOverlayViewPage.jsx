@@ -187,7 +187,8 @@ const ordinal = n => `${n}${(n % 100 > 10 && n % 100 < 14) ? 'th' : ['th', 'st',
 
 // The pair's archive history over the gameplay cam while the panel has it
 // shown (between games): each player's majors, top cuts, Day 2s and best
-// finishes on their own side, the head-to-head at majors between. The data
+// finishes on their own side, the head-to-head at every archived event
+// (side events included) between. The data
 // is the row's `player_card` (buildPlayerCard), written by Tournament
 // Lookup's send — the view has no session to query the archive itself.
 function PlayerCardPanel({ state, card }) {
@@ -199,7 +200,7 @@ function PlayerCardPanel({ state, card }) {
       <PlayerHalf player={a} history={card.players[0]} align="left" />
       <div className="w-[300px] shrink-0 border-x-4 border-(--accent) flex flex-col items-center px-5 py-8 text-center">
         <div className="text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Head to head</div>
-        <div className="mt-1 text-sm uppercase tracking-[0.2em] text-(--on-fill)/50">at majors</div>
+        <div className="mt-1 text-sm uppercase tracking-[0.2em] text-(--on-fill)/50">at archived events</div>
         <div className="mt-6 text-7xl leading-none tabular-nums text-(--accent)">
           {wins[0]}<span className="text-(--on-fill)/40 mx-2">–</span>{wins[1]}
         </div>
@@ -256,7 +257,7 @@ function PlayerHalf({ player, history, align }) {
             </span>
           </div>
         ))}
-        {history.finishes.length === 0 && <div className="text-2xl text-(--on-fill)/50">No majors on record</div>}
+        {history.finishes.length === 0 && <div className="text-2xl text-(--on-fill)/50">No finishes on record</div>}
       </div>
     </div>
   )

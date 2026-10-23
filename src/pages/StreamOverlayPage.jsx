@@ -358,7 +358,7 @@ export function StreamOverlayPage() {
           </div>
         </Card>
 
-        <Card title="Player card" description="Both players' majors history and head-to-head from the Tournament History archive, laid over the gameplay cam between games. Comes with a pairing picked from the linked event." className="p-5 lg:col-span-2">
+        <Card title="Player card" description="Both players' majors, finishes and head-to-head from the Tournament History archive, laid over the gameplay cam between games. Comes with a pairing picked from the linked event." className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-gray-600">
               {row.player_card

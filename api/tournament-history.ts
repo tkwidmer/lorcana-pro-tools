@@ -26,8 +26,10 @@ import {
   getEventMatches,
   getEventPlayerMatches,
   getPlayerMatches,
+  getMajorParents,
 } from './_lib/tournamentHistorySupabase.js'
 import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournamentDiscovery.js'
+import { isSideEvent } from './_lib/sideEvents.js'
 
 // Single consolidated route for the caster-history archive of imported RPH
 // major events (see supabase/migrations/008_tournament_history.sql), folded
@@ -185,7 +187,7 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
   if (!playerId) return res.status(400).json({ error: 'Missing playerId' })
 
   try {
-    const rows = await getPlayerHistory(playerId)
+    const [rows, parents] = await Promise.all([getPlayerHistory(playerId), getMajorParents()])
     const events = rows.map((r: any) => ({
       eventId: r.event?.rph_event_id ?? null,
       eventName: r.event?.event_name ?? null,
@@ -198,14 +200,19 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
       madeDayTwo: r.made_day_two,
       topCutSize: r.event?.top_cut_size ?? null,
       startingPlayerCount: r.event?.starting_player_count ?? null,
+      // A large side event of a DLC weekend: shown as a finish, not counted
+      // as a major (sideEvents.ts).
+      sideEvent: isSideEvent(r.event ?? {}, parents),
     }))
+    const majors = events.filter((e) => !e.sideEvent)
     res.setHeader('Cache-Control', PUBLIC_CACHE)
     return res.status(200).json({
       playerId,
       playerName: rows[0]?.player_name ?? null,
       events,
-      topCutCount: events.filter((e) => e.madeTopCut).length,
-      dayTwoCount: events.filter((e) => e.madeDayTwo).length,
+      topCutCount: majors.filter((e) => e.madeTopCut).length,
+      dayTwoCount: majors.filter((e) => e.madeDayTwo).length,
+      majorsPlayed: majors.length,
       eventsPlayed: events.length,
     })
   } catch (err) {

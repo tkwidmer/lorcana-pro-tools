@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, roundLabel, activeRoundLabel, currentRoundPairings,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -53,11 +53,11 @@ describe('streamOverlay row mapping', () => {
   it('builds the player card: cuts and Day 2s first, meetings newest first, head-to-head by side', () => {
     const ev = (eventName, eventDate, rank, o = {}) => ({ eventName, eventDate, rank, startingPlayerCount: 500, topCutSize: 32, madeTopCut: false, madeDayTwo: false, ...o })
     const histories = [
-      { eventsPlayed: 4, topCutCount: 1, dayTwoCount: 1, events: [
+      { eventsPlayed: 4, majorsPlayed: 3, topCutCount: 1, dayTwoCount: 1, events: [
         ev('Open A', '2026-01-01', 40), ev('Disney Lorcana Challenge: Milwaukee', '2026-03-01', 150, { madeDayTwo: true }),
-        ev('CCQ B', '2026-05-01', 3, { madeTopCut: true, madeDayTwo: true }), ev('Open C', '2026-06-01', 9),
+        ev('CCQ B', '2026-05-01', 3, { madeTopCut: true, madeDayTwo: true }), ev('Open C', '2026-06-01', 9, { sideEvent: true }),
       ] },
-      { eventsPlayed: 1, topCutCount: 0, dayTwoCount: 0, events: [ev('Open A', '2026-01-01', 77)] },
+      { eventsPlayed: 1, majorsPlayed: 1, topCutCount: 0, dayTwoCount: 0, events: [ev('Open A', '2026-01-01', 77)] },
     ]
     const headToHead = { matches: [
       { eventName: 'Open A', eventDate: '2026-01-01', roundNumber: 4, phaseName: 'Phase 1', winnerId: 'b', isDraw: false, isBye: false, gamesWonByWinner: 2, gamesWonByLoser: 0 },
@@ -69,12 +69,32 @@ describe('streamOverlay row mapping', () => {
       ['CCQ B', 3, 'cut'], ['DLC Milwaukee', 150, 'day2'], ['Open C', 9, null], ['Open A', 40, null],
     ])
     expect(card.players[0].finishes[0].year).toBe(2026)
+    expect(card.players[0].majorsPlayed).toBe(3)
+    expect(card.players[0].finishes.map(f => f.side)).toEqual([false, false, true, false])
     expect(card.players[1].finishes).toHaveLength(1)
     expect(card.headToHead.wins).toEqual([1, 1])
     expect(card.headToHead.draws).toBe(1)
     expect(card.headToHead.matches.map(m => [m.event, m.phase, m.winner, m.score])).toEqual([
       ['Open C', 'Round 2', null, null], ['CCQ B', 'Top 8', 0, '2-1'], ['Open A', 'Round 4', 1, '2-0'],
     ])
+  })
+
+  it('writes caster talking points from the card: record, best finish, head-to-head', () => {
+    const card = {
+      players: [
+        { majorsPlayed: 2, topCutCount: 0, dayTwoCount: 1, finishes: [{ event: 'DLC Indy Promo Quest', year: 2026, rank: 1, players: 707, topCutSize: 8, tier: 'cut', side: true }] },
+        { majorsPlayed: 0, topCutCount: 0, dayTwoCount: 0, finishes: [] },
+      ],
+      headToHead: { wins: [1, 0], draws: 0, matches: [{ event: 'DLC Indianapolis', year: 2026, phase: 'Round 6', winner: 0, score: '2-1' }] },
+    }
+    expect(casterPoints(card, 0, ['Ibai', 'Kyle'])).toEqual([
+      '2 majors played, 1 Day 2',
+      'Best finish: 1st of 707 at DLC Indy Promo Quest 2026 (top 8), a side event',
+      'Leads the head-to-head with Kyle 1-0; last met DLC Indianapolis 2026 Round 6, Ibai won 2-1',
+    ])
+    expect(casterPoints(card, 1, ['Ibai', 'Kyle'])).toEqual(['No majors in the archive', 'Trails the head-to-head with Ibai 0-1; last met DLC Indianapolis 2026 Round 6, Ibai won 2-1'])
+    const fresh = { ...card, headToHead: { wins: [0, 0], draws: 0, matches: [] } }
+    expect(casterPoints(fresh, 1, ['Ibai', 'Kyle'])[1]).toBe('First meeting with Ibai in the archive')
   })
 
   it('clears the pairing but keeps the event setup', () => {

@@ -217,6 +217,7 @@ export function StreamOverlayPage() {
   const links = row && {
     overlay: `${window.location.origin}/stream-overlay/view?table=${row.id}`,
     control: `${window.location.origin}/stream-overlay/control?table=${row.id}&key=${row.controller_key}`,
+    notes: `${window.location.origin}/stream-overlay/notes?table=${row.id}`,
   }
   async function copyLink(which) {
     try {
@@ -236,6 +237,7 @@ export function StreamOverlayPage() {
         description="Run a gameplay stream overlay from here. Each table is one feature match: add its overlay link as one OBS Browser Source (1920×1080) with the gameplay cam and player cams behind it — the cam areas are transparent — and open its player controller link on a tablet at the table so the players keep their own lore and game score. Break shows the next pairing full-screen between matches; a side on 2 game wins is marked the winner."
         actions={row && (
           <>
+            <Button onClick={() => copyLink('notes')}>{copied === 'notes' ? 'Link copied!' : 'Copy caster notes link'}</Button>
             <Button onClick={() => copyLink('control')}>{copied === 'control' ? 'Link copied!' : 'Copy player controller link'}</Button>
             <Button variant="primary" onClick={() => copyLink('overlay')}>{copied === 'overlay' ? 'Link copied!' : 'Copy OBS overlay link'}</Button>
           </>
@@ -358,11 +360,11 @@ export function StreamOverlayPage() {
           </div>
         </Card>
 
-        <Card title="Player card" description="Both players' majors history and head-to-head from the Tournament History archive, laid over the gameplay cam between games. Comes with a pairing picked from the linked event." className="p-5 lg:col-span-2">
+        <Card title="Player card" description="Both players' majors, finishes and head-to-head from the Tournament History archive, laid over the gameplay cam between games. Comes with a pairing picked from the linked event." className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-gray-600">
               {row.player_card
-                ? `${state.players[0].name || 'Left'}: ${row.player_card.players[0].eventsPlayed} majors, ${row.player_card.players[0].topCutCount} top cuts, ${row.player_card.players[0].dayTwoCount} Day 2s · ${state.players[1].name || 'Right'}: ${row.player_card.players[1].eventsPlayed} majors, ${row.player_card.players[1].topCutCount} top cuts, ${row.player_card.players[1].dayTwoCount} Day 2s · head-to-head ${row.player_card.headToHead.wins[0]}-${row.player_card.headToHead.wins[1]}`
+                ? `${state.players[0].name || 'Left'}: ${row.player_card.players[0].majorsPlayed} majors, ${row.player_card.players[0].topCutCount} top cuts, ${row.player_card.players[0].dayTwoCount} Day 2s · ${state.players[1].name || 'Right'}: ${row.player_card.players[1].majorsPlayed} majors, ${row.player_card.players[1].topCutCount} top cuts, ${row.player_card.players[1].dayTwoCount} Day 2s · head-to-head ${row.player_card.headToHead.wins[0]}-${row.player_card.headToHead.wins[1]}`
                 : 'No player card for this pairing yet. It comes with a pairing picked from the linked event.'}
             </span>
             <Button size="sm" variant={row.card_shown ? 'primary' : 'secondary'} aria-pressed={row.card_shown} disabled={!row.player_card} onClick={() => write(row.id, { card_shown: !row.card_shown, deck_shown: 0 })}>
@@ -439,6 +441,7 @@ export function StreamOverlayPage() {
         <div className="mt-6 text-sm text-gray-500 space-y-1">
           <p>Overlay link: <code className="text-xs break-all">{links.overlay}</code></p>
           <p>Player controller link: <code className="text-xs break-all">{links.control}</code></p>
+          <p>Caster notes link: <code className="text-xs break-all">{links.notes}</code></p>
         </div>
       )}
     </div>

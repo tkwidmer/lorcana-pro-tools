@@ -187,7 +187,8 @@ const ordinal = n => `${n}${(n % 100 > 10 && n % 100 < 14) ? 'th' : ['th', 'st',
 
 // The pair's archive history over the gameplay cam while the panel has it
 // shown (between games): each player's majors, top cuts, Day 2s and best
-// finishes on their own side, the head-to-head at majors between. The data
+// finishes on their own side, the head-to-head at every archived event
+// (side events included) between. The data
 // is the row's `player_card` (buildPlayerCard), written by Tournament
 // Lookup's send — the view has no session to query the archive itself.
 function PlayerCardPanel({ state, card }) {
@@ -199,7 +200,7 @@ function PlayerCardPanel({ state, card }) {
       <PlayerHalf player={a} history={card.players[0]} align="left" />
       <div className="w-[300px] shrink-0 border-x-4 border-(--accent) flex flex-col items-center px-5 py-8 text-center">
         <div className="text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Head to head</div>
-        <div className="mt-1 text-sm uppercase tracking-[0.2em] text-(--on-fill)/50">at majors</div>
+        <div className="mt-1 text-sm uppercase tracking-[0.2em] text-(--on-fill)/50">at archived events</div>
         <div className="mt-6 text-7xl leading-none tabular-nums text-(--accent)">
           {wins[0]}<span className="text-(--on-fill)/40 mx-2">–</span>{wins[1]}
         </div>
@@ -233,27 +234,30 @@ function PlayerHalf({ player, history, align }) {
         <span className="flex gap-1.5">{player.inks.map(ink => <InkIcon key={ink} color={ink} size={30} />)}</span>
       </div>
       <div className="mt-7 flex gap-10">
-        <Tile label="Majors" value={history.eventsPlayed} align={align} />
+        <Tile label="Majors" value={history.majorsPlayed} align={align} />
         <Tile label="Top cuts" value={history.topCutCount} align={align} />
         <Tile label="Day 2s" value={history.dayTwoCount} align={align} />
       </div>
-      <div className="mt-7 text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Best finishes at majors</div>
+      <div className="mt-7 text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Best finishes</div>
       <div className="mt-2 w-full space-y-2">
         {history.finishes.map((f, i) => (
           <div key={i} className={`flex items-baseline gap-4 ${right ? 'flex-row-reverse' : ''}`}>
             <span className="text-3xl text-(--accent) tabular-nums w-16 shrink-0" style={{ textAlign: align }}>{ordinal(f.rank)}</span>
             <span className="min-w-0">
-              <span className="text-2xl leading-tight block truncate">
-                {f.event}
-                {f.tier && <span className="ml-3 align-middle text-sm uppercase tracking-[0.2em] px-2 py-0.5 bg-(--accent) text-(--fill)">{TIER_LABEL[f.tier]}</span>}
-              </span>
-              <span className="text-base text-(--on-fill)/60 uppercase tracking-wide">
+              <span className="text-2xl leading-tight block truncate">{f.event}</span>
+              <span className="text-base text-(--on-fill)/60 uppercase tracking-wide block">
                 {[f.year, f.players && `${f.players} players`, f.tier === 'cut' && f.topCutSize && `top ${f.topCutSize}`].filter(Boolean).join(' · ')}
               </span>
+              {(f.tier || f.side) && (
+                <span className={`mt-1 flex gap-2 ${right ? 'flex-row-reverse' : ''}`}>
+                  {f.tier && <span className="text-xs uppercase tracking-[0.2em] px-1.5 py-0.5 bg-(--accent) text-(--fill)">{TIER_LABEL[f.tier]}</span>}
+                  {f.side && <span className="text-xs uppercase tracking-[0.2em] px-1.5 py-0.5 border border-(--on-fill)/40 text-(--on-fill)/70">Side event</span>}
+                </span>
+              )}
             </span>
           </div>
         ))}
-        {history.finishes.length === 0 && <div className="text-2xl text-(--on-fill)/50">No majors on record</div>}
+        {history.finishes.length === 0 && <div className="text-2xl text-(--on-fill)/50">No finishes on record</div>}
       </div>
     </div>
   )

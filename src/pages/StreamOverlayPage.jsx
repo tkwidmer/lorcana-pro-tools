@@ -217,6 +217,7 @@ export function StreamOverlayPage() {
   const links = row && {
     overlay: `${window.location.origin}/stream-overlay/view?table=${row.id}`,
     control: `${window.location.origin}/stream-overlay/control?table=${row.id}&key=${row.controller_key}`,
+    notes: `${window.location.origin}/stream-overlay/notes?table=${row.id}`,
   }
   async function copyLink(which) {
     try {
@@ -236,6 +237,7 @@ export function StreamOverlayPage() {
         description="Run a gameplay stream overlay from here. Each table is one feature match: add its overlay link as one OBS Browser Source (1920×1080) with the gameplay cam and player cams behind it — the cam areas are transparent — and open its player controller link on a tablet at the table so the players keep their own lore and game score. Break shows the next pairing full-screen between matches; a side on 2 game wins is marked the winner."
         actions={row && (
           <>
+            <Button onClick={() => copyLink('notes')}>{copied === 'notes' ? 'Link copied!' : 'Copy caster notes link'}</Button>
             <Button onClick={() => copyLink('control')}>{copied === 'control' ? 'Link copied!' : 'Copy player controller link'}</Button>
             <Button variant="primary" onClick={() => copyLink('overlay')}>{copied === 'overlay' ? 'Link copied!' : 'Copy OBS overlay link'}</Button>
           </>
@@ -439,6 +441,7 @@ export function StreamOverlayPage() {
         <div className="mt-6 text-sm text-gray-500 space-y-1">
           <p>Overlay link: <code className="text-xs break-all">{links.overlay}</code></p>
           <p>Player controller link: <code className="text-xs break-all">{links.control}</code></p>
+          <p>Caster notes link: <code className="text-xs break-all">{links.notes}</code></p>
         </div>
       )}
     </div>

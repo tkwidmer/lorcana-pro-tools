@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, roundLabel, activeRoundLabel, currentRoundPairings,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -77,6 +77,24 @@ describe('streamOverlay row mapping', () => {
     expect(card.headToHead.matches.map(m => [m.event, m.phase, m.winner, m.score])).toEqual([
       ['Open C', 'Round 2', null, null], ['CCQ B', 'Top 8', 0, '2-1'], ['Open A', 'Round 4', 1, '2-0'],
     ])
+  })
+
+  it('writes caster talking points from the card: record, best finish, head-to-head', () => {
+    const card = {
+      players: [
+        { majorsPlayed: 2, topCutCount: 0, dayTwoCount: 1, finishes: [{ event: 'DLC Indy Promo Quest', year: 2026, rank: 1, players: 707, topCutSize: 8, tier: 'cut', side: true }] },
+        { majorsPlayed: 0, topCutCount: 0, dayTwoCount: 0, finishes: [] },
+      ],
+      headToHead: { wins: [1, 0], draws: 0, matches: [{ event: 'DLC Indianapolis', year: 2026, phase: 'Round 6', winner: 0, score: '2-1' }] },
+    }
+    expect(casterPoints(card, 0, ['Ibai', 'Kyle'])).toEqual([
+      '2 majors played, 1 Day 2',
+      'Best finish: 1st of 707 at DLC Indy Promo Quest 2026 (top 8), a side event',
+      'Leads the head-to-head with Kyle 1-0; last met DLC Indianapolis 2026 Round 6, Ibai won 2-1',
+    ])
+    expect(casterPoints(card, 1, ['Ibai', 'Kyle'])).toEqual(['No majors in the archive', 'Trails the head-to-head with Ibai 0-1; last met DLC Indianapolis 2026 Round 6, Ibai won 2-1'])
+    const fresh = { ...card, headToHead: { wins: [0, 0], draws: 0, matches: [] } }
+    expect(casterPoints(fresh, 1, ['Ibai', 'Kyle'])[1]).toBe('First meeting with Ibai in the archive')
   })
 
   it('clears the pairing but keeps the event setup', () => {

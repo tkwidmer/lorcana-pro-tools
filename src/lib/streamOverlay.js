@@ -6,6 +6,7 @@
 
 import { resolveColors } from './inkColors'
 import { bracketRoundLabel } from './bracket'
+import { ordinal } from './resultsArchive'
 
 export const OVERLAY_WIDTH = 1920
 export const OVERLAY_HEIGHT = 1080
@@ -334,6 +335,38 @@ export function buildPlayerCard({ histories, headToHead, playerIds }) {
     else if (m.winnerId === playerIds[1]) wins[1] += 1
   }
   return { players, headToHead: { wins, draws, matches } }
+}
+
+// Plain-English lines a caster can read off for one side of the player
+// card: the majors record, the best finish, and the head-to-head. Built
+// from the card's own data, so the notes page needs nothing the OBS view
+// doesn't have.
+export function casterPoints(card, side, names) {
+  const p = card.players[side]
+  const other = 1 - side
+  const lines = []
+  if (p.majorsPlayed === 0) lines.push('No majors in the archive')
+  else {
+    const parts = [`${p.majorsPlayed} major${p.majorsPlayed === 1 ? '' : 's'} played`]
+    if (p.topCutCount) parts.push(`${p.topCutCount} top cut${p.topCutCount === 1 ? '' : 's'}`)
+    if (p.dayTwoCount) parts.push(`${p.dayTwoCount} Day 2${p.dayTwoCount === 1 ? '' : 's'}`)
+    lines.push(parts.join(', '))
+  }
+  const best = p.finishes[0]
+  if (best) {
+    const tag = best.tier === 'cut' ? ` (top ${best.topCutSize})` : best.tier === 'day2' ? ' (Day 2)' : ''
+    lines.push(`Best finish: ${ordinal(best.rank)} of ${best.players} at ${best.event}${best.year ? ` ${best.year}` : ''}${tag}${best.side ? ', a side event' : ''}`)
+  }
+  const { wins, draws, matches } = card.headToHead
+  if (wins[0] + wins[1] + draws === 0) lines.push(`First meeting with ${names[other]} in the archive`)
+  else {
+    const record = `${wins[side]}-${wins[other]}${draws ? `-${draws}` : ''}`
+    const stance = wins[side] > wins[other] ? 'Leads' : wins[side] < wins[other] ? 'Trails' : 'Level in'
+    const last = matches[0]
+    const lastLine = last ? `; last met ${last.event}${last.year ? ` ${last.year}` : ''} ${last.phase}, ${last.winner === null ? 'a draw' : `${names[last.winner]} won${last.score ? ` ${last.score}` : ''}`}` : ''
+    lines.push(`${stance} the head-to-head with ${names[other]} ${record}${lastLine}`)
+  }
+  return lines
 }
 
 // Mirrors which side each player sits on; a shown deck follows its player.

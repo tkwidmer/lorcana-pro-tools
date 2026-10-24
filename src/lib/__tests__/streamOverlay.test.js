@@ -5,7 +5,7 @@ import {
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '',
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', sponsor2_logo_url: 'https://x/s2.png', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '',
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
   p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0, p1_decklist: '4 Elsa',
   p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1, p2_decklist: '',
@@ -24,6 +24,7 @@ describe('streamOverlay row mapping', () => {
     expect(s.players[1].gameWins).toBe(1)
     expect(s.note).toBe('Top 8 at 5pm')
     expect(rowToState(row()).timerEndsAt).toBeNull()
+    expect(rowToState(row()).sponsor2LogoUrl).toBe('https://x/s2.png')
   })
 
   it('maps operator hotkeys, and ignores them while typing or with a modifier held', () => {
@@ -100,7 +101,7 @@ describe('streamOverlay row mapping', () => {
   it('clears the pairing but keeps the event setup', () => {
     const p = clearTablePatch()
     expect(p).toMatchObject({ p1_name: '', p2_name: '', p1_inks: [], p2_lore: 0, p1_game_wins: 0, p2_decklist: '', round: '', note: '', rph_event_id: null, deck_shown: 0, card_shown: false, player_card: null, mode: 'live', standings: null, bracket: null, break_panel: '' })
-    for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'theme_fill', 'theme_accent', 'timer_ends_at', 'timer_remaining_ms']) expect(p).not.toHaveProperty(kept)
+    for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'sponsor2_logo_url', 'theme_fill', 'theme_accent', 'timer_ends_at', 'timer_remaining_ms']) expect(p).not.toHaveProperty(kept)
   })
 
   it('captions the round: the elimination phase in top cut, else Round N', () => {

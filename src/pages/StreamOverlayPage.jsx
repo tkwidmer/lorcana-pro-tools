@@ -7,7 +7,7 @@ import { VALID_INKS } from '../lib/inkColors'
 import { fetchEventDetails, getTournamentStructure, extractEventId, fetchAllStandings, fetchAllRoundMatches } from '../lib/tournamentApi'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import {
-  listMyTables, createTable, updateTable, deleteTable, adjustTable, subscribeToTable, uploadLogo, resetLore,
+  listMyTables, createTable, updateTable, updateLinkedClock, deleteTable, adjustTable, subscribeToTable, uploadLogo, resetLore,
   readSelectedTableId, storeSelectedTableId,
 } from '../lib/streamTables'
 import {
@@ -31,6 +31,11 @@ const RPH_POLL_MS = 15000
 // from broadcasts here; everything else on the panel is the owner's own typing,
 // and adopting the echo of a keystroke would clobber the next one.
 const SCORE_COLUMNS = ['p1_lore', 'p1_game_wins', 'p2_lore', 'p2_game_wins']
+// What the panel adopts from the row's broadcasts: the scores (the controller
+// writes them) and the RPH link, so a second panel follows a link made or
+// cleared elsewhere instead of polling the old event. Everything else is the
+// owner's own typing, and adopting the echo of a keystroke would clobber it.
+const ADOPTED_COLUMNS = [...SCORE_COLUMNS, 'rph_event_id']
 
 // Control panel for the gameplay stream overlay. Each of the owner's tables
 // is a `stream_tables` row: edits here are column writes under RLS, the
@@ -73,7 +78,7 @@ export function StreamOverlayPage() {
   useEffect(() => {
     if (!rowId) return
     return subscribeToTable(rowId, payload => {
-      patchLocal(rowId, Object.fromEntries(SCORE_COLUMNS.map(c => [c, payload[c]])))
+      patchLocal(rowId, Object.fromEntries(ADOPTED_COLUMNS.map(c => [c, payload[c]])))
     })
   }, [rowId])
 
@@ -97,7 +102,7 @@ export function StreamOverlayPage() {
         const patch = rphClockPatch(structure)
         if (patch) {
           setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
-          updateTable(rowId, patch).catch(e => setError(e.message))
+          updateLinkedClock(rowId, rphEventId, patch).catch(e => setError(e.message))
         }
         setRphError(false)
       })

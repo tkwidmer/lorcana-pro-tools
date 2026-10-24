@@ -103,8 +103,13 @@ export function StreamOverlayPage() {
       })
       .catch(() => { if (!cancelled) setRphError(true) })
     poll()
-    const id = setInterval(poll, RPH_POLL_MS)
-    return () => { cancelled = true; clearInterval(id); setRphStructure(null) }
+    // The tick comes from a worker, not setInterval: a background tab's
+    // timers are throttled to about once a minute, which left the overlay
+    // on 00:00 for up to a minute after the organizer started the next
+    // round's clock, until the operator switched back to this tab.
+    const ticker = new Worker(URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${RPH_POLL_MS})`], { type: 'text/javascript' })))
+    ticker.onmessage = poll
+    return () => { cancelled = true; ticker.terminate(); setRphStructure(null) }
   }, [rowId, rphEventId])
 
   // Operator hotkeys (HOTKEYS in streamOverlay.js): scores go through the

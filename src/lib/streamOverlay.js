@@ -63,6 +63,7 @@ export function rowToState(row) {
     eventName: row.event_name,
     eventLogoUrl: row.event_logo_url,
     sponsorLogoUrl: row.sponsor_logo_url,
+    sponsor2LogoUrl: row.sponsor2_logo_url,
     round: row.round,
     note: row.note,
     // 0 = no deck over the gameplay cam, else the side (1 or 2) being shown.

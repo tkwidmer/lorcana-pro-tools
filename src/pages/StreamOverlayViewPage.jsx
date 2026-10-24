@@ -28,7 +28,7 @@ const CAM_HEIGHT = SIDE_WIDTH
 
 // The single OBS Browser Source for a gameplay stream: a 1920×1080 frame with
 // opaque side columns (square player cam cutout, name, record, inks, game-win
-// pips, lore) and a top banner (event and sponsor logos, round, timer), everything else
+// pips, lore) and a top banner (event and up to two sponsor logos, round, timer), everything else
 // transparent so the gameplay cam and player cams sit behind it. Once a side
 // reaches the match win count it's marked the winner; on `break` the same
 // source renders an opaque full-frame screen with the next pairing. It reads
@@ -282,6 +282,7 @@ function TopBanner({ state, now, winner }) {
           ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-16 object-contain" />
           : <div className="text-3xl uppercase tracking-wide">{state.eventName || ' '}</div>}
         {state.sponsorLogoUrl && <img src={state.sponsorLogoUrl} alt="" className="h-16 object-contain -ml-4" />}
+        {state.sponsor2LogoUrl && <img src={state.sponsor2LogoUrl} alt="" className="h-16 object-contain -ml-4" />}
         {result ? <Stat label="Winner" value={result} /> : <Stat label="Round" value={state.round || '—'} />}
         <Stat label="Time" value={formatClock(remaining)} warn={state.timerEndsAt !== null && remaining < 5 * 60 * 1000} />
       </div>
@@ -308,6 +309,7 @@ function BreakScreen({ state, now }) {
           ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-48 object-contain" />
           : <div className="text-7xl uppercase tracking-wide">{state.eventName || ' '}</div>}
         {state.sponsorLogoUrl && <img src={state.sponsorLogoUrl} alt="" className="h-36 object-contain" />}
+        {state.sponsor2LogoUrl && <img src={state.sponsor2LogoUrl} alt="" className="h-36 object-contain" />}
       </div>
 
       {state.breakPanel === 'standings' && state.standings ? (

@@ -309,6 +309,7 @@ export function StreamOverlayPage() {
           </Labeled>
           <LogoField label="Event logo" value={row.event_logo_url} onChange={v => setField('event_logo_url', v)} onError={setError} />
           <LogoField label="Sponsor logo" value={row.sponsor_logo_url} onChange={v => setField('sponsor_logo_url', v)} onError={setError} />
+          <LogoField label="Second sponsor logo" value={row.sponsor2_logo_url} onChange={v => setField('sponsor2_logo_url', v)} onError={setError} />
           <Labeled label="Round">
             <Input value={row.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" />
           </Labeled>

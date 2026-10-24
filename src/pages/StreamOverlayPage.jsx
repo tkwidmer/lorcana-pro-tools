@@ -381,7 +381,7 @@ export function StreamOverlayPage() {
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="primary" onClick={() => resetLore(row.id, row.controller_key).catch(e => setError(e.message))}>Next game: lore to 0</Button>
             <Button size="sm" onClick={() => write(row.id, swapSidesPatch(row))}>Swap sides</Button>
-            <Button size="sm" variant="danger" onClick={() => { if (window.confirm('Clear both players, the round, the note, the decklists and the player card? The event name, logos, theme and timer stay.')) write(row.id, clearTablePatch()) }}>Clear table</Button>
+            <Button size="sm" variant="danger" onClick={() => { if (window.confirm('Clear both players, their decklists and the player card? The event, logos, theme, timer, linked event, round and note stay.')) write(row.id, clearTablePatch()) }}>Clear table</Button>
           </div>
         </div>
 

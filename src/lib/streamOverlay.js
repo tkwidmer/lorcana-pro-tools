@@ -216,11 +216,12 @@ export function featureMatchPatch({ eventName, round, players, timer, rphEventId
 
 const SIDE_FIELDS = ['name', 'record', 'inks', 'lore', 'game_wins', 'decklist']
 
-// "Clear table" for the next event: both players, the round, the note, the
-// RPH link and anything shown over the cam. The event name, logos, theme
-// and timer stay — they're the operator's setup, not the pairing's.
+// "Clear table" between matches: both players, their decklists, the player
+// card, the break-screen snapshots and anything shown over the cam. The
+// event name, logos, theme, timer, linked RPH event, round and note stay —
+// they're the operator's setup for the event, not the pairing's.
 export function clearTablePatch() {
-  const patch = { round: '', note: '', rph_event_id: null, mode: 'live', deck_shown: 0, card_shown: false, player_card: null, standings: null, bracket: null, break_panel: '' }
+  const patch = { mode: 'live', deck_shown: 0, card_shown: false, player_card: null, standings: null, bracket: null, break_panel: '' }
   for (const n of [1, 2]) {
     Object.assign(patch, { [`p${n}_name`]: '', [`p${n}_record`]: '', [`p${n}_inks`]: [], [`p${n}_lore`]: 0, [`p${n}_game_wins`]: 0, [`p${n}_decklist`]: '' })
   }

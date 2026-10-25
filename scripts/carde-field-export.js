@@ -12,7 +12,8 @@
 // Stream Overlay's Metagame card directly: copy(cardeField.metaLines).
 //
 // Nothing here is stored or sent anywhere: the registration payload carries
-// player emails, and only card names and inks are kept.
+// player emails, and only card names and inks are kept. Your API token is
+// read from the page for these requests only.
 //
 (async () => {
   const API = 'https://api.admin.carde.io/api/v2'
@@ -20,14 +21,25 @@
   if (!eventId) throw new Error('No event id in this URL. Open the event page in the carde.io admin first.')
   const REGISTRATIONS = `${API}/organize/events/${eventId}/registrations-slim/`
 
-  // The page's own session: cookies ride along, and a JWT in web storage is
-  // sent as a Bearer token when there is one.
+  // The admin page authorizes its API calls with `Authorization: Token <40 hex
+  // chars>`. The token is looked for in web storage (bare, or inside a stored
+  // JSON object); failing that, you're asked for it: Network tab, any
+  // api.admin.carde.io request, the authorization header, the part after
+  // "Token ". It is used for these requests only and never stored.
+  const TOKEN = /^[0-9a-f]{40}$/
+  const findToken = value => {
+    if (typeof value === 'string') {
+      if (TOKEN.test(value)) return value
+      try { return findToken(JSON.parse(value)) } catch { return null }
+    }
+    if (value && typeof value === 'object') for (const v of Object.values(value)) { const t = findToken(v); if (t) return t }
+    return null
+  }
   const stored = [localStorage, sessionStorage].flatMap(s => Object.keys(s).map(k => s.getItem(k)))
-  const unwrap = v => { try { const j = JSON.parse(v); return typeof j === 'string' ? j : j?.access ?? j?.access_token ?? j?.token ?? null } catch { return v } }
-  const token = stored.map(unwrap).find(v => typeof v === 'string' && /^ey[\w-]+\.[\w-]+\.[\w-]+$/.test(v))
-  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  const token = stored.map(findToken).find(Boolean) ?? prompt('carde.io API token (Network tab → any api.admin.carde.io request → authorization header, after "Token ")')?.trim()
+  if (!TOKEN.test(token ?? '')) throw new Error('No carde.io token; the requests would be refused.')
   const get = async url => {
-    const r = await fetch(url, { headers, credentials: 'include' })
+    const r = await fetch(url, { headers: { Authorization: `Token ${token}` } })
     if (!r.ok) throw new Error(`${r.status} from ${url}`)
     return r.json()
   }

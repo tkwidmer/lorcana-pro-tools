@@ -115,6 +115,7 @@ Defined in `src/App.jsx`:
 | `/forge-decks` | `ForgeDecksPage.jsx` | The Forge Decklists — the site's own recommended lists, in the same set folders as Stock Deck Lists (see "Stock Deck Lists" below). Public |
 | `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
 | `/deck-doctor` | `DeckDoctorPage.jsx` | Your list (from match history, or pasted) beside duels.ink's average build and card lift for its archetype, your own WAR, and your matchups vs the field's, ending in a short verdict (see "Deck Doctor" below) |
+| `/field-breakdown` | `FieldBreakdownPage.jsx` | Paste every decklist in a room (blank line between lists) → the field by archetype and each list's assignment, using Deck Doctor's `assignArchetype()` rule against duels.ink's profiles (`lib/fieldBreakdown.js`, unit-tested). Textarea and queue persist in localStorage (`lorcana_field_breakdown`) |
 | `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis; clicking a pairing in the Matches tab opens cross-event history + head-to-head from the Tournament History archive (see below) |
 | `/results` | `ResultsPage.jsx` | Public Tournament Results — every imported archive event (newest first, events under 32 players hidden behind a toggle) with a player-name search. See "Tournament History Archive" |
 | `/results/events/:eventId` | `ResultsEventPage.jsx` | One archived event (`rph_event_id`): final standings (all rows, name filter) and the top-cut bracket via `EliminationBracket` |
@@ -126,7 +127,7 @@ Defined in `src/App.jsx`:
 
 **Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
 
-**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/deck-doctor`, `/tournament-lookup`, `/meta-synthesis`, `/decklist-inspector`, `/stream-overlay`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
+**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/deck-doctor`, `/field-breakdown`, `/tournament-lookup`, `/meta-synthesis`, `/decklist-inspector`, `/stream-overlay`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
 
 All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname`) so a render-time throw in one tool shows a fallback instead of white-screening the SPA; `Nav` sits outside the boundary and stays usable.
 

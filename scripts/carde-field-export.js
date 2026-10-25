@@ -1,21 +1,22 @@
 // Pull every submitted decklist for an event out of carde.io (Play Hub's
-// back end) and copy them as Field Breakdown input.
+// back end) and copy the room's ink-pair counts for the Stream Overlay's
+// Metagame card.
 //
 // Only the organizer's logged-in session can read registrations and decks,
-// so this runs in YOUR browser, not on our server: open the event in the
-// carde.io admin (the URL carries the event id), open DevTools, paste this
-// whole file into the Console and press Enter. It pages the registrations,
-// fetches each submitted deck, and copies the decklists to the clipboard,
-// one `4 Card Name` list per deck with a blank line between. Paste that
-// into Field Breakdown (/field-breakdown) for the archetype split, then
-// "Copy for Stream Overlay" there. It also builds ink-pair lines for the
-// Stream Overlay's Metagame card directly: copy(cardeField.metaLines).
+// so this runs in YOUR browser, not on our server. The Stream Overlay panel's
+// Metagame card offers it as a bookmarklet: drag it to the bookmarks bar,
+// open the event in the carde.io admin (the URL carries the event id), click
+// the bookmark. The same code can be pasted into the DevTools console there.
+// It pages the registrations, fetches each submitted deck, and copies one
+// line per ink pair ("Emerald/Steel 8") to the clipboard: paste into the
+// Metagame card. The full decklists, one `4 Card Name` list per deck with a
+// blank line between, stay in the console as cardeField.fieldText for
+// Field Breakdown.
 //
 // Nothing here is stored or sent anywhere: the registration payload carries
 // player emails, and only card names and inks are kept. Your API token is
 // taken from the page (its storage, or the next request the admin app makes)
 // for these requests only.
-//
 (async () => {
   const API = 'https://api.admin.carde.io/api/v2'
   const eventId = location.pathname.match(/events\/(\d+)/)?.[1] ?? new URLSearchParams(location.search).get('event')
@@ -89,12 +90,14 @@
   const metaLines = Object.entries(pairs).sort((a, b) => b[1] - a[1]).map(([pair, n]) => `${pair} ${n}`).join('\n')
 
   window.cardeField = { fieldText: lists.join('\n\n'), metaLines }
-  console.log(`${registrations.length} registrations, ${submitted.length} with a submitted deck, ${decks.length} decks fetched.`)
+  const summary = `${decks.length} decks from ${registrations.length} registrations (${submitted.length} submitted a deck).`
+  console.log(summary)
   console.log(metaLines)
+  console.log('Full decklists for Field Breakdown: copy(cardeField.fieldText)')
   try {
-    await navigator.clipboard.writeText(window.cardeField.fieldText)
-    console.log('Decklists copied: paste into Field Breakdown. For the Metagame card lines instead, run copy(cardeField.metaLines).')
+    await navigator.clipboard.writeText(metaLines)
+    alert(`${summary}\n\nInk pairs copied. Paste them into the Stream Overlay's Metagame card.\n\n${metaLines}`)
   } catch {
-    console.log('Clipboard blocked: run copy(cardeField.fieldText) for Field Breakdown or copy(cardeField.metaLines) for the Metagame card.')
+    prompt(`${summary}\n\nThe clipboard was blocked. Copy these lines for the Metagame card:`, metaLines)
   }
 })()

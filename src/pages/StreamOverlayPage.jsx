@@ -17,6 +17,7 @@ import {
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
 import { StreamPairingPicker } from '../components/StreamPairingPicker'
+import cardeFieldExport from '../../scripts/carde-field-export.js?raw'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input, Select, Textarea } from '../components/ui/Field'
@@ -26,6 +27,9 @@ import { PageHeader } from '../components/ui/PageHeader'
 // skill), so a linked clock is polled. The countdown stays exact between polls;
 // only an organizer's start/pause/reset lags by up to this long.
 const RPH_POLL_MS = 15000
+// The carde.io export as a bookmarklet: the script with its comment lines
+// dropped, wrapped so the click evaluates to nothing and the page stays put.
+const CARDE_BOOKMARKLET = `javascript:${encodeURIComponent(`void ${cardeFieldExport.replace(/^\s*\/\/.*$/gm, '')}`)}`
 
 // Only the columns another writer (the players' controller) changes are taken
 // from broadcasts here; everything else on the panel is the owner's own typing,
@@ -244,13 +248,14 @@ export function StreamOverlayPage() {
     control: `${window.location.origin}/stream-overlay/control?table=${row.id}&key=${row.controller_key}`,
     notes: `${window.location.origin}/stream-overlay/notes?table=${row.id}`,
   }
-  async function copyLink(which) {
+  async function copyText(text, which) {
     try {
-      await navigator.clipboard.writeText(links[which])
+      await navigator.clipboard.writeText(text)
       setCopied(which)
       setTimeout(() => setCopied(null), 2000)
     } catch { /* clipboard unavailable — noop */ }
   }
+  const copyLink = which => copyText(links[which], which)
 
   const state = row && rowToState(row)
   const running = state?.timerEndsAt !== null
@@ -400,7 +405,22 @@ export function StreamOverlayPage() {
           </div>
         </Card>
 
-        <Card title="Metagame" description={'The room\'s decks, one line per archetype or ink pair with a deck count ("Emerald/Steel Midrange 7", "Amber/Sapphire 5") or a share ("… 28%"); lines are grouped into ink pairs. Field Breakdown\'s Copy for Stream Overlay gives these lines. Shown as bars over the gameplay cam or on the break screen; in a room over 50 players, pairs under 5% fold into Other.'} className="p-5 lg:col-span-2">
+        <Card title="Metagame" description={'The room\'s decks, one line per archetype or ink pair with a deck count ("Emerald/Steel Midrange 7", "Amber/Sapphire 5") or a share ("… 28%"); lines are grouped into ink pairs. Shown as bars over the gameplay cam or on the break screen; in a room over 50 players, pairs under 5% fold into Other.'} className="p-5 lg:col-span-2">
+          <div className="mb-4 rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+            <div className="font-display uppercase tracking-wider text-xs text-gray-500">Fetch the room from carde.io</div>
+            <ol className="mt-1 list-decimal pl-5 space-y-1">
+              <li>
+                Drag this to your bookmarks bar once:{' '}
+                <a href={CARDE_BOOKMARKLET} onClick={e => e.preventDefault()} className="font-semibold text-forge-ink underline decoration-dotted" title="Drag me to the bookmarks bar">Export carde.io decks</a>
+                <span className="text-gray-500"> (or </span>
+                <button type="button" className="underline text-gray-700" onClick={() => copyText(CARDE_BOOKMARKLET, 'bookmarklet')}>{copied === 'bookmarklet' ? 'copied' : 'copy it'}</button>
+                <span className="text-gray-500"> and paste it as a bookmark's URL).</span>
+              </li>
+              <li>Open the event in the carde.io admin, with the event id in the URL, and click the bookmark. If it says it's waiting, click anything in the admin page.</li>
+              <li>It copies one line per ink pair, like <code className="font-mono text-xs">Emerald/Steel 8</code>. Paste them below. Re-run it after the decklist deadline to catch late submissions.</li>
+            </ol>
+            <p className="mt-1 text-xs text-gray-500">Runs in your own browser with your organizer login; nothing is sent to InkbornForge. Hand-collected lists work too: Field Breakdown's "Copy for Stream Overlay" gives the same lines.</p>
+          </div>
           <div className="grid gap-4 md:grid-cols-[1fr_200px]">
             <Textarea value={row.meta_text} onChange={e => setField('meta_text', e.target.value)} rows={6} className="w-full font-mono text-xs" placeholder={'Emerald/Steel Midrange 7\nAmber/Sapphire Detectives 5\nAmber/Amethyst Midrange 4\n…'} />
             <div className="flex flex-col gap-3">

@@ -8,8 +8,7 @@ import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass,
-} from '../lib/streamOverlay'
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
 // Name size classes per slot, big → small, with the character budget each
@@ -350,8 +349,9 @@ function BreakScreen({ state, now }) {
 // Standings snapshot on the break screen: the top of the field in two
 // columns, rank / name / record / points.
 function StandingsPanel({ standings, note }) {
-  const half = Math.ceil(standings.rows.length / 2)
-  const columns = [standings.rows.slice(0, half), standings.rows.slice(half)].filter(c => c.length)
+  const rows = standings.rows.slice(0, STANDINGS_ROWS)
+  const half = Math.ceil(rows.length / 2)
+  const columns = [rows.slice(0, half), rows.slice(half)].filter(c => c.length)
   return (
     <>
       <div className="text-center">

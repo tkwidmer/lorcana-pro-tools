@@ -8,8 +8,9 @@ import { InkIcon } from '../components/InkIcons'
 
 // Caster notes for one stream table: the same public row the OBS view
 // renders, laid out to read from a second screen — each player's talking
-// points, archive finishes and decklist on their own side, the head-to-head
-// and the standings snapshot between, the live score. Follows the row's
+// points, archive finishes and decklist on their own side, the head-to-head,
+// the standings snapshot and the round's results from the other tables
+// between, the live score. Follows the row's
 // broadcasts, so a new pairing or a sent standings snapshot shows up by
 // itself. Unguarded like the view: casters have no session, and the link
 // carries only the table id, so it can't change anything.
@@ -40,6 +41,8 @@ export function StreamOverlayNotesPage() {
   const names = players.map(p => p.name)
   const remaining = timerRemainingMs(state, now)
   const standings = row.standings
+  const results = row.results
+  const onStream = r => [r.p1, r.p2].some(n => n && names.includes(n))
 
   return (
     <div className="min-h-screen bg-paper text-gray-900 px-6 py-5">
@@ -140,6 +143,27 @@ export function StreamOverlayNotesPage() {
                   ))}
                 </tbody>
               </table>
+            </>
+          )}
+
+          {results && results.matches.length > 0 && (
+            <>
+              <h3 className="mt-6 font-display uppercase tracking-wider text-xs text-gray-500">
+                {results.round} · {results.matches.filter(m => m.done).length} of {results.matches.length} reported
+              </h3>
+              <table className="mt-1 w-full text-sm">
+                <tbody>
+                  {results.matches.map((m, j) => (
+                    <tr key={j} className={`border-b border-gray-200 ${onStream(m) ? 'bg-forge-soft' : ''}`}>
+                      <td className="py-1 pr-2 text-gray-500 tabular-nums w-6">{m.table ?? ''}</td>
+                      <td className={`py-1 pr-2 ${m.winner === 0 ? 'font-semibold' : m.winner === 1 ? 'text-gray-500' : ''}`}>{m.p1}</td>
+                      <td className={`py-1 pr-2 ${m.winner === 1 ? 'font-semibold' : m.winner === 0 ? 'text-gray-500' : ''}`}>{m.bye ? 'Bye' : m.p2}</td>
+                      <td className="py-1 text-right tabular-nums text-gray-500 whitespace-nowrap">{m.score ?? (m.bye ? '' : m.done ? 'Draw' : '…')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="text-xs text-gray-500 mt-1">From Play Hub, refreshed by the control panel</div>
             </>
           )}
 

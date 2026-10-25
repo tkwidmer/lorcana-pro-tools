@@ -77,6 +77,9 @@ export function rowToState(row) {
     // the pairing, else 'standings' or 'bracket'.
     standings: row.standings,
     bracket: row.bracket,
+    // The linked event's active-round results (buildResultsSnapshot), for
+    // the caster notes.
+    results: row.results,
     breakPanel: row.break_panel,
     // Wall-time target while running (ms since epoch), null while paused.
     timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
@@ -268,6 +271,30 @@ export function buildStandingsSnapshot(allStandings, structure) {
   return { round, players: allStandings.length, rows }
 }
 
+// One RPH match as a snapshot row: both names (p2 null on a bye), the
+// winner as a side index, and the game score once reported.
+function matchSummary(m) {
+  const [p1, p2] = [...(m.player_match_relationships ?? [])].sort((a, b) => a.player_order - b.player_order)
+  const name = p => p?.user_event_status?.best_identifier ?? p?.player?.best_identifier ?? null
+  const winner = m.winning_player == null ? null : m.winning_player === p1?.player?.id ? 0 : m.winning_player === p2?.player?.id ? 1 : null
+  return {
+    p1: name(p1), p2: m.match_is_bye ? null : name(p2),
+    winner, bye: Boolean(m.match_is_bye),
+    score: m.games_won_by_winner != null ? `${m.games_won_by_winner}-${m.games_won_by_loser ?? 0}` : null,
+  }
+}
+
+// The active round's results as the caster notes list them, from the
+// round's matches: every table in order, each with its pairing, whether
+// it's finished, and the result so far. The panel's RPH poll rewrites it
+// whenever it changes.
+export function buildResultsSnapshot(matches, structure) {
+  const rows = [...matches]
+    .sort((a, b) => (a.table_number ?? 0) - (b.table_number ?? 0))
+    .map(m => ({ table: m.table_number ?? null, done: m.status === 'COMPLETE', ...matchSummary(m) }))
+  return { round: activeRoundLabel(structure), matches: rows }
+}
+
 // The top cut as the break screen shows it, from the event's matches: the elimination phase's rounds in order, each match's two names,
 // the winner as a side index, and the game score. Table order is bracket
 // order, as in EliminationBracket.
@@ -278,16 +305,7 @@ export function buildBracketSnapshot(allMatches, phaseName) {
     const matches = inPhase
       .filter(m => m.round_number === roundNum)
       .sort((a, b) => (a.table_number ?? 0) - (b.table_number ?? 0))
-      .map(m => {
-        const [p1, p2] = [...(m.player_match_relationships ?? [])].sort((a, b) => a.player_order - b.player_order)
-        const name = p => p?.user_event_status?.best_identifier ?? p?.player?.best_identifier ?? null
-        const winner = m.winning_player == null ? null : m.winning_player === p1?.player?.id ? 0 : m.winning_player === p2?.player?.id ? 1 : null
-        return {
-          p1: name(p1), p2: m.match_is_bye ? null : name(p2),
-          winner, bye: Boolean(m.match_is_bye),
-          score: m.games_won_by_winner != null ? `${m.games_won_by_winner}-${m.games_won_by_loser ?? 0}` : null,
-        }
-      })
+      .map(matchSummary)
     return { label: bracketRoundLabel(matches.length, roundNum, phaseName), matches }
   })
   return { phase: phaseName, rounds }

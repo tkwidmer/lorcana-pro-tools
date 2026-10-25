@@ -24,10 +24,11 @@ export async function updateTable(id, patch) {
   return unwrap(await supabase.from('stream_tables').update(patch).eq('id', id).select().single())
 }
 
-// The linked clock, written only while the row is still linked to the event
-// it was polled from: a second panel left on an earlier event's link must
-// not write that event's clock over this one's.
-export async function updateLinkedClock(id, rphEventId, patch) {
+// What the RPH poll writes (the linked clock, the round's results), landed
+// only while the row is still linked to the event it was polled from: a
+// second panel left on an earlier event's link must not write that event's
+// clock or results over this one's.
+export async function updateWhileLinked(id, rphEventId, patch) {
   unwrap(await supabase.from('stream_tables').update(patch).eq('id', id).eq('rph_event_id', rphEventId))
 }
 

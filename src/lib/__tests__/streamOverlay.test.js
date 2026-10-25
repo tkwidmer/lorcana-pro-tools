@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -147,6 +147,22 @@ describe('streamOverlay row mapping', () => {
     expect(snap.rounds.map(r => r.label)).toEqual(['Semifinals', 'Final'])
     expect(snap.rounds[0].matches.map(x => [x.p1, x.p2, x.winner, x.score])).toEqual([['Ann', 'Bo', 0, '2-1'], ['Cy', 'Di', 1, '2-1']])
     expect(snap.rounds[1].matches[0]).toEqual({ p1: 'Ann', p2: 'Di', winner: null, score: null, bye: false })
+  })
+
+  it('snapshots the active round\'s results in table order', () => {
+    const rel = (order, id) => ({ player_order: order, player: { id, best_identifier: id }, user_event_status: { best_identifier: id } })
+    const matches = [
+      { table_number: 2, status: 'IN_PROGRESS', player_match_relationships: [rel(1, 'Cy'), rel(2, 'Di')], winning_player: null },
+      { table_number: 1, status: 'COMPLETE', player_match_relationships: [rel(2, 'Bo'), rel(1, 'Ann')], winning_player: 'Bo', games_won_by_winner: 2, games_won_by_loser: 0 },
+      { table_number: 3, status: 'COMPLETE', match_is_bye: true, player_match_relationships: [rel(1, 'Ed')], winning_player: 'Ed' },
+    ]
+    const snap = buildResultsSnapshot(matches, { activePhaseType: 'SWISS', activeRoundNumber: 4 })
+    expect(snap.round).toBe('Round 4')
+    expect(snap.matches.map(m => [m.table, m.p1, m.p2, m.winner, m.score, m.done, m.bye])).toEqual([
+      [1, 'Ann', 'Bo', 1, '2-0', true, false],
+      [2, 'Cy', 'Di', null, null, false, false],
+      [3, 'Ed', null, 0, null, true, true],
+    ])
   })
 
   it('swaps the player card with the sides', () => {

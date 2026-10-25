@@ -372,13 +372,13 @@ export function StreamOverlayPage() {
           )}
         </Card>
 
-        <Card title="Break screen" description="What the break screen shows: the pairing (with the last result or the next match), a standings or bracket snapshot from the linked event (Send standings / Send bracket in the Event card), or the metagame pie. Sending a snapshot switches to it; re-send after each round." className="p-5 lg:col-span-2">
+        <Card title="Break screen" description="What the break screen shows: the pairing (with the last result or the next match), a standings or bracket snapshot from the linked event (Send standings / Send bracket in the Event card), or the metagame chart. Sending a snapshot switches to it; re-send after each round." className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center gap-2">
             {[
               ['', 'Pairing', true, ''],
               ['standings', 'Standings', Boolean(row.standings), row.standings ? `after ${row.standings.round} · ${row.standings.players} players` : 'none sent'],
               ['bracket', 'Bracket', Boolean(row.bracket), row.bracket ? `${row.bracket.phase} · ${row.bracket.rounds.length} rounds` : 'none sent'],
-              ['meta', 'Metagame', hasMeta, hasMeta ? `${metaSlices(row.meta_text, row.meta_players).slices.length} slices` : 'nothing typed'],
+              ['meta', 'Metagame', hasMeta, hasMeta ? `${metaSlices(row.meta_text, row.meta_players).slices.length} archetypes` : 'nothing typed'],
             ].map(([value, label, available, sub]) => (
               <Button key={value} size="sm" variant={row.break_panel === value ? 'primary' : 'secondary'} aria-pressed={row.break_panel === value} disabled={!available} onClick={() => setField('break_panel', value)}>
                 {label}{sub && <span className="normal-case tracking-normal font-sans opacity-70">· {sub}</span>}
@@ -400,7 +400,7 @@ export function StreamOverlayPage() {
           </div>
         </Card>
 
-        <Card title="Metagame" description={'The room\'s archetypes, one per line with a deck count ("Emerald/Steel Midrange 7") or a share ("… 28%"). Field Breakdown\'s Copy for Stream Overlay gives these lines. Shown as a pie over the gameplay cam or on the break screen; in a room over 50 players, archetypes under 5% fold into Other.'} className="p-5 lg:col-span-2">
+        <Card title="Metagame" description={'The room\'s archetypes, one per line with a deck count ("Emerald/Steel Midrange 7") or a share ("… 28%"). Field Breakdown\'s Copy for Stream Overlay gives these lines. Shown as bars over the gameplay cam or on the break screen; in a room over 50 players, archetypes under 5% fold into Other.'} className="p-5 lg:col-span-2">
           <div className="grid gap-4 md:grid-cols-[1fr_200px]">
             <Textarea value={row.meta_text} onChange={e => setField('meta_text', e.target.value)} rows={6} className="w-full font-mono text-xs" placeholder={'Emerald/Steel Midrange 7\nAmber/Sapphire Detectives 5\nAmber/Amethyst Midrange 4\n…'} />
             <div className="flex flex-col gap-3">

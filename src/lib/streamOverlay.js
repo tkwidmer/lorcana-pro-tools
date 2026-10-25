@@ -83,7 +83,7 @@ export function rowToState(row) {
     results: row.results,
     breakPanel: row.break_panel,
     // The tournament's metagame as typed in the panel (metaSlices() turns it
-    // into the pie), the field size the "Other" fold reads, and whether the
+    // into the chart), the field size the "Other" fold reads, and whether the
     // live view is showing the pie over the cam.
     metaText: row.meta_text,
     metaPlayers: row.meta_players,
@@ -438,7 +438,7 @@ export function metaInks(name) {
   return [...new Set(inks)]
 }
 
-// The pie: each archetype's share of the field, largest first, with its
+// The chart: each archetype's share of the field, largest first, with its
 // inks. Counts share by their sum; percentages by 100, any remainder being
 // Other. In a room over META_OTHER_MIN_PLAYERS players (the typed field size,
 // else the sum of the counts) archetypes under META_OTHER_MAX_SHARE fold

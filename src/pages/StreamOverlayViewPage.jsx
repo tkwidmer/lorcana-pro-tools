@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useCards } from '../hooks/useCards'
 import { buildCardIndex } from '../lib/cardAnalysis'
-import { BUCKET_ORDER, BUCKET_LABEL, buildBuckets, matchDeckList } from '../lib/decklistShared'
+import { BUCKET_ORDER, BUCKET_LABEL, buildBuckets, matchDeckList, inkFill } from '../lib/decklistShared'
 import { CardBar } from '../components/DecklistCardBar'
 import { useSearchParams } from 'react-router-dom'
 import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
-import { INK_HEX, INK_TEXT_ON } from '../lib/inkColors'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
   OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices } from '../lib/streamOverlay'
@@ -350,32 +349,32 @@ function BreakScreen({ state, now }) {
   )
 }
 
-// The tournament's metagame (metaSlices over the panel's text): a pie with
-// each archetype's share, two-tone for an ink pair, Other in muted ink, and
-// a legend with inks, name, share and deck count. Framed over the gameplay
-// cam (same box as the player card) or bare on the break screen.
-const PIE_LABEL_MIN_SHARE = 0.07
-// Legend type steps down as the list grows, so a 15-archetype room still fits.
-const legendSize = n => (n > 10 ? 'text-xl' : n > 6 ? 'text-2xl' : 'text-3xl')
-
+// The tournament's metagame (metaSlices over the panel's text): one bar per
+// archetype, largest first, in its ink pair's two colors (inkFill, as the
+// Inspector paints a deck), the share and the deck count beside it. Framed
+// over the gameplay cam (same box as the player card) or bare on the break
+// screen. Type and row height step down as the list grows.
 function MetaPanel({ state, note, framed }) {
   const meta = metaSlices(state.metaText, state.metaPlayers)
   if (!meta) return null
-  const r = framed ? 280 : 230
-  const size = legendSize(meta.slices.length)
+  const n = meta.slices.length
+  const size = n > 10 ? 'text-xl' : n > 6 ? 'text-2xl' : 'text-3xl'
+  const rowH = n > 10 ? 40 : n > 6 ? 52 : 64
+  const barH = n > 10 ? 20 : 28
+  const max = Math.max(...meta.slices.map(sl => sl.share))
   const body = (
-    <div className="flex items-center justify-center gap-14 w-full h-full px-10">
-      <MetaPie slices={meta.slices} r={r} />
-      <div className={`min-w-0 flex-1 max-w-[760px] flex flex-col ${meta.slices.length > 10 ? 'gap-1.5' : 'gap-3'}`}>
-        {meta.slices.map(sl => (
-          <div key={sl.name} className="flex items-center gap-4">
-            <span className="flex gap-1 w-[64px] shrink-0">{sl.inks.map(ink => <InkIcon key={ink} color={ink} size={28} />)}</span>
-            <span className={`${size} uppercase tracking-wide leading-none truncate flex-1 min-w-0`}>{sl.name}</span>
-            <span className={`${size} tabular-nums text-(--accent) w-[80px] text-right`}>{Math.round(sl.share * 100)}%</span>
-            {sl.count != null && <span className="text-xl tabular-nums text-(--on-fill)/60 w-[48px] text-right">{sl.count}</span>}
+    <div className="flex flex-col justify-center w-full h-full px-14">
+      {meta.slices.map(sl => (
+        <div key={sl.name} className="flex items-center gap-5" style={{ height: rowH }}>
+          <span className="flex gap-1 w-[72px] shrink-0">{sl.inks.map(ink => <InkIcon key={ink} color={ink} size={n > 10 ? 26 : 32} />)}</span>
+          <span className={`${size} uppercase tracking-wide leading-none truncate w-[440px] shrink-0`}>{sl.name}</span>
+          <div className="flex-1 bg-(--on-fill)/10 overflow-hidden" style={{ height: barH }}>
+            <div className="h-full" style={{ width: `${(sl.share / max) * 100}%`, ...inkFill(sl.inks) }} />
           </div>
-        ))}
-      </div>
+          <span className={`${size} tabular-nums text-(--accent) w-[90px] text-right`}>{Math.round(sl.share * 100)}%</span>
+          <span className="text-xl tabular-nums text-(--on-fill)/60 w-[56px] text-right">{sl.count ?? ''}</span>
+        </div>
+      ))}
     </div>
   )
   if (framed) {
@@ -396,50 +395,8 @@ function MetaPanel({ state, note, framed }) {
         {meta.players && <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">{meta.players} players</div>}
         {note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{note}</div>}
       </div>
-      <div style={{ height: r * 2 + 20 }} className="w-full">{body}</div>
+      <div style={{ width: 1500, height: n * rowH }}>{body}</div>
     </>
-  )
-}
-
-// A wedge of radius r from angle a to b (radians, clockwise from 12 o'clock).
-function wedge(a, b, r) {
-  const p = t => `${r + r * Math.sin(t)} ${r - r * Math.cos(t)}`
-  if (b - a >= 2 * Math.PI - 1e-6) return `M${r} 0 A${r} ${r} 0 1 1 ${r - 0.01} 0 Z`
-  return `M${r} ${r} L${p(a)} A${r} ${r} 0 ${b - a > Math.PI ? 1 : 0} 1 ${p(b)} Z`
-}
-
-// The wedges and in-slice labels for a pie, clockwise from 12 o'clock.
-function pieParts(slices, r) {
-  const total = slices.reduce((s, sl) => s + sl.share, 0)
-  let angle = 0
-  return slices.map(sl => {
-    const span = (sl.share / total) * 2 * Math.PI
-    const start = angle
-    angle += span
-    // An ink pair splits its wedge down the middle, one ink each side.
-    const fills = sl.inks.length ? sl.inks.map(ink => INK_HEX[ink]) : ['rgba(128,128,128,0.55)']
-    const step = span / fills.length
-    const mid = start + span / 2
-    return {
-      key: sl.name,
-      wedges: fills.map((fill, i) => ({ d: wedge(start + i * step, start + (i + 1) * step, r), fill })),
-      label: sl.share / total >= PIE_LABEL_MIN_SHARE ? {
-        x: r + r * 0.64 * Math.sin(mid), y: r - r * 0.64 * Math.cos(mid),
-        text: `${Math.round(sl.share * 100)}%`, color: sl.inks.length ? INK_TEXT_ON[sl.inks[0]] : '#ffffff',
-      } : null,
-    }
-  })
-}
-
-function MetaPie({ slices, r }) {
-  const parts = pieParts(slices, r)
-  return (
-    <svg width={r * 2} height={r * 2} viewBox={`0 0 ${r * 2} ${r * 2}`} className="shrink-0 font-display">
-      {parts.map(p => p.wedges.map((w, i) => <path key={`${p.key}-${i}`} d={w.d} fill={w.fill} stroke="var(--fill)" strokeWidth={i === 0 ? 4 : 2} />))}
-      {parts.map(p => p.label && (
-        <text key={`${p.key}-l`} x={p.label.x} y={p.label.y} textAnchor="middle" dominantBaseline="central" fill={p.label.color} fontSize={34} fontWeight={600}>{p.label.text}</text>
-      ))}
-    </svg>
   )
 }
 

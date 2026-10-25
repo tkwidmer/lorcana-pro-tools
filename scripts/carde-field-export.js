@@ -1,0 +1,103 @@
+// Pull every submitted decklist for an event out of carde.io (Play Hub's
+// back end) and copy the room's ink-pair counts for the Stream Overlay's
+// Metagame card.
+//
+// Only the organizer's logged-in session can read registrations and decks,
+// so this runs in YOUR browser, not on our server. The Stream Overlay panel's
+// Metagame card offers it as a bookmarklet: drag it to the bookmarks bar,
+// open the event in the carde.io admin (the URL carries the event id), click
+// the bookmark. The same code can be pasted into the DevTools console there.
+// It pages the registrations, fetches each submitted deck, and copies one
+// line per ink pair ("Emerald/Steel 8") to the clipboard: paste into the
+// Metagame card. The full decklists, one `4 Card Name` list per deck with a
+// blank line between, stay in the console as cardeField.fieldText for
+// Field Breakdown.
+//
+// Nothing here is stored or sent anywhere: the registration payload carries
+// player emails, and only card names and inks are kept. Your API token is
+// taken from the page (its storage, or the next request the admin app makes)
+// for these requests only.
+(async () => {
+  const API = 'https://api.admin.carde.io/api/v2'
+  const eventId = location.pathname.match(/events\/(\d+)/)?.[1] ?? new URLSearchParams(location.search).get('event')
+  if (!eventId) throw new Error('No event id in this URL. Open the event page in the carde.io admin first.')
+  const REGISTRATIONS = `${API}/organize/events/${eventId}/registrations-slim/`
+
+  // The admin page authorizes its API calls with `Authorization: Token <40 hex
+  // chars>`. If the token sits in web storage it is read from there; otherwise
+  // the page's own fetch and XHR are watched until the admin app makes a
+  // request, and the header it sends is reused. Click anything in the admin
+  // (switch a tab) to trigger one. The token is used for these requests only.
+  const TOKEN = /^[0-9a-f]{40}$/
+  const findToken = value => {
+    if (typeof value === 'string') {
+      if (TOKEN.test(value)) return value
+      try { return findToken(JSON.parse(value)) } catch { return null }
+    }
+    if (value && typeof value === 'object') for (const v of Object.values(value)) { const t = findToken(v); if (t) return t }
+    return null
+  }
+  const fromHeader = value => { const m = /^Token\s+([0-9a-f]{40})$/i.exec(value ?? ''); return m ? m[1] : null }
+  const captureToken = () => new Promise(resolve => {
+    const origFetch = window.fetch
+    const origSet = XMLHttpRequest.prototype.setRequestHeader
+    const done = t => { window.fetch = origFetch; XMLHttpRequest.prototype.setRequestHeader = origSet; resolve(t) }
+    window.fetch = function (input, init) {
+      const h = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+      const t = fromHeader(h.get('authorization'))
+      if (t) done(t)
+      return origFetch.apply(this, arguments)
+    }
+    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+      if (name.toLowerCase() === 'authorization') { const t = fromHeader(value); if (t) done(t) }
+      return origSet.apply(this, arguments)
+    }
+    console.log('Waiting for the admin page to make a request: click anything in it (switch a tab, open a player).')
+  })
+  const stored = [localStorage, sessionStorage].flatMap(s => Object.keys(s).map(k => s.getItem(k)))
+  const token = stored.map(findToken).find(Boolean) ?? await captureToken()
+  const get = async url => {
+    const r = await fetch(url, { headers: { Authorization: `Token ${token}` } })
+    if (!r.ok) throw new Error(`${r.status} from ${url}`)
+    return r.json()
+  }
+
+  const registrations = []
+  for (let page = 1; page; ) {
+    const data = await get(`${REGISTRATIONS}?page=${page}&page_size=100`)
+    registrations.push(...data.results)
+    page = data.next_page_number
+  }
+  const submitted = registrations.filter(r => r.registration_status === 'COMPLETE' && r.deck_submission?.deck_id)
+
+  const decks = []
+  for (let i = 0; i < submitted.length; i += 4) {
+    decks.push(...await Promise.all(submitted.slice(i, i + 4).map(r => get(`${API}/deckbuilder/decks/${r.deck_submission.deck_id}/`))))
+  }
+
+  const mainCards = deck => deck.sections.filter(s => s.section_type === 'main').flatMap(s => s.cards)
+  const lists = decks.map(deck => mainCards(deck).map(c => `${c.quantity} ${c.card.display_name}`).join('\n'))
+
+  // A deck's ink pair: its two most-played inks, alphabetical.
+  const cap = s => s[0].toUpperCase() + s.slice(1)
+  const inkPair = deck => {
+    const weight = {}
+    for (const c of mainCards(deck)) for (const ink of c.card.ink_array ?? []) weight[ink] = (weight[ink] ?? 0) + c.quantity
+    return Object.entries(weight).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([ink]) => cap(ink)).sort().join('/')
+  }
+  const pairs = {}
+  for (const deck of decks) pairs[inkPair(deck)] = (pairs[inkPair(deck)] ?? 0) + 1
+  const metaLines = Object.entries(pairs).sort((a, b) => b[1] - a[1]).map(([pair, n]) => `${pair} ${n}`).join('\n')
+
+  window.cardeField = { fieldText: lists.join('\n\n'), metaLines }
+  const summary = `${decks.length} decks from ${registrations.length} registrations (${submitted.length} submitted a deck).`
+  console.log(summary)
+  console.log(metaLines)
+  console.log('Full decklists for Field Breakdown: copy(cardeField.fieldText)')
+  try {
+    await navigator.clipboard.writeText(metaLines)
+    alert(`${summary}\n\nInk pairs copied. Paste them into the Stream Overlay's Metagame card.\n\n${metaLines}`)
+  } catch {
+    prompt(`${summary}\n\nThe clipboard was blocked. Copy these lines for the Metagame card:`, metaLines)
+  }
+})()

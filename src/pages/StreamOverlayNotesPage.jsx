@@ -8,9 +8,9 @@ import { InkIcon } from '../components/InkIcons'
 
 // Caster notes for one stream table: the same public row the OBS view
 // renders, laid out to read from a second screen — each player's talking
-// points, archive finishes and decklist on their own side, the head-to-head,
-// the standings snapshot and the round's results from the other tables
-// between, the live score. Follows the row's
+// points, archive finishes and decklist on their own side, the head-to-head
+// and the round's results from the other tables between, the live score,
+// and the standings snapshot across the bottom. Follows the row's
 // broadcasts, so a new pairing or a sent standings snapshot shows up by
 // itself. Unguarded like the view: casters have no session, and the link
 // carries only the table id, so it can't change anything.
@@ -128,24 +128,6 @@ export function StreamOverlayNotesPage() {
             </>
           ) : <p className="mt-1 text-sm text-gray-500">No pairing with archive data yet.</p>}
 
-          {standings && (
-            <>
-              <h3 className="mt-6 font-display uppercase tracking-wider text-xs text-gray-500">Standings after {standings.round}</h3>
-              <table className="mt-1 w-full text-sm">
-                <tbody>
-                  {standings.rows.map(r => (
-                    <tr key={r.rank} className={`border-b border-gray-200 ${names.includes(r.name) ? 'font-semibold' : ''}`}>
-                      <td className="py-1 pr-2 text-gray-500 tabular-nums w-6">{r.rank}</td>
-                      <td className="py-1 pr-2">{r.name}</td>
-                      <td className="py-1 pr-2 tabular-nums whitespace-nowrap">{r.record}</td>
-                      <td className="py-1 text-right tabular-nums text-gray-500">{r.points ?? ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-
           {results && results.matches.length > 0 && (
             <>
               <h3 className="mt-6 font-display uppercase tracking-wider text-xs text-gray-500">
@@ -174,6 +156,22 @@ export function StreamOverlayNotesPage() {
           <div className="text-xs text-gray-500 mt-1">Follows the stream table live</div>
         </div>
       </div>
+
+      {standings && (
+        <div className="mt-8 border-t-2 border-gray-900 pt-3">
+          <h3 className="font-display uppercase tracking-wider text-xs text-gray-500">Standings after {standings.round} · {standings.players} players</h3>
+          <div className="mt-1 columns-2 lg:columns-4 gap-x-8 text-sm">
+            {standings.rows.map(r => (
+              <div key={r.rank} className={`flex gap-2 py-1 border-b border-gray-200 break-inside-avoid ${names.includes(r.name) ? 'font-semibold' : ''}`}>
+                <span className="text-gray-500 tabular-nums w-6">{r.rank}</span>
+                <span className="flex-1 truncate">{r.name}</span>
+                <span className="tabular-nums whitespace-nowrap">{r.record}</span>
+                <span className="tabular-nums text-gray-500 w-6 text-right">{r.points ?? ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

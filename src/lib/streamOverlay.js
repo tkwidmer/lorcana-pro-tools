@@ -257,16 +257,17 @@ export function shortEventName(name) {
     .trim()
 }
 
+// How much of the standings the break screen shows; the caster notes show
+// the whole snapshot.
 export const STANDINGS_ROWS = 16
 
-// The top of the standings as the break screen shows them, from the round's
-// standings and the event structure.
+// The standings as the notes and the break screen show them, from the
+// round's standings and the event structure: every ranked player.
 export function buildStandingsSnapshot(allStandings, structure) {
   const round = roundLabel(structure)
   const rows = [...allStandings]
     .filter(e => e.rank != null)
     .sort((a, b) => a.rank - b.rank)
-    .slice(0, STANDINGS_ROWS)
     .map(e => ({ rank: e.rank, name: e.user_event_status?.best_identifier ?? e.player?.best_identifier ?? '', record: e.record ?? '', points: e.match_points ?? null }))
   return { round, players: allStandings.length, rows }
 }

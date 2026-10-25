@@ -3,6 +3,7 @@ import { fetchStats } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
 import { buildCardIndex } from '../lib/cardAnalysis'
 import { splitDeckLists, classifyField } from '../lib/fieldBreakdown'
+import { readDecklistsPdf } from '../lib/cardePdf'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -48,6 +49,13 @@ export function FieldBreakdownPage() {
   )
   const total = result?.decks.length ?? 0
   const [copied, setCopied] = useState(false)
+  const [pdfError, setPdfError] = useState(null)
+  async function importPdf(e) {
+    const file = e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    try { setText(await readDecklistsPdf(file)); setPdfError(null) } catch (err) { setPdfError(err.message) }
+  }
   async function copyForOverlay() {
     try {
       await navigator.clipboard.writeText(result.field.map(r => `${r.archetype} ${r.count}`).join('\n'))
@@ -83,7 +91,14 @@ export function FieldBreakdownPage() {
           className="w-full font-mono text-sm"
           placeholder={'4 Card Name\n4 Card Name\n\n4 Card Name\n…'}
         />
-        <div className="mt-2 text-sm text-gray-500">{lists.length} list{lists.length === 1 ? '' : 's'}</div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
+          <span>{lists.length} list{lists.length === 1 ? '' : 's'}</span>
+          <label className="flex items-center gap-2">
+            <span>Or the carde.io decklists PDF (replaces the text):</span>
+            <input type="file" accept="application/pdf" onChange={importPdf} className="text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-900 file:bg-transparent file:px-3 file:py-1.5 file:font-display file:uppercase file:tracking-wider file:text-xs file:text-gray-900" />
+          </label>
+          {pdfError && <span className="text-red-700">{pdfError}</span>}
+        </div>
       </Card>
 
       {result && (

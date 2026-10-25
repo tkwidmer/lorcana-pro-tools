@@ -18,6 +18,8 @@ import {
 import { InkIcon } from '../components/InkIcons'
 import { StreamPairingPicker } from '../components/StreamPairingPicker'
 import cardeFieldExport from '../../scripts/carde-field-export.js?raw'
+import { readDecklistsPdf } from '../lib/cardePdf'
+import { splitDeckLists, inkPairLines } from '../lib/fieldBreakdown'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input, Select, Textarea } from '../components/ui/Field'
@@ -29,6 +31,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 const RPH_POLL_MS = 15000
 // The carde.io export as a bookmarklet: the script with its comment lines
 // dropped, wrapped so the click evaluates to nothing and the page stays put.
+const FILE_INPUT = 'text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-900 file:bg-transparent file:px-3 file:py-1.5 file:font-display file:uppercase file:tracking-wider file:text-xs file:text-gray-900 disabled:opacity-40'
 const CARDE_BOOKMARKLET = `javascript:${encodeURIComponent(`void ${cardeFieldExport.replace(/^\s*\/\/.*$/gm, '')}`)}`
 
 // Only the columns another writer (the players' controller) changes are taken
@@ -179,6 +182,16 @@ export function StreamOverlayPage() {
     updateTable(id, patch).catch(e => setError(e.message))
   }
   const setField = (key, value) => write(row.id, { [key]: value })
+  const [pdfBusy, setPdfBusy] = useState(false)
+  async function importDecklistsPdf(e) {
+    const file = e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    setPdfBusy(true)
+    try {
+      setField('meta_text', inkPairLines(splitDeckLists(await readDecklistsPdf(file)), cardIndex).join('\n'))
+    } catch (err) { setError(err.message) } finally { setPdfBusy(false) }
+  }
   const setPlayer = (side, key, value) => write(row.id, { [`p${side}_${key}`]: value })
   const adjust = (side, field, delta) => adjustTable(row.id, row.controller_key, side, field, delta).catch(e => setError(e.message))
 
@@ -408,6 +421,12 @@ export function StreamOverlayPage() {
         <Card title="Metagame" description={'The room\'s decks, one line per archetype or ink pair with a deck count ("Emerald/Steel Midrange 7", "Amber/Sapphire 5") or a share ("… 28%"); lines are grouped into ink pairs. Shown as bars over the gameplay cam or on the break screen; in a room over 50 players, pairs under 5% fold into Other.'} className="p-5 lg:col-span-2">
           <div className="mb-4 rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
             <div className="font-display uppercase tracking-wider text-xs text-gray-500">Fetch the room from carde.io</div>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <span>In the carde.io admin, download the event's decklists PDF and drop it here:</span>
+              <input type="file" accept="application/pdf" onChange={importDecklistsPdf} disabled={pdfBusy} aria-label="Decklists PDF" className={FILE_INPUT} />
+              {pdfBusy && <span className="text-xs text-gray-500">Reading…</span>}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Each deck's two most-played inks make the lines below; the PDF is read in your browser and the player names in it are never kept. Or use the bookmarklet:</p>
             <ol className="mt-1 list-decimal pl-5 space-y-1">
               <li>
                 Drag this to your bookmarks bar once:{' '}
@@ -419,7 +438,7 @@ export function StreamOverlayPage() {
               <li>Open the event in the carde.io admin, with the event id in the URL, and click the bookmark. If it says it's waiting, click anything in the admin page.</li>
               <li>It copies one line per ink pair, like <code className="font-mono text-xs">Emerald/Steel 8</code>. Paste them below. Re-run it after the decklist deadline to catch late submissions.</li>
             </ol>
-            <p className="mt-1 text-xs text-gray-500">Runs in your own browser with your organizer login; nothing is sent to InkbornForge. Hand-collected lists work too: Field Breakdown's "Copy for Stream Overlay" gives the same lines.</p>
+            <p className="mt-1 text-xs text-gray-500">Both run in your own browser with your organizer login; nothing is sent to InkbornForge. Hand-collected lists work too: Field Breakdown's "Copy for Stream Overlay" gives the same lines.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-[1fr_200px]">
             <Textarea value={row.meta_text} onChange={e => setField('meta_text', e.target.value)} rows={6} className="w-full font-mono text-xs" placeholder={'Emerald/Steel Midrange 7\nAmber/Sapphire Detectives 5\nAmber/Amethyst Midrange 4\n…'} />
@@ -526,7 +545,7 @@ function LogoField({ label, value, onChange, onError }) {
     <Labeled label={`${label} (URL, or upload a PNG up to 2 MB)`}>
       <div className="flex items-center gap-3">
         <Input value={value} onChange={e => onChange(e.target.value)} className="w-full" placeholder="https://…/logo.png" />
-        <input type="file" accept="image/*" onChange={upload} disabled={busy} className="text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-900 file:bg-transparent file:px-3 file:py-1.5 file:font-display file:uppercase file:tracking-wider file:text-xs file:text-gray-900 disabled:opacity-40" />
+        <input type="file" accept="image/*" onChange={upload} disabled={busy} className={FILE_INPUT} />
         {value && <img src={value} alt="" className="h-9 w-16 object-contain bg-gray-900 rounded shrink-0" />}
       </div>
       {busy && <span className="mt-1 block text-xs text-gray-500">Uploading…</span>}

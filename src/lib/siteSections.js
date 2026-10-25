@@ -129,6 +129,12 @@ export const SECTIONS = [
         description: 'Browse final standings, top-cut brackets and every player\'s record across imported Disney Lorcana Challenges, qualifiers and other major events.',
       },
       {
+        path: '/field-breakdown',
+        name: 'Field Breakdown',
+        icon: 'pie',
+        description: 'Paste every decklist in the room and see the field by archetype, each list matched to the duels.ink build it overlaps most.',
+      },
+      {
         path: '/tournament-lookup',
         name: 'Tournament Lookup',
         icon: 'trophy',

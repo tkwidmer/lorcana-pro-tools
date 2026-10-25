@@ -13,7 +13,7 @@ import {
 import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks, clearTablePatch,
-  activeRoundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot,
+  activeRoundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, metaSlices,
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
 import { StreamPairingPicker } from '../components/StreamPairingPicker'
@@ -135,6 +135,8 @@ export function StreamOverlayPage() {
   const deckShown = row?.deck_shown ?? 0
   const cardShown = row?.card_shown ?? false
   const hasCard = Boolean(row?.player_card)
+  const metaShown = row?.meta_shown ?? false
+  const hasMeta = Boolean(row && metaSlices(row.meta_text, row.meta_players))
   useEffect(() => {
     if (!rowId) return
     const onKey = e => {
@@ -145,15 +147,18 @@ export function StreamOverlayPage() {
         resetLore(rowId, controllerKey).catch(e => setError(e.message))
         return
       }
-      if (action.toggleMode || action.toggleDeck || action.toggleCard) {
+      if (action.toggleMode || action.toggleDeck || action.toggleCard || action.toggleMeta) {
         if (action.toggleCard && !hasCard) return
-        // The deck and the player card share the slot over the cam: showing
-        // one hides the other.
+        if (action.toggleMeta && !hasMeta) return
+        // The deck, the player card and the metagame share the slot over the
+        // cam: showing one hides the others.
         const patch = action.toggleMode
           ? { mode: mode === 'break' ? 'live' : 'break' }
           : action.toggleCard
-            ? { card_shown: !cardShown, deck_shown: 0 }
-            : { deck_shown: deckShown === action.toggleDeck ? 0 : action.toggleDeck, card_shown: false }
+            ? { card_shown: !cardShown, deck_shown: 0, meta_shown: false }
+            : action.toggleMeta
+              ? { meta_shown: !metaShown, card_shown: false, deck_shown: 0 }
+              : { deck_shown: deckShown === action.toggleDeck ? 0 : action.toggleDeck, card_shown: false, meta_shown: false }
         setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
         updateTable(rowId, patch).catch(e => setError(e.message))
       } else {
@@ -162,7 +167,7 @@ export function StreamOverlayPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [rowId, controllerKey, mode, deckShown, cardShown, hasCard])
+  }, [rowId, controllerKey, mode, deckShown, cardShown, hasCard, metaShown, hasMeta])
 
   // Optimistic local update, then the column write; a failed write surfaces.
   function write(id, patch) {
@@ -367,12 +372,13 @@ export function StreamOverlayPage() {
           )}
         </Card>
 
-        <Card title="Break screen" description="What the break screen shows: the pairing (with the last result or the next match), or a standings or bracket snapshot from the linked event (Send standings / Send bracket in the Event card). Sending one switches to it; re-send after each round." className="p-5 lg:col-span-2">
+        <Card title="Break screen" description="What the break screen shows: the pairing (with the last result or the next match), a standings or bracket snapshot from the linked event (Send standings / Send bracket in the Event card), or the metagame pie. Sending a snapshot switches to it; re-send after each round." className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center gap-2">
             {[
               ['', 'Pairing', true, ''],
               ['standings', 'Standings', Boolean(row.standings), row.standings ? `after ${row.standings.round} · ${row.standings.players} players` : 'none sent'],
               ['bracket', 'Bracket', Boolean(row.bracket), row.bracket ? `${row.bracket.phase} · ${row.bracket.rounds.length} rounds` : 'none sent'],
+              ['meta', 'Metagame', hasMeta, hasMeta ? `${metaSlices(row.meta_text, row.meta_players).slices.length} slices` : 'nothing typed'],
             ].map(([value, label, available, sub]) => (
               <Button key={value} size="sm" variant={row.break_panel === value ? 'primary' : 'secondary'} aria-pressed={row.break_panel === value} disabled={!available} onClick={() => setField('break_panel', value)}>
                 {label}{sub && <span className="normal-case tracking-normal font-sans opacity-70">· {sub}</span>}
@@ -388,15 +394,32 @@ export function StreamOverlayPage() {
                 ? `${state.players[0].name || 'Left'}: ${row.player_card.players[0].majorsPlayed} majors, ${row.player_card.players[0].topCutCount} top cuts, ${row.player_card.players[0].dayTwoCount} Day 2s · ${state.players[1].name || 'Right'}: ${row.player_card.players[1].majorsPlayed} majors, ${row.player_card.players[1].topCutCount} top cuts, ${row.player_card.players[1].dayTwoCount} Day 2s · head-to-head ${row.player_card.headToHead.wins[0]}-${row.player_card.headToHead.wins[1]}`
                 : 'No player card for this pairing yet. It comes with a pairing picked from the linked event.'}
             </span>
-            <Button size="sm" variant={row.card_shown ? 'primary' : 'secondary'} aria-pressed={row.card_shown} disabled={!row.player_card} onClick={() => write(row.id, { card_shown: !row.card_shown, deck_shown: 0 })}>
+            <Button size="sm" variant={row.card_shown ? 'primary' : 'secondary'} aria-pressed={row.card_shown} disabled={!row.player_card} onClick={() => write(row.id, { card_shown: !row.card_shown, deck_shown: 0, meta_shown: false })}>
               {row.card_shown ? 'Hide from stream' : 'Show on stream'}
             </Button>
           </div>
         </Card>
 
+        <Card title="Metagame" description={'The room\'s archetypes, one per line with a deck count ("Emerald/Steel Midrange 7") or a share ("… 28%"). Field Breakdown\'s Copy for Stream Overlay gives these lines. Shown as a pie over the gameplay cam or on the break screen; in a room over 50 players, archetypes under 5% fold into Other.'} className="p-5 lg:col-span-2">
+          <div className="grid gap-4 md:grid-cols-[1fr_200px]">
+            <Textarea value={row.meta_text} onChange={e => setField('meta_text', e.target.value)} rows={6} className="w-full font-mono text-xs" placeholder={'Emerald/Steel Midrange 7\nAmber/Sapphire Detectives 5\nAmber/Amethyst Midrange 4\n…'} />
+            <div className="flex flex-col gap-3">
+              <Labeled label="Players (blank: the counts' total)">
+                <Input type="number" min="0" value={row.meta_players ?? ''} placeholder={rphStructure?.startingPlayerCount ?? ''} onChange={e => setField('meta_players', e.target.value === '' ? null : Number(e.target.value))} className="w-full" />
+              </Labeled>
+              <Button size="sm" variant={row.meta_shown ? 'primary' : 'secondary'} aria-pressed={row.meta_shown} disabled={!hasMeta} onClick={() => write(row.id, { meta_shown: !row.meta_shown, card_shown: false, deck_shown: 0 })}>
+                {row.meta_shown ? 'Hide from stream' : 'Show on stream'}
+              </Button>
+              <Button size="sm" variant={row.break_panel === 'meta' ? 'primary' : 'secondary'} aria-pressed={row.break_panel === 'meta'} disabled={!hasMeta} onClick={() => setField('break_panel', row.break_panel === 'meta' ? '' : 'meta')}>
+                {row.break_panel === 'meta' ? 'On the break screen' : 'Put on break screen'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+
         <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
-            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck · <Kbd>3</Kbd> player card · <Kbd>N</Kbd> next game (lore to 0). Click outside any field first.
+            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck · <Kbd>3</Kbd> player card · <Kbd>4</Kbd> metagame · <Kbd>N</Kbd> next game (lore to 0). Click outside any field first.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="primary" onClick={() => resetLore(row.id, row.controller_key).catch(e => setError(e.message))}>Next game: lore to 0</Button>
@@ -441,7 +464,7 @@ export function StreamOverlayPage() {
                 const inks = deckInks(matchDeckList(text, cardIndex))
                 write(row.id, { [`p${side}_decklist`]: text, ...(inks.length ? { [`p${side}_inks`]: inks } : {}) })
               }}
-              onToggleShow={() => write(row.id, { deck_shown: row.deck_shown === side ? 0 : side, card_shown: false })}
+              onToggleShow={() => write(row.id, { deck_shown: row.deck_shown === side ? 0 : side, card_shown: false, meta_shown: false })}
             />
 
             <div className="grid grid-cols-2 gap-3">

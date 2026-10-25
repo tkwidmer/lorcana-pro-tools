@@ -6,6 +6,7 @@
 
 import { resolveColors } from './inkColors'
 import { bracketRoundLabel } from './bracket'
+import { resolveInkName } from './inkColors'
 import { ordinal } from './resultsArchive'
 
 export const OVERLAY_WIDTH = 1920
@@ -81,6 +82,12 @@ export function rowToState(row) {
     // the caster notes.
     results: row.results,
     breakPanel: row.break_panel,
+    // The tournament's metagame as typed in the panel (metaSlices() turns it
+    // into the pie), the field size the "Other" fold reads, and whether the
+    // live view is showing the pie over the cam.
+    metaText: row.meta_text,
+    metaPlayers: row.meta_players,
+    metaShown: row.meta_shown,
     // Wall-time target while running (ms since epoch), null while paused.
     timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
     timerRemainingMs: row.timer_remaining_ms,
@@ -224,7 +231,7 @@ const SIDE_FIELDS = ['name', 'record', 'inks', 'lore', 'game_wins', 'decklist']
 // event name, logos, theme, timer, linked RPH event, round and note stay —
 // they're the operator's setup for the event, not the pairing's.
 export function clearTablePatch() {
-  const patch = { mode: 'live', deck_shown: 0, card_shown: false, player_card: null, standings: null, bracket: null, break_panel: '' }
+  const patch = { mode: 'live', deck_shown: 0, card_shown: false, meta_shown: false, player_card: null, standings: null, bracket: null, break_panel: '' }
   for (const n of [1, 2]) {
     Object.assign(patch, { [`p${n}_name`]: '', [`p${n}_record`]: '', [`p${n}_inks`]: [], [`p${n}_lore`]: 0, [`p${n}_game_wins`]: 0, [`p${n}_decklist`]: '' })
   }
@@ -400,6 +407,64 @@ export function swapSidesPatch(row) {
   return patch
 }
 
+// The metagame as typed in the panel: one archetype per line, "<name> <n>"
+// for a deck count or "<name> <n>%" for a share. Lines without a trailing
+// number are ignored. `percent` is true when any line carries a %.
+export function parseMeta(text) {
+  const entries = []
+  let percent = false
+  for (const line of (text ?? '').split('\n')) {
+    const m = line.trim().match(/^(.*?)[\s:–-]*(\d+(?:\.\d+)?)\s*(%)?$/)
+    if (!m || !m[1].trim()) continue
+    if (m[3]) percent = true
+    entries.push({ name: m[1].trim(), value: Number(m[2]) })
+  }
+  return { entries, percent }
+}
+
+export const META_OTHER_MIN_PLAYERS = 50
+export const META_OTHER_MAX_SHARE = 0.05
+const OTHER = 'Other'
+
+// The inks an archetype name starts with ("Emerald/Steel Midrange" → emerald,
+// steel), for the slice's colors; none when the name doesn't start with one.
+export function metaInks(name) {
+  const inks = []
+  for (const word of name.split(/\s+/)) {
+    const parts = word.split('/').map(resolveInkName)
+    if (parts.some(p => !p)) break
+    inks.push(...parts)
+  }
+  return [...new Set(inks)]
+}
+
+// The pie: each archetype's share of the field, largest first, with its
+// inks. Counts share by their sum; percentages by 100, any remainder being
+// Other. In a room over META_OTHER_MIN_PLAYERS players (the typed field size,
+// else the sum of the counts) archetypes under META_OTHER_MAX_SHARE fold
+// into Other, which always sits last.
+export function metaSlices(text, players) {
+  const { entries, percent } = parseMeta(text)
+  if (entries.length === 0) return null
+  const sum = entries.reduce((s, e) => s + e.value, 0)
+  const total = percent ? Math.max(100, sum) : sum
+  const fieldSize = players ?? (percent ? null : sum)
+  const fold = (fieldSize ?? 0) > META_OTHER_MIN_PLAYERS
+  const named = []
+  let other = percent && sum < 100 ? { count: null, share: (100 - sum) / 100 } : { count: 0, share: 0 }
+  for (const e of entries) {
+    const share = e.value / total
+    if (e.name.toLowerCase() === OTHER.toLowerCase() || (fold && share < META_OTHER_MAX_SHARE)) {
+      other = { count: other.count === null || percent ? null : other.count + e.value, share: other.share + share }
+    } else {
+      named.push({ name: e.name, count: percent ? null : e.value, share, inks: metaInks(e.name) })
+    }
+  }
+  named.sort((a, b) => b.share - a.share)
+  if (other.share > 0) named.push({ name: OTHER, ...other, inks: [] })
+  return { players: fieldSize, slices: named }
+}
+
 // Operator hotkeys on the control panel (and so a Stream Deck sending keys):
 // left-hand keys for the left player, right-hand keys for the right player,
 // B flips Live / Break. Letters only, so any key sender can produce them.
@@ -411,6 +476,7 @@ export const HOTKEYS = {
   b: { toggleMode: true },
   1: { toggleDeck: 1 }, 2: { toggleDeck: 2 },
   3: { toggleCard: true },
+  4: { toggleMeta: true },
   n: { nextGame: true },
 }
 

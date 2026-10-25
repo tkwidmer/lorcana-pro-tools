@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', sponsor2_logo_url: 'https://x/s2.png', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '',
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', sponsor2_logo_url: 'https://x/s2.png', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '', meta_text: '', meta_players: null, meta_shown: false,
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
   p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0, p1_decklist: '4 Elsa',
   p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1, p2_decklist: '',
@@ -163,6 +163,30 @@ describe('streamOverlay row mapping', () => {
       [2, 'Cy', 'Di', null, null, false, false],
       [3, 'Ed', null, 0, null, true, true],
     ])
+  })
+
+  it('parses the metagame text as counts or percentages', () => {
+    expect(parseMeta('Emerald/Steel Midrange 7\nAmber/Sapphire Detectives: 5\n\nno number here\nOther 2')).toEqual({
+      entries: [{ name: 'Emerald/Steel Midrange', value: 7 }, { name: 'Amber/Sapphire Detectives', value: 5 }, { name: 'Other', value: 2 }], percent: false,
+    })
+    expect(parseMeta('Ruby/Sapphire Pawpsicle 28%\nAmber/Steel Songs 12.5 %').percent).toBe(true)
+    expect(metaInks('Emerald/Steel Midrange')).toEqual(['emerald', 'steel'])
+    expect(metaInks('Amber Steel Songs')).toEqual(['amber', 'steel'])
+    expect(metaInks('Pawpsicle')).toEqual([])
+  })
+
+  it('builds pie slices, folding small archetypes into Other only in a big room', () => {
+    const small = metaSlices('Amber/Sapphire Detectives 3\nEmerald/Steel Midrange 7\nRuby/Amethyst Tempo 1', null)
+    expect(small.players).toBe(11)
+    expect(small.slices.map(s => [s.name, s.count, Math.round(s.share * 100)])).toEqual([['Emerald/Steel Midrange', 7, 64], ['Amber/Sapphire Detectives', 3, 27], ['Ruby/Amethyst Tempo', 1, 9]])
+    const big = metaSlices('Emerald/Steel Midrange 40\nAmber/Sapphire Detectives 15\nRuby/Amethyst Tempo 2\nOther 3', null)
+    expect(big.players).toBe(60)
+    expect(big.slices.map(s => [s.name, s.count])).toEqual([['Emerald/Steel Midrange', 40], ['Amber/Sapphire Detectives', 15], ['Other', 5]])
+    expect(big.slices[2].inks).toEqual([])
+    const pct = metaSlices('Emerald/Steel Midrange 40%\nAmber/Sapphire Detectives 35%', 120)
+    expect(pct.players).toBe(120)
+    expect(pct.slices.map(s => [s.name, s.count, s.share])).toEqual([['Emerald/Steel Midrange', null, 0.4], ['Amber/Sapphire Detectives', null, 0.35], ['Other', null, 0.25]])
+    expect(metaSlices('', null)).toBeNull()
   })
 
   it('swaps the player card with the sides', () => {

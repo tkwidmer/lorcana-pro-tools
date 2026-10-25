@@ -6,9 +6,10 @@ import { CardBar } from '../components/DecklistCardBar'
 import { useSearchParams } from 'react-router-dom'
 import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
+import { INK_HEX, INK_TEXT_ON } from '../lib/inkColors'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS } from '../lib/streamOverlay'
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
 // Name size classes per slot, big → small, with the character budget each
@@ -74,8 +75,9 @@ export function StreamOverlayViewPage() {
         <>
           <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} />
           <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} />
-          {state.deckShown > 0 && !state.cardShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
-          {state.cardShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} />}
+          {state.deckShown > 0 && !state.cardShown && !state.metaShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
+          {state.cardShown && !state.metaShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} />}
+          {state.metaShown && <MetaPanel state={state} framed />}
           <TopBanner state={state} now={now} winner={winner} />
         </>
       )}
@@ -315,6 +317,8 @@ function BreakScreen({ state, now }) {
         <StandingsPanel standings={state.standings} note={state.note} />
       ) : state.breakPanel === 'bracket' && state.bracket ? (
         <BracketPanel bracket={state.bracket} note={state.note} />
+      ) : state.breakPanel === 'meta' && metaSlices(state.metaText, state.metaPlayers) ? (
+        <MetaPanel state={state} note={state.note} />
       ) : (
         <>
           <div className="text-center">
@@ -343,6 +347,99 @@ function BreakScreen({ state, now }) {
         <span className="text-xl uppercase tracking-[0.12em]">InkbornForge</span>
       </div>
     </div>
+  )
+}
+
+// The tournament's metagame (metaSlices over the panel's text): a pie with
+// each archetype's share, two-tone for an ink pair, Other in muted ink, and
+// a legend with inks, name, share and deck count. Framed over the gameplay
+// cam (same box as the player card) or bare on the break screen.
+const PIE_LABEL_MIN_SHARE = 0.07
+// Legend type steps down as the list grows, so a 15-archetype room still fits.
+const legendSize = n => (n > 10 ? 'text-xl' : n > 6 ? 'text-2xl' : 'text-3xl')
+
+function MetaPanel({ state, note, framed }) {
+  const meta = metaSlices(state.metaText, state.metaPlayers)
+  if (!meta) return null
+  const r = framed ? 280 : 230
+  const size = legendSize(meta.slices.length)
+  const body = (
+    <div className="flex items-center justify-center gap-14 w-full h-full px-10">
+      <MetaPie slices={meta.slices} r={r} />
+      <div className={`min-w-0 flex-1 max-w-[760px] flex flex-col ${meta.slices.length > 10 ? 'gap-1.5' : 'gap-3'}`}>
+        {meta.slices.map(sl => (
+          <div key={sl.name} className="flex items-center gap-4">
+            <span className="flex gap-1 w-[64px] shrink-0">{sl.inks.map(ink => <InkIcon key={ink} color={ink} size={28} />)}</span>
+            <span className={`${size} uppercase tracking-wide leading-none truncate flex-1 min-w-0`}>{sl.name}</span>
+            <span className={`${size} tabular-nums text-(--accent) w-[80px] text-right`}>{Math.round(sl.share * 100)}%</span>
+            {sl.count != null && <span className="text-xl tabular-nums text-(--on-fill)/60 w-[48px] text-right">{sl.count}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+  if (framed) {
+    return (
+      <div className="absolute flex flex-col bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden" style={{ left: SIDE_WIDTH + 40, right: SIDE_WIDTH + 40, top: 170, bottom: 40 }}>
+        <div className="pt-6 text-center">
+          <span className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">Metagame</span>
+          {meta.players && <span className="ml-6 text-2xl uppercase tracking-wide text-(--accent)">{meta.players} players</span>}
+        </div>
+        <div className="flex-1 min-h-0">{body}</div>
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="text-center">
+        <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">Metagame</div>
+        {meta.players && <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">{meta.players} players</div>}
+        {note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{note}</div>}
+      </div>
+      <div style={{ height: r * 2 + 20 }} className="w-full">{body}</div>
+    </>
+  )
+}
+
+// A wedge of radius r from angle a to b (radians, clockwise from 12 o'clock).
+function wedge(a, b, r) {
+  const p = t => `${r + r * Math.sin(t)} ${r - r * Math.cos(t)}`
+  if (b - a >= 2 * Math.PI - 1e-6) return `M${r} 0 A${r} ${r} 0 1 1 ${r - 0.01} 0 Z`
+  return `M${r} ${r} L${p(a)} A${r} ${r} 0 ${b - a > Math.PI ? 1 : 0} 1 ${p(b)} Z`
+}
+
+// The wedges and in-slice labels for a pie, clockwise from 12 o'clock.
+function pieParts(slices, r) {
+  const total = slices.reduce((s, sl) => s + sl.share, 0)
+  let angle = 0
+  return slices.map(sl => {
+    const span = (sl.share / total) * 2 * Math.PI
+    const start = angle
+    angle += span
+    // An ink pair splits its wedge down the middle, one ink each side.
+    const fills = sl.inks.length ? sl.inks.map(ink => INK_HEX[ink]) : ['rgba(128,128,128,0.55)']
+    const step = span / fills.length
+    const mid = start + span / 2
+    return {
+      key: sl.name,
+      wedges: fills.map((fill, i) => ({ d: wedge(start + i * step, start + (i + 1) * step, r), fill })),
+      label: sl.share / total >= PIE_LABEL_MIN_SHARE ? {
+        x: r + r * 0.64 * Math.sin(mid), y: r - r * 0.64 * Math.cos(mid),
+        text: `${Math.round(sl.share * 100)}%`, color: sl.inks.length ? INK_TEXT_ON[sl.inks[0]] : '#ffffff',
+      } : null,
+    }
+  })
+}
+
+function MetaPie({ slices, r }) {
+  const parts = pieParts(slices, r)
+  return (
+    <svg width={r * 2} height={r * 2} viewBox={`0 0 ${r * 2} ${r * 2}`} className="shrink-0 font-display">
+      {parts.map(p => p.wedges.map((w, i) => <path key={`${p.key}-${i}`} d={w.d} fill={w.fill} stroke="var(--fill)" strokeWidth={i === 0 ? 4 : 2} />))}
+      {parts.map(p => p.label && (
+        <text key={`${p.key}-l`} x={p.label.x} y={p.label.y} textAnchor="middle" dominantBaseline="central" fill={p.label.color} fontSize={34} fontWeight={600}>{p.label.text}</text>
+      ))}
+    </svg>
   )
 }
 

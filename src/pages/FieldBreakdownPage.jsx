@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchStats } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
 import { buildCardIndex } from '../lib/cardAnalysis'
-import { splitDeckLists, classifyField } from '../lib/fieldBreakdown'
+import { splitDeckLists, classifyField, inkPairLines } from '../lib/fieldBreakdown'
 import { readDecklistsPdf } from '../lib/cardePdf'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
@@ -48,6 +48,7 @@ export function FieldBreakdownPage() {
     [stats, cards, cardIndex, lists],
   )
   const total = result?.decks.length ?? 0
+  const inkLines = useMemo(() => (cards?.length ? inkPairLines(lists, cardIndex) : []), [cards, cardIndex, lists])
   const [copied, setCopied] = useState(false)
   const [pdfError, setPdfError] = useState(null)
   async function importPdf(e) {
@@ -58,7 +59,7 @@ export function FieldBreakdownPage() {
   }
   async function copyForOverlay() {
     try {
-      await navigator.clipboard.writeText(result.field.map(r => `${r.archetype} ${r.count}`).join('\n'))
+      await navigator.clipboard.writeText(inkLines.join('\n'))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch { /* clipboard unavailable */ }
@@ -92,7 +93,11 @@ export function FieldBreakdownPage() {
           placeholder={'4 Card Name\n4 Card Name\n\n4 Card Name\n…'}
         />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
-          <span>{lists.length} list{lists.length === 1 ? '' : 's'}</span>
+          <span className="flex items-center gap-3">
+            {lists.length} list{lists.length === 1 ? '' : 's'}
+            <Button size="sm" disabled={!inkLines.length} onClick={copyForOverlay}>{copied ? 'Copied' : 'Copy for Stream Overlay'}</Button>
+            <span className="text-xs">One line per ink pair with its deck count, the Stream Overlay Metagame card's input.</span>
+          </span>
           <label className="flex items-center gap-2">
             <span>Or the carde.io decklists PDF (replaces the text):</span>
             <input type="file" accept="application/pdf" onChange={importPdf} className="text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-900 file:bg-transparent file:px-3 file:py-1.5 file:font-display file:uppercase file:tracking-wider file:text-xs file:text-gray-900" />
@@ -104,10 +109,6 @@ export function FieldBreakdownPage() {
       {result && (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card title="The field" description={`${total} deck${total === 1 ? '' : 's'}`} className="p-4">
-            <div className="mb-3 flex items-center gap-3">
-              <Button size="sm" onClick={copyForOverlay}>{copied ? 'Copied' : 'Copy for Stream Overlay'}</Button>
-              <span className="text-xs text-gray-500">One archetype per line with its deck count, ready for the Stream Overlay's Metagame card.</span>
-            </div>
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wide text-gray-500">
                 <tr><th className="py-1">Archetype</th><th className="py-1">Inks</th><th className="py-1 text-right">Decks</th><th className="py-1 text-right">Share</th></tr>

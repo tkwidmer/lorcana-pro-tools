@@ -1,19 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCards } from '../hooks/useCards'
 import { buildCardIndex } from '../lib/cardAnalysis'
 import { parseDeckList } from '../lib/parseDeckList'
 import { matchDeckList } from '../lib/decklistShared'
 import { VALID_INKS } from '../lib/inkColors'
-import { fetchEventDetails, getTournamentStructure, extractEventId, fetchAllStandings, fetchAllRoundMatches } from '../lib/tournamentApi'
+import { fetchEventDetails, getTournamentStructure, extractEventId, fetchAllStandings, fetchAllRoundMatches, fetchRoundMatches } from '../lib/tournamentApi'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import {
-  listMyTables, createTable, updateTable, updateLinkedClock, deleteTable, adjustTable, subscribeToTable, uploadLogo, resetLore,
+  listMyTables, createTable, updateTable, updateWhileLinked, deleteTable, adjustTable, subscribeToTable, uploadLogo, resetLore,
   readSelectedTableId, storeSelectedTableId,
 } from '../lib/streamTables'
 import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks, clearTablePatch,
-  activeRoundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot,
+  activeRoundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot,
 } from '../lib/streamOverlay'
 import { InkIcon } from '../components/InkIcons'
 import { StreamPairingPicker } from '../components/StreamPairingPicker'
@@ -87,22 +87,32 @@ export function StreamOverlayPage() {
     return () => clearInterval(id)
   }, [])
 
-  // A linked event is polled for its clock and its structure (the round,
+  // A linked event is polled for its clock, its structure (the round,
   // field size and current round id the pairing picker and the standings
-  // and bracket sends work from).
+  // and bracket sends work from) and the active round's results, which go
+  // on the row for the caster notes whenever they change.
   const rphEventId = row?.rph_event_id ?? null
+  const lastResults = useRef(null)
   useEffect(() => {
     if (!rowId || !rphEventId) return
     let cancelled = false
     const poll = () => fetchEventDetails(rphEventId)
-      .then(details => {
+      .then(async details => {
         if (cancelled) return
         const structure = getTournamentStructure(details)
         setRphStructure(structure)
-        const patch = rphClockPatch(structure)
-        if (patch) {
+        const patch = rphClockPatch(structure) ?? {}
+        // A failed matches fetch leaves the results as they were; the clock still lands.
+        const matches = structure.activeRoundId ? await fetchRoundMatches(rphEventId, structure.activeRoundId).catch(() => null) : null
+        if (cancelled) return
+        if (matches) {
+          const results = buildResultsSnapshot(matches, structure)
+          const key = JSON.stringify(results)
+          if (key !== lastResults.current) { lastResults.current = key; patch.results = results }
+        }
+        if (Object.keys(patch).length > 0) {
           setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
-          updateLinkedClock(rowId, rphEventId, patch).catch(e => setError(e.message))
+          updateWhileLinked(rowId, rphEventId, patch).catch(e => setError(e.message))
         }
         setRphError(false)
       })
@@ -114,7 +124,7 @@ export function StreamOverlayPage() {
     // round's clock, until the operator switched back to this tab.
     const ticker = new Worker(URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${RPH_POLL_MS})`], { type: 'text/javascript' })))
     ticker.onmessage = poll
-    return () => { cancelled = true; ticker.terminate(); setRphStructure(null) }
+    return () => { cancelled = true; ticker.terminate(); setRphStructure(null); lastResults.current = null }
   }, [rowId, rphEventId])
 
   // Operator hotkeys (HOTKEYS in streamOverlay.js): scores go through the
@@ -300,7 +310,7 @@ export function StreamOverlayPage() {
                     : rphError ? `Event ${rphEventId}: last sync failed, retrying` : `Event ${rphEventId}…`}
                 </span>
                 <span className={`text-xs font-semibold uppercase tracking-widest ${rphError ? 'text-red-600' : 'text-emerald-600'}`}>Linked</span>
-                <Button size="sm" className="ml-auto" onClick={() => setField('rph_event_id', null)}>Unlink</Button>
+                <Button size="sm" className="ml-auto" onClick={() => write(row.id, { rph_event_id: null, results: null })}>Unlink</Button>
               </div>
             ) : (
               <form className="flex items-center gap-3" onSubmit={e => { e.preventDefault(); linkEvent() }}>

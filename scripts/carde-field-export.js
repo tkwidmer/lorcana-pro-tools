@@ -14,14 +14,11 @@
 // Nothing here is stored or sent anywhere: the registration payload carries
 // player emails, and only card names and inks are kept.
 //
-// If the registrations request 404s, the path differs from the one seen in
-// the Network tab when this was written; set REGISTRATIONS to the URL the
-// admin page itself calls (minus the page params).
 (async () => {
   const API = 'https://api.admin.carde.io/api/v2'
   const eventId = location.pathname.match(/events\/(\d+)/)?.[1] ?? new URLSearchParams(location.search).get('event')
   if (!eventId) throw new Error('No event id in this URL. Open the event page in the carde.io admin first.')
-  const REGISTRATIONS = `${API}/events/${eventId}/registrations/`
+  const REGISTRATIONS = `${API}/organize/events/${eventId}/registrations-slim/`
 
   // The page's own session: cookies ride along, and a JWT in web storage is
   // sent as a Bearer token when there is one.

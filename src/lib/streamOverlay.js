@@ -438,10 +438,14 @@ export function metaInks(name) {
   return [...new Set(inks)]
 }
 
-// The chart: each archetype's share of the field, largest first, with its
-// inks. Counts share by their sum; percentages by 100, any remainder being
-// Other. In a room over META_OTHER_MIN_PLAYERS players (the typed field size,
-// else the sum of the counts) archetypes under META_OTHER_MAX_SHARE fold
+const cap = w => w[0].toUpperCase() + w.slice(1)
+
+// The chart: each ink pair's share of the field, largest first. Lines are
+// grouped by the inks their name starts with (so Field Breakdown's archetype
+// lines merge into their pairs); a line with no ink in front counts as
+// Other. Counts share by their sum; percentages by 100, any remainder being
+// Other. In a room over META_OTHER_MIN_PLAYERS players (the typed field
+// size, else the sum of the counts) pairs under META_OTHER_MAX_SHARE fold
 // into Other, which always sits last.
 export function metaSlices(text, players) {
   const { entries, percent } = parseMeta(text)
@@ -450,18 +454,25 @@ export function metaSlices(text, players) {
   const total = percent ? Math.max(100, sum) : sum
   const fieldSize = players ?? (percent ? null : sum)
   const fold = (fieldSize ?? 0) > META_OTHER_MIN_PLAYERS
-  const named = []
-  let other = percent && sum < 100 ? { count: null, share: (100 - sum) / 100 } : { count: 0, share: 0 }
+  const byPair = new Map()
+  let otherValue = 0
   for (const e of entries) {
-    const share = e.value / total
-    if (e.name.toLowerCase() === OTHER.toLowerCase() || (fold && share < META_OTHER_MAX_SHARE)) {
-      other = { count: other.count === null || percent ? null : other.count + e.value, share: other.share + share }
-    } else {
-      named.push({ name: e.name, count: percent ? null : e.value, share, inks: metaInks(e.name) })
-    }
+    const inks = metaInks(e.name)
+    if (inks.length === 0) { otherValue += e.value; continue }
+    const key = [...inks].sort().join('/')
+    const pair = byPair.get(key) ?? { name: inks.map(cap).join(' / '), inks, value: 0 }
+    pair.value += e.value
+    byPair.set(key, pair)
+  }
+  const named = []
+  for (const pair of byPair.values()) {
+    const share = pair.value / total
+    if (fold && share < META_OTHER_MAX_SHARE) otherValue += pair.value
+    else named.push({ name: pair.name, count: percent ? null : pair.value, share, inks: pair.inks })
   }
   named.sort((a, b) => b.share - a.share)
-  if (other.share > 0) named.push({ name: OTHER, ...other, inks: [] })
+  const otherShare = otherValue / total + (percent && sum < 100 ? (100 - sum) / 100 : 0)
+  if (otherShare > 0) named.push({ name: OTHER, count: percent ? null : otherValue, share: otherShare, inks: [] })
   return { players: fieldSize, slices: named }
 }
 

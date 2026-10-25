@@ -175,17 +175,19 @@ describe('streamOverlay row mapping', () => {
     expect(metaInks('Pawpsicle')).toEqual([])
   })
 
-  it('builds pie slices, folding small archetypes into Other only in a big room', () => {
-    const small = metaSlices('Amber/Sapphire Detectives 3\nEmerald/Steel Midrange 7\nRuby/Amethyst Tempo 1', null)
-    expect(small.players).toBe(11)
-    expect(small.slices.map(s => [s.name, s.count, Math.round(s.share * 100)])).toEqual([['Emerald/Steel Midrange', 7, 64], ['Amber/Sapphire Detectives', 3, 27], ['Ruby/Amethyst Tempo', 1, 9]])
-    const big = metaSlices('Emerald/Steel Midrange 40\nAmber/Sapphire Detectives 15\nRuby/Amethyst Tempo 2\nOther 3', null)
+  it('groups the lines into ink pairs, folding small pairs into Other only in a big room', () => {
+    const small = metaSlices('Amber/Sapphire Detectives 3\nEmerald/Steel Midrange 4\nEmerald/Steel Touch Paradise 3\nSteel/Emerald Songs 1\nRuby/Amethyst Tempo 1', null)
+    expect(small.players).toBe(12)
+    expect(small.slices.map(s => [s.name, s.count, Math.round(s.share * 100), s.inks])).toEqual([
+      ['Emerald / Steel', 8, 67, ['emerald', 'steel']], ['Amber / Sapphire', 3, 25, ['amber', 'sapphire']], ['Ruby / Amethyst', 1, 8, ['ruby', 'amethyst']],
+    ])
+    const big = metaSlices('Emerald/Steel Midrange 40\nAmber/Sapphire Detectives 15\nRuby/Amethyst Tempo 2\nPawpsicle 3', null)
     expect(big.players).toBe(60)
-    expect(big.slices.map(s => [s.name, s.count])).toEqual([['Emerald/Steel Midrange', 40], ['Amber/Sapphire Detectives', 15], ['Other', 5]])
+    expect(big.slices.map(s => [s.name, s.count])).toEqual([['Emerald / Steel', 40], ['Amber / Sapphire', 15], ['Other', 5]])
     expect(big.slices[2].inks).toEqual([])
     const pct = metaSlices('Emerald/Steel Midrange 40%\nAmber/Sapphire Detectives 35%', 120)
     expect(pct.players).toBe(120)
-    expect(pct.slices.map(s => [s.name, s.count, s.share])).toEqual([['Emerald/Steel Midrange', null, 0.4], ['Amber/Sapphire Detectives', null, 0.35], ['Other', null, 0.25]])
+    expect(pct.slices.map(s => [s.name, s.count, s.share])).toEqual([['Emerald / Steel', null, 0.4], ['Amber / Sapphire', null, 0.35], ['Other', null, 0.25]])
     expect(metaSlices('', null)).toBeNull()
   })
 

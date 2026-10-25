@@ -350,7 +350,7 @@ function BreakScreen({ state, now }) {
 }
 
 // The tournament's metagame (metaSlices over the panel's text): one bar per
-// archetype, largest first, in its ink pair's two colors (inkFill, as the
+// ink pair, largest first, in its two colors (inkFill, as the
 // Inspector paints a deck), the share and the deck count beside it. Framed
 // over the gameplay cam (same box as the player card) or bare on the break
 // screen. Type and row height step down as the list grows.
@@ -367,7 +367,7 @@ function MetaPanel({ state, note, framed }) {
       {meta.slices.map(sl => (
         <div key={sl.name} className="flex items-center gap-5" style={{ height: rowH }}>
           <span className="flex gap-1 w-[72px] shrink-0">{sl.inks.map(ink => <InkIcon key={ink} color={ink} size={n > 10 ? 26 : 32} />)}</span>
-          <span className={`${size} uppercase tracking-wide leading-none truncate w-[440px] shrink-0`}>{sl.name}</span>
+          <span className={`${size} uppercase tracking-wide leading-none truncate w-[340px] shrink-0`}>{sl.name}</span>
           <div className="flex-1 bg-(--on-fill)/10 overflow-hidden" style={{ height: barH }}>
             <div className="h-full" style={{ width: `${(sl.share / max) * 100}%`, ...inkFill(sl.inks) }} />
           </div>

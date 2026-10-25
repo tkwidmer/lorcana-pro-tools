@@ -41,3 +41,15 @@ export function classifyField(lists, cards, cardIndex, stats) {
   const field = [...byName.values()].sort((a, b) => b.count - a.count || a.archetype.localeCompare(b.archetype))
   return { decks, field }
 }
+
+// Each list's two most-played inks → "Amber/Steel 5" lines, the Stream
+// Overlay Metagame card's input (the lines the carde.io bookmarklet copies).
+export function inkPairLines(lists, cardIndex) {
+  const counts = new Map()
+  for (const text of lists) {
+    const inks = deckInks(matchDeckList(text, cardIndex)).slice(0, 2).map(w => w[0].toUpperCase() + w.slice(1)).sort()
+    const pair = inks.join('/') || 'Unknown'
+    counts.set(pair, (counts.get(pair) ?? 0) + 1)
+  }
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([pair, n]) => `${pair} ${n}`)
+}

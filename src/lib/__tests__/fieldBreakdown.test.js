@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitDeckLists, classifyField } from '../fieldBreakdown'
+import { splitDeckLists, classifyField, inkPairLines } from '../fieldBreakdown'
 import { buildCardIndex } from '../cardAnalysis'
 
 const cards = [
@@ -26,5 +26,9 @@ describe('fieldBreakdown', () => {
     expect(decks[1].unmatched).toEqual(['Unknown Card'])
     expect(decks[2].archetype).toBeNull()
     expect(field).toEqual([{ archetype: 'Amethyst/Ruby Tempo', colors: ['amethyst', 'ruby'], count: 2 }, { archetype: 'Unassigned', colors: ['sapphire'], count: 1 }])
+  })
+  it('counts the field by ink pair as Metagame card lines', () => {
+    const lists = ['4 Elsa - Snow Queen\n4 Mulan - Elite Archer', '4 Mulan - Elite Archer\n2 Elsa - Snow Queen', '4 Hamm - Piggy Bank', '4 Nobody']
+    expect(inkPairLines(lists, buildCardIndex(cards))).toEqual(['Amethyst/Ruby 2', 'Sapphire 1', 'Unknown 1'])
   })
 })

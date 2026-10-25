@@ -13,7 +13,8 @@
 //
 // Nothing here is stored or sent anywhere: the registration payload carries
 // player emails, and only card names and inks are kept. Your API token is
-// read from the page for these requests only.
+// taken from the page (its storage, or the next request the admin app makes)
+// for these requests only.
 //
 (async () => {
   const API = 'https://api.admin.carde.io/api/v2'
@@ -22,10 +23,10 @@
   const REGISTRATIONS = `${API}/organize/events/${eventId}/registrations-slim/`
 
   // The admin page authorizes its API calls with `Authorization: Token <40 hex
-  // chars>`. The token is looked for in web storage (bare, or inside a stored
-  // JSON object); failing that, you're asked for it: Network tab, any
-  // api.admin.carde.io request, the authorization header, the part after
-  // "Token ". It is used for these requests only and never stored.
+  // chars>`. If the token sits in web storage it is read from there; otherwise
+  // the page's own fetch and XHR are watched until the admin app makes a
+  // request, and the header it sends is reused. Click anything in the admin
+  // (switch a tab) to trigger one. The token is used for these requests only.
   const TOKEN = /^[0-9a-f]{40}$/
   const findToken = value => {
     if (typeof value === 'string') {
@@ -35,9 +36,25 @@
     if (value && typeof value === 'object') for (const v of Object.values(value)) { const t = findToken(v); if (t) return t }
     return null
   }
+  const fromHeader = value => { const m = /^Token\s+([0-9a-f]{40})$/i.exec(value ?? ''); return m ? m[1] : null }
+  const captureToken = () => new Promise(resolve => {
+    const origFetch = window.fetch
+    const origSet = XMLHttpRequest.prototype.setRequestHeader
+    const done = t => { window.fetch = origFetch; XMLHttpRequest.prototype.setRequestHeader = origSet; resolve(t) }
+    window.fetch = function (input, init) {
+      const h = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+      const t = fromHeader(h.get('authorization'))
+      if (t) done(t)
+      return origFetch.apply(this, arguments)
+    }
+    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+      if (name.toLowerCase() === 'authorization') { const t = fromHeader(value); if (t) done(t) }
+      return origSet.apply(this, arguments)
+    }
+    console.log('Waiting for the admin page to make a request: click anything in it (switch a tab, open a player).')
+  })
   const stored = [localStorage, sessionStorage].flatMap(s => Object.keys(s).map(k => s.getItem(k)))
-  const token = stored.map(findToken).find(Boolean) ?? prompt('carde.io API token (Network tab → any api.admin.carde.io request → authorization header, after "Token ")')?.trim()
-  if (!TOKEN.test(token ?? '')) throw new Error('No carde.io token; the requests would be refused.')
+  const token = stored.map(findToken).find(Boolean) ?? await captureToken()
   const get = async url => {
     const r = await fetch(url, { headers: { Authorization: `Token ${token}` } })
     if (!r.ok) throw new Error(`${r.status} from ${url}`)

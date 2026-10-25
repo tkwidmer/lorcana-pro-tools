@@ -5,6 +5,7 @@ import { buildCardIndex } from '../lib/cardAnalysis'
 import { splitDeckLists, classifyField } from '../lib/fieldBreakdown'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
 import { Select, Textarea } from '../components/ui/Field'
 import { InkIcons } from '../components/InkIcons'
 
@@ -46,6 +47,14 @@ export function FieldBreakdownPage() {
     [stats, cards, cardIndex, lists],
   )
   const total = result?.decks.length ?? 0
+  const [copied, setCopied] = useState(false)
+  async function copyForOverlay() {
+    try {
+      await navigator.clipboard.writeText(result.field.map(r => `${r.archetype} ${r.count}`).join('\n'))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* clipboard unavailable */ }
+  }
 
   return (
     <div className="w-full px-6 py-8">
@@ -80,6 +89,10 @@ export function FieldBreakdownPage() {
       {result && (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card title="The field" description={`${total} deck${total === 1 ? '' : 's'}`} className="p-4">
+            <div className="mb-3 flex items-center gap-3">
+              <Button size="sm" onClick={copyForOverlay}>{copied ? 'Copied' : 'Copy for Stream Overlay'}</Button>
+              <span className="text-xs text-gray-500">One archetype per line with its deck count, ready for the Stream Overlay's Metagame card.</span>
+            </div>
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wide text-gray-500">
                 <tr><th className="py-1">Archetype</th><th className="py-1">Inks</th><th className="py-1 text-right">Decks</th><th className="py-1 text-right">Share</th></tr>

@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useCards } from '../hooks/useCards'
 import { buildCardIndex } from '../lib/cardAnalysis'
-import { BUCKET_ORDER, BUCKET_LABEL, buildBuckets, matchDeckList } from '../lib/decklistShared'
+import { BUCKET_ORDER, BUCKET_LABEL, buildBuckets, matchDeckList, inkFill } from '../lib/decklistShared'
 import { CardBar } from '../components/DecklistCardBar'
 import { useSearchParams } from 'react-router-dom'
 import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS } from '../lib/streamOverlay'
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
 // Name size classes per slot, big → small, with the character budget each
@@ -74,8 +74,9 @@ export function StreamOverlayViewPage() {
         <>
           <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} />
           <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} />
-          {state.deckShown > 0 && !state.cardShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
-          {state.cardShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} />}
+          {state.deckShown > 0 && !state.cardShown && !state.metaShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
+          {state.cardShown && !state.metaShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} />}
+          {state.metaShown && <MetaPanel state={state} framed />}
           <TopBanner state={state} now={now} winner={winner} />
         </>
       )}
@@ -315,6 +316,8 @@ function BreakScreen({ state, now }) {
         <StandingsPanel standings={state.standings} note={state.note} />
       ) : state.breakPanel === 'bracket' && state.bracket ? (
         <BracketPanel bracket={state.bracket} note={state.note} />
+      ) : state.breakPanel === 'meta' && metaSlices(state.metaText, state.metaPlayers) ? (
+        <MetaPanel state={state} note={state.note} />
       ) : (
         <>
           <div className="text-center">
@@ -343,6 +346,57 @@ function BreakScreen({ state, now }) {
         <span className="text-xl uppercase tracking-[0.12em]">InkbornForge</span>
       </div>
     </div>
+  )
+}
+
+// The tournament's metagame (metaSlices over the panel's text): one bar per
+// ink pair, largest first, in its two colors (inkFill, as the
+// Inspector paints a deck), the share and the deck count beside it. Framed
+// over the gameplay cam (same box as the player card) or bare on the break
+// screen. Type and row height step down as the list grows.
+function MetaPanel({ state, note, framed }) {
+  const meta = metaSlices(state.metaText, state.metaPlayers)
+  if (!meta) return null
+  const n = meta.slices.length
+  const size = n > 10 ? 'text-xl' : n > 6 ? 'text-2xl' : 'text-3xl'
+  const rowH = n > 10 ? 40 : n > 6 ? 52 : 64
+  const barH = n > 10 ? 20 : 28
+  const max = Math.max(...meta.slices.map(sl => sl.share))
+  const body = (
+    <div className="flex flex-col justify-center w-full h-full px-14">
+      {meta.slices.map(sl => (
+        <div key={sl.name} className="flex items-center gap-5" style={{ height: rowH }}>
+          <span className="flex gap-1 w-[72px] shrink-0">{sl.inks.map(ink => <InkIcon key={ink} color={ink} size={n > 10 ? 26 : 32} />)}</span>
+          <span className={`${size} uppercase tracking-wide leading-none truncate w-[340px] shrink-0`}>{sl.name}</span>
+          <div className="flex-1 bg-(--on-fill)/10 overflow-hidden" style={{ height: barH }}>
+            <div className="h-full" style={{ width: `${(sl.share / max) * 100}%`, ...inkFill(sl.inks) }} />
+          </div>
+          <span className={`${size} tabular-nums text-(--accent) w-[90px] text-right`}>{Math.round(sl.share * 100)}%</span>
+          <span className="text-xl tabular-nums text-(--on-fill)/60 w-[56px] text-right">{sl.count ?? ''}</span>
+        </div>
+      ))}
+    </div>
+  )
+  if (framed) {
+    return (
+      <div className="absolute flex flex-col bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden" style={{ left: SIDE_WIDTH + 40, right: SIDE_WIDTH + 40, top: 170, bottom: 40 }}>
+        <div className="pt-6 text-center">
+          <span className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">Metagame</span>
+          {meta.players && <span className="ml-6 text-2xl uppercase tracking-wide text-(--accent)">{meta.players} players</span>}
+        </div>
+        <div className="flex-1 min-h-0">{body}</div>
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="text-center">
+        <div className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">Metagame</div>
+        {meta.players && <div className="mt-1 text-3xl uppercase tracking-wide text-(--accent)">{meta.players} players</div>}
+        {note && <div className="mt-2 text-2xl uppercase tracking-[0.3em] text-(--on-fill)/70">{note}</div>}
+      </div>
+      <div style={{ width: 1500, height: n * rowH }}>{body}</div>
+    </>
   )
 }
 

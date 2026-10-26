@@ -1,6 +1,6 @@
 ---
 name: vercel-preview-url
-description: Load this whenever you create or update a pull request in this repo and need its Vercel preview link for the PR description. The URL can't be derived from the branch name — Vercel truncates it and appends a hash — so it must be read from the vercel[bot] comment on the PR. Use it for every "Include Vercel preview link" step in CLAUDE.md.
+description: Get a PR's Vercel preview URL from the vercel[bot] comment for the PR description; it cannot be derived from the branch name. Use on every PR create or update.
 ---
 
 # Vercel Preview URL

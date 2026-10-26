@@ -1,6 +1,6 @@
 ---
 name: add-coconut-card
-description: Add a newly released [Format Coconut] card to this app — its art to the Proxy Generator and the card to the Coconut deck builder. Use whenever the user says "add this coconut card", pastes or attaches new Coconut card art, or points at a new Coconut release (they ship roughly weekly). Covers deriving the card id, verifying the base card and inks against LorcanaJSON, transcribing the printed ability, finding duels.ink's own card id, and the counts in tests and CLAUDE.md that will silently fail if you forget them.
+description: Add a new [Format Coconut] card: art, data, duels.ink id, and the counts in tests and docs that silently fail. Use when the user says "add this coconut card" or shares new Coconut card art.
 ---
 
 # Add a [Format Coconut] card
@@ -11,8 +11,7 @@ with its own full-art face. Adding one is mostly data entry plus an image —
 but there are four hardcoded counts that break if you miss them, and two
 fields you must verify rather than read off the art.
 
-Read CLAUDE.md's "[Format Coconut] Deck Builder", "Coconut Decklist Text" and
-"Coconut Card Faces" sections first if you haven't this session.
+Read `docs/agents/coconut.md` first if you haven't this session.
 
 ## What you need from the user
 
@@ -202,9 +201,9 @@ These are the easy ones to miss:
 |---|---|
 | `src/lib/__tests__/coconutFormat.test.js` | `expect(COCONUT_CARDS.length).toBe(25)` |
 | `src/lib/__tests__/coconutDecklistText.test.js` | the two `toBe(29)` duels.ink id assertions — only if you set a `duelsId` |
-| `CLAUDE.md` | "all 25", "25 beta Coconut cards", "so all 25 are bundled", "Add all 25" |
+| `docs/agents/coconut.md` | "all 25", "25 beta Coconut cards", "so all 25 are bundled", "Add all 25" |
 
-Also refresh CLAUDE.md's "catalog runs to `coconut-029`" line.
+Also refresh that doc's "catalog runs to `coconut-029`" line.
 
 ### 8. Verify
 

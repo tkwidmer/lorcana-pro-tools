@@ -1,6 +1,6 @@
 ---
 name: ravensburger-tournament-api
-description: Load this before touching src/lib/tournamentApi.js, api/tournament.ts, api/_lib/discordTournamentApi.ts, api/_lib/discordTournamentEmbeds.ts, TournamentLookupPage, PracticePlanPage, or the Discord /tournament and /favorite commands. There is no published documentation for this API — the two client implementations in this repo are the only reference, and the upstream has an undocumented quirk (match data requires a second, separate host) worth knowing before assuming a straightforward REST API.
+description: The undocumented Ravensburger Play Hub API, from this repo's two clients. Read before editing tournamentApi.js, api/tournament.ts, api/_lib/discordTournamentApi.ts, Tournament Lookup, Practice Plan or the Discord /tournament commands; match data needs a second host.
 ---
 
 # Ravensburger Play Hub Tournament API

@@ -1,9 +1,6 @@
----
-name: stream-overlay
-description: Read this before touching any /stream-overlay route (StreamOverlayPage, StreamOverlayViewPage, StreamOverlayControlPage, StreamOverlayNotesPage, StreamPairingPicker), src/lib/streamOverlay.js, src/lib/streamTables.js, or a stream_tables migration. A "table" is a Supabase row shared by four surfaces with three access roles, and most of the bugs that shipped came from writing the row from the wrong place: this holds the row contract, which surface may write which column, the linked-RPH poll, the over-the-cam slot rules, how to apply a migration live, and the per-surface verification recipe.
----
-
 # Stream Overlay
+
+Read before touching any `/stream-overlay` route, `StreamPairingPicker.jsx`, `src/lib/streamOverlay.js`, `src/lib/streamTables.js`, or a `stream_tables` migration. Also covers the Decklist Inspector's OBS overlay, the other content-creator surface.
 
 A tournament gameplay overlay for OBS. One `stream_tables` row is a **table** (a feature match being streamed); four surfaces read it and three roles write it. Pure logic is in `src/lib/streamOverlay.js` (unit-tested in `src/lib/__tests__/streamOverlay.test.js`); Supabase access is in `src/lib/streamTables.js`.
 
@@ -68,7 +65,7 @@ Write the file under `supabase/migrations/NNN_stream_tables_<thing>.sql`, then a
 
 ## Verifying a change
 
-Every surface renders from a mocked row with no Supabase: see the `ui-screenshots` skill for the Playwright setup (the panel needs the fake session and a `stream_tables` intercept; view, controller and notes need only a `get_stream_table` RPC intercept). Screenshots live in `docs/screenshots/stream-overlay-*.png` and go in the PR body.
+Every surface renders from a mocked row with no Supabase: see `docs/agents/ui-screenshots.md` for the Playwright setup (the panel needs the fake session and a `stream_tables` intercept; view, controller and notes need only a `get_stream_table` RPC intercept). Screenshots live in `docs/screenshots/stream-overlay-*.png` and go in the PR body.
 
 ## Design history, so it is not retried
 
@@ -76,3 +73,7 @@ Every surface renders from a mocked row with no Supabase: see the `ui-screenshot
 - "Send to Stream Overlay" buttons once lived on Tournament Lookup; they hid the flow on a player tool, so the linked event moved into the panel.
 - The metagame chart was a pie, then per-archetype bars, before one bar per ink pair.
 - Deliberately not built, cheap to add: featured-card art over the cam, any layout other than 1920×1080.
+
+## Decklist Inspector and its overlay
+
+`/decklist-inspector` (`DecklistInspectorPage.jsx`, supporter-gated) is the content-creator decklist view: browse by type/cost, pin up to 4 cards' full art beside stat charts, copy an OBS overlay link. `/decklist-inspector/overlay` (`DecklistOverlayPage.jsx`) is the chrome-less, read-only render for an OBS Browser Source; the deck comes entirely from the `?deck=` param (`decklistShared.js` `encodeDeckParam`/`decodeDeckParam`). It is **deliberately not supporter-gated**: a Browser Source has no Supabase session, and the view exposes only what is in the link. `Nav`/`Footer` are hidden there, as on every `/stream-overlay/*` sub-route and `/lore-tracker`. `DecklistCardBar.jsx` (the card row with the inkwell cost emblem) and `matchDeckList()`/`deckInks()` are shared with the Stream Overlay's decklist panel.

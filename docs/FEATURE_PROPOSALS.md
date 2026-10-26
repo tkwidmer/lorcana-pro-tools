@@ -12,6 +12,8 @@ InkbornForge already covers a lot of ground (see [TOOLS.md](TOOLS.md)):
 - **Live events**: Tournament Lookup
 - **Scouting**: Game Scraper, Scouting Library
 
+Shipped since this was written: proposal 4 (Session & Tilt Insights, now the Sessions & Tilt card in Match History), Deck Doctor (`/deck-doctor`, a different cut at proposal 3's question: your list against the field's build rather than version A against version B), Field Breakdown, the public Tournament Results pages, Stock Deck Lists, The Forge Decklists and the Stream Overlay. Proposals 1, 2, 3 and 5 are still open.
+
 What's missing is the **deliberate practice loop** that stronger players rely on:
 
 1. **Reflect** on specific decisions, not just results.

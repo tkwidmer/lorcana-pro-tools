@@ -1,9 +1,6 @@
----
-name: ui-screenshots
-description: Use this whenever a change touches a page's UI and needs a screenshot for the PR body, or a change has to be seen working in a real browser (a file upload, a clipboard copy, an OBS view). Runs the Vite dev server and Playwright with the mocks that let supporter-gated pages and the Stream Overlay surfaces render without a Supabase session, and names the three traps that cost a round trip each (the Vercel preview gate, pkill killing the shell, the build rewriting the extension zip).
----
-
 # UI screenshots with Playwright
+
+Read whenever a change touches a page's UI and needs a screenshot for the PR body, or has to be seen working in a real browser (a file upload, a clipboard copy, an OBS view).
 
 Chromium and Playwright are pre-installed in the cloud session. Screenshots are taken against the local dev server, never the Vercel preview (it sits behind a deployment-protection gate that blocks headless access).
 

@@ -1,6 +1,6 @@
 ---
 name: vercel-proxy-pattern
-description: Load this before adding or modifying a Vercel serverless route in /api/*.ts. Covers the 12-function budget (a new endpoint joins an existing ?endpoint= dispatcher such as api/duels.ts rather than adding a file), the flat-file rule (a nested route silently fails to deploy), and the proxy shape the routes share (auth forwarding, text-first body reads, the { error, status, detail } error contract, Cache-Control choices).
+description: Read before adding or changing an api/*.ts route: the 12-function budget (join an ?endpoint= dispatcher, never a new file by default), the flat-file rule, and the shared proxy shape and error contract.
 ---
 
 # Vercel Proxy Route Pattern
@@ -90,8 +90,8 @@ rows, never a client-supplied id. Admin-only endpoints go through
    (`res.status === 401` → "Invalid or expired API token", etc.).
 5. Set `Cache-Control` deliberately: no caching for per-user data, a real
    max-age for public slow-changing data.
-6. Update CLAUDE.md's API Routes table (the endpoint list and, for a new
-   file, the function count). If the target endpoint isn't covered by the
+6. Update the routes table in `docs/agents/api-routes.md` and, for a new
+   file, the function count in CLAUDE.md. If the target endpoint isn't covered by the
    relevant docs skill (`duels-api-docs`, `lorcanajson-docs`,
    `discord-interactions-docs`, `ravensburger-tournament-api`), note that it
    is unofficial, as `duels.ts`'s `deck?personalStats=1` and `stats`

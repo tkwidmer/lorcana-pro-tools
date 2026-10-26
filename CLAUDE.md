@@ -97,7 +97,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 | Meta stats | `metaSynthesis.js`, `metaDrift.js`, `rankTiers.js`, `archetypeStats.js`, `deckDoctor.js`, `stockDecks.js`, `forgeDecks.js`, `practiceSim.js`, `drawOddsMath.js`, `monteCarloSim.js` |
 | Tournaments | `tournamentApi.js`, `tournamentLive.js`, `tournamentHistoryApi.js`, `resultsArchive.js`, `bracket.js`, `storeTiers.js`, `trackedStores.js`, `fieldBreakdown.js`, `cardePdf.js` |
 | Stream Overlay | `streamOverlay.js` (pure, tested), `streamTables.js` (Supabase) |
-| Content | `siteSections.js` (the catalog; new tools need an `icon` in `toolIcons.js`, a test enforces it), `blog.js`, `blogPost.js`, `blogMeta.js`, `frontmatter.js`, `rules/` |
+| Content | `siteSections.js` (the catalog; new tools need an `icon` in `toolIcons.js`, a test enforces it), `blog.js`, `blogPost.js`, `blogMeta.js`, `frontmatter.js`, `metaDigest.js` (the weekly meta digest post), `rules/` |
 | Coconut | `coconutCards.js`, `coconutFormat.js`, `coconutDecklistText.js` |
 | Share images (canvas) | `tournamentShareImage.js`, `metaSynthesisShareImage.js`, `coconutShareImage.js` |
 
@@ -116,6 +116,8 @@ Paper surfaces, an ink-black nav bar, condensed caps display type, one forge-gol
 ### API routes
 
 Vercel functions in `api/*.ts`, flat files only (a nested route once deployed green and silently served the SPA shell). **Vercel Hobby caps a deployment at 12 functions; the count is 9.** A new endpoint joins an existing `?endpoint=` dispatcher (`duels.ts`, `tournament-history.ts`, `metafy.ts`) or `tournament.ts`'s `?type=` switch rather than adding a file; the `vercel-proxy-pattern` skill has the shape. Routes: `duels` (every duels.ink call), `tournament` (Ravensburger), `tournament-history` (the archive, Supabase), `duels-tokens` (encrypted token store), `card-image` (allow-listed image proxy), `metafy`, `discord-interactions`, `discord-tournament-tick`, `subscribe-substack`. `/api/cards` is a rewrite to LorcanaJSON, not a function. Details, secrets and the integrations: `docs/agents/api-routes.md`.
+
+Scheduled GitHub Actions: `tournament-tracker-tick.yml` and `metafy-reconcile-tick.yml` call their ticks every 30 minutes; `meta-digest.yml` runs `scripts/meta-digest.mjs` every Monday and commits a draft meta digest post to `main` (`docs/agents/content.md`).
 
 ### Storage
 

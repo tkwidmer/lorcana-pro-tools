@@ -12,5 +12,5 @@ jobs:
       - name: Trigger Metafy reconciliation tick
         run: |
           curl --fail-with-body -sS -X POST \
-            "https://lorcana-pro-tools.vercel.app/api/metafy?endpoint=reconcile-tick" \
+            "https://www.inkbornforge.com/api/metafy?endpoint=reconcile-tick" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

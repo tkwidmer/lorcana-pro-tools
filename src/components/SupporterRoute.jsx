@@ -3,6 +3,7 @@ import { useSupporter } from '../hooks/useSupporter'
 import { METAFY_JOIN_URL, METAFY_PRICE } from '../lib/access'
 import { findTool } from '../lib/siteSections'
 import { Badge } from './ui/Badge'
+import { MetafyAccessSteps } from './MetafyAccessSteps'
 import { Button } from './ui/Button'
 
 // What a locked tool looks like to a visitor or a non-supporter: the tool's
@@ -47,9 +48,10 @@ function Gate({ signedIn, pathname }) {
             Unlock {tool?.name ?? 'this tool'}
           </h2>
           <p className="text-sm text-gray-500 leading-relaxed">
-            Join The Forge tier on Metafy and every supporter tool opens up — deck insights,
-            match history and analytics, coaching tools, tournament tools and the stream overlay.
+            Every supporter tool opens up — deck insights, match history and analytics, coaching
+            tools, tournament tools and the stream overlay. How to get in:
           </p>
+          <MetafyAccessSteps signedIn={signedIn} />
           <p className="text-gray-900">
             <span className="font-display text-4xl font-medium">{METAFY_PRICE}</span>
             <span className="text-sm text-gray-500"> / month</span>
@@ -59,11 +61,11 @@ function Gate({ signedIn, pathname }) {
           </Button>
           {signedIn ? (
             <Link to="/settings" className="text-sm text-gray-500 hover:text-gray-900 hover:underline">
-              Already a member? Link your Metafy account in Settings →
+              Already subscribed? Connect your Metafy account in Settings →
             </Link>
           ) : (
             <Link to="/login" className="text-sm text-gray-500 hover:text-gray-900 hover:underline">
-              Already a supporter? Sign in →
+              Already subscribed and connected? Sign in →
             </Link>
           )}
         </div>

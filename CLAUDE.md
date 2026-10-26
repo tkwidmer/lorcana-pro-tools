@@ -153,7 +153,7 @@ In `src/components/`:
 | `ui/Button.jsx`, `ui/Card.jsx`, `ui/PageHeader.jsx`, `ui/Field.jsx` (`Input`/`Textarea`/`Select`), `ui/Tabs.jsx` (`Tabs`/`Tab`), `ui/Badge.jsx` | Shared UI building blocks — see "Design System" below |
 | `Footer.jsx` | Site-wide footer, hidden on the same routes as `Nav` |
 | `ErrorBoundary.jsx` | Class-based error boundary with a "Something broke" fallback (Try again / Reload / Back to tools; dev-only stack trace). Resets when its `resetKey` prop changes. Wraps the routes in `App.jsx` |
-| `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise a "Supporters only" gate (sign-in CTA when logged out). Reads `useSupporter` |
+| `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise the gate: the tool's catalog name and description, a screenshot of it in use from `public/previews/<tool path>.jpg` (a unit test in `access.test.js` requires one per `SUPPORTER_PATHS` entry; capture new ones against the local dev server, logged in as a supporter, at 1440×900), and a Metafy call to action (`METAFY_JOIN_URL`/`METAFY_PRICE` from `lib/access.js`) with a sign-in link when logged out or a link-your-account link when signed in. `previewPath` names the catalog tool for a gated sub-route (`/scouting/game/:uuid` and `/players/:name` show the Scouting Library's). Reads `useSupporter` |
 | `GameView.jsx` | Unified game display — player panels (lore bar, ink meter, field, hand predictor), action log, export button; reused across `GameScraperPage`, `LibraryPage`, `ScoutedGamePage` |
 | `HandPredictor.jsx` | Bayesian hand inference display — shows top 12 cards with P(≥1 in hand) given observed deck + player profile |
 | `SearchBar.jsx` | Fuzzy card search dropdown with quantity selector (×1–×4); used by proxy generator |
@@ -198,7 +198,7 @@ In `src/lib/`:
 | File | Purpose |
 |---|---|
 | `supabaseClient.js` | Supabase client init; exports `loginWithGoogle`, `logout`, `getSession`, `getCurrentUser` |
-| `access.js` | `SUPPORTER_PATHS` set + `isSupporterPath()` — single source of truth for supporter-gated routes (used by `App.jsx` and `HomePage`) |
+| `access.js` | `SUPPORTER_PATHS` set + `isSupporterPath()` — single source of truth for supporter-gated routes (used by `App.jsx` and `HomePage`); also `METAFY_URL`/`METAFY_JOIN_URL`/`METAFY_PRICE`, the one place the Metafy community link and The Forge tier's price live (`HomePage`, `Footer`, `SupporterRoute`) |
 | `theme.js` | Dark-mode preference storage + resolution — `readStoredTheme()`/`storeTheme()`, `resolveTheme()`, `prefersDark()`, `subscribeToSystemTheme()`, `applyResolvedTheme()`. See "Dark Mode" below |
 | `db.js` | IndexedDB abstraction for the `lorcana_pro_tools` DB — `openDB()`, `getTx()`, `promisify()` |
 | `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |

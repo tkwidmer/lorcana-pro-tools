@@ -87,8 +87,8 @@ function RoutedContent() {
         <Route path="/replay-analyzer" element={<Navigate to="/analytics" replace />} />
         <Route path="/game-scraper" element={<SupporterRoute><GameScraperPage /></SupporterRoute>} />
         <Route path="/library" element={<SupporterRoute><LibraryPage /></SupporterRoute>} />
-        <Route path="/scouting/game/:uuid" element={<SupporterRoute><ScoutedGamePage /></SupporterRoute>} />
-        <Route path="/players/:name" element={<SupporterRoute><PlayerProfilePage /></SupporterRoute>} />
+        <Route path="/scouting/game/:uuid" element={<SupporterRoute previewPath="/library"><ScoutedGamePage /></SupporterRoute>} />
+        <Route path="/players/:name" element={<SupporterRoute previewPath="/library"><PlayerProfilePage /></SupporterRoute>} />
         <Route path="/deck-comparison" element={<DeckComparisonPage />} />
         <Route path="/decklist-inspector" element={<SupporterRoute><DecklistInspectorPage /></SupporterRoute>} />
         {/* Unguarded: an OBS Browser Source has no Supabase session, and this

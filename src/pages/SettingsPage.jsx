@@ -17,6 +17,8 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
+import { MetafyAccessSteps } from '../components/MetafyAccessSteps'
+import { METAFY_JOIN_URL } from '../lib/access'
 
 async function metafyFetch(method) {
   const { data } = await supabase.auth.getSession()
@@ -321,8 +323,11 @@ export function SettingsPage() {
                 Metafy
               </span>
             }
-            description="Connect your Metafy account — an active subscription to our community automatically grants Supporter access."
+            description="Supporter access comes from Metafy, but a subscription alone doesn't unlock anything: your Metafy account has to be connected to this one."
           >
+            <div className="mb-5">
+              <MetafyAccessSteps signedIn onSettings />
+            </div>
 
             {metafyBanner === 'connected' && (
               <p className="text-sm text-green-600 font-medium mb-4">✓ Metafy connected.</p>
@@ -346,7 +351,9 @@ export function SettingsPage() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">Connected</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {metafyStatus.hasAccess ? 'Active subscriber' : 'No active subscription to the right tier'}
+                    {metafyStatus.hasAccess
+                      ? 'Active subscriber — supporter tools are unlocked.'
+                      : <>No active subscription to The Forge tier. <a href={METAFY_JOIN_URL} target="_blank" rel="noopener noreferrer" className="text-gray-900 underline hover:text-forge-ink">Subscribe or upgrade on Metafy</a>; access follows within about half an hour, or reconnect to apply it now.</>}
                   </p>
                 </div>
                 <Button variant="danger" size="sm" className="mt-3" onClick={handleDisconnectMetafy} disabled={metafyBusy}>

@@ -1,4 +1,5 @@
 import { replayViewerUrl } from '../../lib/analyticsAggregation'
+import { loreCurve, decisiveRound } from '../../lib/turningPoints'
 import { GameLeaks } from './LeakReport'
 import { Badge } from '../ui/Badge'
 
@@ -79,34 +80,19 @@ function PlayerSection({ name, data, isWinner, finalLore }) {
   )
 }
 
-function LoreChart({ loreEvents, turnCount, p1Name, p2Name }) {
-  if (!loreEvents?.length) return null
-
-  const maxTurn = Math.max(turnCount, ...loreEvents.map(e => e.turn))
-  const p1Lore = new Array(maxTurn + 1).fill(0)
-  const p2Lore = new Array(maxTurn + 1).fill(0)
-
-  for (const ev of loreEvents) {
-    if (ev.player === 1) p1Lore[ev.turn] = ev.total
-    else p2Lore[ev.turn] = ev.total
-  }
-  for (let t = 1; t <= maxTurn; t++) {
-    if (p1Lore[t] === 0 && p1Lore[t - 1] > 0) p1Lore[t] = p1Lore[t - 1]
-    if (p2Lore[t] === 0 && p2Lore[t - 1] > 0) p2Lore[t] = p2Lore[t - 1]
-  }
-
-  const maxLore = Math.max(20, ...p1Lore, ...p2Lore)
+// Both players' lore after each round, the decisive round marked (turningPoints.js).
+function LoreRaceChart({ gamelog, p1Name, p2Name }) {
+  const curve = loreCurve(gamelog)
+  const decisive = decisiveRound(gamelog)
+  const lastRound = curve[1].length - 1
+  const maxLore = Math.max(20, ...curve[1], ...curve[2])
   const W = 480, H = 120, PAD = { top: 8, right: 8, bottom: 20, left: 28 }
   const chartW = W - PAD.left - PAD.right
   const chartH = H - PAD.top - PAD.bottom
-  const turns = Array.from({ length: maxTurn + 1 }, (_, i) => i)
-
-  const x = (t) => PAD.left + (t / maxTurn) * chartW
+  const x = (r) => PAD.left + (r / lastRound) * chartW
   const y = (v) => PAD.top + chartH - (v / maxLore) * chartH
-
-  const pathFor = (arr) => arr.map((v, t) => `${t === 0 ? 'M' : 'L'}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
-
-  const winY = y(20)
+  const pathFor = (arr) => arr.map((v, r) => `${r === 0 ? 'M' : 'L'}${x(r).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const step = Math.max(1, Math.floor(lastRound / 8))
 
   return (
     <div>
@@ -114,25 +100,35 @@ function LoreChart({ loreEvents, turnCount, p1Name, p2Name }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 140 }}>
         {[0, 5, 10, 15, 20].map(v => (
           <g key={v}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} stroke="#e5e7eb" strokeWidth="0.5" />
-            <text x={PAD.left - 4} y={y(v) + 3.5} textAnchor="end" fontSize="7" fill="#9ca3af">{v}</text>
+            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} className="stroke-gray-200" strokeWidth="0.5" />
+            <text x={PAD.left - 4} y={y(v) + 3.5} textAnchor="end" fontSize="7" className="fill-gray-400">{v}</text>
           </g>
         ))}
-        <line x1={PAD.left} x2={W - PAD.right} y1={winY} y2={winY} stroke="#10b981" strokeWidth="1" strokeDasharray="3,3" opacity="0.6" />
-
-        <path d={pathFor(p2Lore)} fill="none" stroke="#f87171" strokeWidth="2" strokeLinejoin="round" />
-        <path d={pathFor(p1Lore)} fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinejoin="round" />
-
-        {turns.filter(t => t > 0 && t % Math.max(1, Math.floor(maxTurn / 8)) === 0).map(t => (
-          <text key={t} x={x(t)} y={H - 4} textAnchor="middle" fontSize="7" fill="#9ca3af">{t}</text>
+        <line x1={PAD.left} x2={W - PAD.right} y1={y(20)} y2={y(20)} className="stroke-emerald-500" strokeWidth="1" strokeDasharray="3,3" opacity="0.6" />
+        {decisive && (
+          <g>
+            <line x1={x(decisive.round)} x2={x(decisive.round)} y1={PAD.top} y2={PAD.top + chartH} className="stroke-gray-500" strokeWidth="1" strokeDasharray="2,2" />
+            <text x={x(decisive.round) + 3} y={PAD.top + 7} fontSize="7" className="fill-gray-500">decided</text>
+          </g>
+        )}
+        <path d={pathFor(curve[2])} fill="none" className="stroke-forge" strokeWidth="2" strokeLinejoin="round" />
+        <path d={pathFor(curve[1])} fill="none" className="stroke-gray-900" strokeWidth="2" strokeLinejoin="round" />
+        {curve[1].map((_, r) => r > 0 && r % step === 0 && (
+          <text key={r} x={x(r)} y={H - 4} textAnchor="middle" fontSize="7" className="fill-gray-400">{r}</text>
         ))}
-        <text x={PAD.left + chartW / 2} y={H - 4} textAnchor="middle" fontSize="7" fill="#d1d5db">turn</text>
+        <text x={PAD.left + chartW / 2} y={H - 4} textAnchor="middle" fontSize="7" className="fill-gray-300">round</text>
       </svg>
-      <div className="flex items-center gap-4 mt-1">
-        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-blue-400" />{p1Name}</span>
-        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-red-400" />{p2Name}</span>
+      <div className="flex items-center gap-4 mt-1 flex-wrap">
+        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-gray-900" />{p1Name}</span>
+        <span className="flex items-center gap-1 text-xs text-gray-500"><span className="inline-block w-3 h-0.5 bg-forge" />{p2Name}</span>
         <span className="flex items-center gap-1 text-xs text-gray-400 ml-auto"><span className="inline-block w-3 h-0.5 border-t border-dashed border-emerald-500" />win (20)</span>
       </div>
+      <p className="text-xs text-gray-500 mt-2">
+        Final score {curve[1][lastRound]}–{curve[2][lastRound]}.{' '}
+        {decisive
+          ? `Decided on round ${decisive.round}, when the winner went ${decisive.winnerLead} ahead for good.`
+          : 'No decisive round: the game has no winner, or the winner did not finish ahead on lore.'}
+      </p>
     </div>
   )
 }
@@ -524,7 +520,7 @@ export function GamelogDetail({ gamelog, myPlayerNum, myName = '' }) {
       {/* Lore Race */}
       {loreEvents?.length > 0 && (
         <div className="border border-gray-100 rounded-lg p-4 mb-6">
-          <LoreChart loreEvents={loreEvents} turnCount={turnCount} p1Name={p1Name} p2Name={p2Name} />
+          <LoreRaceChart gamelog={gamelog} p1Name={p1Name} p2Name={p2Name} />
         </div>
       )}
 

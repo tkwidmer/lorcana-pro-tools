@@ -160,11 +160,12 @@ Filter by queue, date range, your colors, opponent colors, MMR range, and deck. 
 | Overall | Total games, win rate going 1st vs 2nd, average turns, play time, and Bo3 matches |
 | Trends | Win rate, MMR, and inkwell & turns over time |
 | Matchup Matrix / Opponent Metagame | Your win rate against each opposing color pair, and what you're actually facing |
+| **Turning points** | On which round your wins and losses are decided, how far behind you were, your win rate when 5 or more lore down after round 5, your comebacks, and the cards you played on the deciding round. Needs 10 games in the current filters. |
 | Personal stats | Most-played and most-mulliganed cards, and how multiple copies behave in mulligans |
 | **Card Impact (WAR)** | For each card, your wins above what the deck would have won without it. Includes **Kept % / Sent %**, your win rate when you kept the card versus sent it back. With a duels.ink token, cards cut in later deck versions aren't counted against them. |
 | WAR Trends Over Time | How a card's impact changes month to month |
 | Leak report | Places you gave away information about your hand |
-| Game Detail | One game in depth: opening hand, what you sent back, draw sequence, challenges, and lore. It links to the duels.ink replay. |
+| Game Detail | One game in depth: opening hand, what you sent back, draw sequence, challenges, and a lore race with the deciding round marked. It links to the duels.ink replay. |
 
 **Tip:** Set *Opp Colors* and pick one deck. The Card Impact and Kept/Sent columns then become a matchup-specific card and mulligan guide.
 

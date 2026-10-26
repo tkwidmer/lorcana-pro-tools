@@ -37,6 +37,16 @@ Key parsing details in `parseGamelog.js`:
 - `ON_PLAY_DRAWS` map tracks cards that draw on play (e.g. Junior Woodchuck Guidebook → 2 draws); uses `pendingDrawSource`/`pendingDrawCount` to attribute subsequent `CARD_DRAWN` events to the source card
 - `CARD_PUT_INTO_INKWELL` with `fromZone === 'field'` means the *other* player caused the removal (e.g. Let It Go, Hades) — attribute as effectRemovals on the other player's last played card
 - `lastPlayedByPlayer` tracks the most recently played card per player for effect attribution
+- `plays: [{ turn, player, cardName, cardId }]` lists every `CARD_PLAYED` in event order; `turns[].plays` is only a count
+
+## Turning points
+
+The Analytics section of that name (`components/analytics/TurningPoints.jsx`) and the drilldown's lore race (`LoreRaceChart` in `GamelogDetail.jsx`) run on `turningPoints.js` (pure, tested). A round is duels.ink's shared `turnNumber` (the first player's opening round is solo), and the UI says "round".
+- **Lore curve** (`loreCurve`): each player's total after each round 0..N, carried forward from `loreEvents`, both starting at 0.
+- **Decisive round** (`decisiveRound`): the first round after which the winner's lead is never lost or tied again; a wire-to-wire game's is the round of the winner's first lore. Null for a game without a winner and for one the winner did not finish ahead on lore (a concession or timeout while level or behind), so those count as games but not in the decisive-round stats.
+- **Deficit** (losses): the winner's lead at the decisive round. **Comeback**: a win in which you trailed by `COMEBACK_LORE` (5) or more at any round from round 3 on. **Late-deficit win rate**: your win rate in games where you trailed by 5 or more after round 5.
+- `aggregateTurningPoints(games)` takes games with `myPlayerNum` resolved (Analytics passes its enriched games, so every filter applies) and leaves out games without a winner. "Usually decided on round a to b" is the middle half (quartiles) of the decisive rounds. Rates carry `wilsonInterval()` and `n`; under `MIN_GAMES` (10) the section says "Import more games", and each sentence needs 5 games of its own.
+- The decisive-round cards come from the parser's `plays`. `AnalyticsPage` adds `plays` to a stored record that has `_rawLogs` but no `plays` after the games render (an effect on `games`, written back with `saveGamelog`); a record without `_rawLogs` simply has no card data.
 
 ## Chrome Extension
 

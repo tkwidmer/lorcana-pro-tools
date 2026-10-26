@@ -41,6 +41,7 @@ export function parseGamelog(id, logs, meta = {}) {
   const loreByPlayer = { 1: 0, 2: 0 }
   const loreEvents = []
   const challenges = []
+  const plays = []
 
   const ensureCard = (p, name, cardId) => {
     const pData = players[p]
@@ -116,6 +117,10 @@ export function parseGamelog(id, logs, meta = {}) {
       else if (type === 'CARD_PUT_INTO_INKWELL' && (d.fromZone === 'hand')) curSeg.inked++
       else if (type === 'CARD_PLAYED') curSeg.plays++
       else if (type === 'CARD_QUEST') curSeg.lore += (d.loreGained ?? 0)
+    }
+
+    if (type === 'CARD_PLAYED' && d.cardName) {
+      plays.push({ turn: entry.turnNumber ?? 0, player: p, cardName: d.cardName, cardId: d.cardId })
     }
 
     if (type === 'INITIAL_HAND') {
@@ -485,6 +490,7 @@ export function parseGamelog(id, logs, meta = {}) {
     myInkCombo,
     oppInkCombo,
     loreEvents,
+    plays,
     yourDecklist: meta.yourDecklist ?? null,
     oppDecklist: meta.oppDecklist ?? null,
     inferredOppDecklist: myPlayerNum ? buildInferredDecklist(myPlayerNum === 1 ? 2 : 1) : null,

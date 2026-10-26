@@ -1,11 +1,10 @@
 import { Link } from 'react-router-dom'
-import { isSupporterPath } from '../lib/access'
+import { isSupporterPath, METAFY_URL } from '../lib/access'
 import { SECTIONS } from '../lib/siteSections'
 import { ToolIcon } from '../components/ToolIcon'
 import { Badge } from '../components/ui/Badge'
 
 const SUBSTACK_URL = 'https://inkbornforge.substack.com'
-const METAFY_URL = 'https://metafy.gg/@inkbornforge'
 
 const CARD = 'group flex flex-col gap-3 bg-white border border-gray-200 border-b-[3px] rounded-lg p-5 hover:border-gray-900 transition-colors'
 

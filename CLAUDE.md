@@ -60,7 +60,7 @@ Pages in `src/pages/` are self-contained; shared logic lives in `src/lib/` as pu
 | `/deck-comparison` | `DeckComparisonPage` | Diff two pasted decklists |
 | `/decklist-inspector`, `/decklist-inspector/overlay` | `DecklistInspectorPage`, `DecklistOverlayPage` | Creator decklist view and its OBS overlay (overlay unguarded by design) |
 | `/stream-overlay`, `/view`, `/control`, `/notes` | `StreamOverlay*Page` | Tournament stream overlay: panel (gated), OBS view, tablet controller, caster notes (the last three unguarded) |
-| `/settings` | `SettingsPage` | duels.ink tokens, Metafy connect, dark mode |
+| `/settings` | `SettingsPage` | duels.ink tokens, the Metafy card (`MetafyAccessSteps`, Connect / Disconnect, upgrade link), dark mode |
 | `/match-history` | `MatchHistoryPage` | duels.ink ranked history with cascading filters and Sessions & Tilt |
 | `/gamelog` | `GamelogViewerPage` | Bare single-gamelog inspector (`?id=`); nothing links here |
 | `/analytics` | `AnalyticsPage` | Imported gamelogs: drilldown, card stats (WAR), matchup matrix |
@@ -80,7 +80,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 
 ### Components (`src/components/`)
 
-`Nav` (ink-black bar, one dropdown per catalog section, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*` and `analytics/*` sub-views.
+`Nav` (ink-black bar, one dropdown per catalog section, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` (the gate: tool name, description, a preview screenshot and a Metafy call to action) + `MetafyAccessSteps` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*` and `analytics/*` sub-views.
 
 ### Hooks (`src/hooks/`)
 
@@ -90,7 +90,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 
 | Area | Files |
 |---|---|
-| Auth, access, theme | `supabaseClient.js`, `access.js` (`SUPPORTER_PATHS`), `theme.js` |
+| Auth, access, theme | `supabaseClient.js`, `access.js` (`SUPPORTER_PATHS`; `METAFY_URL`/`METAFY_JOIN_URL`/`METAFY_PRICE`, the one home of the Metafy link and The Forge tier's price), `theme.js` |
 | Storage | `db.js` (IndexedDB `lorcana_pro_tools`), `cardsCache.js`, `scoutedGames.js`, `coconutDecks.js`, `gamelogHistory.js` (IndexedDB `lorcana_gamelogs`); see the `indexeddb-schema-map` skill before adding a store |
 | Cards and inks | `inkColors.js` (`resolveInkName`, `resolveColors`, `matchupKey`), `cardAnalysis.js` (`buildCardIndex`), `parseDeckList.js`, `decklistShared.js` (`matchDeckList`, `inkFill`, deck URL params) |
 | duels.ink | `duelsApi.js` (tokens, match history, gamelogs, stats), `parseGamelog.js`, `gameStats.js`, `analyticsAggregation.js`, `cardImpact.js` (WAR), `buildWinrateMatrix.js`, `metagameAnalysis.js`, `sessionStats.js`, `opponentDirectory.js`, `playerProfiles.js`, `leakDetection.js`, `handInference.js`, `gameSnapshot.js`, `gameExport.js`/`gameImport.js`, `exportGameIds.js` |
@@ -111,7 +111,7 @@ Paper surfaces, an ink-black nav bar, condensed caps display type, one forge-gol
 
 ### Access control
 
-`profiles.supporter_tier` (`supporter` | `admin`) with `supporter_source` (`manual` from `AdminPage`, `metafy` from the Metafy integration, which never overwrites a manual grant). RLS lets users read their own row; only admins (`is_admin()`) update tiers. Gating is client-side UX only: the `/api/*` proxies do not check supporter status.
+`profiles.supporter_tier` (`supporter` | `admin`) with `supporter_source` (`manual` from `AdminPage`, `metafy` from the Metafy integration, which never overwrites a manual grant). RLS lets users read their own row; only admins (`is_admin()`) update tiers. Gating is client-side UX only: the `/api/*` proxies do not check supporter status. The gate (`SupporterRoute`) shows the tool's catalog entry, a screenshot from `public/previews/<tool path>.jpg` (a unit test in `access.test.js` requires one per `SUPPORTER_PATHS` entry; capture it against the local dev server as a supporter at 1440×900; a gated sub-route names its tool with `previewPath`) and the Metafy call to action with `MetafyAccessSteps`.
 
 ### API routes
 

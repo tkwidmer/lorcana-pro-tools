@@ -175,6 +175,25 @@ describe('parseGamelog - meta fields', () => {
   })
 })
 
+describe('parseGamelog - plays', () => {
+  it('lists each CARD_PLAYED in event order with its round and player', () => {
+    const logs = [
+      entry('TURN_START', 1, 1),
+      entry('CARD_PLAYED', 1, 1, { cardName: 'Elsa', cardId: '1-1' }),
+      entry('CARD_INKED', 1, 1, { cardName: 'Mickey', cardId: '1-2' }),
+      entry('TURN_START', 2, 2),
+      entry('CARD_PLAYED', 2, 2, { cardName: 'Hades', cardId: '2-1' }),
+      entry('TURN_START', 1, 2),
+      entry('CARD_PLAYED', 1, 2, { cardName: 'Mickey', cardId: '1-2' }),
+    ]
+    expect(parseGamelog('x', logs, {}).plays).toEqual([
+      { turn: 1, player: 1, cardName: 'Elsa', cardId: '1-1' },
+      { turn: 2, player: 2, cardName: 'Hades', cardId: '2-1' },
+      { turn: 2, player: 1, cardName: 'Mickey', cardId: '1-2' },
+    ])
+  })
+})
+
 describe('parseGamelog - inferred decklist', () => {
   it('builds inferred decklist from CARD_DRAWN instanceIds', () => {
     const logs = [

@@ -73,9 +73,9 @@ describe('renderStaticPage', () => {
       name="description"
       content="old"
     />
-    <link rel="canonical" href="https://lorcana-pro-tools.vercel.app/" />
+    <link rel="canonical" href="https://www.inkbornforge.com/" />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://lorcana-pro-tools.vercel.app/" />
+    <meta property="og:url" content="https://www.inkbornforge.com/" />
     <meta property="og:title" content="Old" />
     <meta
       property="og:description"
@@ -102,7 +102,7 @@ describe('renderStaticPage', () => {
     })
     expect(html).toContain('<title>A &quot;quoted&quot; &lt;title&gt;</title>')
     expect(html).toContain('<meta name="description" content="Desc &amp; more" />')
-    expect(html).toContain('<link rel="canonical" href="https://lorcana-pro-tools.vercel.app/blog/a" />')
+    expect(html).toContain('<link rel="canonical" href="https://www.inkbornforge.com/blog/a" />')
     expect(html).toContain('<meta property="og:type" content="article" />')
     expect(html).toContain('"@type":"BlogPosting"')
     expect(html).not.toContain('WebApplication')

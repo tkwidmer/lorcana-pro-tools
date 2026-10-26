@@ -60,7 +60,7 @@ function RoutedContent() {
     if (description) description.setAttribute('content', routeDescription(location.pathname))
 
     const canonical = document.querySelector('link[rel="canonical"]')
-    if (canonical) canonical.setAttribute('href', `https://lorcana-pro-tools.vercel.app${location.pathname}`)
+    if (canonical) canonical.setAttribute('href', `https://www.inkbornforge.com${location.pathname}`)
   }, [location.pathname])
 
   return (

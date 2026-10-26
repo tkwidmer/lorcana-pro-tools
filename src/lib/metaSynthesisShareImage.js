@@ -172,7 +172,7 @@ export async function generateMetaSynthesisImage({ title, subtitle, blocks, topP
   ctx.fillStyle = '#1E293B'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('lorcana-pro-tools.vercel.app', W / 2, H - FOOTER_H / 2)
+  ctx.fillText('inkbornforge.com', W / 2, H - FOOTER_H / 2)
 
   return canvas
 }

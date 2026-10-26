@@ -1,59 +1,59 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/</loc>
+    <loc>https://www.inkbornforge.com/</loc>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/proxy</loc>
+    <loc>https://www.inkbornforge.com/proxy</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/coconut-deck-builder</loc>
+    <loc>https://www.inkbornforge.com/coconut-deck-builder</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/limited-guide</loc>
+    <loc>https://www.inkbornforge.com/limited-guide</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/rules</loc>
+    <loc>https://www.inkbornforge.com/rules</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/results</loc>
+    <loc>https://www.inkbornforge.com/results</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/results/ratings</loc>
+    <loc>https://www.inkbornforge.com/results/ratings</loc>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/deck-comparison</loc>
+    <loc>https://www.inkbornforge.com/deck-comparison</loc>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/winrate-matrix</loc>
+    <loc>https://www.inkbornforge.com/winrate-matrix</loc>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/stock-decks</loc>
+    <loc>https://www.inkbornforge.com/stock-decks</loc>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/forge-decks</loc>
+    <loc>https://www.inkbornforge.com/forge-decks</loc>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/lore-tracker</loc>
+    <loc>https://www.inkbornforge.com/lore-tracker</loc>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/gamelog</loc>
+    <loc>https://www.inkbornforge.com/gamelog</loc>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://lorcana-pro-tools.vercel.app/sitemap</loc>
+    <loc>https://www.inkbornforge.com/sitemap</loc>
     <priority>0.3</priority>
   </url>
 </urlset>

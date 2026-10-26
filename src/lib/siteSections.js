@@ -129,6 +129,12 @@ export const SECTIONS = [
         description: 'Browse final standings, top-cut brackets and every player\'s record across imported Disney Lorcana Challenges, qualifiers and other major events.',
       },
       {
+        path: '/results/ratings',
+        name: 'Player Ratings',
+        icon: 'trend',
+        description: 'The top 100 players in the Tournament History archive by Glicko rating, with each one\'s record, rating deviation and change since their last event.',
+      },
+      {
         path: '/field-breakdown',
         name: 'Field Breakdown',
         icon: 'pie',
@@ -178,12 +184,12 @@ export const SECTIONS = [
 // catalog (settings, blog, admin…). Sub-routes match their tool's path
 // prefix, so `/rules/:doc` belongs to Rules.
 export function findTool(pathname) {
+  let found = null // the longest matching path: /results/ratings over /results
   for (const section of SECTIONS) {
     for (const tool of section.tools) {
-      if (tool.path && (pathname === tool.path || pathname.startsWith(tool.path + '/'))) {
-        return { section, tool }
-      }
+      const matches = tool.path && (pathname === tool.path || pathname.startsWith(tool.path + '/'))
+      if (matches && (!found || tool.path.length > found.tool.path.length)) found = { section, tool }
     }
   }
-  return null
+  return found
 }

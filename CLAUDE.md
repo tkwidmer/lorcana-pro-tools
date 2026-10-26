@@ -72,6 +72,7 @@ Pages in `src/pages/` are self-contained; shared logic lives in `src/lib/` as pu
 | `/field-breakdown` | `FieldBreakdownPage` | A room's decklists (pasted or carde.io PDF) → ink pairs for the Stream Overlay |
 | `/tournament-lookup` | `TournamentLookupPage` | Ravensburger live standings, ID analysis, pairing history |
 | `/results`, `/results/events/:id`, `/results/players/:id` | `Results*Page` | Public Tournament History archive |
+| `/results/ratings` | `ResultsRatingsPage` | Glicko player ratings over the archive, top 100 established players |
 | `/lore-tracker` | `LoreTrackerPage` | Mobile lore counter |
 | `/store-lookup` | `StoreLookupPage` | RPH store details and store-tier status |
 | `/admin`, `/admin/tournament-import` | `AdminPage`, `AdminTournamentImportPage` | Supporter grants; archive import |
@@ -127,7 +128,7 @@ Scheduled GitHub Actions: `tournament-tracker-tick.yml` and `metafy-reconcile-ti
 | IndexedDB `lorcana_gamelogs` | `gamelogs` (parsed imports) |
 | localStorage | `lorcana_theme`, `lorcana_deck_names`, `lorcana_stream_table`, `lorcana_field_breakdown`, `lorcana_lore_tracker`, per-page form state |
 | `chrome.storage.local` | `lorcana_active_games` (extension, 2-hour TTL) |
-| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `tournament_history_events`/`_standings`/`_matches` (service-role only) |
+| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `tournament_history_events`/`_standings`/`_matches`/`_ratings` (service-role only; `_ratings` rebuilt nightly from the matches) |
 
 ### Ink icons
 

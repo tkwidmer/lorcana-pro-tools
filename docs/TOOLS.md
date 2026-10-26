@@ -10,7 +10,7 @@ Tools marked **Supporter** need an active supporter account (see [Getting starte
 - [Deckbuilding](#deckbuilding): Deck Insights, Deck Comparison, Coconut Deck Builder, Stock Deck Lists, The Forge Decklists
 - [Coaching](#coaching): Match History, Analytics, Practice Plan, Deck Doctor, Gamelog Viewer
 - [Metagame](#metagame): Winrate Matrix, Meta Synthesis
-- [Tournament](#tournament): Tournament Lookup, Tournament Results, Field Breakdown, Lore Tracker, Store Lookup
+- [Tournament](#tournament): Tournament Lookup, Tournament Results, Player Ratings, Field Breakdown, Lore Tracker, Store Lookup
 - [Scouting](#scouting): Game Scraper, Scouting Library, Player Profiles
 - [Content creators](#content-creators): Decklist Inspector and its OBS overlay, Stream Overlay
 - [Discord bot](#discord-bot)
@@ -240,7 +240,12 @@ Standings refresh live when the event updates, and recent events are remembered.
 ### Tournament Results
 `/results` · Free
 
-Final standings and top-cut brackets for every major event in the archive (Disney Lorcana Challenges, Challenge Championship Qualifiers, Asia Championship Qualifiers, and big side events), newest first, with a player-name search. A player's page lists every archived event they played, their best finish, top cuts and Day 2s, their match record, round-by-round results, and the opponents they have faced most. Events under 32 players are hidden behind a toggle. No account needed; the archive updates when an event is imported, not live.
+Final standings and top-cut brackets for every major event in the archive (Disney Lorcana Challenges, Challenge Championship Qualifiers, Asia Championship Qualifiers, and big side events), newest first, with a player-name search. A player's page lists every archived event they played, their rating, best finish, top cuts and Day 2s, their match record, round-by-round results, and the opponents they have faced most. Events under 32 players are hidden behind a toggle. No account needed; the archive updates when an event is imported, not live.
+
+### Player Ratings
+`/results/ratings` · Free
+
+The 100 highest-rated players in the Tournament History archive. The rating is Glicko, computed over every imported event: each player's rating ± its deviation, matches, record, last event, and the change since their previous event. A player is ranked once their deviation is 100 or under, which takes about two events; until then their page shows the rating as provisional. Unreported matches are left out, not counted as losses. Ratings update nightly. The same rating appears on each player's results page, in Tournament Lookup's Pairing History, and on the Stream Overlay player card.
 
 ### Field Breakdown
 `/field-breakdown` · Supporter

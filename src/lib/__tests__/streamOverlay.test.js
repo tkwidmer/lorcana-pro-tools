@@ -54,11 +54,11 @@ describe('streamOverlay row mapping', () => {
   it('builds the player card: cuts and Day 2s first, meetings newest first, head-to-head by side', () => {
     const ev = (eventName, eventDate, rank, o = {}) => ({ eventName, eventDate, rank, startingPlayerCount: 500, topCutSize: 32, madeTopCut: false, madeDayTwo: false, ...o })
     const histories = [
-      { eventsPlayed: 4, majorsPlayed: 3, topCutCount: 1, dayTwoCount: 1, events: [
+      { eventsPlayed: 4, majorsPlayed: 3, topCutCount: 1, dayTwoCount: 1, rating: { rating: 1712.4, rd: 60, matches: 30, rank: 14, established: true, history: [] }, events: [
         ev('Open A', '2026-01-01', 40), ev('Disney Lorcana Challenge: Milwaukee', '2026-03-01', 150, { madeDayTwo: true }),
         ev('CCQ B', '2026-05-01', 3, { madeTopCut: true, madeDayTwo: true }), ev('Open C', '2026-06-01', 9, { sideEvent: true }),
       ] },
-      { eventsPlayed: 1, majorsPlayed: 1, topCutCount: 0, dayTwoCount: 0, events: [ev('Open A', '2026-01-01', 77)] },
+      { eventsPlayed: 1, majorsPlayed: 1, topCutCount: 0, dayTwoCount: 0, rating: null, events: [ev('Open A', '2026-01-01', 77)] },
     ]
     const headToHead = { matches: [
       { eventName: 'Open A', eventDate: '2026-01-01', roundNumber: 4, phaseName: 'Phase 1', winnerId: 'b', isDraw: false, isBye: false, gamesWonByWinner: 2, gamesWonByLoser: 0 },
@@ -71,6 +71,8 @@ describe('streamOverlay row mapping', () => {
     ])
     expect(card.players[0].finishes[0].year).toBe(2026)
     expect(card.players[0].majorsPlayed).toBe(3)
+    expect([card.players[0].rating, card.players[0].rank]).toEqual([1712, 14])
+    expect([card.players[1].rating, card.players[1].rank]).toEqual([null, null])
     expect(card.players[0].finishes.map(f => f.side)).toEqual([false, false, true, false])
     expect(card.players[1].finishes).toHaveLength(1)
     expect(card.headToHead.wins).toEqual([1, 1])
@@ -83,13 +85,14 @@ describe('streamOverlay row mapping', () => {
   it('writes caster talking points from the card: record, best finish, head-to-head', () => {
     const card = {
       players: [
-        { majorsPlayed: 2, topCutCount: 0, dayTwoCount: 1, finishes: [{ event: 'DLC Indy Promo Quest', year: 2026, rank: 1, players: 707, topCutSize: 8, tier: 'cut', side: true }] },
-        { majorsPlayed: 0, topCutCount: 0, dayTwoCount: 0, finishes: [] },
+        { rating: 1712, rank: 14, majorsPlayed: 2, topCutCount: 0, dayTwoCount: 1, finishes: [{ event: 'DLC Indy Promo Quest', year: 2026, rank: 1, players: 707, topCutSize: 8, tier: 'cut', side: true }] },
+        { rating: 1540, rank: null, majorsPlayed: 0, topCutCount: 0, dayTwoCount: 0, finishes: [] },
       ],
       headToHead: { wins: [1, 0], draws: 0, matches: [{ event: 'DLC Indianapolis', year: 2026, phase: 'Round 6', winner: 0, score: '2-1' }] },
     }
     expect(casterPoints(card, 0, ['Ibai', 'Kyle'])).toEqual([
       '2 majors played, 1 Day 2',
+      'Rated 1,712, ranked 14th in the archive',
       'Best finish: 1st of 707 at DLC Indy Promo Quest 2026 (top 8), a side event',
       'Leads the head-to-head with Kyle 1-0; last met DLC Indianapolis 2026 Round 6, Ibai won 2-1',
     ])

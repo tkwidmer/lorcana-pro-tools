@@ -27,6 +27,9 @@ import {
   getEventPlayerMatches,
   getPlayerMatches,
   getMajorParents,
+  recomputeRatings,
+  getTopRatings,
+  getPlayerRating,
 } from './_lib/tournamentHistorySupabase.js'
 import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournamentDiscovery.js'
 import { isMajor, isSideEvent } from './_lib/sideEvents.js'
@@ -38,10 +41,11 @@ import { isMajor, isSideEvent } from './_lib/sideEvents.js'
 // deployment at 12 serverless functions.
 //
 // Auth: the archive reads (`events`, `event`, `event-player`, `player`,
-// `player-history`, `head-to-head`, `search-players`) are public and
+// `player-history`, `head-to-head`, `search-players`, `ratings`) are public and
 // edge-cached — the data only changes on admin import, so the cache is the
 // abuse/cost control. `import`, `recent-imports` and `suggested-imports` are
-// admin-only; `pairing-badges` needs any signed-in session.
+// admin-only; `recompute-ratings` takes an admin session or the CRON_SECRET
+// bearer; `pairing-badges` needs any signed-in session.
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 
@@ -187,7 +191,11 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
   if (!playerId) return res.status(400).json({ error: 'Missing playerId' })
 
   try {
-    const [rows, parents] = await Promise.all([getPlayerHistory(playerId), getMajorParents()])
+    const [rows, parents, rating] = await Promise.all([
+      getPlayerHistory(playerId),
+      getMajorParents(),
+      getPlayerRating(playerId),
+    ])
     const events = rows.map((r: any) => ({
       eventId: r.event?.rph_event_id ?? null,
       eventName: r.event?.event_name ?? null,
@@ -214,6 +222,7 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
       dayTwoCount: majors.filter((e) => e.madeDayTwo).length,
       majorsPlayed: majors.length,
       eventsPlayed: events.length,
+      rating,
     })
   } catch (err) {
     console.error('tournament-history player-history failed:', err instanceof Error ? err.message : err)
@@ -369,7 +378,11 @@ async function handlePlayer(req: VercelRequest, res: VercelResponse) {
   const playerId = str(req.query.playerId)
   if (!playerId || !ID_RE.test(playerId)) return res.status(400).json({ error: 'Invalid playerId' })
   try {
-    const [history, matchRows] = await Promise.all([getPlayerHistory(playerId), getPlayerMatches(playerId)])
+    const [history, matchRows, rating] = await Promise.all([
+      getPlayerHistory(playerId),
+      getPlayerMatches(playerId),
+      getPlayerRating(playerId),
+    ])
     if (history.length === 0) return res.status(404).json({ error: 'Player not found' })
     const events = history.map((r: any) => ({
       eventId: r.event?.rph_event_id ?? null,
@@ -391,10 +404,62 @@ async function handlePlayer(req: VercelRequest, res: VercelResponse) {
       playerName: history[0].player_name, // getPlayerHistory sorts newest first
       events,
       matches: matchRows.map((m: any) => matchShape(m, m.event?.rph_event_id ?? null)),
+      rating,
     })
   } catch (err) {
     console.error('tournament-history player failed:', err instanceof Error ? err.message : err)
     return res.status(500).json({ error: 'Failed to load player' })
+  }
+}
+
+const RATINGS_LIMIT = 100
+
+// The leaderboard: the top established players, each with the change from
+// their previous rated event.
+async function handleRatings(_req: VercelRequest, res: VercelResponse) {
+  try {
+    const rows = await getTopRatings(RATINGS_LIMIT)
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
+    return res.status(200).json({
+      updatedAt: rows[0]?.updated_at ?? null,
+      players: rows.map((r: any, i: number) => {
+        const prev = r.history[r.history.length - 2]
+        return {
+          rank: i + 1,
+          playerId: r.player_id,
+          playerName: r.player_name,
+          rating: Number(r.rating),
+          rd: Number(r.rd),
+          matches: r.matches,
+          wins: r.wins,
+          losses: r.losses,
+          draws: r.draws,
+          lastEventDate: r.last_event_date,
+          delta: prev ? Number(r.rating) - prev.rating : null,
+        }
+      }),
+    })
+  } catch (err) {
+    console.error('tournament-history ratings failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to load ratings' })
+  }
+}
+
+// Rebuilds every rating. The nightly workflow (.github/workflows/
+// ratings-recompute.yml) sends the CRON_SECRET bearer; the admin import
+// page sends an admin session.
+async function handleRecomputeRatings(req: VercelRequest, res: VercelResponse) {
+  const cronSecret = process.env.CRON_SECRET
+  const isCron = Boolean(cronSecret) && req.headers.authorization === `Bearer ${cronSecret}`
+  if (!isCron && !(await requireAdmin(req, res))) return
+
+  const started = Date.now()
+  try {
+    const players = await recomputeRatings()
+    return res.status(200).json({ players, elapsedMs: Date.now() - started })
+  } catch (err) {
+    console.error('tournament-history recompute-ratings failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to recompute ratings' })
   }
 }
 
@@ -487,12 +552,12 @@ async function handleSuggestedImports(req: VercelRequest, res: VercelResponse) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const endpoint = str(req.query.endpoint)
 
-  if (endpoint === 'import') {
+  if (endpoint === 'import' || endpoint === 'recompute-ratings') {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')
       return res.status(405).json({ error: 'Method not allowed' })
     }
-    return handleImport(req, res)
+    return endpoint === 'import' ? handleImport(req, res) : handleRecomputeRatings(req, res)
   }
 
   if (req.method !== 'GET') {
@@ -521,6 +586,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleEventPlayer(req, res)
     case 'player':
       return handlePlayer(req, res)
+    case 'ratings':
+      return handleRatings(req, res)
     default:
       return res.status(400).json({ error: 'Missing or invalid endpoint param' })
   }

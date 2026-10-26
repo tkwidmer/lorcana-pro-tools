@@ -327,9 +327,12 @@ export const PLAYER_CARD_MEETINGS = 5
 // Lookup's pairing panel already holds. Finishes: every top cut and Day 2
 // first (best rank first within each), then the rest by rank, capped at
 // what the card fits. Meetings: newest first, winner as a side index.
+// Rating: the whole Glicko rating, and the archive rank (null while provisional).
 export function buildPlayerCard({ histories, headToHead, playerIds }) {
   const tier = e => (e.madeTopCut ? 0 : e.madeDayTwo ? 1 : 2)
   const players = histories.map(h => ({
+    rating: h.rating ? Math.round(h.rating.rating) : null,
+    rank: h.rating?.rank ?? null,
     majorsPlayed: h.majorsPlayed,
     topCutCount: h.topCutCount,
     dayTwoCount: h.dayTwoCount ?? 0,
@@ -366,7 +369,7 @@ export function buildPlayerCard({ histories, headToHead, playerIds }) {
 }
 
 // Plain-English lines a caster can read off for one side of the player
-// card: the majors record, the best finish, and the head-to-head. Built
+// card: the majors record, the rating once ranked, the best finish, and the head-to-head. Built
 // from the card's own data, so the notes page needs nothing the OBS view
 // doesn't have.
 export function casterPoints(card, side, names) {
@@ -380,6 +383,7 @@ export function casterPoints(card, side, names) {
     if (p.dayTwoCount) parts.push(`${p.dayTwoCount} Day 2${p.dayTwoCount === 1 ? '' : 's'}`)
     lines.push(parts.join(', '))
   }
+  if (p.rank) lines.push(`Rated ${p.rating.toLocaleString('en-US')}, ranked ${ordinal(p.rank)} in the archive`)
   const best = p.finishes[0]
   if (best) {
     const tag = best.tier === 'cut' ? ` (top ${best.topCutSize})` : best.tier === 'day2' ? ' (Day 2)' : ''

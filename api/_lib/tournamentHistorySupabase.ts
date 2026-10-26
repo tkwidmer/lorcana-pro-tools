@@ -1,4 +1,5 @@
 import { getSupabaseServiceClient } from './discordSupabase.js'
+import { rateEvents, ESTABLISHED_RD, type RatedEvent } from './glicko.js'
 
 // Service-role query/upsert helpers for the tournament_history_* tables
 // (supabase/migrations/008_tournament_history.sql). All access goes through
@@ -380,4 +381,114 @@ export function getPlayerMatches(playerId: string) {
       .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
       .order('id') // stable order across .range() pages
   )
+}
+
+// ---- Player ratings (glicko.ts, migration 025) ----
+
+const RATING_UPSERT_CHUNK = 1000
+
+// Rebuilds every rating from scratch: an import can add an older event,
+// which changes everything after it. Events and matches are read separately
+// and joined here, keeping each paged match read to the columns the math needs.
+// ponytail: sequential 1,000-row pages (~140 at 140k matches) inside the
+// route's 60 s maxDuration; fetch pages concurrently once the archive outgrows it.
+export async function recomputeRatings(): Promise<number> {
+  const supabase = getSupabaseServiceClient()
+  const startedAt = new Date().toISOString()
+  const [eventRows, matchRows] = await Promise.all([
+    fetchAllRanges<any>(() =>
+      supabase.from('tournament_history_events').select('id, rph_event_id, event_date').order('id')
+    ),
+    fetchAllRanges<any>(() =>
+      supabase
+        .from('tournament_history_matches')
+        .select('event_id, player1_id, player1_name, player2_id, player2_name, winner_id, is_draw')
+        .eq('is_bye', false)
+        .order('id')
+    ),
+  ])
+
+  const events = new Map<string, RatedEvent>(
+    eventRows.map((e) => [e.id, { rphEventId: e.rph_event_id, eventDate: e.event_date, matches: [] }])
+  )
+  // Each player under the name from their latest event.
+  const names = new Map<string, { name: string; date: string }>()
+  const noteName = (id: string | null, name: string | null, date: string) => {
+    if (!id || !name) return
+    const seen = names.get(id)
+    if (!seen || date >= seen.date) names.set(id, { name, date })
+  }
+  for (const m of matchRows) {
+    const event = events.get(m.event_id)!
+    event.matches.push({ player1Id: m.player1_id, player2Id: m.player2_id, winnerId: m.winner_id, isDraw: m.is_draw })
+    noteName(m.player1_id, m.player1_name, event.eventDate)
+    noteName(m.player2_id, m.player2_name, event.eventDate)
+  }
+
+  const rows = [...rateEvents([...events.values()])].map(([playerId, r]) => ({
+    player_id: playerId,
+    player_name: names.get(playerId)?.name ?? null,
+    rating: r.rating,
+    rd: r.rd,
+    matches: r.matches,
+    wins: r.wins,
+    losses: r.losses,
+    draws: r.draws,
+    last_event_date: r.lastEventDate,
+    history: r.history,
+    updated_at: startedAt,
+  }))
+  for (let i = 0; i < rows.length; i += RATING_UPSERT_CHUNK) {
+    const { error } = await supabase
+      .from('tournament_history_ratings')
+      .upsert(rows.slice(i, i + RATING_UPSERT_CHUNK), { onConflict: 'player_id' })
+    if (error) throw error
+  }
+  // A player whose rated matches all went away keeps no stale row.
+  const { error } = await supabase.from('tournament_history_ratings').delete().lt('updated_at', startedAt)
+  if (error) throw error
+  return rows.length
+}
+
+const RATING_COLUMNS =
+  'player_id, player_name, rating, rd, matches, wins, losses, draws, last_event_date, history, updated_at'
+
+// The leaderboard: established players by rating.
+export async function getTopRatings(limit: number) {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_ratings')
+    .select(RATING_COLUMNS)
+    .lte('rd', ESTABLISHED_RD)
+    .order('rating', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data ?? []
+}
+
+// One player's rating with their rank among established players (null when
+// provisional), or null when they have no rated match.
+export async function getPlayerRating(playerId: string) {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_ratings')
+    .select(RATING_COLUMNS)
+    .eq('player_id', playerId)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const rating = Number(data.rating)
+  const rd = Number(data.rd)
+  const established = rd <= ESTABLISHED_RD
+  let rank: number | null = null
+  if (established) {
+    const { count, error: countError } = await supabase
+      .from('tournament_history_ratings')
+      .select('player_id', { count: 'exact', head: true })
+      .lte('rd', ESTABLISHED_RD)
+      .gt('rating', rating)
+    if (countError) throw countError
+    rank = (count ?? 0) + 1
+  }
+  return { rating, rd, matches: data.matches, rank, established, history: data.history }
 }

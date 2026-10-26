@@ -12,5 +12,5 @@ jobs:
       - name: Trigger tournament tracker tick
         run: |
           curl --fail-with-body -sS -X POST \
-            "https://lorcana-pro-tools.vercel.app/api/discord-tournament-tick" \
+            "https://www.inkbornforge.com/api/discord-tournament-tick" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

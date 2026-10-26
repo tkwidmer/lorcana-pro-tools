@@ -12,5 +12,5 @@ jobs:
       - name: Recompute Tournament History player ratings
         run: |
           curl --fail-with-body -sS -X POST \
-            "https://lorcana-pro-tools.vercel.app/api/tournament-history?endpoint=recompute-ratings" \
+            "https://www.inkbornforge.com/api/tournament-history?endpoint=recompute-ratings" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

@@ -1,654 +1,132 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code in this repository. This file is the map; the reference for each area lives in `docs/agents/` and the procedures in `.claude/skills/`. Read the area's doc before changing its code.
 
 ## Commands
 
 ```bash
-npm run dev        # Start Vite dev server (port 5173 or $PORT)
-npm run build      # Build app + package Chrome extension
-npm run build:ext  # Package the Chrome extension only
-npm run lint       # ESLint (React hooks + refresh rules)
-npm run preview    # Preview production build locally
-npm test           # Run the Vitest unit suite once
-npm run test:watch # Run Vitest in watch mode
+npm run dev        # Vite dev server (port 5173 or $PORT)
+npm run build      # Build app + package Chrome extension (rewrites public/lorcana-extension.zip; restore it before committing)
+npm run lint       # ESLint
+npm test           # Vitest, once (npm run test:watch to watch)
 ```
 
-Unit tests live in `src/lib/__tests__/` (Vitest), one `<lib>.test.js` per pure-logic
-lib in `src/lib/` (e.g. `parseGamelog`, `cardImpact`, `practiceSim`, `metaSynthesis`,
-`storeTiers`). CI runs `npm test` on every push/PR (`.github/workflows/test.yml`).
-UI and integration behavior is still validated manually.
+Unit tests: `src/lib/__tests__/<lib>.test.js`, one per pure-logic lib in `src/lib/`, plus `api/_lib/__tests__/` for server-side pure helpers; `npm test` runs both and CI runs it on every push. UI behavior is verified in a browser: `docs/agents/ui-screenshots.md` is the recipe (local Vite server, never the Vercel preview, which sits behind a deployment-protection gate; mocks for gated pages; where screenshots go).
 
-## Screenshots & Manual Verification
+## Pull requests
 
-When asked to screenshot or visually verify a change, run it against the local
-Vite dev server (`npm run dev`) first — not the Vercel preview deployment.
-Preview deployments are commonly behind Vercel's SSO/deployment-protection
-gate, which blocks headless/unauthenticated access (e.g. Playwright), so
-attempting the preview first just wastes a round trip. Only fall back to the
-preview URL if local verification isn't possible for some reason.
-
-## Pull Requests
-
-When creating a pull request:
-
-1. **Include Vercel preview link** — Add the live preview URL in the PR description so reviewers can test changes without building locally. Don't construct the URL — Vercel truncates the branch and appends a hash, so any guessed pattern is wrong. Read it from the vercel[bot] comment on the PR per the `vercel-preview-url` skill (`.claude/skills/vercel-preview-url/`)
-2. **Include screenshots for UI changes** — For any updates or new features affecting the user interface, capture and attach relevant screenshots in the PR body. Include before/after pairs when applicable
+1. Include the Vercel preview link, read from the vercel[bot] comment per the `vercel-preview-url` skill (the URL cannot be derived from the branch name).
+2. Include screenshots for UI changes, before/after when a layout changed, saved under `docs/screenshots/` and referenced by raw GitHub URL.
 
 ## Stack
 
-React 19 + React Router 7 + Tailwind CSS 4 + Vite 8, deployed on Vercel. Serverless API routes live in `/api/*.ts` (TypeScript). Authentication via Supabase + Google OAuth. All of *your own* game data is stored client-side in IndexedDB or localStorage. Supabase stores the auth session, a small `profiles` table that records each user's supporter tier (`supporter`/`admin`), and — as of the Tournament History archive — admin-imported major-tournament standings/matches (see "Tournament History Archive" below), the first server-side store of real domain data rather than just auth/tier metadata. Stream Overlay tables (`stream_tables`, see "Stream Overlay") are the second: a supporter's own rows, read and written under RLS.
+React 19 + React Router 7 + Tailwind CSS 4 + Vite 8 on Vercel; serverless routes in `api/*.ts`; Supabase + Google OAuth. A user's own game data stays client-side (IndexedDB, localStorage). Supabase holds the session, a `profiles` table of supporter tiers, the admin-imported Tournament History archive, and each supporter's Stream Overlay tables. Local `.env` needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; every server-side secret is listed in `docs/agents/api-routes.md`.
 
-## Environment Variables
+## Deeper reference
 
-Required in `.env` for local development:
+| Read before touching | Doc |
+|---|---|
+| `api/*`, server secrets, Discord bot, Metafy, Substack | `docs/agents/api-routes.md` |
+| `/stream-overlay/*`, `streamOverlay.js`, `streamTables.js`, `stream_tables` migrations, Decklist Inspector overlay | `docs/agents/stream-overlay.md` |
+| Tournament Lookup, Store Lookup, Field Breakdown, `/results/*`, the Tournament History archive | `docs/agents/tournaments.md` |
+| Match History, Analytics, Library, player profiles, Winrate Matrix, Meta Synthesis, Deck Doctor, Stock Decks, Deck Insights, Game Scraper | `docs/agents/duels-data.md` |
+| Blog, rules browser | `docs/agents/content.md` |
+| [Format Coconut] | `docs/agents/coconut.md` |
+| Any UI change that needs a screenshot or a browser check | `docs/agents/ui-screenshots.md` |
 
-```
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_ANON_KEY=...
-```
-
-Vercel also accepts `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` prefixes (both are checked in `supabaseClient.js`).
-
-`VITE_DISCORD_CLIENT_ID` is no longer read: the "Add to Discord" invite card (a Community section in `siteSections.js`) was removed from the home page while the bot matures. The bot itself (`/api/discord-interactions`) is unaffected.
-
-Optional: `VITE_METAFY_CLIENT_ID` — the Metafy OAuth client ID (not a secret). When set, `SettingsPage` shows a "Connect Metafy" card; when unset, `connectMetafy()` throws and the card's connect button surfaces an error instead of redirecting.
-
-Server-side only (set in Vercel, not `.env`):
-- `DISCORD_PUBLIC_KEY` — used by `/api/discord-interactions` to verify Discord's request signature.
-- `DISCORD_BOT_TOKEN` — used by `/api/discord-tournament-tick` to post proactive channel messages via the Discord Bot API (different from `DISCORD_PUBLIC_KEY`; this one's a real secret).
-- `SUPABASE_SERVICE_ROLE_KEY` — used by `api/_lib/discordSupabase.ts` for server-side access to the `discord_favorite_players`, `duels_api_tokens`, and `metafy_links` tables, bypassing RLS.
-- `CRON_SECRET` — shared secret checked by `/api/discord-tournament-tick` and `/api/metafy?endpoint=reconcile-tick`; must match the same-named secret in the GitHub repo (Settings → Secrets and variables → Actions) used by `.github/workflows/tournament-tracker-tick.yml` and `.github/workflows/metafy-reconcile-tick.yml`.
-- `DUELS_TOKEN_ENCRYPTION_KEY` — symmetric passphrase used by `/api/duels-tokens` to encrypt/decrypt saved duels.ink API tokens at rest (via Postgres `pgcrypto`, see `supabase/migrations/005_duels_api_tokens_crypto_functions.sql`). Never exposed to the client.
-- `METAFY_CLIENT_ID` / `METAFY_CLIENT_SECRET` — Metafy OAuth app credentials, used by `/api/metafy?endpoint=callback` to exchange the authorization code. The client ID is not secret (also exposed client-side as `VITE_METAFY_CLIENT_ID`); the client secret is a real secret.
-- `METAFY_API_KEY` — an owner-scoped Metafy API key (scope `community`), used by `/api/metafy?endpoint=reconcile-tick` to list active community subscribers. No per-user OAuth token is ever persisted for Metafy — see "Metafy Integration" below.
-- `METAFY_COMMUNITY_ID` — the ID of this app owner's own Metafy community, used by `/api/metafy?endpoint=callback` to check whether the connecting user has access to it.
-- `METAFY_SUPPORTER_TIER_ID` — the ID of the specific Metafy subscription tier ("The Forge") that grants Supporter access here. The community has a second tier ("Supporter", for Metafy-side guides) that does **not** grant access — see "Metafy Integration" below.
-
-See `discord-bot/README.md` for full setup.
+Skills (`.claude/skills/`) hold procedures and upstream API notes: `add-coconut-card`, `new-blog-post`, `tournament-history-sync`, `vercel-preview-url`, `vercel-proxy-pattern`, `ravensburger-tournament-api`, `duels-api-docs`, `lorcanajson-docs`, `discord-interactions-docs`, `gamelog-pipeline`, `chrome-extension-mv3`, `indexeddb-schema-map`.
 
 ## Architecture
 
-### Pages → Shared Libs → Storage
+Pages in `src/pages/` are self-contained; shared logic lives in `src/lib/` as pure functions (tested) beside thin I/O modules. Page wrappers are full-width (`w-full px-6 py-8`), matching `Nav`/`Footer`; `max-w-* mx-auto` only for a small centered message or list.
 
-Pages are in `src/pages/`. Each page is self-contained. Shared logic lives in `src/lib/`.
+### Routes (`src/App.jsx`)
 
-Page content is full-width: outer page wrappers use `w-full px-6 py-8` (no `max-w-*`/`mx-auto`), matching `Nav`/`Footer`. New pages should follow this pattern rather than constraining width — narrow `max-w-* mx-auto` is still fine for small, deliberately-centered content (an error/gate message, a short list) but not for a page's primary content wrapper.
-
-### Pages & Routes
-
-Defined in `src/App.jsx`:
-
-| Route | Page File | Purpose |
+| Route | Page | Purpose |
 |---|---|---|
-| `/` | `HomePage.jsx` | Dashboard — tool catalog organized into Resources, Deckbuilding, Coaching Tools, Tournament Tools, Content Creators. The catalog lives in `src/lib/siteSections.js` |
-| `/sitemap` | `SitemapPage.jsx` | Plain link list of every tool, rendered from the same `siteSections.js` catalog as `HomePage` so the two never drift |
-| `/blog` | `BlogIndexPage.jsx` | Blog post index — every post in `content/blog/`, newest first (see "Blog" below) |
-| `/blog/:slug` | `BlogPostPage.jsx` | Renders one blog post |
-| `/login` | `LoginPage.jsx` | Google OAuth sign-in via Supabase |
-| `/auth/callback` | `AuthCallbackPage.jsx` | OAuth redirect handler; checks session and redirects |
-| `/proxy` | `ProxyGeneratorPage.jsx` | B&W proxy card generator — search cards, add [Format Coconut] cards, build print sheets (9/page) |
-| `/coconut-deck-builder` | `CoconutDeckBuilderPage.jsx` | [Format Coconut] deck builder — pick a Coconut card, lock in up to 3 inks, build a singleton 60+ card deck with the format's copy-count exceptions enforced |
-| `/limited-guide` | `LimitedGuidePage.jsx` | Limited format reference — BREAD framework, mana curves, uninkable counts |
-| `/rules` | `RulesPage.jsx` | Rules browser index — lists every document in `src/lib/rules/registry.js` with its latest version (see "Rules Browser" below) |
-| `/rules/:doc`, `/rules/:doc/:chapterSlug` | `RulesDocumentPage.jsx` | One rules document, chaptered, with a `?v=` version picker and inline "changed from previous version" highlighting |
-| `/rules/:doc/changes` | `RulesChangesPage.jsx` | Full word-level diff of one version (`?v=`) against the previous one |
-| `/deck-insights` | `DrawOddsPage.jsx` | Comprehensive deck analytics: draw odds, mulligan/scry simulation, keyword analysis, brickability, quest pressure curves |
-| `/game-scraper` | `GameScraperPage.jsx` | Live game state viewer via Chrome extension (automatic) or bookmarklet (manual) |
-| `/library` | `LibraryPage.jsx` | Saved games (`?tab=history`) and a unified opponent directory (`?tab=players`) merging scouted-game and imported-gamelog opponent data |
-| `/scouting/game/:uuid` | `ScoutedGamePage.jsx` | Full game state replay with action log (single scraped snapshot) |
-| `/players/:name` | `PlayerProfilePage.jsx` | Unified per-opponent profile — win rates, deck archetypes, and inferred decklists merged from scouted games and imported duels.ink gamelogs (see "Unified Opponent Profiles" below) |
-| `/deck-comparison` | `DeckComparisonPage.jsx` | Paste two decklists to highlight differences |
-| `/decklist-inspector` | `DecklistInspectorPage.jsx` | Content-creator decklist view — browse by type/cost, pin up to 4 cards' full art beside stat charts, copy an OBS overlay link |
-| `/decklist-inspector/overlay` | `DecklistOverlayPage.jsx` | Chrome-less, read-only render of a decklist for an OBS Browser Source. Deck comes entirely from the `?deck=` param (`decklistShared.js` `encodeDeckParam`/`decodeDeckParam`). **Deliberately not supporter-gated** — a Browser Source has no Supabase session, and the view exposes only what's in the link. `Nav`/`Footer` are hidden here |
-| `/stream-overlay` | `StreamOverlayPage.jsx` | Control panel for a tournament gameplay stream overlay — one `stream_tables` row per feature table (switch, create, rename, delete, Live / Break), with event/sponsor logos, round, round timer, Swap sides, and per player name, record, deck inks, game-win pips and lore (see "Stream Overlay" below) |
-| `/stream-overlay/view` | `StreamOverlayViewPage.jsx` | The single OBS Browser Source for one table: a 1920×1080 frame, transparent where the gameplay cam and player cams go; marks the match winner at 2 game wins and renders an opaque break screen when the table is on Break. Reads the `?table=` row through the public `get_stream_table()` function and follows its broadcasts. **Deliberately not supporter-gated** for the same reason as the decklist overlay. `Nav`/`Footer` are hidden here |
-| `/stream-overlay/control` | `StreamOverlayControlPage.jsx` | The players' controller for one table — a tablet at the table with lore and game-win taps per player. Each tap calls `adjust_stream_table()` with the `?key=` from the link; shows the same row as the view. Unguarded, `Nav`/`Footer` hidden |
-| `/stream-overlay/notes` | `StreamOverlayNotesPage.jsx` | Caster notes for one table — the same public row as the view, laid out to read from a second screen: each player's talking points (`casterPoints()`), archive finishes and decklist on their own side, the head-to-head, the round's results and the live score between, the full standings snapshot in columns across the bottom. Follows the row's broadcasts. Unguarded (the link carries only the table id), `Nav`/`Footer` hidden |
-| `/settings` | `SettingsPage.jsx` | Auth management and preferences — including the Appearance (dark mode) toggle and the Metafy card (the access steps from `MetafyAccessSteps`, Connect / Disconnect, and an upgrade link when the linked account isn't on The Forge tier) |
-| `/match-history` | `MatchHistoryPage.jsx` | duels.ink ranked match history with cascading filters |
-| `/gamelog` | `GamelogViewerPage.jsx` | Bare single-gamelog view for `?id=<gamelog id>` (fetched via `fetchGamelogBuffer`, needs a duels.ink token) — opening hand plus per-player played/inked/discarded/destroyed, and a raw structure inspector. No in-app links point here |
-| `/analytics` | `AnalyticsPage.jsx` | Merged gamelog + team analytics — import your own games (.zip/.gz) or shared team exports; per-game drilldown (draw sequence, mulligans, leaks, challenge log), personal card/win-rate stats, and team-wide matchup matrix, metagame breakdown, and MMR/win-rate trends |
-| `/winrate-matrix` | `WinrateMatrixPage.jsx` | Color-pair matchup matrix — head-to-head win rates, first-player advantage |
-| `/meta-synthesis` | `MetaSynthesisPage.jsx` | Plain-English meta report from duels.ink `fetchStats`, centered on the user's rank band — see "Meta Synthesis" below |
-| `/stock-decks` | `StockDecksPage.jsx` | Stock deck lists — one starting list per archetype, grouped by ink pair, in folders per set/meta (see "Stock Deck Lists" below). Public |
-| `/forge-decks` | `ForgeDecksPage.jsx` | The Forge Decklists — the site's own recommended lists, in the same set folders as Stock Deck Lists (see "Stock Deck Lists" below). Public |
-| `/practice-plan` | `PracticePlanPage.jsx` | Pre-tournament prep — select deck + meta, highlight matchups needing practice |
-| `/deck-doctor` | `DeckDoctorPage.jsx` | Your list (from match history, or pasted) beside duels.ink's average build and card lift for its archetype, your own WAR, and your matchups vs the field's, ending in a short verdict (see "Deck Doctor" below) |
-| `/field-breakdown` | `FieldBreakdownPage.jsx` | Paste every decklist in a room (blank line between lists), or upload carde.io's decklists PDF, → the room by ink pair (`inkPairField()` in `lib/fieldBreakdown.js`, unit-tested: each deck's two most-played inks, counted) and each list's inks, card count and unmatched names; "Copy for Stream Overlay" copies the ink pairs as `Emerald/Steel 8` lines (`inkPairLines()`), the Stream Overlay Metagame card's input. Needs only the card database; an archetype assignment against duels.ink's profiles was tried first and removed, since the Metagame chart is by ink pair. The PDF (the admin's "Download decklists" export, one deck per page) is read in the browser by `lib/cardePdf.js` with pdf.js (`pdfjs-dist`, legacy build, loaded on first use); `decklistsFromPages()` (unit-tested) turns the pages into this input, rejoining a card name that wrapped and dropping the print header/footer. `scripts/carde-field-export.js` (the Stream Overlay panel's "Export carde.io decks" bookmarklet, or pasted into the DevTools console on an event's carde.io admin page) pulls every submitted decklist with the organizer's own session (Play Hub's public API carries no decks), copies the room's ink-pair lines for the Metagame card, and leaves the full lists in this page's input format in `cardeField.fieldText`. Textarea persists in localStorage (`lorcana_field_breakdown`) |
-| `/tournament-lookup` | `TournamentLookupPage.jsx` | Ravensburger live standings — paste event URL, find yourself, check tiebreakers, ID analysis; clicking a pairing in the Matches tab opens cross-event history + head-to-head from the Tournament History archive (see below) |
-| `/results` | `ResultsPage.jsx` | Public Tournament Results — every imported archive event (newest first, events under 32 players hidden behind a toggle) with a player-name search. See "Tournament History Archive" |
-| `/results/events/:eventId` | `ResultsEventPage.jsx` | One archived event (`rph_event_id`): final standings (all rows, name filter) and the top-cut bracket via `EliminationBracket` |
-| `/results/players/:playerId` | `ResultsPlayerPage.jsx` | One player (`rph_player_id`) across every imported event: events played, top cuts, best finish, match record, per-event finishes with expandable round-by-round, most-faced opponents. Unrelated to `/players/:name` |
-| `/lore-tracker` | `LoreTrackerPage.jsx` | Mobile in-game lore counter with tap controls and audit log |
-| `/store-lookup` | `StoreLookupPage.jsx` | Paste RPH store IDs/URLs → store details plus store-tier status (see "Store Lookup" below) |
-| `/admin` | `AdminPage.jsx` | Admin-only — search users by email and grant/revoke supporter access; links to the tournament import page |
-| `/admin/tournament-import` | `AdminTournamentImportPage.jsx` | Admin-only — paste a completed RPH event URL to import its final standings/matches into the Tournament History archive |
+| `/` | `HomePage` | Tool catalog from `src/lib/siteSections.js` (Resources, Deckbuilding, Coaching, Tournament, Content Creators) |
+| `/sitemap` | `SitemapPage` | The same catalog as plain links |
+| `/blog`, `/blog/:slug` | `BlogIndexPage`, `BlogPostPage` | Posts from `content/blog/` |
+| `/login`, `/auth/callback` | `LoginPage`, `AuthCallbackPage` | Google OAuth via Supabase |
+| `/proxy` | `ProxyGeneratorPage` | B&W proxy print sheets, plus Coconut card faces |
+| `/coconut-deck-builder` | `CoconutDeckBuilderPage` | [Format Coconut] singleton deck builder |
+| `/limited-guide` | `LimitedGuidePage` | Static limited-format reference |
+| `/rules`, `/rules/:doc`, `/rules/:doc/changes` | `RulesPage`, `RulesDocumentPage`, `RulesChangesPage` | Versioned official documents with diffs |
+| `/deck-insights` | `DrawOddsPage` (exports `DeckInsightsPage`) | Draw odds, mulligan/scry simulation, curves |
+| `/game-scraper` | `GameScraperPage` | Live duels.ink game state via the Chrome extension |
+| `/library` | `LibraryPage` | Saved games (`?tab=history`) and opponent directory (`?tab=players`) |
+| `/scouting/game/:uuid` | `ScoutedGamePage` | One scraped game replay |
+| `/players/:name` | `PlayerProfilePage` | Unified opponent profile (scouted games + imported gamelogs) |
+| `/deck-comparison` | `DeckComparisonPage` | Diff two pasted decklists |
+| `/decklist-inspector`, `/decklist-inspector/overlay` | `DecklistInspectorPage`, `DecklistOverlayPage` | Creator decklist view and its OBS overlay (overlay unguarded by design) |
+| `/stream-overlay`, `/view`, `/control`, `/notes` | `StreamOverlay*Page` | Tournament stream overlay: panel (gated), OBS view, tablet controller, caster notes (the last three unguarded) |
+| `/settings` | `SettingsPage` | duels.ink tokens, the Metafy card (`MetafyAccessSteps`, Connect / Disconnect, upgrade link), dark mode |
+| `/match-history` | `MatchHistoryPage` | duels.ink ranked history with cascading filters and Sessions & Tilt |
+| `/gamelog` | `GamelogViewerPage` | Bare single-gamelog inspector (`?id=`); nothing links here |
+| `/analytics` | `AnalyticsPage` | Imported gamelogs: drilldown, card stats (WAR), matchup matrix |
+| `/winrate-matrix` | `WinrateMatrixPage` | Public duels.ink matchup matrix and meta drift |
+| `/meta-synthesis` | `MetaSynthesisPage` | Plain-English meta report by rank band |
+| `/stock-decks`, `/forge-decks` | `StockDecksPage`, `ForgeDecksPage` | duels.ink average builds per archetype; the site's own lists from `content/forge-decks/` |
+| `/practice-plan` | `PracticePlanPage` | Matchup practice allocation and tournament Monte Carlo |
+| `/deck-doctor` | `DeckDoctorPage` | Your list vs the field's build, lift, WAR and matchups |
+| `/field-breakdown` | `FieldBreakdownPage` | A room's decklists (pasted or carde.io PDF) → ink pairs for the Stream Overlay |
+| `/tournament-lookup` | `TournamentLookupPage` | Ravensburger live standings, ID analysis, pairing history |
+| `/results`, `/results/events/:id`, `/results/players/:id` | `Results*Page` | Public Tournament History archive |
+| `/lore-tracker` | `LoreTrackerPage` | Mobile lore counter |
+| `/store-lookup` | `StoreLookupPage` | RPH store details and store-tier status |
+| `/admin`, `/admin/tournament-import` | `AdminPage`, `AdminTournamentImportPage` | Supporter grants; archive import |
 
-**Note:** `DrawOddsPage.jsx` exports `DeckInsightsPage` — the file name and component name differ.
+Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`SupporterRoute` wraps them; `HomePage` badges them). `/admin` enforces admin itself. Legacy redirects live at the bottom of `App.jsx`. All routes render inside one `ErrorBoundary` keyed on the pathname; `Nav` sits outside it.
 
-**Supporter-gated routes:** These routes are wrapped in `<SupporterRoute>` in `App.jsx` and require an active supporter (or admin) — non-supporters see a gate: `/deck-insights`, `/game-scraper`, `/library`, `/scouting/game/:uuid`, `/players/:name`, `/match-history`, `/analytics`, `/practice-plan`, `/deck-doctor`, `/field-breakdown`, `/tournament-lookup`, `/meta-synthesis`, `/decklist-inspector`, `/stream-overlay`. The gated set is the single source of truth in `src/lib/access.js` (`SUPPORTER_PATHS`), reused by `HomePage` to badge tools as "Supporters". `/admin` enforces its own admin-only redirect via `useSupporter`.
+### Components (`src/components/`)
 
-All routes render inside a single `<ErrorBoundary>` (keyed on `location.pathname`) so a render-time throw in one tool shows a fallback instead of white-screening the SPA; `Nav` sits outside the boundary and stays usable.
+`Nav` (ink-black bar, one dropdown per catalog section, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` (the gate: tool name, description, a preview screenshot and a Metafy call to action) + `MetafyAccessSteps` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*` and `analytics/*` sub-views.
 
-Legacy redirects:
-- `/replay-analyzer` → `/analytics`
-- `/gamelog-analyzer` → `/analytics` (the two pages were merged into one — see below)
-- `/team-analytics` → `/analytics` (renamed)
-- `/game-library` → `/analytics`
-- `/shared` → `/library`
-- `/legality-checker` → `/deck-insights`
-- `/cut-calculator` → `/tournament-lookup` (retired; Tournament Lookup's ID analysis covers it)
-- `/opponent-directory` → `/library?tab=players` (the two pages were merged into one — see below)
+### Hooks (`src/hooks/`)
 
-### Components
+`useAuth` (session, ensures a `profiles` row) · `useSupporter` (`isSupporter` is true for `supporter` and `admin`) · `useCards` (card data from `/api/cards`, IndexedDB-cached) · `useTournamentLiveUpdates` (RPH Pusher) · `usePairingBadges` · `useTransparentBackground` (OBS views) · `useTheme`.
 
-In `src/components/`:
+### Shared libraries (`src/lib/`)
 
-| File | Purpose |
+| Area | Files |
 |---|---|
-| `Nav.jsx` | Ink-black top bar — one dropdown per `siteSections.js` section (tools + the newest blog post), Blog link, ⌘K tool search, settings link, username dropdown (logout, plus an Admin link for admins); below `xl` the sections collapse into a hamburger menu. Hidden on `/lore-tracker`, `/decklist-inspector/overlay` and every `/stream-overlay/*` sub-route |
-| `ToolSearch.jsx` | The ⌘K / Ctrl+K quick switcher over the tool catalog, opened from `Nav` |
-| `ToolIcon.jsx` | Renders a catalog tool's glyph from `lib/toolIcons.js` by the tool's `icon` name |
-| `ui/Button.jsx`, `ui/Card.jsx`, `ui/PageHeader.jsx`, `ui/Field.jsx` (`Input`/`Textarea`/`Select`), `ui/Tabs.jsx` (`Tabs`/`Tab`), `ui/Badge.jsx` | Shared UI building blocks — see "Design System" below |
-| `Footer.jsx` | Site-wide footer, hidden on the same routes as `Nav` |
-| `ErrorBoundary.jsx` | Class-based error boundary with a "Something broke" fallback (Try again / Reload / Back to tools; dev-only stack trace). Resets when its `resetKey` prop changes. Wraps the routes in `App.jsx` |
-| `MetafyAccessSteps.jsx` | The numbered "subscribe to The Forge → sign in → Connect Metafy in Settings" steps, shown by `SupporterRoute`'s gate and the Settings page's Metafy card so the link-your-account step is spelled out wherever access is explained |
-| `SupporterRoute.jsx` | Route guard — renders children for supporters/admins, otherwise the gate: the tool's catalog name and description, a screenshot of it in use from `public/previews/<tool path>.jpg` (a unit test in `access.test.js` requires one per `SUPPORTER_PATHS` entry; capture new ones against the local dev server, logged in as a supporter, at 1440×900), and a Metafy call to action (`METAFY_JOIN_URL`/`METAFY_PRICE` from `lib/access.js`) with a sign-in link when logged out or a link-your-account link when signed in. `previewPath` names the catalog tool for a gated sub-route (`/scouting/game/:uuid` and `/players/:name` show the Scouting Library's). Reads `useSupporter` |
-| `GameView.jsx` | Unified game display — player panels (lore bar, ink meter, field, hand predictor), action log, export button; reused across `GameScraperPage`, `LibraryPage`, `ScoutedGamePage` |
-| `HandPredictor.jsx` | Bayesian hand inference display — shows top 12 cards with P(≥1 in hand) given observed deck + player profile |
-| `SearchBar.jsx` | Fuzzy card search dropdown with quantity selector (×1–×4); used by proxy generator |
-| `ProxyCard.jsx` | Printable card proxy renderer — portrait (2.5"×3.5") and landscape (location) layouts; print-optimized with Georgia serif fonts. A card carrying `imageSrc` (Coconut cards) is printed as that image filling the 2.5"×3.5" slot instead of through the text layout |
-| `ShareCardModal.jsx` | Modal shell for sharing a canvas-rendered image (native share / clipboard copy / download); used by `TournamentLookupPage`'s and `PlayerMatchHistory`'s share-card buttons |
-| `PlayerMatchHistory.jsx` | Round-by-round match history table for one player within a single loaded tournament event (opponent, result, score, user-annotated opp colors/play-draw, share card). Used by `TournamentLookupPage`'s player detail view and reused by `PairingHistoryPanel` for either side of a clicked pairing |
-| `SessionInsights.jsx` | Match History's collapsible "Sessions & Tilt" card: session summary, a stop-loss callout, and win-rate tables by game number in session, after a losing streak, time of day, and day of week. Renders `sessionStats.js` over the page's `filteredGames` |
-| `PostByline.jsx` | "By <author> · <date>" line for blog posts, author linked to their profile (`authorUrl`). Used by `BlogIndexPage` and `BlogPostPage` |
-| `PairingHistoryPanel.jsx` | Modal opened by clicking a pairing row in `TournamentLookupPage`'s Matches tab — shows both players' cross-event history and head-to-head from the Tournament History archive, alongside each player's `PlayerMatchHistory` for the currently loaded event. See "Tournament History Archive" below |
-| `StreamPairingPicker.jsx` | The Stream Overlay panel's pairing picker — a modal listing the linked RPH event's current round (table, both names and records, a Send per row), loaded fresh from `fetchRoundMatches()` + `fetchAllStandings()` when opened (see "Stream Overlay") |
+| Auth, access, theme | `supabaseClient.js`, `access.js` (`SUPPORTER_PATHS`; `METAFY_URL`/`METAFY_JOIN_URL`/`METAFY_PRICE`, the one home of the Metafy link and The Forge tier's price), `theme.js` |
+| Storage | `db.js` (IndexedDB `lorcana_pro_tools`), `cardsCache.js`, `scoutedGames.js`, `coconutDecks.js`, `gamelogHistory.js` (IndexedDB `lorcana_gamelogs`); see the `indexeddb-schema-map` skill before adding a store |
+| Cards and inks | `inkColors.js` (`resolveInkName`, `resolveColors`, `matchupKey`), `cardAnalysis.js` (`buildCardIndex`), `parseDeckList.js`, `decklistShared.js` (`matchDeckList`, `inkFill`, deck URL params) |
+| duels.ink | `duelsApi.js` (tokens, match history, gamelogs, stats), `parseGamelog.js`, `gameStats.js`, `analyticsAggregation.js`, `cardImpact.js` (WAR), `buildWinrateMatrix.js`, `metagameAnalysis.js`, `sessionStats.js`, `opponentDirectory.js`, `playerProfiles.js`, `leakDetection.js`, `handInference.js`, `gameSnapshot.js`, `gameExport.js`/`gameImport.js`, `exportGameIds.js` |
+| Meta stats | `metaSynthesis.js`, `metaDrift.js`, `rankTiers.js`, `archetypeStats.js`, `deckDoctor.js`, `stockDecks.js`, `forgeDecks.js`, `practiceSim.js`, `drawOddsMath.js`, `monteCarloSim.js` |
+| Tournaments | `tournamentApi.js`, `tournamentLive.js`, `tournamentHistoryApi.js`, `resultsArchive.js`, `bracket.js`, `storeTiers.js`, `trackedStores.js`, `fieldBreakdown.js`, `cardePdf.js` |
+| Stream Overlay | `streamOverlay.js` (pure, tested), `streamTables.js` (Supabase) |
+| Content | `siteSections.js` (the catalog; new tools need an `icon` in `toolIcons.js`, a test enforces it), `blog.js`, `blogPost.js`, `blogMeta.js`, `frontmatter.js`, `rules/` |
+| Coconut | `coconutCards.js`, `coconutFormat.js`, `coconutDecklistText.js` |
+| Share images (canvas) | `tournamentShareImage.js`, `metaSynthesisShareImage.js`, `coconutShareImage.js` |
 
-| `InkIcons.jsx` | Shared ink icons — `InkIcon` (one ink) and `InkIcons` (a list, order-preserving and de-duplicated via `resolveInkName()`). Some pages alias it locally (`ColorPairIcons`, `InkImg`); `MatchHistoryPage` wraps it in a small local `InkIcons` with its own sizing/fallback |
-| `StatCard.jsx` | Small label/value stat card (compact and large `size` variants) |
-| `PlayerTags.jsx` | Favorite/team-tag toggle buttons shared by `TournamentLookupPage` tabs and `EliminationBracket` |
-| `EliminationBracket.jsx` | `TournamentLookupPage`'s Bracket tab — reconstructs the top-cut bracket from RPH `round_number` + `table_number` (RPH has no explicit "advances to" link) |
-| `MetaTrendChart.jsx` | Multi-line weekly sparkline of archetype play/win rate (Okabe-Ito colors); used by `MetaSynthesisPage` |
-| `DeckListCard.jsx` | A decklist card (type buckets of `CardBar`s + Copy list, Deck Insights and Inspector buttons; the last two hand the list over through each page's localStorage deck key) shared by `StockDecksPage` and `ForgeDecksPage` |
-| `DecklistCardBar.jsx` | Card row with the inkwell cost emblem, shared by the Decklist Inspector and its overlay |
-| `PlayerProfileDetail.jsx` | Body of `PlayerProfilePage` — the unified opponent profile |
-| `deckDoctor/*` | `DeckDoctorPage` sections — `BuildDiff` (only yours / count differs / only the field's), `LiftChecklist` (one lift list against your list), `YourCards` (WAR tables with the field's lift beside each card), `MatchupsVsField` |
-| `ResultsArchive.jsx` | Shared bits of the three `/results/*` pages — `ArchiveFootnote` (the "as published on Play Hub" line), `ArchiveLoading` (forge spinner), `ArchiveError` (not-found / failed card with a link back) |
-| `analytics/*` | `AnalyticsPage` sub-views — `GamesList`, `GamelogDetail` (per-game drilldown), `StatTables` (card/mulligan tables), `MatchupViews` (matchup matrix, `CardImpactView` WAR + Kept/Sent %, `CardImpactTrendView`), `LeakReport` |
+### Design system
 
-### Hooks
+Paper surfaces, an ink-black nav bar, condensed caps display type, one forge-gold accent, defined as tokens in `src/index.css`'s `@theme` block. `font-sans` is Source Sans 3, `font-display` is Oswald (every `<h1>` gets it via a base rule; use `font-display uppercase tracking-wide` for matching headings). Brand colors: `paper`, `ink`/`on-ink`, `forge`/`on-forge`/`forge-ink`/`forge-soft`; the gray scale is a warm paper neutral and `white` is the card surface. Radii are squared off (`rounded`, `rounded-lg` are 2–4px). Use the `ui/` building blocks rather than hand-rolled class strings; `forge` is for the one primary action or current selection, ink and gray for the rest; blue is off-brand; win/loss and similar status colors stay semantic.
 
-In `src/hooks/`:
+### Dark mode
 
-| File | Returns | Purpose |
-|---|---|---|
-| `useAuth.js` | `{ user, isLoading, error }` | Supabase session — checks on mount, subscribes to auth state changes, and ensures a `profiles` row exists for the user |
-| `useSupporter.js` | `{ user, isAdmin, isSupporter, tier, isLoading }` | Reads the user's `supporter_tier` from the `profiles` table; `isSupporter` is true for both `supporter` and `admin` |
-| `useCards.js` | `{ cards, loading, error }` | Fetches card data from `/api/cards`, falls back to IndexedDB cache via `cardsCache.js` |
-| `useTournamentLiveUpdates.js` | Pusher connection status | Subscribes to RPH live updates for an event (via `tournamentLive.js`) and calls a debounced `onMessage` so `TournamentLookupPage` silently refetches |
-| `usePairingBadges.js` | badge cache + `ensureBadges`/`hasPedigree`/`hasRivalry` | Shared cache for Tournament Lookup's "pedigree" (made top cut at a Challenge-tier event) and "rivalry" (met before) badges from `/api/tournament-history`, batched to the server's 500-per-request cap |
-| `useTransparentBackground.js` | — | Makes `<html>`/`<body>` transparent while mounted, so OBS composites a Browser Source view over the scene; used by both overlay views |
-| `useTheme.js` | `{ theme, resolvedTheme, setTheme }` | Reads the dark-mode preference from `ThemeProvider` — `theme` is the stored choice (`light`/`dark`/`system`), `resolvedTheme` is what's applied |
+**No `dark:` variants anywhere, and none in new code.** `src/index.css` remaps Tailwind's color variables under `html.dark`, so every palette utility themes itself: grays 50–300 become dark surfaces and borders, 400–950 light text, accent families mirror so tinted panels darken while their text lightens. Stay on the palette and it works. `bg-black` is not remapped (it is the modal scrim) so use `bg-gray-900` for a solid dark fill. Inline hex and canvas colors do not participate (`ProxyCard.jsx` is inline-styled on purpose: a proxy prints white). The remap is `@media screen` only, so print stays light. The preference (`light`/`dark`/`system`, localStorage `lorcana_theme`) is read by `theme.js`, applied by `context/ThemeProvider.jsx`, written only by `SettingsPage`; an inline script in `index.html` applies the class before first paint and duplicates the storage key, so change both together.
 
-### Shared Libraries
+### Access control
 
-In `src/lib/`:
+`profiles.supporter_tier` (`supporter` | `admin`) with `supporter_source` (`manual` from `AdminPage`, `metafy` from the Metafy integration, which never overwrites a manual grant). RLS lets users read their own row; only admins (`is_admin()`) update tiers. Gating is client-side UX only: the `/api/*` proxies do not check supporter status. The gate (`SupporterRoute`) shows the tool's catalog entry, a screenshot from `public/previews/<tool path>.jpg` (a unit test in `access.test.js` requires one per `SUPPORTER_PATHS` entry; capture it against the local dev server as a supporter at 1440×900; a gated sub-route names its tool with `previewPath`) and the Metafy call to action with `MetafyAccessSteps`.
 
-| File | Purpose |
-|---|---|
-| `supabaseClient.js` | Supabase client init; exports `loginWithGoogle`, `logout`, `getSession`, `getCurrentUser` |
-| `access.js` | `SUPPORTER_PATHS` set + `isSupporterPath()` — single source of truth for supporter-gated routes (used by `App.jsx` and `HomePage`); also `METAFY_URL`/`METAFY_JOIN_URL`/`METAFY_PRICE`, the one place the Metafy community link and The Forge tier's price live (`HomePage`, `Footer`, `SupporterRoute`) |
-| `theme.js` | Dark-mode preference storage + resolution — `readStoredTheme()`/`storeTheme()`, `resolveTheme()`, `prefersDark()`, `subscribeToSystemTheme()`, `applyResolvedTheme()`. See "Dark Mode" below |
-| `db.js` | IndexedDB abstraction for the `lorcana_pro_tools` DB — `openDB()`, `getTx()`, `promisify()` |
-| `cardsCache.js` | IndexedDB card data caching (stored in `cards` store of `lorcana_pro_tools` DB) |
-| `inkColors.js` | Ink color normalization — `resolveInkName()` (red→ruby, etc.), `resolveColors()`, `matchupKey()` |
-| `scoutedGames.js` | IndexedDB CRUD for scraped game snapshots (`lorcana_pro_tools` DB, `games` store, keyed by `uuid`) — powers the Scouting Library |
-| `coconutCards.js` | Static data for all 29 [Format Coconut] cards — `id` (also the art filename), `name`/`version`, `baseFullName`, `inks` (one ink, or two for the duo cards), `duelsId` (duels.ink's own id, omitted for a card duels.ink doesn't carry yet), ability text, and the Nick Wilde → Pawpsicle extra-copy exception. Also exports `getCoconutCard()` and `coconutCardImageUrl()` |
-| `coconutFormat.js` | [Format Coconut] deck rules — `getCardLimit()` (1, or 4 for the Coconut card/its extra-copy exception), ink legality, and `validateDeck()` (60+ cards, singleton, ink) |
-| `coconutDecks.js` | IndexedDB CRUD for saved Coconut decks (`lorcana_pro_tools` DB, `coconutDecks` store, keyed by `id`) |
-| `gamelogHistory.js` | IndexedDB CRUD for parsed gamelogs (`lorcana_gamelogs` DB, `gamelogs` store, keyed by `id`) |
-| `gameStats.js` | Aggregate stats across game records — matchups, card plays, ink curves |
-| `gameSnapshot.js` | Export/import game state as JSON files for sharing |
-| `playerProfiles.js` | `listPlayers()`/`buildPlayerProfile()` — unified per-opponent profiles merging scouted games (`scoutedGames.js`) and imported duels.ink gamelogs (via `opponentDirectory.js`'s `buildDirectory()`); see "Unified Opponent Profiles" below |
-| `opponentDirectory.js` | `buildDirectory()` — aggregates parsed gamelogs into per-opponent, per-deck card totals (played/inked/discarded/destroyed). Used directly by `playerProfiles.js` to fold gamelog data into the unified profile — no longer has its own page |
-| `handInference.js` | Hypergeometric P(≥1 in hand) calculator — powers `HandPredictor` |
-| `leakDetection.js` | Detect when hand information is leaked (quests, zones); used by `PracticePlanPage` and `AnalyticsPage` |
-| `tournamentShareImage.js` | Renders a shareable summary image (canvas) for tournament/practice results |
-| `parseGamelog.js` | Decompress gzip + parse raw gamelog entries into structured game state |
-| `buildWinrateMatrix.js` | Aggregate color-pair matchup data from game records into a win/loss matrix |
-| `sessionStats.js` | Session & tilt analysis over match-history rows. `buildSessions()` excludes bot games and starts a new session after a `SESSION_GAP_MINUTES` (30) gap between `ended_at` and the next `started_at`; it throws on a row missing either timestamp. Also `winRateByPosition()`, `winRateAfterLossStreak()` (streaks reset at session boundaries, and draws don't move them), `winRateByTimeOfDay()`/`winRateByDayOfWeek()` (browser-local time), and `stopLossSuggestion()`, which only suggests a break when the after-streak gap's `diffInterval()` is entirely below zero with at least 15 games |
-| `siteSections.js` | `SECTIONS` — the tool catalog (name, path, icon, description per tool; `navLabel` per section) rendered by `HomePage`, `SitemapPage`, and `Nav`. `findTool(pathname)` resolves a route to its section/tool |
-| `toolIcons.js` | Stroke-glyph path data for each catalog tool's `icon`, drawn by `components/ToolIcon.jsx` |
-| `analyticsAggregation.js` | `enrichGame()` + per-card/mulligan aggregations (`aggregateMyCards`, `aggregateMulliganSentBack`, `aggregateMulliganWinRates`, `aggregateMultiCopyMulligan`) behind `AnalyticsPage` |
-| `practiceSim.js` | `wilsonInterval()`, `diffInterval()` (Newcombe 95% interval for a difference of two proportions), `shrinkWR()` (Bayesian shrinkage toward the public WR, 10-game prior), and the Bo1/Bo3 tournament Monte Carlo used by `PracticePlanPage` |
-| `drawOddsMath.js` / `monteCarloSim.js` | Exact hypergeometric odds (log-space) and the mulligan/scry/curve/quest-pressure simulations behind Deck Insights |
-| `tournamentLive.js` | `subscribeToTournamentLive()` — Pusher subscription to RPH's public `player-event-{id}` channel; wrapped by `hooks/useTournamentLiveUpdates.js` so `TournamentLookupPage` refetches on any broadcast |
-| `metaSynthesis.js` / `rankTiers.js` / `archetypeStats.js` | Meta Synthesis logic (see below), MMR → rank-tier mapping, and curation of duels.ink archetype profiles |
-| `deckDoctor.js` | Pure helpers behind Deck Doctor — deck grouping and versions from match-history rows, archetype assignment by build overlap, build diff, lift checklist, matchups vs the field, and the verdict sentences (see "Deck Doctor" below) |
-| `stockDecks.js` | `STOCK_DECK_FOLDERS` + `buildStockDecks()` behind `StockDecksPage` (see "Stock Deck Lists" below) |
-| `forgeDecks.js` | `parseForgeDeck()` / `forgeDecksFor(folderId)` — The Forge's own recommended lists from `content/forge-decks/` (see "Stock Deck Lists" below) |
-| `cardePdf.js` | carde.io decklists PDF → Field Breakdown's input: `decklistsFromPages()` (pure) and `readDecklistsPdf(file)` (pdf.js, loaded on first use) |
-| `storeTiers.js` | RPH store-tier rules for Store Lookup (see below) |
-| `resultsArchive.js` | Pure helpers behind the public `/results/*` pages — `matchOutcome()`, `playerSummary()`, `toBracketMatch()` (archived row → the RPH shape `EliminationBracket` renders), `isMajor()`/`MAJOR_MIN_PLAYERS`, `formatEventDate()`, `ordinal()`. See "Tournament History Archive" |
-| `decklistShared.js` | Decklist Inspector/overlay helpers — deck URL param encoding, ink fills, type/cost bucketing |
-| `streamOverlay.js` | Pure Stream Overlay helpers — `rowToState()` (a `stream_tables` row → the render shape, theme included), `winnerIndex()`, `breakHeadline()`, `themeTextColor()`/`DEFAULT_THEME`, the wall-time round timer (`startTimer`/`pauseTimer`/`resetTimer` return column patches; `timerRemainingMs`/`formatClock`), `timerFromRph()`/`rphClockPatch()`, `featureMatchPatch()`, `swapSidesPatch()`, `buildPlayerCard()` and `casterPoints()` (see "Stream Overlay" below) |
-| `streamTables.js` | Supabase access for `stream_tables` — owner CRUD under RLS (`listMyTables`/`createTable`/`updateTable`/`deleteTable`), the public `fetchPublicTable()` and `adjustTable()` RPCs, `subscribeToTable()` on the row's broadcast topic, and the panel's selected-table localStorage key |
-| `rules/` | Rules browser — `registry.js` (document list), `index.js` (accessors), `diff.js` (word diff), `content/<doc>/<version>.js` (see "Rules Browser" below) |
-| `cardImpact.js` | `computeCardImpact()` — per-card "wins above replacement" (WAR) for a deck's games; `computeCardImpactTrend()` — the same logic bucketed by calendar month, powering `CardImpactTrendView`'s WAR-over-time chart |
-| `metagameAnalysis.js` | Opponent metagame breakdown — deck frequency and win rates by color pair |
-| `duelsApi.js` | duels.ink API client — token management, match history (`fetchAllMatchHistory()` pages up to 20 × 100 games, shared by Practice Plan and Deck Doctor), gamelog, deck/personal-stats, and meta stats fetches |
-| `metaDrift.js` | `archetypeDrift()` / `archetypeMatchupDrift()` — week-by-week win rate, games and play rate per grouped archetype, and one archetype's win rate vs each other archetype, for `WinrateMatrixPage`'s Meta Drift view |
-| `tournamentApi.js` | Ravensburger tournament API — event details, standings, matches, registrations, ID analysis |
-| `tournamentHistoryApi.js` | Client for `/api/tournament-history` — `fetchPlayerTournamentHistory()`, `fetchHeadToHead()`, `searchTournamentPlayers()`, `fetchRecentTournamentImports()`, `importTournamentEvent()`, and the public archive reads `fetchArchiveEvents()`/`fetchArchiveEvent()`/`fetchArchiveEventPlayer()`/`fetchArchivePlayer()` (no session header, so they're edge-cacheable). See "Tournament History Archive" below |
-| `blog.js` | Client access to the compiled blog posts — `listPosts()` (newest first), `getPost(slug)`. See "Blog" below |
-| `blogPost.js` | `parsePost()` — frontmatter + markdown → `{ slug, title, date, description, html }`. Build-time only (imports `marked`) |
-| `blogMeta.js` | `BLOG_DESCRIPTION`, `AUTHOR_LINK_REL` + `formatPostDate()`, shared by the client and `blogPlugin.js` |
-| `gameExport.js` | Serialize game records for sharing (used by `AnalyticsPage`) |
-| `gameImport.js` | Deserialize imported game records |
-| `exportGameIds.js` | CSV export of game IDs |
+### API routes
 
-### Design System (Ink & Parchment)
-
-The look is taken from the brand art: paper surfaces, an ink-black nav bar, condensed display type set in caps like the wordmark, and one forge-gold accent. It's defined as tokens in `src/index.css`'s `@theme` block, so it applies app-wide without per-page markup:
-
-- **Fonts:** `font-sans` is Source Sans 3 (body), `font-display` is Oswald (loaded from Google Fonts in `index.html`). Every `<h1>` gets the display face in caps via a base rule; use `font-display uppercase tracking-wide` for other headings and labels that should match.
-- **Brand colors:** `paper` (page ground), `ink` / `on-ink` (nav bar, stays dark in both themes), `forge` / `on-forge` (gold fill for the one primary action and supporter status), `forge-ink` (gold text on a light surface), `forge-soft` (tinted gold panel). The gray scale is retuned to a warm paper neutral and `white` is the card surface, so existing `gray-*`/`white` utilities already carry the brand.
-- **Radii** are squared off app-wide (`rounded`, `rounded-lg`, etc. are 2–4px); `rounded-full` is unchanged.
-- **Building blocks** in `src/components/ui/` — use these rather than hand-rolling class strings: `Button` (`primary` gold / `secondary` ink outline / `quiet` / `danger`; `to` for a router link, `href` for an external one), `Card` (bordered surface with optional `title`/`description`), `PageHeader` (page title + description + `actions`; the eyebrow is the route's catalog section from `findTool()`), `Input`/`Textarea`/`Select`, `Tabs`/`Tab` (underlined tab bar, forge underline on the active tab), `Badge` (`forge` for supporter status, `neutral` otherwise). Blue accents are off-brand: use `forge` for the one primary action or current selection, and ink/gray for the rest. Win/loss/draw colours and similar status colours stay semantic.
-- New catalog tools need an `icon` from `lib/toolIcons.js` (a unit test enforces it).
-
-### Dark Mode
-
-**There are no `dark:` variants in this codebase, and new code should not add any.** Dark mode is implemented once, in `src/index.css`, by remapping Tailwind's color tokens under `html.dark`. Every color utility Tailwind v4 generates resolves through a CSS variable (`.bg-gray-50` compiles to `background-color: var(--color-gray-50)`), so redefining those variables flips the whole app at once — retrofitting ~16k lines of markup with paired `dark:` classes was never on the table, and pages added later get dark mode for free as long as they stay on the palette.
-
-What this means when writing UI:
-
-- Use the normal Tailwind palette plus the brand tokens above (`bg-white`, `bg-gray-50`, `border-gray-200`, `text-gray-500`, `bg-gray-900 text-white`, tinted `bg-red-50`/`text-red-700` panels) and it will theme itself. The remap is built around exactly these idioms: grays 50–300 become dark surfaces and borders, 400–950 become light text, and accent families are mirrored so tinted panels darken while their paired text lightens.
-- **Don't use `bg-black` for a solid fill** — `--color-black` is deliberately *not* remapped, because it's the modal-scrim color (`bg-black/40`) and must stay dark in both themes. Use `bg-gray-900` for a solid dark-in-light fill.
-- Hardcoded colors (inline `style` hex values, canvas rendering) don't participate. `ProxyCard.jsx` is fully inline-styled on purpose — a printable proxy must stay white regardless of theme.
-- The remap is scoped to `@media screen`, so printed output (proxy sheets, standings) always uses the light palette.
-
-The preference itself (`light` | `dark` | `system`, default `system`) lives in `localStorage` under `lorcana_theme`:
-
-- `src/lib/theme.js` — storage, normalization, and resolution helpers (unit-tested in `src/lib/__tests__/theme.test.js`).
-- `src/context/ThemeProvider.jsx` — wraps the app in `main.jsx`, subscribes to `prefers-color-scheme` via `useSyncExternalStore` so `system` stays live, and toggles the `dark` class on `<html>`.
-- `src/hooks/useTheme.js` — the consumer hook; `SettingsPage`'s Appearance card is the only UI that writes.
-- An inline script in `index.html` applies the class **before first paint** so dark-mode users don't get a flash of the light palette. It duplicates the storage key and the `system` fallback from `theme.js` — change one, change the other. It always *toggles* rather than only adding, so the class baked into prerendered HTML by `prerender.js` can't override the user's real preference.
-
-### Access Control & Supporters
-
-- Supabase `profiles` table (`supabase/migrations/001_profiles.sql`, `002_admin.sql`) holds `supporter_tier` (`supporter` | `admin`), `supporter_source`, `supporter_since`. RLS lets users read their own row; only admins (via the `is_admin()` security-definer function, with `tkwidmer@gmail.com` as a JWT-email bootstrap fallback) may update tiers. A trigger auto-creates a profile row on signup.
-- `useSupporter` reads the tier; `SupporterRoute` gates the routes in `SUPPORTER_PATHS`; `AdminPage` is the UI for granting/revoking access. Gating is client-side UX only — the `/api/*` proxies do **not** check supporter status.
-- `supporter_source = 'metafy'` rows are granted/revoked automatically by the Metafy integration (see below) rather than through `AdminPage`; manual/admin grants (`supporter_source = 'manual'`) are never overwritten by that automation.
-
-### Substack Signup Sync
-
-A deliberate, narrow exception to the "no game data server-side" ethos above — this is marketing email, not game data. `AuthProvider.jsx` fires once per browser session per signed-in user: it grabs the current Supabase access token and calls `POST /api/subscribe-substack`. That route verifies the token via Supabase (`auth.getUser`), takes the email from the *verified* session only (never a client-supplied value), and forwards it to `https://inkbornforge.substack.com/api/v1/free` — the same undocumented endpoint Substack's own embed signup form posts to, since Substack has no official public API. Best-effort and fire-and-forget: failures are logged server-side and never surface to the user or block sign-in.
-
-### API Routes
-
-Vercel serverless functions in `/api/*.ts`. Most are thin forwarding proxies with error handling and caching headers, and have no server-side auth on those — tokens are forwarded from the client. `/api/tournament-history` is the exception: it reads/writes project-owned Supabase data rather than proxying an external API, so it verifies the caller's Supabase session server-side on its admin endpoints (admin tier) and `pairing-badges`; its archive reads are public and edge-cached instead — see "Tournament History Archive" below.
-
-**Function budget — read before adding a route.** Vercel's Hobby plan caps a deployment at **12 serverless functions**, counted as files in `api/` (`api/_lib/` is excluded). The count is currently **9**. Going over fails the deploy, so the established fix is to consolidate related endpoints into one function dispatched by a query param — see `/api/duels`, `/api/tournament-history`, and `/api/metafy` (`?endpoint=`).
-
-⚠️ **Use flat `api/<name>.ts` files only.** A nested dynamic route (`api/patreon/[action].ts`) was tried and **silently did not deploy** — the build went green, but every request to it fell through to the `/(.*)` → `/index.html` catch-all in `vercel.json` and returned the SPA shell instead of the function. That took the Patreon integration down in production (PR #175, reverted in #176). A green Vercel build is **not** evidence that a function exists; verify a new route by curling it after deploy and confirming a JSON/expected response rather than `text/html`.
-
-| Endpoint | Upstream | Auth | Notes |
-|---|---|---|---|
-| `/api/duels` | Various duels.ink endpoints | Bearer token (except `stats`) | Single consolidated proxy for everything duels.ink, dispatched by `?endpoint=` — `match-history`, `gamelog`, `deck`, `stats`. Folded into one function (rather than one route per endpoint) because Vercel's Hobby plan caps a deployment at 12 serverless functions. `deck` additionally takes `?personalStats=1` to hit `/api/account/personal-stats` (undocumented — not in duels.ink's `/api-docs.md`) for per-deck-version stats, including each version's exact card list + timeframe, used by `AnalyticsPage`'s Card Impact (WAR) to confirm whether a card was actually in the deck for a given game. `stats` forwards duels.ink's documented `era` param; `fetchStats()` in `duelsApi.js` always scopes to the queue's current era, looking its key up once per queue from `meta.eras.currentEra.key`. Only the fields duels.ink documents as stable (`matchups`, `colorPairs`, `activity.totalGames`, `updatedAt`, a few `meta.*`) are a supported contract — the archetype fields (`profiles`, `archetypeMatchups`, `cardLift`, `pairCardLift`) behind `MetaSynthesisPage`, Deck Doctor and the matrix's archetype view are not. In bo3 queues `matchups[].games` counts matches, not games. |
-| `/api/tournament` | Ravensburger API | Public | Routes by `?type=` param: `event`, `matches`, `registrations`, `standings`, `store`, `storeEvents`; handles pagination |
-| `/api/tournament-history` | Supabase (`tournament_history_*` tables) | Public for the archive reads (`events`, `event`, `event-player`, `player`, `player-history`, `head-to-head`, `search-players`; edge-cached 5 min, search 1 min) — `import`, `recent-imports`, `suggested-imports` require admin tier; `pairing-badges` requires any signed-in session | Single consolidated route for the caster history archive, dispatched by `?endpoint=` — `import` (admin-only, fetches an RPH event's final standings + matches server-side and upserts them), `player-history`, `head-to-head`, `search-players`, `recent-imports`, `suggested-imports`, `pairing-badges`, and the public results reads `events`, `event`, `event-player`, `player`. See "Tournament History Archive" below. |
-| `/api/discord-interactions` | Discord Interactions webhook | Ed25519 signature (`DISCORD_PUBLIC_KEY`) | Not a proxy — implements the Discord bot's commands (Decode Deck QR, `/tournament`, `/favorite`, `/unfavorite`, `/favorites`) directly. See `discord-bot/README.md`. |
-| `/api/subscribe-substack` | Substack's undocumented `/api/v1/free` embed-form endpoint | Bearer Supabase access token | Called by `AuthProvider.jsx` once per session on sign-in. See "Substack Signup Sync" above. |
-| `/api/discord-tournament-tick` | None (internal) | Shared secret (`CRON_SECRET`) | Called every 30 min by `.github/workflows/tournament-tracker-tick.yml`; posts an update to Discord for any favorited player whose rank/record changed, and auto-deactivates favorites once an event ends. |
-| `/api/metafy` | Metafy API | Varies by endpoint — see "Metafy Integration" below | Single consolidated route for the Metafy supporter integration, dispatched by `?endpoint=` — `callback`, `status`, `reconcile-tick`. See "Metafy Integration" below. |
-
-LorcanaJSON card data (`/api/cards`) is a rewrite, not a serverless function — handled by Vite proxy in dev and by `vercel.json` in production, both pointing to `https://lorcanajson.org/files/current/en/allCards.json`.
-
-### Discord Bot (`api/discord-interactions.ts`)
-
-The Discord bot (message command "Decode Deck QR" + `/tournament`, `/favorite`, `/unfavorite`, `/favorites` slash commands) is implemented as a Vercel serverless function receiving Discord's HTTP Interactions webhook — not a persistent gateway process. `discord-bot/` only holds a one-time script to register the commands with Discord's API; the actual command logic lives in `api/discord-interactions.ts` and `api/_lib/discordQr.ts` / `discordTournamentApi.ts` / `discordTournamentEmbeds.ts`. Image QR decoding uses `jimp` + `jsqr` (not `sharp`, whose native binaries are a portability risk in a serverless bundle). `discordTournamentApi.ts` is a standalone port of `src/lib/tournamentApi.js` that calls the public Ravensburger API directly, since this function isn't behind `/api/tournament`. Requires a `DISCORD_PUBLIC_KEY` env var in Vercel for request signature verification. See `discord-bot/README.md` for full setup.
-
-`/favorite url:<event> player:<name>` tracks a player in the channel it's run from; a scheduled tick (`api/discord-tournament-tick.ts`, triggered by GitHub Actions every 30 minutes — Vercel Hobby's Cron Jobs only run once/day, so that couldn't drive this) checks all active favorites, groups them by event to minimize API calls, and posts an update embed only when a tracked player's rank/record actually changed since the last check. Favorites are stored in the `discord_favorite_players` Supabase table (`supabase/migrations/003_discord_favorite_players.sql`) — RLS is enabled with zero policies, since this table is only ever touched server-side via `api/_lib/discordSupabase.ts` (a service-role client, bypassing RLS entirely; separate from the anon-key client the main web app uses). `/unfavorite` deactivates a tracked row; `/favorites` lists current ones in the channel. A favorite auto-deactivates once its event's current round can no longer be resolved (tournament finished).
-
-### Metafy Integration (`api/metafy.ts`)
-
-The only automated supporter integration in the app (a prior Patreon integration was removed entirely, code and data, in favor of this). Backers connect their Metafy account via OAuth from a "Connect Metafy" card on `SettingsPage.jsx`; an active subscription **to a specific tier** of this app owner's own Metafy community grants `profiles.supporter_tier = 'supporter'` with `supporter_source = 'metafy'`. Docs: [dev.metafy.gg](https://dev.metafy.gg/).
-
-**Tier-gated, not just "any subscription":** the community has two tiers — "Supporter" (Metafy-side guides) and "The Forge" (this app) — and only "The Forge" (`METAFY_SUPPORTER_TIER_ID`) grants access. `isSupporterTier()` in `api/metafy.ts` is the single place this comparison happens, used by both `?endpoint=callback` and `?endpoint=reconcile-tick`. `metafy_links.has_access` (and the `hasAccess` field `?endpoint=status` returns to `SettingsPage`) means "has the specific tier that unlocks this app" — a subscriber on the wrong tier is stored/shown as not having access, not as a second ambiguous flag. `metafy_links.tier_id` still records whichever tier they're actually on, even when it's not the gating one, for visibility.
-
-**No OAuth tokens are ever persisted.** The Metafy user ID ↔ Supabase user_id link (plus last-known access state) lives in the `metafy_links` table (`supabase/migrations/010_metafy_links.sql`) — RLS enabled with zero policies, same service-role-only pattern as `discord_favorite_players` and `duels_api_tokens`. `api/_lib/metafyApi.ts` is the thin client for Metafy's OAuth2 + API v1; `api/_lib/metafySupabase.ts` holds `applyMetafyStateToProfile()`, the single grant/revoke chokepoint.
-
-`api/metafy.ts` is a single consolidated route, dispatched by `?endpoint=`:
-- `?endpoint=callback` — the OAuth redirect target. `state` carries the initiating user's Supabase access token (verified server-side via `auth.getUser()`, the same pattern `api/duels-tokens.ts` uses for its Bearer auth) since this is a plain browser redirect with no other way to identify the logged-in user. Uses the user's freshly-issued access token for exactly one call — `GET /v1/me/purchases/communities/{communityId}` (`METAFY_COMMUNITY_ID`) — then gates the result through `isSupporterTier()` to grant/revoke immediately on connect, then discards the token entirely; it's never written to `metafy_links`.
-- `?endpoint=status` — authenticated GET/DELETE so `SettingsPage` can read connection status and disconnect.
-- `?endpoint=reconcile-tick` — a `CRON_SECRET`-gated safety net that's actually the **only** revoke path: Metafy's webhooks are Partner-only ([dev.metafy.gg/api-reference/v1/webhooks](https://dev.metafy.gg/api-reference/v1/webhooks)), so there's no real-time push at all here. It runs every 30 minutes (`.github/workflows/metafy-reconcile-tick.yml`, same cadence as `discord-tournament-tick`), and does a single owner-scoped `GET /v1/me/community/subscribers` call (`METAFY_API_KEY`) rather than re-polling each linked user's own token — that's what makes storing/refreshing per-user tokens unnecessary. Both `?endpoint=callback` and this refuse to run (redirect-with-error / 500, respectively) if `METAFY_SUPPORTER_TIER_ID` isn't set, rather than defaulting to "no tier matches" and silently revoking every linked account.
-
-There is deliberately no PKCE code-verifier flow here, even though Metafy's docs recommend one for authorization-code integrations: PKCE protects clients that can't hold a secret, and this integration exchanges the code server-side with `METAFY_CLIENT_SECRET`.
-
-**Invariant:** revocation (`applyMetafyStateToProfile(userId, false)`) only ever updates rows where `supporter_source = 'metafy'` — a manually- or admin-granted supporter (via `AdminPage.jsx`) is never touched by a Metafy subscription lapsing.
-
-A prior Patreon OAuth integration (`api/patreon.ts` + friends) was fully removed, including its `patreon_links` table and `pgcrypto` functions (`supabase/migrations/011_drop_patreon_links.sql`, dropping what `006_patreon_links.sql`/`007_patreon_links_crypto_functions.sql` created) — confirmed safe first: its 2 linked rows were never actually active patrons (`patron_status` was `null` on both) and zero `profiles` rows carried `supporter_source = 'patreon'`, so nothing real was destroyed. `supporter_source`'s CHECK constraint no longer permits `'patreon'`.
+Vercel functions in `api/*.ts`, flat files only (a nested route once deployed green and silently served the SPA shell). **Vercel Hobby caps a deployment at 12 functions; the count is 9.** A new endpoint joins an existing `?endpoint=` dispatcher (`duels.ts`, `tournament-history.ts`, `metafy.ts`) or `tournament.ts`'s `?type=` switch rather than adding a file; the `vercel-proxy-pattern` skill has the shape. Routes: `duels` (every duels.ink call), `tournament` (Ravensburger), `tournament-history` (the archive, Supabase), `duels-tokens` (encrypted token store), `card-image` (allow-listed image proxy), `metafy`, `discord-interactions`, `discord-tournament-tick`, `subscribe-substack`. `/api/cards` is a rewrite to LorcanaJSON, not a function. Details, secrets and the integrations: `docs/agents/api-routes.md`.
 
 ### Storage
 
-| Layer | DB / Key | Contents |
-|---|---|---|
-| IndexedDB `lorcana_pro_tools` v2 | `games` store (key: `uuid`) | Scraped game snapshots from `GameScraperPage` |
-| IndexedDB `lorcana_pro_tools` v2 | `cards` store (key: `version`) | Cached LorcanaJSON card data |
-| IndexedDB `lorcana_pro_tools` v3 | `coconutDecks` store (key: `id`) | Saved [Format Coconut] decks from `CoconutDeckBuilderPage` |
-| IndexedDB `lorcana_gamelogs` v1 | `gamelogs` store (key: `id`) | Parsed gamelogs from `AnalyticsPage` |
-| localStorage `lorcana_deck_names` | — | User-assigned deck names (keyed by `your_deck_id`) |
-| localStorage `lorcana_theme` | — | Dark-mode preference: `light` \| `dark` \| `system` (see Dark Mode) |
-| localStorage `lorcana_stream_table` | — | Which of the owner's Stream Overlay tables the panel shows (see "Stream Overlay") |
-| localStorage (various) | — | Form state for `DrawOddsPage`, filter state, lore tracker (`lorcana_lore_tracker`), etc. |
-| `chrome.storage.local` | `lorcana_active_games` | Active game states captured by the Chrome extension (2-hour TTL) |
-| Supabase `auth` | session | Google OAuth user session |
-| Supabase `profiles` table | row per user | Supporter tier metadata (see Access Control) |
-| Supabase `duels_api_tokens` table | row per token | Logged-in users' duels.ink API tokens, encrypted at rest (pgcrypto) — replaces the old browser-only `localStorage` tokens so they carry over across devices. Managed via `/api/duels-tokens`; see `src/lib/duelsApi.js` |
-| Supabase `metafy_links` table | row per user | Metafy user ID ↔ Supabase user_id, last-known community access state. No OAuth tokens stored — see "Metafy Integration". Managed via `api/metafy.ts` (`?endpoint=callback`/`status`/`reconcile-tick`) |
-| Supabase `stream_tables` table | row per feature table | Stream Overlay state — one column per overlay field, owner-only RLS, public read/tap functions and a broadcast trigger for the unauthenticated view and controller (see "Stream Overlay"). Managed via `src/lib/streamTables.js` |
-| Supabase `tournament_history_events`/`_standings`/`_matches` tables | row per imported event / per-player standing / per match | Admin-imported major RPH tournament archive powering the caster history tool — the first server-side store of real tournament/game domain data (see "Tournament History Archive"). Managed via `/api/tournament-history`; see `src/lib/tournamentHistoryApi.js` |
-
-### External APIs
-
-**duels.ink** — Authenticated via Bearer token. Tokens are stored in the Supabase `duels_api_tokens` table (encrypted at rest), one row per account, with an `is_active` flag choosing the active one; managed on the Settings page via `/api/duels-tokens` (see `src/lib/duelsApi.js`). The active token is passed through the Vercel proxy routes. No server-side validation of the duels.ink API itself.
-
-**LorcanaJSON** — Card data from `https://lorcanajson.org/files/current/en/allCards.json`. Cached in IndexedDB after first load. In dev, `vite.config.js` proxies `/api/cards`; in production, `vercel.json` rewrites it.
-
-**Ravensburger Tournament API** — Public API for live tournament events. Accessed via `/api/tournament` which routes by `?type=` param. Pagination is handled by `fetchAllRegistrations()` in `tournamentApi.js` which loops until `next_page_number === null`. The `getTournamentStructure()` helper resolves current round, advancement requirements, and top-cut info from the raw event response.
-
-### Gamelog Pipeline
-
-This is the most complex data flow in the app:
-
-1. `fetchGamelogBuffer(gameId)` in `duelsApi.js` hits `/api/duels?endpoint=gamelog`, which fetches a gzip binary from `https://duels.ink/g/{id}`
-2. `decompressGzip(arrayBuffer)` in `parseGamelog.js` decompresses via native `DecompressionStream('gzip')`
-3. `parseGamelog(id, logs, meta)` processes an array of log entries with `{type, player, turnNumber, data, visibility}` shape into a structured object with per-player draw sequences, challenges, lore events, and card effects
-4. The result is saved to IndexedDB via `gamelogHistory.js` and displayed in `AnalyticsPage` or `GameView`
-
-Key parsing details in `parseGamelog.js`:
-- `ON_PLAY_DRAWS` map tracks cards that draw on play (e.g. Junior Woodchuck Guidebook → 2 draws); uses `pendingDrawSource`/`pendingDrawCount` to attribute subsequent `CARD_DRAWN` events to the source card
-- `CARD_PUT_INTO_INKWELL` with `fromZone === 'field'` means the *other* player caused the removal (e.g. Let It Go, Hades) — attribute as effectRemovals on the other player's last played card
-- `lastPlayedByPlayer` tracks the most recently played card per player for effect attribution
-
-### Chrome Extension
-
-`/chrome-extension/` is a separate artifact built with Manifest V3. `npm run build` calls `build-extension.js` which packages it into `/public/lorcana-extension.zip`. It does not share source with the main React app.
-
-Data flow when spectating a duels.ink game:
-
-1. User visits `duels.ink/spectate/{uuid}`
-2. `patch.js` (MAIN world, `document_start`) patches `WebSocket.prototype` to intercept all game messages
-3. `relay.js` (ISOLATED world) receives `postMessage` from `patch.js` and forwards to `background.js`
-4. `background.js` (service worker) stores game state in `chrome.storage.local` under `lorcana_active_games`, keyed by UUID; prunes entries older than 2 hours
-5. `bridge.js` (injected on lorcana-pro-tools pages) polls `chrome.storage.local` and posts a `lorcana_active_games` message to the page
-6. `GameScraperPage` listens for the message and renders the live game state
-
-The extension merges incoming `spectator_update` payloads — any field that ever appeared in a game's `meta` is retained across updates.
-
-### Unified Opponent Profiles
-
-`/library?tab=players` and `/players/:name` merge two independent opponent-tracking systems into one view — there is no route dedicated to gamelog-only opponent data anymore (`/opponent-directory` redirects to `/library?tab=players`):
-- **Scouted games** (`scoutedGames.js`) — full board-state snapshots captured via the Chrome extension or an imported shared snapshot. Games may not even involve the signed-in user (spectating two strangers is possible), so stats here are tracked per named player as *that player's own* record, not "my record against them".
-- **Imported duels.ink gamelogs** (`gamelogHistory.js`, aggregated per-opponent by `opponentDirectory.js`'s `buildDirectory()`) — always games the signed-in user actually played, with coarser per-card totals (played/inked/discarded/destroyed) but no turn-by-turn detail. `buildDirectory()`'s `wins`/`losses` are from *my* perspective (my record against that opponent); `playerProfiles.js` flips them (`wins`/`losses` swapped) when merging so the unified profile's `wins`/`losses` consistently mean "this opponent's own record", matching the scouted side.
-
-`playerProfiles.js` does the merge:
-- `listPlayers(records, gamelogs)` — per-opponent summary (games/W-L/deck count) for the Players tab list, keyed by name across both sources. `scoutedGameCount`/`gamelogGameCount` are broken out so the UI can show where the numbers came from.
-- `buildPlayerProfile(records, gamelogs, name)` — full per-opponent detail for `PlayerProfilePage`. Decks are bucketed by ink-color key (`matchupKey()`) and merged via `mergeDeckBuckets()`: a deck seen in only one source keeps that source's fields (`hasScoutedData`/`hasGamelogData` flags tell the UI which); a deck seen in both sums games/wins/losses and combines card stats by name (scouted `plays`/`inks` — max observed in a single game, used for the inferred-decklist `estimatedCopies` — alongside gamelog `played`/`inked`/`discarded`/`destroyed`, summed across games). Play-pattern stats (quests/turn, ink rate, went-first rate) require the full per-turn log a gamelog import doesn't carry, so they're scouted-only and read as 0 for a gamelog-only deck.
-
-The two sources can't be deduplicated against each other — there's no shared game ID between a spectated match and a duels.ink gamelog export — so if the same physical game was somehow captured by both, it's counted twice rather than merged 1:1. In practice this is rare enough not to matter (spectating your own game and also importing its gamelog).
-
-### Match History Filters
-
-`MatchHistoryPage` uses a cascading filter pattern where each filter layer narrows the options available to filters below it:
-
-```
-games → afterDate → afterQueue → afterMyColors → afterOppColors → filteredGames
-```
-
-`SessionInsights` (the Sessions & Tilt card) reads `filteredGames`, so every filter above scopes it too.
-
-Color options exclude 3+ ink entries (sealed/limited formats). Deck identity uses `your_deck_id` (stable API field) with `deckFingerprint(your_decklist)` as fallback. Deck names are stored in localStorage under `lorcana_deck_names`.
-
-### Match History Game Object Shape
-
-Key fields on game objects from the duels.ink API:
-- `your_player` (1 or 2), `your_deck_id`, `your_deck_colors` ("ruby/sapphire"), `your_decklist` (array of `{cardId, count}`)
-- `opp_display_name`, `opp_deck_colors` (the opponent's decklist is never returned)
-- `started_at` (ISO string — game time), `went_first`, `result`, `queue_name`
-- `gamelog_id`, `mmr_delta`, `your_lore`, `opp_lore`
-
-### Winrate Matrix & Metagame Analysis
-
-`AnalyticsPage` builds its matchup matrix from imported gamelogs (`gamelogHistory.js`) via `buildWinrateMatrix.js`. (`WinrateMatrixPage` is unrelated — it pulls public meta stats from the duels.ink API via `fetchStats`, not local records.) `buildWinrateMatrix.js`:
-- Groups games by `(myColors, oppColors)` pair using sorted JSON string keys
-- Tracks wins, games, and first/second player splits per matchup
-- Returns `{ matchups, colorPairs, totalGames, winLossMatrix }` — the matrix is a nested map `[playerColorKey][oppColorKey]`
-
-`metagameAnalysis.js` (`analyzeOpponentMetagame`) groups by opponent color pair and returns frequency + win rate sorted by game count.
-
-`WinrateMatrixPage` (defaults to Core Bo1) has two collapsible sections. **Win Rates** (open by default) groups by Archetypes (default) or Ink pairs and shows a Matrix (default) or a List; the archetype matrix is `archetypeMatrix()` (`metaSynthesis.js`) — archetypes with ≥1% of the meta, pairings under 30 games blanked — and the archetype list expands a row's matchups inline. **Archetype Meta Drift** is built on grouped archetypes (`aggregateArchetypes`, below). When opened, it fetches the last 5 of `meta.availableWeeks` (`period=week:<startDate>`) for the selected queue/ranks in parallel. `archetypeDrift()` (`metaDrift.js`) gives one row per archetype with each week's win rate, games and play rate, plus the overall change from the first week to the latest complete week (not week-over-week), plus a "Last week" column for the latest complete week vs the one before; each change header names its span. The in-progress week is shown but excluded, since its sample is partial. Rows sort by the latest complete week's games or win rate. Clicking an archetype expands `archetypeMatchupDrift()` in a row directly beneath it: its win rate vs each other archetype per week (mirrors omitted). Nothing is stored — it works on a first visit. "% of the meta" everywhere (this page, Meta Synthesis) is `metaShare()` (`metaSynthesis.js`): share of decks, archetype games ÷ (2 × `activity.totalGames`), since every game has two decks (`colorPairs` games sum to exactly 2× `totalGames`). duels.ink's own "play rate" divides by games and is twice this. Named archetypes cover ~80% of decks in Core, so their shares sum to less than 100%. (Drift used to diff daily color-pair snapshots saved in IndexedDB; `db.js` v5 drops that `metaSnapshots` store.)
-
-The page's Archetypes table uses `aggregateArchetypes()` (`metaSynthesis.js`), same as Meta Synthesis: duels.ink's `profiles` are per-build-variant clusters, it reuses one `archetypeName` across several `archetypeSlug`s of the same colors, and one slug can carry several names — so profiles are grouped by colors + `archetypeName`, the only distinction a player can see (Core Bo1 Set 13: 89 named profiles → 30 archetypes). `archetypeMatchups` is keyed by profile `id` and is rolled up to the same groups by `archetypeMatchupSummary()`.
-
-### Rules Browser
-
-`/rules` renders official documents (Comprehensive Rules, Tournament Rules, Play Correction Guidelines, CORE Lore Guide, Community Code, Pack Rush, [Format Coconut] Beta Rules, CCQ Event Term Sheet, Artist Policy, Diversity & Inclusion Policy) from static content in `src/lib/rules/content/<doc>/<version>.js`. Each version is a flat `entries` array of `{ id, type: 'chapter' | 'rule', title?, text? }`, with dotted `id`s (`1.1.3`) giving the hierarchy (`ruleDepth()`).
-
-- To add a document, register it in `registry.js` and wire its versions into `index.js`. To add a version, drop a new dated file into that document's `content/` folder.
-- Version *metadata* is synchronous. Entries load lazily (`loadVersion()`/`loadVersionDiff()` via `content/versionLoader.js` + each document's `import.meta.glob`), so one document doesn't pull every version into the bundle. Pages should go through `index.js`, never import content files directly.
-- `diff.js` (`changesById`, `wordDiff`) compares a version against its predecessor. That powers the inline highlighting on `RulesDocumentPage` and the full diff on `RulesChangesPage`.
-
-### Meta Synthesis
-
-`MetaSynthesisPage` turns duels.ink's `/api/stats/meta` response (`fetchStats`) into plain English. `metaSynthesis.js` holds pure, unit-tested functions:
-- `aggregateArchetypes()` merges duels.ink's per-variant cluster profiles into one archetype per colors + archetype name.
-- `buildSynthesis()` covers most-played, top and bottom win rate with a sample floor, matchup summaries, and best/worst signature cards.
-- `compareRankBands()` / `compareWeeks()` produce the "higher ranks vs lower" and "this week vs last" deltas.
-
-The page defaults to the user's own rank band (`fetchCurrentMmr` → `rankTiers.js`) and the latest week, offers Core/Infinity × Bo1/Bo3, persists filters in localStorage (`lorcana_meta_synthesis_filters`), and has a share image (`metaSynthesisShareImage.js`).
-
-### Deck Doctor
-
-`DeckDoctorPage` (`/deck-doctor`, supporter-gated, Coaching Tools) joins three things the app already has for one deck. All logic is in `deckDoctor.js` (pure, unit-tested); the page composes it and the `components/deckDoctor/*` sections.
-
-- **Your list and results** come from match history (`fetchAllMatchHistory()`): every row carries the exact `your_decklist`, so decks group by `your_deck_id` (else list fingerprint) as on Match History, and a deck's versions are its games grouped by fingerprint. Sealed/draft queues are excluded. Match-history queue ids aren't stats queue keys, so decks aren't filtered by queue; choosing a deck defaults the field queue from its `queue_name` (`defaultQueueFor()`), and the user can override. A pasted `4 Card Name` list works too (field sections only); LorcanaJSON lists a reprint under each printing's id and duels.ink names one, so `countsFromPasted()` takes the printing the feed uses (`fieldCardIds()`).
-- **The field** is `fetchStats({ queue, period: 'all_time' })`, current era only. `assignArchetype()` scores each same-colour archetype (`aggregateArchetypes()`) by overlap with its representative variant's `centroidCounts` — Σ min(yours, centroid) ÷ the larger deck — and assigns none below 50% (`MIN_ARCHETYPE_OVERLAP`); a picker offers the others with their overlap. Lift comes from the profile's `cardLift` and from `pairCardLift`, a per-colour-pair list of 10 lift entries the feed also carries, keyed `amber/ruby` (lowercase, sorted, `/`). The field's matchup rate is `archetypeMatchups` rolled up from profile ids to opponent colour pairs (as side B, wins = games − winsA), falling back to colour-pair `matchups` when no archetype is assigned.
-- **Your cards** are `computeCardImpact()` over imported gamelogs whose `deck_id` matches, with `fetchPersonalStats()` deck versions as Analytics does; without imports the section is a prompt.
-
-Every read of the undocumented fields is null-safe and hides its own section. With no profiles for the era the page shows a banner and only the verdict and your own sections. Note on the feed (checked 2026-10-22): an unscoped `period=all_time` call returns no profiles for Set 14, but the era-scoped call `fetchStats` makes (`era=set-14-core`) returns 78; an unknown era key silently falls back to the current era (`meta.eraResolution: 'current'`), and Set 13's key is `set-13`.
-
-### Stock Deck Lists
-
-`StockDecksPage` (`/stock-decks`) shows a starting list for every named duels.ink archetype, grouped by ink pair. Each folder in `STOCK_DECK_FOLDERS` (`stockDecks.js`) pins one duels.ink queue + era (`fetchEraStats()` in `duelsApi.js`, `period=all_time`), so an old set's folder keeps showing that set's lists; add a folder per new set or meta. A list is the `centroidCounts` (duels.ink's average build, cardId → copies) of the archetype's most-played variant (`representativeProfile()` in `metaSynthesis.js`). Centroids occasionally total 61–62 cards; the page shows the real total rather than trimming.
-
-`ForgeDecksPage` (`/forge-decks`) shows the site's own recommended lists in the same folders, one file each at `content/forge-decks/<folder id>/<slug>.txt`: a `name`/`inks`/optional `note` frontmatter block (`frontmatter.js`, shared with the blog) over `4 Card Name` lines. `forgeDecks.js` loads them at build time and throws on a malformed file; card names are matched to LorcanaJSON `fullName` at runtime, and unmatched names are listed under the list rather than hidden. Adding a file publishes it.
-
-### Store Lookup
-
-`StoreLookupPage` extracts every UUID from pasted store IDs/URLs and fetches each store via `/api/tournament?type=store`, plus its events (`storeEvents`) and unique-fan count. `storeTiers.js` models RPH's store-tier program:
-- `computeTierProgress()` tracks provisional Legendary progress in the pro-rating window (`PRORATE_WINDOW`, `LEGENDARY_PRORATED_REQUIREMENTS`, plus running a Hyperia City Prerelease).
-- `computeStandingTierStatus()` gives the standing tier over the trailing 4 set seasons, whose boundaries are derived from Prerelease events (`deriveSeasons()`).
-
-Each lookup writes the extracted store IDs to the URL as `?stores=<id>,<id>` (whether IDs or store URLs were pasted), so the link is shareable; opening it pre-fills the input from that param (over the localStorage last input) and auto-runs the lookup.
-
-The page also shows a static Welcome/Standard/Legendary reference (definitions + benefits from RPH's announcement, requirements from the `*_MAINTENANCE_REQUIREMENTS` constants).
-
-Only `display_status === 'complete'` events count. The window dates and requirements are hardcoded from the Aug 2026 program email, so they'll need updating when RPH changes the program.
-
-### Tournament Lookup
-
-`TournamentLookupPage` accepts a Ravensburger tournament URL and extracts the event ID. It uses `tournamentApi.js` for all data:
-- `fetchEventDetails` → raw event + phases + rounds
-- `getTournamentStructure` → resolved current round, top-cut size, rounds remaining, advancement requirements
-- `fetchTournamentStandings` → paginated standings for a specific round
-- `fetchAllRegistrations` → all registered players (paginated loop)
-- `analyzeId` → ID safety analysis: compares player's points buffer vs cut line, counts players who could pass them if everyone wins
-- `analyzeAdvancement` → status (secured/possible/eliminated) toward the next phase cutoff
-
-### Tournament History Archive
-
-The caster-facing tool for surfacing a player's history across multiple imported RPH major events, and any prior head-to-head between two players in a pairing. This is the first feature to store real domain data in Supabase rather than only auth/tier metadata (see "Stack" above).
-
-**Import (admin-only, one-shot, re-runnable):** `AdminTournamentImportPage.jsx` (`/admin/tournament-import`, linked from `AdminPage.jsx`) posts an event URL to `POST /api/tournament-history?endpoint=import`. Its **Suggested events** card is the bulk path: `?endpoint=suggested-imports` runs `api/_lib/tournamentDiscovery.ts` — the one implementation of major-event discovery (official DLC / Challenge Championship / Last Chance Qualifier templates, the CCQ, ACQ and prize-pool name searches the `tournament-history-sync` skill documents, and side events at a DLC or Championship parent's store within three days of it with 200+ players and 5+ rounds) — and returns every discoverable event that is complete, has a round with generated standings (the events list carries each round's `standings_status`, so a store that never entered results is dropped without a per-event fetch), isn't a Ravensburger test fixture and isn't in the archive; the card shows the count and total players, labels each row by category, and **Import all** imports them one at a time. There is no sync script or cache file any more: the archive is the already-imported set. That route (`requireAdmin()` in `api/_lib/requireAdmin.ts`) fetches the event's details, final-round standings, and all completed rounds' matches directly from `RAVEN_BASE`/`HYDRA_BASE` (`api/_lib/tournamentImport.ts` — a server-side port of `tournamentApi.js`'s fetch/pagination logic, since this runs in a Vercel function rather than the browser and can't go through the client-only `/api/tournament` proxy), then upserts them via `api/_lib/tournamentHistorySupabase.ts`. Re-running the import for the same event is idempotent — it always re-derives and upserts, so importing again after more rounds complete updates standings/ranks rather than duplicating rows.
-
-**Schema** (`supabase/migrations/008_tournament_history.sql`): `tournament_history_events`, `tournament_history_standings`, `tournament_history_matches` — zero RLS policies, service-role-only access, same pattern as `discord_favorite_players`/`duels_api_tokens`/`metafy_links`. Player identity is joined by RPH's own stable `player.id` (`rph_player_id`), the same id `TournamentLookupPage.jsx`'s cross-event favorites/team-tag localStorage already keys by — never by name, which is stored only for display/search (trigram-indexed for fuzzy search). "Made top cut" is precomputed at import time (`has_elimination AND rank <= top_cut_size`) rather than needing a separate accomplishments table. Head-to-head lookups use a generated `player_pair` column on `tournament_history_matches` for an O(1) equality lookup instead of an OR'd scan.
-
-**Caster UI:** clicking a non-bye pairing row in `TournamentLookupPage`'s Matches tab (`MatchesTab`'s `onSelectPairing`) opens `PairingHistoryPanel.jsx` — a modal showing a head-to-head banner (prior meetings across imported majors, or "first meeting") plus each player's cross-event summary (events played, top cuts made) alongside their `PlayerMatchHistory` for the currently loaded event. The panel's cross-event data and the loaded event's `PlayerMatchHistory` are two independent data sources shown side by side — this feature does not merge with `/players/:name`'s separate scouted-game/gamelog opponent-profile system (see "Unified Opponent Profiles" above); they remain unrelated.
-
-**Public results pages:** `/results`, `/results/events/:eventId` and `/results/players/:playerId` (catalog tool "Tournament Results", Tournament Tools) expose the same archive without a session — the first free, linkable surface on it. Reads are edge-cached (`Cache-Control: s-maxage`) instead of session-gated, since the data only changes on admin import. `src/lib/resultsArchive.js` (unit-tested) derives a player's outcome per match, the summary stats (record excludes byes; best finish ties go to the larger event; up to 10 most-faced opponents) and adapts archived bracket rows to the RPH match shape `EliminationBracket` renders. Elimination matches are picked by the phase whose `round_type` is `RANKED_SINGLE_ELIMINATION` in `raw_event_details` (Swiss phase names vary per organizer). `event_date` is derived from RPH's `start_datetime` in the event's `timezone` (`eventDateOf()` in `tournamentImport.ts`); migration `019` backfilled it (numbered after `018_day_two_and_player_card.sql`, which landed in parallel) — every earlier import had left it NULL because the code read a field RPH doesn't send. The results list hides events under `MAJOR_MIN_PLAYERS` (32) by default because the discovery sweep also imports tiny CCQ trial events. `PairingHistoryPanel`'s player cards link to the player's results page ("Full history →"). Per-event/per-player sitemap entries and prerendering are deliberately not done (prerender runs against `vite preview`, which has no `/api` functions).
-
-**API** (`api/tournament-history.ts`, `?endpoint=` dispatch, folded into one function per the function budget above): `import` (admin-only), `player-history`, `head-to-head`, `search-players`, `recent-imports` (all requiring a valid Supabase session — this route reads/writes project-owned data rather than proxying an external API, so unlike most `/api/*` proxies it does check auth server-side).
-
-### Blog
-
-Posts are markdown files in `content/blog/<slug>.md` — the filename is the URL slug (`/blog/<slug>`, lowercase-hyphenated), and each needs a frontmatter block:
-
-```
----
-title: My post
-date: 2026-09-23
-description: One sentence — used on the index, as the meta description, and on social cards.
-author: Jane Doe
-authorUrl: https://x.com/janedoe
----
-```
-
-Posts can be guest-written, so every post names its own `author` and links `authorUrl` (their X/Twitter, Metafy, or other profile; must be `https://`). The byline (`components/PostByline.jsx` client-side, mirrored in `blogPlugin.js`'s static HTML) links it with `rel="author"`, and the post's `BlogPosting` JSON-LD carries it as a `Person`.
-
-Adding a file is all it takes to publish; there's no registry to update. An optional `draft: true` line keeps a post out of production builds (no static page, no sitemap entry, and it compiles to `null` so its content never reaches the bundle) while still showing it in `npm run dev` with a Draft badge; delete the line to publish. The `new-blog-post` skill (`.claude/skills/new-blog-post/`) scaffolds a draft with today's date and InkbornForge as the default author. `parsePost()` (`src/lib/blogPost.js`) throws on a missing field, a non-`YYYY-MM-DD` date, a non-`https://` `authorUrl`, or a non-slug filename, which fails the build rather than shipping a broken post. Links to other pages on the site should be root-relative (`[Tournament Lookup](/tournament-lookup)`).
-
-`blogPlugin.js` (a Vite plugin registered in `vite.config.js`) does the work:
-- **Compile at build time.** It transforms each `content/blog/*.md` import into a JS module exporting the parsed post, so `src/lib/blog.js`'s `import.meta.glob` gets plain HTML strings and `marked` never ships to the browser.
-- **Static HTML for SEO.** After `vite build`, it writes `dist/blog/index.html` and `dist/blog/<slug>/index.html` from the built `index.html` shell, with per-post `<title>`, description, canonical, Open Graph/Twitter tags, `BlogPosting` JSON-LD, and the post body inside `#root` — then appends the blog URLs to `dist/sitemap.xml`. The client render replaces `#root` on load, same as a prerendered page. `vercel.json` rewrites `/blog` and `/blog/:slug` to those files explicitly (ahead of the SPA catch-all), since serving a directory's `index.html` for a path without a trailing slash isn't something to rely on (vite preview, for one, doesn't).
-- This is independent of `prerender.js` on purpose: that step needs Chromium, and production evidence (every route, including `/proxy/index.html`, returns the identical bare shell) shows it currently emits nothing on Vercel.
-
-Client-side, `routeTitle()`/`routeDescription()` resolve a `/blog/<slug>` path to its post's title/description so in-app navigation updates the tab title too. Post bodies are styled by the `.blog-prose` rules in `src/index.css`, which use palette variables so dark mode works without `dark:` variants.
-
-### Stream Overlay
-
-A tournament gameplay overlay for OBS, in the same control-page + chrome-less-view shape as the Decklist Inspector, plus a players' controller. **A "table" is a `stream_tables` row** (`supabase/migrations/012_stream_tables.sql`): one per feature table a supporter streams, with one column per overlay field (event, logos, round, timer, RPH link, and `p1_*`/`p2_*` name, record, inks, lore, game wins) rather than a JSON blob, so increments happen in the database and two writers can never lose a tap. Three routes share a row:
-
-- `StreamOverlayPage` (`/stream-overlay`, supporter-gated, Content Creators) is the control panel. It lists the owner's tables (switch / rename / New table / Delete table / Live-Break toggle; the first table is an explicit click, never auto-created — a mount effect that created one ran twice under StrictMode and made two). Every edit is an optimistic local change plus a column `update` under RLS (`updateTable()`). Lore and game-win buttons go through `adjustTable()`, the same atomic RPC the controller uses. From the row's broadcasts the panel adopts **only the four score columns and `rph_event_id`** — everything else is the owner's own typing, and adopting the echo of a keystroke would clobber the next one. The link is adopted so a second panel follows a link made or cleared elsewhere instead of polling the old event; and the linked clock is written with `updateWhileLinked()`, which only lands while the row is still linked to the event it was polled from (a stale panel on an earlier event's link wrote that event's expired clock into the row every poll, which read as 00:00 on stream; and because that stale panel can be running old code, the database refuses the write too — `stream_tables_keep_clock()` (migration `022_stream_tables_keep_clock.sql`), a BEFORE UPDATE trigger that keeps the row's clock when an update would move `timer_ends_at` more than 30 minutes into the past). "Copy OBS overlay link" / "Copy player controller link" give the two other URLs; the selected table is remembered in localStorage (`lorcana_stream_table`).
-- `StreamOverlayViewPage` (`/stream-overlay/view?table=<id>`, unguarded) is the one Browser Source: a fixed 1920×1080 frame with opaque ink-black side columns (a transparent **square** cutout at the top of each — the operator positions that player's camera behind it in OBS — then name, record, ink icons, game-win pips, lore) and a top banner (event logo or name with the optional sponsor logo beside it, round, timer); everything else is transparent so the gameplay cam sits behind it — nothing floats over the playmat. The InkbornForge mark + wordmark (same lockup as `Nav`) sits at the foot of the right column, where the reference streams put the overlay tool's brand. It loads the row with `fetchPublicTable()` and then renders every broadcast. **Winner:** derived, no state — once a side's game wins reach `MAX_GAME_WINS` (`winnerIndex()`), that column gets a "Winner" ribbon in a fixed-height slot just above the "Lore" label (above the name on the break screen) — a reserved slot, so the other column's name, record, inks, pips and lore stay level whether or not there's a winner — and the banner's Round stat becomes "Winner · Name 2-1"; resetting game wins for the next match clears it. **Break:** when the row's `mode` is `break` (migration `013_stream_tables_mode.sql`; the panel's Live / Break toggle writes it) the same source renders an opaque full-frame screen instead — event logo or name with the sponsor logo beside it, a headline, both names, records and inks, the round, and the brand. The headline is `breakHeadline()`, derived from the score because the table keeps holding the pair that just played until the next pairing is published on RPH and sent over: a side on 2 game wins reads "Final" with the score and a Winner ribbon, 0-0 reads "Next match", anything else "Match in progress" with the score. While the round clock has time left it also counts down on the break screen ("Time left in round"), since a feature match often ends early and viewers want to know when the next round starts. So the flow between matches is: flip to Break when the match ends (the result shows), pick the next pairing in the panel once RPH publishes it (the screen becomes "Next match" by itself), flip to Live when the cameras are up. No second OBS source.
-- `StreamOverlayControlPage` (`/stream-overlay/control?table=<id>&key=<controller key>`, unguarded) is the players' controller for a tablet at the table: one half per player with big lore ±1 and game-win ±1 taps, each a call to `adjust_stream_table()`, with the round and the round clock (ticking from the row's wall-time target, red under five minutes) across the top. It needs nothing else open.
-- `StreamOverlayNotesPage` (`/stream-overlay/notes?table=<id>`, unguarded; "Copy caster notes link" on the panel) is the casters' page for a second screen: the same public row, read as text rather than rendered at 1080p — per player, talking points generated by `casterPoints()` from the player card (majors record, best finish, head-to-head with the last meeting), the archive finishes with their tags, and the pasted decklist; between them the head-to-head, the round's results and the live lore / game-win score; the full standings snapshot (both players bolded) in columns across the bottom; the event, round, note, Live / Break and the round clock across the top. Nothing is stored for it: whatever the panel sends to the table (a pairing, standings, decklists) is what the casters see, live.
-
-**Access model, three roles.** The owner reads and writes their rows directly under an owner-only RLS policy. The view and controller are unauthenticated (a Browser Source has no session), so they read through `get_stream_table(id)`, a SECURITY DEFINER function returning the public columns only (never `controller_key` or `owner_id`), and a `BEFORE INSERT OR UPDATE` trigger broadcasts that same public shape via `realtime.send()` on the public Realtime topic `stream-table:<id>` — so a late joiner just reads the row and there is no heartbeat. Taps call `adjust_stream_table(id, key, side, field, ±1)`, a clamped atomic increment gated by `controller_key`, which rides only in the controller link; the view link alone can't change scores. All three were verified against the real project with an anonymous client: direct table reads return nothing, the public read hides the key, a wrong key is refused, five taps land as five and arrive as five broadcasts. No serverless function is involved, so the function budget is untouched. (Applying the migration through the Supabase MCP: statements it classes as destructive — `DROP … IF EXISTS` included — stall waiting for a confirmation that never comes; apply the file's statements without those guards on a fresh schema.)
-
-**Why not the first design.** The first version kept state in the panel's localStorage and published it on a Broadcast channel with a 5 s heartbeat, the controller sending deltas for the panel to apply. That meant one stream per browser profile, a hand-off that only worked inside one browser, and the panel tab as a single point of failure (background tabs throttle timers to about once a minute). The row replaces all three: tables are per account, the hand-off is a database write from any device, and the only thing that still needs the panel tab open is the RPH clock poll.
-
-The round timer is a wall-time target (`timer_ends_at`; paused = `NULL` + `timer_remaining_ms`), so the view ticks on its own. Logos are image URLs on the row (`event_logo_url`, `sponsor_logo_url` and, since migration `021_stream_tables_sponsor2.sql`, `sponsor2_logo_url` for a second sponsor beside the first in the banner and on the break screen; each hides when blank): paste one, or upload a file from the panel's logo field (`uploadLogo()` in `streamTables.js`) into the public `stream-logos` Storage bucket (migration `016_stream_logos_bucket.sql`: 2 MB cap, image types only, files under the uploader's own `<user id>/` folder, which is the only folder their session may write to; public read because the OBS view has no session) and the public URL lands in the same field. Nothing is ever deleted from the bucket. Logos for events the site owner streams can also live in `public/logos/` (`https://www.inkbornforge.com/logos/<file>.png`). A `note` column (migration `015_stream_tables_note.sql`) is one free-text line ("Top 8 starts at 5pm · #MandosBounty") shown under the round in the banner and on the break screen; blank hides it.
-
-**Between games and events.** "Next game" zeroes both lore counts in one call: `reset_stream_table_lore(id, key)` (migration `019_stream_tables_reset_lore.sql`), gated by the controller key like a tap, so the panel's button, the N hotkey and the tablet's button all use it; the tablet's needs two taps within four seconds, since a stray tap mid-game would wipe the score. "Clear table" (panel only, confirmed) writes `clearTablePatch()`: both players, decklists, the player card and the break-screen snapshots go, and whatever was shown over the cam is hidden; the event name, logos, theme, timer, linked RPH event, round and note stay, since they're the operator's setup for the event rather than the pairing's.
-
-The panel also has operator hotkeys (`HOTKEYS` / `hotkeyAction()` in `streamOverlay.js`, listened for on `window` while a table is selected): left-hand keys for the left player (Q/A lore, W/S game wins), right-hand for the right (I/K lore, O/L game wins), B flips Live / Break, 1 / 2 / 3 / 4 show a deck, the player card or the metagame over the cam, N is Next game. Letters only so a Stream Deck or any key sender works; ignored with a modifier held or while typing in a field. Scores go through the same `adjust_stream_table()` RPC as the buttons.
-
-Two display details in the view: a player's name steps down a size class as it outgrows its slot (`nameSizeClass()` with per-slot character budgets, `COLUMN_NAME_SIZES` / `BREAK_NAME_SIZES`) inside a fixed-height line, so a long RPH name shrinks instead of truncating and the record, inks and pips below never move; and the lore number pulses at `WINNING_LORE` (20) as a cue to tap the game win — a cue only, never an automatic win, since a mis-tap shouldn't flip the screen to Winner.
-
-**Event theming** (migration `014_stream_tables_theme.sql`): the overlay's whole look is two colors stored per table, `theme_fill` (columns, banner, break screen) and `theme_accent` (borders, lore, pips, Winner ribbon), defaulting to the site's ink black and forge gold (`DEFAULT_THEME`). The text color on the fill is derived, not stored: `themeTextColor()` picks the site's paper white or ink by WCAG relative luminance so a pale organizer theme still reads. The panel's Event card has two native `<input type="color">` pickers and "Reset to InkbornForge"; the view sets `--fill`, `--accent` and `--on-fill` on the frame root and every color utility reads them (Tailwind v4 `bg-(--fill)` syntax), so the live overlay and the break screen share one theme. Fonts and layout stay fixed; the InkbornForge lockup stays on every theme.
-
-**Linked RPH event:** the panel's Event card takes a Play Hub event link (`extractEventId()` in `tournamentApi.js`) and writes its id to `rph_event_id`; that one link drives the round clock, the pairing picker and the standings and bracket sends, so the operator never leaves the panel mid-stream (an earlier version put "Send to Stream Overlay" buttons on Tournament Lookup, which hid the whole flow on a player tool). While linked the card shows the event name, the round (`roundLabel()`: the elimination phase's name in top cut, else "Round N", plus "of M" Swiss rounds) and field size from the polled structure, with Unlink. **Pick pairing…** opens `components/StreamPairingPicker.jsx`: the **active** round's pairings — `activeRoundId` from `getTournamentStructure()`, the latest round that has started whether or not its standings exist, because RPH posts a round's pairings before it generates that round's standings and `currentRoundId` waits for the standings; records come from the current round's standings (`currentRoundPairings()` over `fetchRoundMatches()` + `fetchAllStandings()`, table order, byes out, a name/table filter; the pair already on the table reads "On stream"). A picked pairing is sent with `activeRoundLabel()` as its round. Send writes `featureMatchPatch()` — the two names, their current records, the event name (RPH's only when the table's is blank; the operator's own wins), the round, RPH's round clock (`timerFromRph()`: the event's `timer_end_datetime` becomes the wall-time target when `timer_is_running`, otherwise end minus `timer_paused_at_datetime` is the paused remainder; no clock set leaves the timer alone), and `rph_event_id` — resetting lore and game wins and leaving inks alone (RPH doesn't know decks). "Swap sides" (`swapSidesPatch()`) mirrors which side of the table each player sits on.
-
-**While `rph_event_id` is set the clock is linked:** the panel polls `fetchEventDetails` every 15 s (ticked by a tiny inline Web Worker, since a background tab's `setInterval` is throttled to about once a minute and left the overlay on 00:00 for up to a minute after each new round started) and writes `rphClockPatch()`, and the Timer card shows "Following the RPH round clock" in place of Start / Pause / Reset, so there's one source of truth for the clock; the same poll keeps the structure the Event card and picker read. Polling, not push, because RPH's Pusher channel was never observed to broadcast (see the `ravensburger-tournament-api` skill); the countdown stays exact between polls since it's a wall-time target, only an organizer's start/pause/reset lags by up to one interval. Unlink in the Event card is the only way the manual controls come back. The same poll also fetches the active round's matches and writes `results` (migration `023_stream_tables_results.sql`; `buildResultsSnapshot()`: every table in order with its pairing, whether it's finished, the winner and score) through the same guarded write, only when the snapshot changed, so the caster notes list the other tables' results live without an operator click; Unlink clears it.
-
-**Decklists** (migration `017_stream_tables_decklists.sql`): each side's list is pasted into the panel's player card as `4 Card Name` lines (`p1_decklist`/`p2_decklist`, the Decklist Inspector's format) and matched against the card database with `matchDeckList()` (`decklistShared.js`, shared with the Inspector's overlay); a paste also sets that side's inks from the matched cards (`deckInks()`, most copies first). `deck_shown` (0, 1 or 2) is which deck the live view lays over the gameplay cam — the panel's "Show on stream" button or the 1 / 2 hotkeys — rendered by `DeckPanel` with the Inspector's own `CardBar` rows zoomed to read at 1080p in two columns. Swap sides carries a shown deck with its player; a feature match from RPH clears both lists and hides the deck. The view loads card data through `useCards()` (the public `/api/cards` rewrite, so no session needed).
-
-**Player card** (migration `018_day_two_and_player_card.sql`): the pair's Tournament History archive data laid over the gameplay cam between games — each player's majors played, top cuts, Day 2s and best finishes on their own side, the head-to-head across every archived event (side events included) between. The OBS view has no session and the archive API requires one, so the data travels on the row: `player_card` (jsonb) is written by the panel's pairing send, which fetches both player histories and the head-to-head first and sends the pairing without a card if any of them fails (`buildPlayerCard()` in `streamOverlay.js`: every top cut and Day 2 first, then other finishes by rank, capped at `PLAYER_CARD_FINISHES`; meetings newest first with the winner as a side index; `shortEventName()` turns RPH's long names into "DLC Milwaukee" / "CCQ"). `card_shown` is the toggle (panel button or the 3 hotkey); it shares the slot over the cam with the decklist, so showing one hides the other. Swap sides mirrors the card's halves and head-to-head; a new feature match replaces it.
-
-**Standings and bracket on the break screen** (migration `020_stream_tables_break_panels.sql`): the Event card's Send standings / Send bracket buttons fetch the linked event (`fetchAllStandings()` for the current round; `fetchEventDetails()` + `fetchAllRoundMatches()` for the bracket) and write a snapshot to the row — `standings` (`buildStandingsSnapshot()`: every ranked player with record and points, plus the round and field size; the break screen shows the top `STANDINGS_ROWS`, the caster notes all of them in columns across the bottom) or `bracket` (`buildBracketSnapshot()`: the elimination phase's rounds in table order, each match's names, winner side and score; round names from `lib/bracket.js`, shared with `EliminationBracket`) — and sets `break_panel` to it. The break screen shows the pairing (default, `''`), the standings in two columns, the bracket (one column per round, box height from the biggest round so a Top 32 fits), or the metagame chart (`'meta'`, below); the panel's Break screen card switches between whichever have been sent. Snapshots, not live: the OBS view has no session, so the operator re-sends after each round. Send bracket errors rather than sending an empty bracket before the top cut has matches. Clear table drops both.
-
-**Metagame chart** (migration `024_stream_tables_meta.sql`): the room's decks typed into the panel's Metagame card, one per line as `<name> <decks>` or `<name> <n>%` (`meta_text`; archetype or ink-pair names both work. The card's "Fetch the room from carde.io" box takes carde.io's decklists PDF (`readDecklistsPdf()` in `lib/cardePdf.js`, then `inkPairLines()` in `lib/fieldBreakdown.js`: each deck's two most-played inks, counted, as `Emerald/Steel 8` lines) and offers `scripts/carde-field-export.js` as a bookmarklet, built at bundle time from the file via a `?raw` import: clicked on an event's carde.io admin page, it reads the organizer's token from the page's own requests, fetches every submitted deck and copies the ink-pair lines. Field Breakdown's "Copy for Stream Overlay" produces the same lines from pasted lists), plus an optional field size (`meta_players`, blank meaning the counts' total). `metaSlices()` in `streamOverlay.js` (unit-tested) turns the text into the chart's rows, **one per ink pair**: lines group by the inks their name starts with (`metaInks()`: "Emerald/Steel Midrange" and "Steel/Emerald Songs" both land in Emerald / Steel), largest first; a line with no ink in front counts as "Other", as do, in a room over `META_OTHER_MIN_PLAYERS` (50) players, pairs under `META_OTHER_MAX_SHARE` (5%), and in percent mode the remainder to 100. `MetaPanel` in the view draws one bar per pair, its length relative to the biggest, painted half in each ink (`inkFill()`, Other in gray), with ink icons, the share and the count beside it; type and row height step down as the list grows. (A pie, then per-archetype bars, were tried first.) It renders in two places: over the gameplay cam (`meta_shown`, the panel's Show on stream or the 4 hotkey; it shares the slot with the decklist and player card, so showing one hides the others) and as a fourth break-screen panel (`break_panel = 'meta'`). Clear table hides it but keeps the text, which is the event's, not the pairing's.
-
-**Day 2 in the archive:** `tournament_history_standings.made_day_two` (same migration), precomputed at import like `made_top_cut`: a player made Day 2 if they played a match in the event's second Swiss phase (a DLC's "Day Two Swiss"; matches carry `phase_name`), counted only when that phase holds fewer players than started — a few side events run everyone through two Swiss phases. The migration's UPDATE backfills already-imported events from their matches. `player-history` returns `madeDayTwo` per event and `dayTwoCount`.
-
-**Majors vs side events in the archive:** the archive's `event_tier` is the official template (`challenge`, `challenge_championship`, `lcq`, or a generic tier), and CCQs and the large side events of a DLC weekend both sit on generic templates, so `api/_lib/sideEvents.ts` decides: an event at the same `store_name` as a `challenge`/`challenge_championship` event within three days of it, not on a major template itself, is a side event. A generic-tier event that isn't a side event is a major only at `MIN_MAJOR_PLAYERS` (100) starting players (`isMajor()`): the archive also holds CCQ trials, CCQ side events and third-party locals imported for their head-to-head history, and above 100 every generic-tier event not at a DLC store is a CCQ, a cash event or a mistagged DLC (the cost: the sub-100 Asian ACQs and the Asia Championship main event, all on generic templates, aren't counted). `player-history` flags each event `sideEvent` and `major` and returns `majorsPlayed` beside `eventsPlayed`; `topCutCount`/`dayTwoCount` count majors only. The player card's "Majors" tile and `PairingHistoryPanel`'s "Majors played" read `majorsPlayed`; side-event finishes still appear in the card's list with a "Side event" tag.
-
-Deliberately not included (cheap to add): the featured-card art some broadcast overlays show, and any layout other than 1920×1080.
-
-### Ink Color Icons
-
-PNG files at `/public/ink/{color}.png` for: amber, amethyst, emerald, ruby, sapphire, steel. Each page that needs them renders `<img src={/ink/${inkName}.png} />` directly — there is no shared component. Use `resolveColors()` from `inkColors.js` to normalize raw color strings (e.g. "red/blue", "Ruby") before using them as icon keys.
-
-### Key Algorithms
-
-**Draw odds (DrawOddsPage / `deck-insights`)** — Uses log-space binomial coefficients to avoid overflow. Hypergeometric distribution for exact card draw probabilities. Monte Carlo simulation (10,000 iterations) for mulligan decisions, scry effects, multi-group joint probabilities, and 12-turn quest pressure curves.
-
-**Hand inference (handInference.js + HandPredictor.jsx)** — Hypergeometric P(≥1 copy in hand) given remaining deck size and current hand size. Combines observed deck composition with historical player profiles as a prior.
-
-**Tournament ID analysis (tournamentApi.js `analyzeId`)** — After an ID, player gains 1 point. Counts how many players below the cut could leapfrog them if those players all win (+3 pts). Classifies as safe (≥3 point buffer), borderline (1–2 buffer), or danger (0 or outside cut).
-
-### [Format Coconut] Deck Builder
-
-`CoconutDeckBuilderPage` walks through: pick one of the 29 beta Coconut cards (`coconutCards.js`) → lock in up to 3 ink types, which must include **every** one of that Coconut card's `inks` → build a 60+ card singleton deck around it. Most Coconut cards have a single ink and leave two free slots; the newer wave is built on Lorcana's dual-ink duo cards, so those lock two inks and leave one. Each Coconut card reuses its associated Disney Lorcana card's real stats (matched by `fullName` against the live `useCards()` data) rather than being a distinct printed card — the base card's ability is replaced on screen with the Coconut card's alternate ability text (`coconutCards.js`'s `ability` field), since we don't have separate art or a separate database entry for the Coconut variant.
-
-`coconutFormat.js` enforces the format's deck-building rules:
-- 1 copy max per card, except up to 4 copies of the card matching the chosen Coconut card's `baseFullName`, and (Nick Wilde – "Wily Fox" only) up to 4 copies of an item named Pawpsicle, via the `extraCopy` field on that Coconut card entry.
-- Every card must be within the deck's locked ink colors (`isCardInkLegal`, using `resolveColors()` from `inkColors.js`) — a dual-ink card needs *both* its inks locked, which is why a duo Coconut card locks both of its own.
-- At least 60 total cards (`MIN_DECK_SIZE`).
-
-Decks are saved to IndexedDB via `coconutDecks.js` (autosaved with a short debounce as the user edits, consistent with the "no server-side game data" ethos — decks never leave the browser).
-
-### Coconut Decklist Text (duels.ink interop)
-
-`coconutDecklistText.js` generates and parses the Copy/Import List text in the
-deck builder. The format is the one **duels.ink** accepts, since that's where
-these decks actually get tested. Its parser (verified against duels.ink's own
-client bundle) skips blank lines and anything prefixed with `#` or `//`, reads a
-`Coconut: <id>` header naming its own card id, takes card lines as
-`<qty> <card name>` with an optional trailing `(setCode-number)` — and treats
-every **other** unrecognized line as a bad card entry that fails the import.
-
-So our own metadata rides along as `#` comments, which duels.ink ignores and
-`parseCoconutDecklist` reads back for a lossless round trip here:
-
-```
-# [Format Coconut]
-# Deck: Wily Items
-# Coconut Card: Nick Wilde - Wily Fox
-# Inks: Sapphire/Amber
-Coconut: coconut-008
-
-4 Pawpsicle
-4 Nick Wilde - Wily Fox
-```
-
-Don't add an uncommented header line — it breaks the paste into duels.ink.
-
-The `Coconut:` header is emitted only when the card has a `duelsId`. All 29 cards
-currently have one (duels.ink's catalog runs to `coconut-029`); a card duels.ink
-hasn't added yet exports without it, and the `# Coconut Card:` comment still
-identifies it on re-import here. The parser
-also accepts a list copied straight off duels.ink (its `Coconut: <id>` header
-and its `(1-145)` card-id suffixes).
-
-### Coconut Card Faces
-
-The full-art Coconut card faces are Nathan Trippe's work
-(https://x.com/NathanTrippe). Both surfaces that show them — the deck builder
-and the Proxy Generator — carry the credit via `components/CoconutArtCredit.jsx`;
-keep it on any new surface that displays the art.
-
-Coconut cards have their own printed face rather than reusing the base card's
-LorcanaJSON art, so all 29 are bundled as local assets at
-`public/coconut-cards/<card id>.jpg` — the filename is the card's `id`, which is
-what `coconutCardImageUrl(id)` builds. Both `CoconutDeckBuilderPage` and the
-Proxy Generator read them through that helper; nothing fetches them remotely.
-
-The Proxy Generator's "+ Coconut cards" panel lists every face from
-`COCONUT_CARDS` (click one to add a copy, or "Add all 29" to print one of
-each). These go onto the sheet as `{ imageSrc, name, version }` rather than a
-LorcanaJSON card object, which is what makes `ProxyCard` print the image
-instead of the B&W text layout — so a Coconut sheet prints in full color.
-
-Every Coconut card is an alternate-ability variant of a real printed Lorcana
-card (`baseFullName`), including the newer duo-card wave — Aladdin & Genie,
-Belle & Beast, Darkwing Duck & Launchpad, Peter Pan & Tinker Bell, The Madrigal
-Family, The Vine and Woody & Buzz Lightyear are all real cards, so they're
-selectable in the deck builder and grant the same "4 copies of your Coconut
-card" exception as the rest. Their only structural difference is `inks`: the
-duo cards are dual-ink, so a deck built on one locks both and has a single free
-ink slot left. (`The Vine` is in that wave but is single-ink Steel.)
+| Where | What |
+|---|---|
+| IndexedDB `lorcana_pro_tools` | `games` (scraped snapshots), `cards` (LorcanaJSON cache), `coconutDecks` |
+| IndexedDB `lorcana_gamelogs` | `gamelogs` (parsed imports) |
+| localStorage | `lorcana_theme`, `lorcana_deck_names`, `lorcana_stream_table`, `lorcana_field_breakdown`, `lorcana_lore_tracker`, per-page form state |
+| `chrome.storage.local` | `lorcana_active_games` (extension, 2-hour TTL) |
+| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `tournament_history_events`/`_standings`/`_matches` (service-role only) |
+
+### Ink icons
+
+`public/ink/{amber,amethyst,emerald,ruby,sapphire,steel}.png`, rendered through `components/InkIcons.jsx` or a direct `<img>`; normalize raw color strings with `resolveColors()` first.

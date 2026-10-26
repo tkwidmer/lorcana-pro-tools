@@ -7,12 +7,12 @@ Tools marked **Supporter** need an active supporter account (see [Getting starte
 - [Getting started](#getting-started)
 - [Which tool should I use?](#which-tool-should-i-use)
 - [Resources](#resources): Proxy Generator, Limited Guide, Rules
-- [Deckbuilding](#deckbuilding): Deck Insights, Deck Comparison, Coconut Deck Builder
-- [Coaching](#coaching): Match History, Analytics, Practice Plan, Gamelog Viewer
+- [Deckbuilding](#deckbuilding): Deck Insights, Deck Comparison, Coconut Deck Builder, Stock Deck Lists, The Forge Decklists
+- [Coaching](#coaching): Match History, Analytics, Practice Plan, Deck Doctor, Gamelog Viewer
 - [Metagame](#metagame): Winrate Matrix, Meta Synthesis
-- [Tournament](#tournament): Tournament Lookup, Lore Tracker, Store Lookup
+- [Tournament](#tournament): Tournament Lookup, Tournament Results, Field Breakdown, Lore Tracker, Store Lookup
 - [Scouting](#scouting): Game Scraper, Scouting Library, Player Profiles
-- [Content creators](#content-creators): Decklist Inspector and its OBS overlay
+- [Content creators](#content-creators): Decklist Inspector and its OBS overlay, Stream Overlay
 - [Discord bot](#discord-bot)
 - [Data & privacy](#data--privacy)
 
@@ -121,6 +121,16 @@ A guided builder for the [Format Coconut] multiplayer format:
 
 Decks autosave in your browser. **Copy / Import Decklist** uses the text format that duels.ink accepts, so you can paste the list straight into duels.ink to test, or import a list copied from there.
 
+### Stock Deck Lists
+`/stock-decks` · Free
+
+One starting list per named archetype, grouped by ink pair, in a folder per set. Each list is duels.ink's average build for the archetype's most-played variant, so it is a sensible first 60, not a tuned list; a few come to 61 or 62 cards because the average does. Copy a list, or send it to Deck Insights or the Decklist Inspector with one click.
+
+### The Forge Decklists
+`/forge-decks` · Free
+
+InkbornForge's own recommended lists, in the same set folders as Stock Deck Lists, each with a short note on the build. Same copy and send buttons.
+
 ---
 
 ## Coaching
@@ -172,6 +182,11 @@ Pre-event prep. Choose **your deck**, the **queue** (for public stats), and the 
 
 Decks under a small "rogue" share of the meta are left out of the meta by default. You can add them back manually if you expect to face them.
 
+### Deck Doctor
+`/deck-doctor` · Supporter
+
+Pick one of your decks from match history (or paste a list) and see it beside the field: duels.ink's average build for its archetype with the cards only you run, only the field runs, or at a different count; the cards with the best lift in that archetype and in its ink pair, checked against your list; your own per-card WAR from imported gamelogs; and your matchup win rates next to the field's. It ends in a short verdict. Needs a duels.ink token; the Your Cards section needs imported gamelogs.
+
 ### Gamelog Viewer
 `/gamelog?id=<gamelog id>` · Free · needs a duels.ink token
 
@@ -221,6 +236,16 @@ Paste a Ravensburger Play Hub event URL (for example `https://tcg.ravensburgerpl
 
 Standings refresh live when the event updates, and recent events are remembered.
 
+### Tournament Results
+`/results` · Free
+
+Final standings and top-cut brackets for every major event in the archive (Disney Lorcana Challenges, Challenge Championship Qualifiers, Asia Championship Qualifiers, and big side events), newest first, with a player-name search. A player's page lists every archived event they played, their best finish, top cuts and Day 2s, their match record, round-by-round results, and the opponents they have faced most. Events under 32 players are hidden behind a toggle. No account needed; the archive updates when an event is imported, not live.
+
+### Field Breakdown
+`/field-breakdown` · Supporter
+
+Paste every decklist in a room, one blank line between lists, or upload the decklists PDF that the carde.io organizer admin exports, and see the field by ink pair: each deck is counted by its two most-played inks. Each list also shows its inks, card count and any card name that did not match, so a bad paste can be fixed. "Copy for Stream Overlay" copies one line per ink pair, ready for the Stream Overlay's Metagame card.
+
 ### Lore Tracker
 `/lore-tracker` · Free
 
@@ -261,6 +286,13 @@ Everything known about one opponent: their record, the decks they've played (gro
 Paste a deck list to browse it by card type and cost, and see deck stat charts. Click up to 4 cards to pin their full art. This view is built for recording videos.
 
 **Copy OBS overlay link** gives a URL (`/decklist-inspector/overlay?deck=…`) to add as an OBS *Browser Source*. It needs no sign-in, because the deck is stored in the link itself.
+
+### Stream Overlay
+`/stream-overlay` · Supporter (the OBS view, player controller and caster notes links are open)
+
+A tournament gameplay overlay for OBS, run from one control panel. Create a table per feature match, then add the overlay link as a single Browser Source: a 1920×1080 frame with each player's name, record, deck inks, game-win pips and lore in the side columns, the event and sponsor logos, round and round clock across the top, and the gameplay cam showing through the middle. Flip to Break and the same source shows a full-screen break slate with the result, the next pairing, standings, the top-cut bracket or the room's metagame.
+
+Link the Play Hub event and the panel follows its round clock, lets you pick the next pairing from the current round, and sends standings, the bracket and both players' archive history (majors played, top cuts, head-to-head) to the stream. Paste decklists to show either deck over the cam; type or import the room's ink pairs for the metagame chart. A player controller link turns a tablet at the table into lore and game-win buttons, and a caster notes link gives commentators talking points, results from the other tables and the full standings on a second screen. Hotkeys on the panel (and so a Stream Deck) drive scores, Live/Break and what is shown over the cam.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: duels-api-docs
-description: Fetch the latest duels.ink API documentation before building or modifying any feature that talks to duels.ink (match history, gamelogs, replays, decks, stats, or the consolidated /api/duels proxy route). Use this whenever a task touches duelsApi.js, parseGamelog.js, or api/duels.ts, or when the shape/behavior of a duels.ink endpoint is unclear.
+description: Fetch duels.ink's current API docs before changing anything that talks to duels.ink: duelsApi.js, parseGamelog.js, api/duels.ts, or an endpoint whose shape is unclear.
 ---
 
 # duels.ink API Docs

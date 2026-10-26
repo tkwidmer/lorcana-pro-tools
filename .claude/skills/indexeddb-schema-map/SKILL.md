@@ -1,6 +1,6 @@
 ---
 name: indexeddb-schema-map
-description: Load this before adding a new IndexedDB store, changing a keyPath, or reading/writing src/lib/db.js, cardsCache.js, scoutedGames.js, coconutDecks.js, or gamelogHistory.js. There are two separate IndexedDB databases in this repo with different version-bump mechanics, and getting the version number wrong silently breaks the store for existing users instead of throwing.
+description: Read before adding an IndexedDB store or editing db.js, cardsCache.js, scoutedGames.js, coconutDecks.js or gamelogHistory.js: two databases with different version-bump mechanics, and a wrong version breaks the store silently.
 ---
 
 # IndexedDB Schema Map

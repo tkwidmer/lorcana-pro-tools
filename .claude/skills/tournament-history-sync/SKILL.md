@@ -1,6 +1,6 @@
 ---
 name: tournament-history-sync
-description: Run this to discover new Disney Lorcana Challenge (DLC), Challenge Championship Qualifier (CCQ), Asia Championship Qualifier (ACQ), and independently-run big-money ($5K-$50K) events on the Ravensburger Play Hub and import any that aren't yet in the Tournament History archive, via /admin/tournament-import's underlying API. Use when the user asks to "sync tournament history", "pick up new DLCs/CCQs", "find major events we haven't imported", "import events that haven't been imported yet", or similar recurring-import/discovery requests.
+description: Discover new DLC, CCQ, ACQ and big-money Play Hub events and import the missing ones into the Tournament History archive. Use for "sync tournament history", "import events we haven't imported".
 ---
 
 # Tournament History Sync (DLC + CCQ + ACQ + big-money events)
@@ -10,7 +10,7 @@ Championship Qualifier (CCQ), Asia Championship Qualifier (ACQ), and
 independently-run big-money events (named things like "$5K", "10k Weekend",
 "$25,000 Cash Tournament") from the Ravensburger Play Hub into this app's
 Tournament History archive (`tournament_history_events`/`_standings`/
-`_matches` tables, see CLAUDE.md's "Tournament History Archive" section).
+`_matches` tables, see `docs/agents/tournaments.md`).
 
 The admin import page (`/admin/tournament-import`) only takes one event URL
 at a time. There is no upstream "list all DLCs/CCQs/ACQs/big events"

@@ -1,14 +1,14 @@
 ---
 name: gamelog-pipeline
-description: Load this before reading, modifying, or debugging src/lib/parseGamelog.js, src/lib/duelsApi.js's gamelog fetch, src/lib/leakDetection.js, src/lib/handInference.js, or anything interpreting raw gamelog log entries (draw/play/ink/challenge/lore events). The parsing logic has several non-obvious invariants that are easy to get wrong when adding new event handling or debugging an attribution bug.
+description: Read before editing parseGamelog.js, leakDetection.js, handInference.js or anything interpreting raw gamelog entries: the draw-attribution and inkwell-removal invariants are easy to break.
 ---
 
 # Gamelog Parsing Pipeline
 
 `parseGamelog.js` turns a raw array of duels.ink log entries into structured
 per-player stats (draws, plays, effects, challenges, lore, tempo segments).
-It has no external docs — this repo's own code and CLAUDE.md's "Gamelog
-Pipeline" section are the only reference, and the parsing logic contains
+It has no external docs — this repo's own code and the "Gamelog Pipeline"
+section of `docs/agents/duels-data.md` are the only reference, and the parsing logic contains
 several non-obvious invariants that are easy to break silently (wrong
 attribution, not a crash) when adding new event handling.
 
@@ -25,7 +25,7 @@ Before touching:
 - Anything debugging why a stat (draws, effect attribution, lore, tempo) is
   wrong for a specific game
 
-## The pipeline (CLAUDE.md's summary, condensed)
+## The pipeline (condensed)
 
 1. `fetchGamelogBuffer(gameId)` in `duelsApi.js` → `/api/duels-gamelog` →
    gzip binary from `https://duels.ink/g/{id}`

@@ -1,6 +1,6 @@
 ---
 name: discord-interactions-docs
-description: Check Discord's official Interactions/API docs before building or modifying anything in api/discord-interactions.ts, api/_lib/discordQr.ts, api/_lib/discordTournamentEmbeds.ts, discord-bot/, or anything involving slash commands, message components, embeds, signature verification, or the Discord Bot API. Use whenever an interaction payload shape, response type, embed field limit, or signature-verification detail is unclear.
+description: Discord Interactions and Bot API reference. Read before changing api/discord-interactions.ts, api/_lib/discord*.ts or discord-bot/, or when a payload shape, response type, embed limit or signature check is unclear.
 ---
 
 # Discord Developer Docs

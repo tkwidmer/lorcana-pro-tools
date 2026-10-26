@@ -1,6 +1,6 @@
 ---
 name: lorcanajson-docs
-description: Check the LorcanaJSON reference before building or modifying any feature that reads card data fields (e.g. useCards.js, cardsCache.js, ProxyCard.jsx, CoconutDeckBuilderPage, DrawOddsPage, or anything matching on card.fullName/color/cost/keywordAbilities/etc.), or before assuming the shape of /api/cards / allCards.json. Use whenever a card field's meaning, existence, or format-version behavior is unclear.
+description: LorcanaJSON card-field reference. Read before relying on a card field (fullName, color, cost, keywordAbilities, images) or the shape of /api/cards.
 ---
 
 # LorcanaJSON Card Data Reference

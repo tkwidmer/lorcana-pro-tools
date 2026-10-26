@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useSupporter } from '../hooks/useSupporter'
 import {
   importTournamentEvent,
   fetchRecentTournamentImports,
   fetchSuggestedTournamentImports,
+  recomputeRatings,
 } from '../lib/tournamentHistoryApi'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -29,6 +30,8 @@ export function AdminTournamentImportPage() {
   const [suggestionStatus, setSuggestionStatus] = useState({})
   // "Import all": null, or { done, total } while running
   const [bulk, setBulk] = useState(null)
+  // Recompute ratings: null, 'running', { players, elapsedMs } or { error }
+  const [recompute, setRecompute] = useState(null)
 
   useEffect(() => {
     if (!isLoading && !isAdmin) navigate('/', { replace: true })
@@ -102,6 +105,15 @@ export function AdminTournamentImportPage() {
     loadRecent()
   }
 
+  async function handleRecompute() {
+    setRecompute('running')
+    try {
+      setRecompute(await recomputeRatings())
+    } catch (err) {
+      setRecompute({ error: err.message || 'Failed to recompute ratings' })
+    }
+  }
+
   if (isLoading) return null
 
   return (
@@ -142,6 +154,24 @@ export function AdminTournamentImportPage() {
                 </p>
               </div>
             )}
+          </Card>
+
+          <Card className="p-6" title="Player ratings">
+            <p className="text-xs text-gray-500 mb-4">
+              Rebuilds every Glicko rating from the whole archive. Runs nightly at 03:00 UTC; run it now after an import
+              to update <Link to="/results/ratings" className="hover:underline">Player Ratings</Link> today.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={handleRecompute} disabled={recompute === 'running'}>
+                {recompute === 'running' ? 'Recomputing…' : 'Recompute ratings'}
+              </Button>
+              {recompute?.players != null && (
+                <span className="text-sm text-gray-500">
+                  {recompute.players.toLocaleString()} players rated in {(recompute.elapsedMs / 1000).toFixed(1)}s
+                </span>
+              )}
+              {recompute?.error && <span className="text-sm text-red-600">{recompute.error}</span>}
+            </div>
           </Card>
 
           <Card className="p-6" title="Recently imported events">

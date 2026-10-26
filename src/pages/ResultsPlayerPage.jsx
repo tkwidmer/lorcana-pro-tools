@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchArchivePlayer, fetchArchiveEventPlayer } from '../lib/tournamentHistoryApi'
-import { playerSummary, matchOutcome, formatEventDate, ordinal } from '../lib/resultsArchive'
+import { playerSummary, matchOutcome, formatEventDate, ordinal, formatRecord, formatRating } from '../lib/resultsArchive'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -11,8 +11,45 @@ import { ArchiveFootnote, ArchiveLoading, ArchiveError } from '../components/Res
 const RESULT_CLASS = { win: 'text-green-700', loss: 'text-red-700', draw: 'text-gray-500', bye: 'text-gray-400' }
 const RESULT_LABEL = { win: 'Win', loss: 'Loss', draw: 'Draw', bye: 'Bye' }
 
-function formatRecord({ wins, losses, draws }) {
-  return `${wins}-${losses}${draws ? `-${draws}` : ''}`
+// The rating after each rated event, as a line scaled to its own range.
+function RatingSparkline({ history }) {
+  if (history.length < 2) return null
+  const ratings = history.map((h) => h.rating)
+  const min = Math.min(...ratings)
+  const span = Math.max(...ratings) - min || 1
+  const points = ratings.map((r, i) => `${i},${(1 - (r - min) / span) * 20 + 2}`).join(' ')
+  return (
+    <svg
+      viewBox={`0 0 ${ratings.length - 1} 24`}
+      preserveAspectRatio="none"
+      className="block w-full h-6 mt-1 text-forge"
+      role="img"
+      aria-label={`Rating over ${history.length} events`}
+    >
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
+function RatingTile({ rating }) {
+  if (!rating) return <StatCard size="lg" label="Rating" value="—" hint="No rated matches" />
+  return (
+    <StatCard
+      size="lg"
+      label="Rating"
+      value={formatRating(rating)}
+      hint={
+        <>
+          {rating.rank ? (
+            <Link to="/results/ratings" className="hover:underline">#{rating.rank} in the archive</Link>
+          ) : (
+            'Provisional'
+          )}
+          <RatingSparkline history={rating.history} />
+        </>
+      }
+    />
+  )
 }
 
 function EventRounds({ eventId, playerId }) {
@@ -99,7 +136,8 @@ function PlayerView({ playerId }) {
       />
       <Link to="/results" className="text-sm text-gray-500 hover:underline">← All results</Link>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 my-6">
+        <RatingTile rating={data.rating} />
         <StatCard size="lg" label="Events played" value={summary.eventsPlayed} />
         <StatCard size="lg" label="Top cuts" value={summary.topCuts} />
         <StatCard

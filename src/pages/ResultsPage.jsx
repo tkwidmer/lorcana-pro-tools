@@ -4,6 +4,7 @@ import { fetchArchiveEvents, searchTournamentPlayers } from '../lib/tournamentHi
 import { isMajor, formatEventDate, MAJOR_MIN_PLAYERS } from '../lib/resultsArchive'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Field'
 import { ArchiveFootnote, ArchiveLoading } from '../components/ResultsArchive'
 
@@ -84,6 +85,7 @@ export function ResultsPage() {
       <PageHeader
         title="Tournament Results"
         description="Final standings, brackets and player records from every major event in the archive."
+        actions={<Button to="/results/ratings">Player ratings</Button>}
       />
       <div className="mb-6">
         <PlayerSearch />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
+import { formatRating } from '../lib/resultsArchive'
 import { PlayerMatchHistory } from './PlayerMatchHistory'
 
 // Player-shaped stub so PlayerMatchHistory (built for a standings-entry
@@ -48,6 +49,12 @@ function PlayerSummaryCard({ label, playerId, history, loading, error }) {
         ) : (
           <>
             <div className="flex gap-4 mb-2">
+              <div>
+                <div className="text-lg font-bold text-gray-900">{history.rating ? formatRating(history.rating) : '—'}</div>
+                <div className="text-xs text-gray-500">
+                  {history.rating?.rank ? `Rating · #${history.rating.rank}` : history.rating ? 'Rating · provisional' : 'Rating'}
+                </div>
+              </div>
               <div>
                 <div className="text-lg font-bold text-gray-900">{history.majorsPlayed}</div>
                 <div className="text-xs text-gray-500">Majors played</div>

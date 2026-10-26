@@ -233,7 +233,13 @@ function PlayerHalf({ player, history, align }) {
         <span className="text-2xl text-(--on-fill)/70 tracking-widest">{player.record}</span>
         <span className="flex gap-1.5">{player.inks.map(ink => <InkIcon key={ink} color={ink} size={30} />)}</span>
       </div>
-      <div className="mt-7 flex gap-10">
+      <div className="mt-7 flex gap-6">
+        <Tile
+          label="Rating"
+          value={history.rating == null ? '—' : history.rating.toLocaleString('en-US')}
+          sub={history.rank ? `#${history.rank}` : history.rating == null ? null : 'Provisional'}
+          align={align}
+        />
         <Tile label="Majors" value={history.majorsPlayed} align={align} />
         <Tile label="Top cuts" value={history.topCutCount} align={align} />
         <Tile label="Day 2s" value={history.dayTwoCount} align={align} />
@@ -263,11 +269,12 @@ function PlayerHalf({ player, history, align }) {
   )
 }
 
-function Tile({ label, value, align }) {
+function Tile({ label, value, sub, align }) {
   return (
-    <div style={{ textAlign: align }}>
+    <div className="whitespace-nowrap" style={{ textAlign: align }}>
       <div className="text-5xl leading-none tabular-nums text-(--accent)">{value}</div>
       <div className="mt-1 text-sm uppercase tracking-[0.3em] text-(--on-fill)/60">{label}</div>
+      {sub && <div className="text-sm uppercase tracking-[0.2em] text-(--on-fill)/40">{sub}</div>}
     </div>
   )
 }

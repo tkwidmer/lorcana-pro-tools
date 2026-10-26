@@ -91,6 +91,24 @@ export function formatEventDate(yyyyMmDd) {
   return new Date(y, mo - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// "5-2", or "5-2-1" with draws.
+export function formatRecord({ wins, losses, draws }) {
+  return `${wins}-${losses}${draws ? `-${draws}` : ''}`
+}
+
+// A Glicko rating with its deviation, both whole: "1,712 ± 60".
+export function formatRating({ rating, rd }) {
+  return `${Math.round(rating).toLocaleString('en-US')} ± ${Math.round(rd)}`
+}
+
+// The change since a player's previous rated event: "+12", "−8", "0", or
+// "—" for a player with one event.
+export function ratingDelta(delta) {
+  if (delta == null) return '—'
+  const n = Math.round(delta)
+  return n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0'
+}
+
 export function ordinal(n) {
   const mod100 = n % 100
   if (mod100 >= 11 && mod100 <= 13) return `${n}th`

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  MAJOR_MIN_PLAYERS, isMajor, matchOutcome, toBracketMatch, playerSummary, formatEventDate, ordinal,
+  MAJOR_MIN_PLAYERS, isMajor, matchOutcome, toBracketMatch, playerSummary, formatEventDate, ordinal, formatRating, ratingDelta,
 } from '../resultsArchive'
 
 const m = (over = {}) => ({
@@ -102,5 +102,19 @@ describe('formatEventDate', () => {
 describe('ordinal', () => {
   it('handles the teens', () => {
     expect([1, 2, 3, 4, 11, 12, 13, 21, 112].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '112th'])
+  })
+})
+
+describe('ratings', () => {
+  it('formats a rating with its deviation, both rounded', () => {
+    expect(formatRating({ rating: 1712.4, rd: 59.6 })).toBe('1,712 ± 60')
+    expect(formatRating({ rating: 987.5, rd: 120 })).toBe('988 ± 120')
+  })
+
+  it('signs the change since the previous event', () => {
+    expect(ratingDelta(12.3)).toBe('+12')
+    expect(ratingDelta(-7.6)).toBe('−8')
+    expect(ratingDelta(0.2)).toBe('0')
+    expect(ratingDelta(null)).toBe('—')
   })
 })

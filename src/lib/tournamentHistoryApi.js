@@ -60,6 +60,14 @@ export async function fetchPlayerTournamentHistory(playerId) {
   return publicFetch(`?endpoint=player-history&playerId=${encodeURIComponent(playerId)}`)
 }
 
+export async function fetchRatings() {
+  return publicFetch('?endpoint=ratings')
+}
+
+export async function recomputeRatings() {
+  return apiFetch('?endpoint=recompute-ratings', { method: 'POST' })
+}
+
 export async function fetchHeadToHead(playerAId, playerBId) {
   return publicFetch(
     `?endpoint=head-to-head&playerA=${encodeURIComponent(playerAId)}&playerB=${encodeURIComponent(playerBId)}`

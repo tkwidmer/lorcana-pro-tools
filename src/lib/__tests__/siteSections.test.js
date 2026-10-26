@@ -20,6 +20,11 @@ describe('siteSections', () => {
 
   it('matches sub-routes by path prefix', () => {
     expect(findTool('/rules/comprehensive-rules').tool.name).toBe('Rules')
+    expect(findTool('/results/events/1').tool.name).toBe('Tournament Results')
+  })
+
+  it('prefers the most specific catalog path', () => {
+    expect(findTool('/results/ratings').tool.name).toBe('Player Ratings')
   })
 
   it('does not match a path that only shares a prefix string', () => {

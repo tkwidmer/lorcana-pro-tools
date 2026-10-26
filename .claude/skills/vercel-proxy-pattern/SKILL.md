@@ -1,6 +1,6 @@
 ---
 name: vercel-proxy-pattern
-description: Load this before adding or modifying a Vercel serverless proxy route in /api/*.ts (e.g. a new duels-*.ts, tournament.ts-style, or any thin forwarding proxy to an external API). Documents the established pattern this repo's proxies follow, so new routes stay consistent with duels-match-history.ts, duels-deck.ts, duels-gamelog.ts, duels-replay.ts, duels-gamelog-bulk.ts, duels-stats.ts, and duels-leaderboard.ts instead of reinventing error handling ad hoc.
+description: Load this before adding or modifying a Vercel serverless route in /api/*.ts. Covers the 12-function budget (a new endpoint joins an existing ?endpoint= dispatcher such as api/duels.ts rather than adding a file), the flat-file rule (a nested route silently fails to deploy), and the proxy shape the routes share (auth forwarding, text-first body reads, the { error, status, detail } error contract, Cache-Control choices).
 ---
 
 # Vercel Proxy Route Pattern
@@ -15,58 +15,84 @@ routes, so a new proxy should follow the same shape rather than improvising.
 
 ## When to use
 
-Before adding a new `/api/*.ts` route that forwards to an external API, or
-before modifying an existing one (`duels-match-history.ts`, `duels-deck.ts`,
-`duels-gamelog.ts`, `duels-gamelog-bulk.ts`, `duels-replay.ts`,
-`duels-stats.ts`, `duels-leaderboard.ts`, `tournament.ts`, `proxy.ts`).
+Before adding an endpoint to, or modifying, any file in `api/`: `duels.ts`
+(every duels.ink call, `?endpoint=`), `tournament.ts` (Ravensburger,
+`?type=`), `card-image.ts` (a host-allow-listed image proxy),
+`tournament-history.ts`, `metafy.ts`, `duels-tokens.ts`,
+`discord-interactions.ts`, `discord-tournament-tick.ts`,
+`subscribe-substack.ts`. The last six are not proxies (they read and write
+project-owned Supabase data or implement a webhook) but share the error
+contract and the budget rules below.
+
+## Two rules before the pattern
+
+1. **Function budget.** Vercel's Hobby plan caps a deployment at 12
+   serverless functions, counted as files in `api/` (`api/_lib/` excluded).
+   CLAUDE.md's API Routes section keeps the current count. A new endpoint
+   joins the closest existing dispatcher (`duels.ts` keys a `HANDLERS` map by
+   `?endpoint=`; `tournament.ts` switches on `?type=`; `tournament-history.ts`
+   and `metafy.ts` dispatch on `?endpoint=`) rather than adding a file, and
+   `src/lib/*Api.js` gains a matching client function.
+2. **Flat files only.** `api/<name>.ts`. A nested dynamic route
+   (`api/patreon/[action].ts`) built green and silently served the SPA shell
+   for every request. After a deploy, curl a new route and confirm JSON, not
+   `text/html`.
 
 ## The pattern, by example
 
-**Auth-forwarding JSON proxy** (`duels-match-history.ts` is the fullest
-example; `duels-deck.ts` is a lighter one):
-1. Check `req.headers.authorization` starts with `Bearer ` — 401 if not
-   (skip this step for endpoints the upstream treats as public, like
-   `duels-leaderboard.ts`/`duels-stats.ts`)
-2. Forward query params to the upstream URL via `URLSearchParams`
+**Auth-forwarding JSON proxy** (`duels.ts`'s `handleMatchHistory` and
+`handleDeck`, both through its `proxyJson()` helper):
+1. `requireBearer()`: 401 unless `req.headers.authorization` starts with
+   `Bearer ` (skip for endpoints the upstream treats as public, like
+   `handleStats`)
+2. Forward query params to the upstream URL via `URLSearchParams`, dropping
+   the dispatch key (`endpoint`)
 3. `fetch()` the upstream with the same `Authorization` header
 4. Read the response as text first (not `.json()` directly) so a
-   non-JSON/empty error body can be handled gracefully instead of throwing
+   non-JSON/empty error body can be handled instead of throwing
 5. If `!upstreamRes.ok`, return the upstream's status code with a
-   `{ error, status, detail }` body — `detail` is the first ~200 chars of
+   `{ error, status, detail }` body; `detail` is the first ~200 chars of
    the upstream body, enough for debugging without dumping arbitrary-size
    payloads
-6. Validate the success response is actually JSON (`content-type` header
-   check, then `JSON.parse` in a try/catch) before forwarding it — protects
-   the frontend from a silently-broken upstream returning an HTML error page
-   with a 200 status
-7. Set `Cache-Control` appropriately: `no-store` for per-user data
-   (match-history), `max-age=N, stale-while-revalidate` for less volatile
-   data (deck details, stats, leaderboard)
+6. Validate the success response is actually JSON (`content-type` check,
+   then `JSON.parse` in a try/catch) before forwarding it, so a silently
+   broken upstream returning an HTML error page with a 200 never reaches
+   the frontend
+7. Set `Cache-Control` deliberately: `no-store` for per-user data
+   (match history), `max-age=N, stale-while-revalidate` for less volatile
+   data (deck details, stats)
 8. Wrap the whole thing in try/catch; network failures return 502 with
    `{ error: 'Failed to reach duels.ink', detail: String(e) }`
 
-**Binary/blob proxy** (`duels-gamelog.ts`, `duels-replay.ts`): same shape,
-but skip JSON validation — fetch with `redirect: 'follow'` (upstream 302s to
-a CDN URL), read `.arrayBuffer()`, forward as `application/gzip` with a
-private cache header.
+**Binary proxy** (`duels.ts`'s `proxyBinary()` for gamelogs;
+`card-image.ts`): same shape, no JSON validation; read `.arrayBuffer()`,
+forward with the right content type and a private cache header. An image
+proxy allow-lists the upstream host so it cannot become an open proxy.
 
-**POST/bulk proxy** (`duels-gamelog-bulk.ts`): validate `req.method`,
-validate the request body shape (array, size cap, all-strings) with 400s
-before forwarding, same error-shape conventions on the way back.
+**Supabase-backed route** (`duels-tokens.ts`, `tournament-history.ts`,
+`metafy.ts`): verify the caller's Supabase session server-side with
+`auth.getUser(jwt)` through the service-role client in
+`api/_lib/discordSupabase.ts`, and only ever operate on that verified user's
+rows, never a client-supplied id. Admin-only endpoints go through
+`api/_lib/requireAdmin.ts`.
 
 ## Steps for a new route
 
-1. Decide auth requirement (Bearer-forwarded vs. public) and JSON vs. binary
-   response — pick the closest existing route as a template.
-2. Copy its structure: auth check → param/body validation → upstream fetch
+1. Decide auth requirement (Bearer-forwarded, Supabase session, public) and
+   JSON vs. binary response; pick the closest existing handler as a template.
+2. Add the handler to the dispatcher it belongs with, or, only when no
+   dispatcher fits and the budget allows, a new flat file.
+3. Copy its structure: auth check → param/body validation → upstream fetch
    → response validation → status/header passthrough → try/catch 502
    fallback.
-3. Keep error bodies in the `{ error, status?, detail? }` shape so
+4. Keep error bodies in the `{ error, status?, detail? }` shape so
    `src/lib/duelsApi.js`-style client code can rely on a consistent contract
    (`res.status === 401` → "Invalid or expired API token", etc.).
-4. Set `Cache-Control` deliberately — don't default to no caching for public,
-   slow-changing data, and don't cache per-user data.
-5. If the target endpoint isn't covered by the relevant docs skill
-   (`duels-api-docs`, `lorcanajson-docs`, `discord-interactions-docs`), note
-   that it's unofficial/reverse-engineered, same as `duels-deck.ts` and
-   `duels-stats.ts` currently are.
+5. Set `Cache-Control` deliberately: no caching for per-user data, a real
+   max-age for public slow-changing data.
+6. Update CLAUDE.md's API Routes table (the endpoint list and, for a new
+   file, the function count). If the target endpoint isn't covered by the
+   relevant docs skill (`duels-api-docs`, `lorcanajson-docs`,
+   `discord-interactions-docs`, `ravensburger-tournament-api`), note that it
+   is unofficial, as `duels.ts`'s `deck?personalStats=1` and `stats`
+   archetype fields are.

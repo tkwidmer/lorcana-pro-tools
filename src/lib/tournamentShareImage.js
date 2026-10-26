@@ -247,7 +247,7 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
   ctx.fillStyle = '#1E293B'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('lorcana-pro-tools.vercel.app', W / 2, footerY)
+  ctx.fillText('inkbornforge.com', W / 2, footerY)
 
   return canvas
 }

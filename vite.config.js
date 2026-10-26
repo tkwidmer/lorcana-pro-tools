@@ -79,6 +79,8 @@ function tournamentApiDevProxy() {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), tournamentApiDevProxy(), blogPlugin()],
+  // Agent worktrees under .claude/ carry a full copy of the suite.
+  test: { exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'] },
   server: {
     port: process.env.PORT ? parseInt(process.env.PORT) : 5173,
     proxy: {

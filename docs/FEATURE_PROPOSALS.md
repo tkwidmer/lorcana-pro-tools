@@ -179,8 +179,8 @@ It appears in three places, as requested:
 
 Each step can ship as its own PR:
 1. Step 0 evidence check. **Done.**
-2. `deckVersions.js`, `decklistDelta.js`, and their tests.
-3. The `/deck-lab` page.
+2. `deckVersions.js`, `decklistDelta.js`, and their tests. **Done.**
+3. The `/deck-lab` page, with `DeckVersionTimeline` and `DeckVersionCompare`. **Done.**
 4. The Match History timeline and version filter.
 5. The Analytics version filter.
 

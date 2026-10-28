@@ -105,6 +105,12 @@ export const SECTIONS = [
         description: 'Your list beside the field\'s average build for your archetype, the cards that lift or sink its win rate, your own card performance, and where your matchups lag the field.',
       },
       {
+        path: '/deck-lab',
+        name: 'Deck Iteration Lab',
+        icon: 'flask',
+        description: 'Every version of each deck you\'ve played, with its record and card changes, and an honest answer to whether version B is actually better than version A or the sample is still too small to tell.',
+      },
+      {
         path: '/game-scraper',
         name: 'Game Scraper',
         icon: 'eye',

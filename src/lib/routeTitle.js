@@ -34,6 +34,7 @@ const TITLES = {
   '/forge-decks': 'The Forge Decklists',
   '/practice-plan': 'Practice Plan',
   '/deck-doctor': 'Deck Doctor',
+  '/deck-lab': 'Deck Iteration Lab',
   '/tournament-lookup': 'Tournament Lookup',
   '/results': 'Tournament Results',
   '/store-lookup': 'Store Lookup',

@@ -26,7 +26,7 @@ export function DeckListCard({ title, subtitle, entries, children }) {
   }
 
   return (
-    <Card className="p-4">
+    <Card className="p-4 min-w-0">
       <h3 className="font-display uppercase tracking-wide text-gray-900">{title}</h3>
       {subtitle && <div className="text-xs text-gray-500">{subtitle}</div>}
       <div className="flex flex-wrap gap-1 mt-2 mb-3">

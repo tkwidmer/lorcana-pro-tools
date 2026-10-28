@@ -1,5 +1,5 @@
 ---
-name: GS
+name: GS Tempo
 inks: emerald/steel
 ---
 4 Ursula - Deceiver (3-90)

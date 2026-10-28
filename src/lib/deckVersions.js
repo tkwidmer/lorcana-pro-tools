@@ -17,6 +17,9 @@ export const DETECTABLE_DIFF = 0.1
 // at the worst-case variance of a 50% win rate: ~393.
 export const GAMES_NEEDED = Math.ceil(((1.96 + 0.8416) ** 2 * 2 * 0.25) / DETECTABLE_DIFF ** 2)
 
+// Versions with fewer decided games than this are shown faded.
+export const LOW_SAMPLE_GAMES = 10
+
 export function fromMatchHistoryRow(row) {
   return {
     id: row.game_id,

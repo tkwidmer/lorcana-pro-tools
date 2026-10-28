@@ -305,14 +305,15 @@ export async function fetchMatchHistory({ cursor, limit = 100, from, to, source,
 }
 
 // Every page of match history up to `maxPages` (20 × 100 ≈ 2,000 games),
-// following next_cursor. PracticePlanPage and DeckDoctorPage both need the
-// whole history, not a page at a time.
-export async function fetchAllMatchHistory({ maxPages = 20, limit = 100, source, queue } = {}) {
+// following next_cursor. PracticePlanPage, DeckDoctorPage and DeckLabPage need
+// the whole history, not a page at a time; `onPage(gamesSoFar)` reports progress.
+export async function fetchAllMatchHistory({ maxPages = 20, limit = 100, source, queue, onPage } = {}) {
   let cursor
   const all = []
   for (let i = 0; i < maxPages; i++) {
     const data = await fetchMatchHistory({ cursor, limit, source, queue })
     all.push(...(data.games ?? []))
+    onPage?.(all.length)
     cursor = data.next_cursor
     if (!cursor) break
   }

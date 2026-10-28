@@ -29,7 +29,7 @@ React 19 + React Router 7 + Tailwind CSS 4 + Vite 8 on Vercel; serverless routes
 | `api/*`, server secrets, Discord bot, Metafy, Substack | `docs/agents/api-routes.md` |
 | `/stream-overlay/*`, `streamOverlay.js`, `streamTables.js`, `stream_tables` migrations, Decklist Inspector overlay | `docs/agents/stream-overlay.md` |
 | Tournament Lookup, Store Lookup, Field Breakdown, `/results/*`, the Tournament History archive | `docs/agents/tournaments.md` |
-| Match History, Analytics, Library, player profiles, Winrate Matrix, Meta Synthesis, Deck Doctor, Stock Decks, Deck Insights, Game Scraper | `docs/agents/duels-data.md` |
+| Match History, Analytics, Library, player profiles, Winrate Matrix, Meta Synthesis, Deck Doctor, Deck Iteration Lab, Stock Decks, Deck Insights, Game Scraper | `docs/agents/duels-data.md` |
 | Blog, rules browser | `docs/agents/content.md` |
 | [Format Coconut] | `docs/agents/coconut.md` |
 | Any UI change that needs a screenshot or a browser check | `docs/agents/ui-screenshots.md` |
@@ -69,6 +69,7 @@ Pages in `src/pages/` are self-contained; shared logic lives in `src/lib/` as pu
 | `/stock-decks`, `/forge-decks` | `StockDecksPage`, `ForgeDecksPage` | duels.ink average builds per archetype; the site's own lists from `content/forge-decks/` |
 | `/practice-plan` | `PracticePlanPage` | Matchup practice allocation and tournament Monte Carlo |
 | `/deck-doctor` | `DeckDoctorPage` | Your list vs the field's build, lift, WAR and matchups |
+| `/deck-lab` | `DeckLabPage` | Deck Iteration Lab: each deck's versions from match history, and whether two versions really differ |
 | `/field-breakdown` | `FieldBreakdownPage` | A room's decklists (pasted or carde.io PDF) → ink pairs for the Stream Overlay |
 | `/tournament-lookup` | `TournamentLookupPage` | Ravensburger live standings, ID analysis, pairing history |
 | `/results`, `/results/events/:id`, `/results/players/:id` | `Results*Page` | Public Tournament History archive |
@@ -81,7 +82,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 
 ### Components (`src/components/`)
 
-`Nav` (ink-black bar, one dropdown per catalog section, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` (the gate: tool name, description, a preview screenshot and a Metafy call to action) + `MetafyAccessSteps` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `analytics/TurningPoints` (Analytics) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*` and `analytics/*` sub-views.
+`Nav` (ink-black bar, one dropdown per catalog section, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` (the gate: tool name, description, a preview screenshot and a Metafy call to action) + `MetafyAccessSteps` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `analytics/TurningPoints` (Analytics) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*`, `deckVersions/*` (`DeckVersionTimeline`, `DeckVersionCompare`) and `analytics/*` sub-views.
 
 ### Hooks (`src/hooks/`)
 

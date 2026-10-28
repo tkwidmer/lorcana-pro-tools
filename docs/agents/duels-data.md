@@ -1,6 +1,6 @@
 # duels.ink data: match history, gamelogs, meta stats and the tools on them
 
-Read before touching Match History, Analytics, the Library and player profiles, Winrate Matrix, Meta Synthesis, Deck Doctor, Practice Plan, Stock Deck Lists, Deck Insights or the Game Scraper. The `duels-api-docs` skill fetches the upstream docs; `gamelog-pipeline` holds the parsing invariants; `chrome-extension-mv3` holds the scraper's 4-script relay.
+Read before touching Match History, Analytics, the Library and player profiles, Winrate Matrix, Meta Synthesis, Deck Doctor, the Deck Iteration Lab, Practice Plan, Stock Deck Lists, Deck Insights or the Game Scraper. The `duels-api-docs` skill fetches the upstream docs; `gamelog-pipeline` holds the parsing invariants; `chrome-extension-mv3` holds the scraper's 4-script relay.
 
 ## Match History Game Object Shape
 
@@ -106,6 +106,10 @@ The page defaults to the user's own rank band (`fetchCurrentMmr` → `rankTiers.
 - **Your cards** are `computeCardImpact()` over imported gamelogs whose `deck_id` matches, with `fetchPersonalStats()` deck versions as Analytics does; without imports the section is a prompt.
 
 Every read of the undocumented fields is null-safe and hides its own section. With no profiles for the era the page shows a banner and only the verdict and your own sections. Note on the feed (checked 2026-10-22): an unscoped `period=all_time` call returns no profiles for Set 14, but the era-scoped call `fetchStats` makes (`era=set-14-core`) returns 78; an unknown era key silently falls back to the current era (`meta.eraResolution: 'current'`), and Set 13's key is `set-13`.
+
+## Deck Iteration Lab
+
+`DeckLabPage` (`/deck-lab`, supporter-gated, Coaching Tools) loads the whole match history (`fetchAllMatchHistory({ limit: 250, maxPages: Infinity, onPage })`, progress shown as it pages) and runs it through `deckVersions.js`: `fromMatchHistoryRow()` → `buildDeckVersions(games, buildCardIdToName(cards))`. Versions are keyed by card *name*, so a reprint or promo swap stays one version (`docs/FEATURE_PROPOSALS.md` §3 has the evidence). A card id missing from LorcanaJSON makes `buildDeckVersions()` throw, and the page shows that error rather than guessing. The timeline and compare views are `components/deckVersions/DeckVersionTimeline` and `DeckVersionCompare`, built to be reused by Match History and Analytics (build steps 4 and 5). Deck names come from `lorcana_deck_names` plus `fetchDecks()`; `?deck=<your_deck_id>` selects a deck.
 
 ## Stock Deck Lists
 

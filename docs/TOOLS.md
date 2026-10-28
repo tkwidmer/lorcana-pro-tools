@@ -8,7 +8,7 @@ Tools marked **Supporter** need an active supporter account (see [Getting starte
 - [Which tool should I use?](#which-tool-should-i-use)
 - [Resources](#resources): Proxy Generator, Limited Guide, Rules
 - [Deckbuilding](#deckbuilding): Deck Insights, Deck Comparison, Coconut Deck Builder, Stock Deck Lists, The Forge Decklists
-- [Coaching](#coaching): Match History, Analytics, Practice Plan, Deck Doctor, Gamelog Viewer
+- [Coaching](#coaching): Match History, Analytics, Practice Plan, Deck Doctor, Deck Iteration Lab, Gamelog Viewer
 - [Metagame](#metagame): Winrate Matrix, Meta Synthesis
 - [Tournament](#tournament): Tournament Lookup, Tournament Results, Player Ratings, Field Breakdown, Lore Tracker, Store Lookup
 - [Scouting](#scouting): Game Scraper, Scouting Library, Player Profiles
@@ -44,6 +44,7 @@ Tools marked **Supporter** need an active supporter account (see [Getting starte
 | Prepare for an upcoming tournament | [Practice Plan](#practice-plan) | [Meta Synthesis](#meta-synthesis) |
 | Know if a deck list is consistent | [Deck Insights](#deck-insights) | [Winrate Matrix](#winrate-matrix) for how it fares in the meta |
 | Find out which cards in my deck are pulling their weight | [Analytics → Card Impact (WAR)](#analytics) | [Deck Comparison](#deck-comparison) to plan the swaps |
+| Know whether my last deck change actually helped | [Deck Iteration Lab](#deck-iteration-lab) | [Analytics → Card Impact (WAR)](#analytics) for the cards behind it |
 | See how I'm doing lately | [Match History](#match-history) | [Analytics](#analytics) trends |
 | Stop making the same mistakes | [Analytics → leak report](#analytics) | [Practice Plan → Skills to drill](#practice-plan) |
 | Scout an opponent | [Scouting Library → Players](#scouting-library) | [Game Scraper](#game-scraper) to capture more games |
@@ -187,6 +188,11 @@ Decks under a small "rogue" share of the meta are left out of the meta by defaul
 `/deck-doctor` · Supporter
 
 Pick one of your decks from match history (or paste a list) and see it beside the field: duels.ink's average build for its archetype with the cards only you run, only the field runs, or at a different count; the cards with the best lift in that archetype and in its ink pair, checked against your list; your own per-card WAR from imported gamelogs; and your matchup win rates next to the field's. It ends in a short verdict. Needs a duels.ink token; the Your Cards section needs imported gamelogs.
+
+### Deck Iteration Lab
+`/deck-lab` · Supporter · needs a duels.ink token
+
+Every version of each deck you've played, read from your full match history. A version is one distinct list; swapping a card for another printing of it isn't a new version, and going back to an old list reuses its version. Each version shows when you played it, its record and win rate with a 95% range (faded under 10 games), and the cards changed from the previous version. Compare any two versions to see the win-rate difference with its range, a plain verdict (ahead with reasonable confidence, no clear difference, or how many more games each version needs), and both records by opponent colors. `?deck=<deck id>` opens a deck directly.
 
 ### Gamelog Viewer
 `/gamelog?id=<gamelog id>` · Free · needs a duels.ink token

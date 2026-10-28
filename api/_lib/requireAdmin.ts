@@ -46,10 +46,9 @@ export async function requireAdmin(req: VercelRequest, res: VercelResponse): Pro
 }
 
 // Verifies only that the caller has a valid Supabase session (any signed-in
-// user) — used by the read endpoints, which don't need admin/supporter tier
-// re-checked server-side (see api/tournament-history.ts), just abuse/cost
-// control on a route that hits our own database rather than proxying an
-// external API.
+// user) — used by api/tournament-history.ts's `pairing-badges` endpoint, as
+// abuse/cost control on a route that hits our own database. The archive's
+// other reads are public and edge-cached instead.
 export async function requireSession(req: VercelRequest, res: VercelResponse): Promise<string | null> {
   const auth = req.headers.authorization
   if (!auth?.startsWith('Bearer ')) {

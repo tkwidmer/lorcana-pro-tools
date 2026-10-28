@@ -95,12 +95,12 @@ function CoconutPicker({ onAdd }) {
           <button
             key={cc.id}
             onClick={() => onAdd(coconutProxyCard(cc))}
-            title={`Add ${cc.name} - ${cc.version}`}
+            title={`Add ${cc.baseFullName}`}
             className="group text-left focus:outline-none focus:ring-2 focus:ring-gray-900 rounded"
           >
             <img
               src={coconutCardImageUrl(cc.id)}
-              alt={`${cc.name} - ${cc.version}`}
+              alt={cc.baseFullName}
               loading="lazy"
               className="w-full rounded border border-gray-200 group-hover:border-gray-900 transition-colors"
               style={{ aspectRatio: '5 / 7', objectFit: 'cover' }}

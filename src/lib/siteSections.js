@@ -62,6 +62,18 @@ export const SECTIONS = [
         icon: 'palm',
         description: 'Build decks for the [Format Coconut] multiplayer format — pick a Coconut card, lock in your inks, and build a singleton deck around it with the copy-count exceptions enforced automatically.',
       },
+      {
+        path: '/stock-decks',
+        name: 'Stock Deck Lists',
+        icon: 'cards',
+        description: 'A starting list for every archetype in the meta, grouped by ink pair and organized by set. Copy any list straight into duels.ink.',
+      },
+      {
+        path: '/forge-decks',
+        name: 'The Forge Decklists',
+        icon: 'flame',
+        description: 'Our recommended deck lists for each format, organized by set. Copy any list straight into duels.ink.',
+      },
     ],
   },
   {
@@ -87,6 +99,12 @@ export const SECTIONS = [
         description: 'Pre-event prep: pick your deck and the expected meta, then see which matchups to focus on based on your personal win rates vs the public matrix.',
       },
       {
+        path: '/deck-doctor',
+        name: 'Deck Doctor',
+        icon: 'stethoscope',
+        description: 'Your list beside the field\'s average build for your archetype, the cards that lift or sink its win rate, your own card performance, and where your matchups lag the field.',
+      },
+      {
         path: '/game-scraper',
         name: 'Game Scraper',
         icon: 'eye',
@@ -104,6 +122,24 @@ export const SECTIONS = [
     title: 'Tournament Tools',
     navLabel: 'Tournaments',
     tools: [
+      {
+        path: '/results',
+        name: 'Tournament Results',
+        icon: 'podium',
+        description: 'Browse final standings, top-cut brackets and every player\'s record across imported Disney Lorcana Challenges, qualifiers and other major events.',
+      },
+      {
+        path: '/results/ratings',
+        name: 'Player Ratings',
+        icon: 'trend',
+        description: 'The top 100 players in the Tournament History archive by Glicko rating, with each one\'s record, rating deviation and change since their last event.',
+      },
+      {
+        path: '/field-breakdown',
+        name: 'Field Breakdown',
+        icon: 'pie',
+        description: "Paste every decklist in the room, or upload carde.io's decklists PDF, and see the field by ink pair, ready for the Stream Overlay's metagame chart.",
+      },
       {
         path: '/tournament-lookup',
         name: 'Tournament Lookup',
@@ -134,6 +170,12 @@ export const SECTIONS = [
         icon: 'video',
         description: 'Paste a decklist and browse it by type and cost, then pin up to 4 cards to show their full art alongside deck stat charts — built for making Lorcana videos.',
       },
+      {
+        path: '/stream-overlay',
+        name: 'Stream Overlay',
+        icon: 'broadcast',
+        description: 'Run a tournament gameplay overlay for OBS — player names, deck inks, records, game wins, lore, round and timer, event and sponsor logos — as one browser source with transparent camera areas.',
+      },
     ],
   },
 ]
@@ -142,12 +184,12 @@ export const SECTIONS = [
 // catalog (settings, blog, admin…). Sub-routes match their tool's path
 // prefix, so `/rules/:doc` belongs to Rules.
 export function findTool(pathname) {
+  let found = null // the longest matching path: /results/ratings over /results
   for (const section of SECTIONS) {
     for (const tool of section.tools) {
-      if (tool.path && (pathname === tool.path || pathname.startsWith(tool.path + '/'))) {
-        return { section, tool }
-      }
+      const matches = tool.path && (pathname === tool.path || pathname.startsWith(tool.path + '/'))
+      if (matches && (!found || tool.path.length > found.tool.path.length)) found = { section, tool }
     }
   }
-  return null
+  return found
 }

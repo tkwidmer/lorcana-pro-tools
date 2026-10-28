@@ -304,6 +304,21 @@ export async function fetchMatchHistory({ cursor, limit = 100, from, to, source,
   return res.json() // { games: MatchHistoryRow[], next_cursor: string | null }
 }
 
+// Every page of match history up to `maxPages` (20 × 100 ≈ 2,000 games),
+// following next_cursor. PracticePlanPage and DeckDoctorPage both need the
+// whole history, not a page at a time.
+export async function fetchAllMatchHistory({ maxPages = 20, limit = 100, source, queue } = {}) {
+  let cursor
+  const all = []
+  for (let i = 0; i < maxPages; i++) {
+    const data = await fetchMatchHistory({ cursor, limit, source, queue })
+    all.push(...(data.games ?? []))
+    cursor = data.next_cursor
+    if (!cursor) break
+  }
+  return all
+}
+
 export async function fetchGamelogBuffer(gameId) {
   const token = getToken()
   if (!token) throw new Error('No API token configured')
@@ -416,4 +431,11 @@ export async function fetchStats({ queue, period, ranks }) {
   const params = { queue, period, era: await currentEraKey(queue) }
   if (ranks && ranks.length > 0) params.ranks = ranks.join(',')
   return getStats(params)
+}
+
+// All-time community stats for one specific card-set era, which stays
+// fixed after the next set ships (unlike fetchStats, which follows the
+// current era).
+export function fetchEraStats({ queue, era }) {
+  return getStats({ queue, period: 'all_time', era })
 }

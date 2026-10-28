@@ -19,7 +19,7 @@ import path from 'path'
 import { parsePost } from './src/lib/blogPost.js'
 import { AUTHOR_LINK_REL, BLOG_DESCRIPTION, formatPostDate } from './src/lib/blogMeta.js'
 
-const SITE_URL = 'https://lorcana-pro-tools.vercel.app'
+const SITE_URL = 'https://www.inkbornforge.com'
 const BLOG_TITLE = 'Blog · InkbornForge'
 
 function escapeHtml(text) {

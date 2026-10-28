@@ -2,6 +2,10 @@
 // the published PDFs. Versions are ordered newest first.
 //
 // Source documents:
+//   - October 2026 (v2.3.0): "Version 2.3.0, Effective October 16, 2026" —
+//     adds Counters (1.13, incl. ink drop counters) and the Adventurous
+//     keyword (8.16); 4.3.3's wrapped "(see 6.7.9.)" cross-reference was
+//     hand-fixed after the parser read it as a duplicate 6.7.9 header
 //   - July 2026 (v2.2.0): "Version 2.2.0, Effective July 9, 2026" — a full
 //     restructure (new chapter/section numbering) vs earlier versions
 //   - April 2026 (v2.1.0): "Version 2.1.0, Effective April 30, 2026"
@@ -31,6 +35,7 @@ import { createVersionLoader } from '../versionLoader'
 // loadVersion() so switching documents doesn't pull every version's
 // content into the bundle.
 export const versionsMeta = [
+  { version: "2026-10-16", label: "October 2026 (v2.3.0)", releaseDate: "2026-10-16" },
   { version: "2026-07-09", label: "July 2026 (v2.2.0)", releaseDate: "2026-07-09" },
   { version: "2026-04-30", label: "April 2026 (v2.1.0)", releaseDate: "2026-04-30" },
   { version: "2026-02-10", label: "February 2026 (v2.0.1)", releaseDate: "2026-02-10" },

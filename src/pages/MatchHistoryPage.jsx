@@ -392,58 +392,6 @@ export function MatchHistoryPage() {
 
   const getDeckKey = useCallback((g) => g.your_deck_id ?? deckFingerprint(g.your_decklist), [])
 
-  const deckStats = useMemo(() => {
-    const byDeck = {}
-    for (const g of games) {
-      const isSealed = g.queue_id?.toLowerCase().includes('sealed') || g.queue_name?.toLowerCase().includes('sealed')
-      if (isSealed) continue
-      const key = getDeckKey(g)
-      if (!key) continue
-      if (!byDeck[key]) byDeck[key] = {
-        key,
-        deckId: g.your_deck_id ?? null,
-        colors: g.your_deck_colors,
-        wins: 0, losses: 0, loreTotal: 0, loreGames: 0,
-        latestDecklist: g.your_decklist ?? null, // games sorted newest-first
-      }
-      if (g.result === 'win') byDeck[key].wins++
-      else if (g.result === 'loss') byDeck[key].losses++
-      if (g.your_lore != null) { byDeck[key].loreTotal += g.your_lore; byDeck[key].loreGames++ }
-    }
-    return Object.values(byDeck).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
-  }, [games, getDeckKey])
-
-  // Background-fetch deck details for all constructed decks with a real deckId
-  useEffect(() => {
-    const deletedIds = getDeletedDeckIds()
-    for (const { deckId } of deckStats) {
-      if (!deckId || fetchedDeckIds.current.has(deckId)) continue
-      if (deletedIds.has(deckId)) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- background sync of fetch status
-        setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'deleted', deck: null } }))
-        continue
-      }
-      fetchedDeckIds.current.add(deckId)
-      setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loading', deck: null } }))
-      fetchDeck(deckId)
-        .then(data => {
-          setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loaded', deck: data.deck } }))
-          if (data.deck) {
-            const cached = JSON.parse(localStorage.getItem(DECK_DETAILS_KEY) ?? '{}')
-            cached[deckId] = data.deck
-            localStorage.setItem(DECK_DETAILS_KEY, JSON.stringify(cached))
-          }
-        })
-        .catch(err => {
-          if (err?.status === 404) {
-            markDeckDeleted(deckId)
-            setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'deleted', deck: null } }))
-          } else {
-            setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'error', deck: null } }))
-          }
-        })
-    }
-  }, [deckStats])
 
   async function handleLoadInsights(deckStat) {
     setInsightsLoading(deckStat.key)
@@ -606,18 +554,58 @@ export function MatchHistoryPage() {
   const oppColorOptions = [...new Set(afterMyColors.map(g => g.opp_deck_colors).filter(c => c && colorCount(c) <= 2))].sort()
   const afterOppColors = afterMyColors.filter(g => !filterOppColors || g.opp_deck_colors === filterOppColors)
 
-  const { seenDeckKeys } = useMemo(() => {
-    const options = []
-    const keys = new Set()
+  const deckStats = useMemo(() => {
+    const byDeck = {}
     for (const g of afterOppColors) {
+      const isSealed = g.queue_id?.toLowerCase().includes('sealed') || g.queue_name?.toLowerCase().includes('sealed')
+      if (isSealed) continue
       const key = getDeckKey(g)
-      if (key && !keys.has(key) && colorCount(g.your_deck_colors) <= 2) {
-        keys.add(key)
-        options.push({ fp: key, colors: g.your_deck_colors })
+      if (!key) continue
+      if (!byDeck[key]) byDeck[key] = {
+        key,
+        deckId: g.your_deck_id ?? null,
+        colors: g.your_deck_colors,
+        wins: 0, losses: 0, loreTotal: 0, loreGames: 0,
+        latestDecklist: g.your_decklist ?? null, // games sorted newest-first
       }
+      if (g.result === 'win') byDeck[key].wins++
+      else if (g.result === 'loss') byDeck[key].losses++
+      if (g.your_lore != null) { byDeck[key].loreTotal += g.your_lore; byDeck[key].loreGames++ }
     }
-    return { deckOptions: options, seenDeckKeys: keys }
+    return Object.values(byDeck).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses))
   }, [afterOppColors, getDeckKey])
+
+  // Background-fetch deck details for all constructed decks with a real deckId
+  useEffect(() => {
+    const deletedIds = getDeletedDeckIds()
+    for (const { deckId } of deckStats) {
+      if (!deckId || fetchedDeckIds.current.has(deckId)) continue
+      if (deletedIds.has(deckId)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- background sync of fetch status
+        setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'deleted', deck: null } }))
+        continue
+      }
+      fetchedDeckIds.current.add(deckId)
+      setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loading', deck: null } }))
+      fetchDeck(deckId)
+        .then(data => {
+          setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'loaded', deck: data.deck } }))
+          if (data.deck) {
+            const cached = JSON.parse(localStorage.getItem(DECK_DETAILS_KEY) ?? '{}')
+            cached[deckId] = data.deck
+            localStorage.setItem(DECK_DETAILS_KEY, JSON.stringify(cached))
+          }
+        })
+        .catch(err => {
+          if (err?.status === 404) {
+            markDeckDeleted(deckId)
+            setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'deleted', deck: null } }))
+          } else {
+            setDeckDetailMap(prev => ({ ...prev, [deckId]: { status: 'error', deck: null } }))
+          }
+        })
+    }
+  }, [deckStats])
 
   const filteredGames = afterOppColors.filter(g => !filterDeck || getDeckKey(g) === filterDeck)
 
@@ -629,7 +617,7 @@ export function MatchHistoryPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (filterOppColors && !oppColorOptions.includes(filterOppColors)) setFilterOppColors(null) }, [oppColorOptions, filterOppColors])
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (filterDeck && !seenDeckKeys.has(filterDeck)) setFilterDeck(null) }, [filterDeck, seenDeckKeys])
+  useEffect(() => { if (filterDeck && !deckStats.some(d => d.key === filterDeck)) setFilterDeck(null) }, [filterDeck, deckStats])
 
   // Group BO3 games by match_id for display; BO1 games stay as individual rows
   const displayItems = (() => {

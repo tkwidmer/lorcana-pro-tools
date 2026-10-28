@@ -1,5 +1,8 @@
 {
   "installCommand": "dnf install -y nss && npm install",
+  "functions": {
+    "api/tournament-history.ts": { "maxDuration": 60 }
+  },
   "rewrites": [
     { "source": "/api/cards", "destination": "https://lorcanajson.org/files/current/en/allCards.json" },
     { "source": "/blog", "destination": "/blog/index.html" },

@@ -1,6 +1,6 @@
 ---
 name: add-coconut-card
-description: Add a newly released [Format Coconut] card to this app — its art to the Proxy Generator and the card to the Coconut deck builder. Use whenever the user says "add this coconut card", pastes or attaches new Coconut card art, or points at a new Coconut release (they ship roughly weekly). Covers deriving the card id, verifying the base card and inks against LorcanaJSON, transcribing the printed ability, finding duels.ink's own card id, and the counts in tests and CLAUDE.md that will silently fail if you forget them.
+description: Add a new [Format Coconut] card: art, data, duels.ink id, and the counts in tests and docs that silently fail. Use when the user says "add this coconut card" or shares new Coconut card art.
 ---
 
 # Add a [Format Coconut] card
@@ -11,15 +11,33 @@ with its own full-art face. Adding one is mostly data entry plus an image —
 but there are four hardcoded counts that break if you miss them, and two
 fields you must verify rather than read off the art.
 
-Read CLAUDE.md's "[Format Coconut] Deck Builder", "Coconut Decklist Text" and
-"Coconut Card Faces" sections first if you haven't this session.
+Read `docs/agents/coconut.md` first if you haven't this session.
 
 ## What you need from the user
 
 The card art. Anything works — an attached image, a zip, a link, or a
-print-ready PDF sheet. If they give a Google Drive folder link, the Drive
-connector may only surface some files; ask for a direct attachment if the art
-isn't there.
+print-ready PDF sheet.
+
+The canonical source is Nathan Trippe's Drive folder
+(`1HrVH8dCnaw2jCefvuVKn12Jf6wcy9SSe`). Prefer its print sheet,
+`coconut-lorcana-long-edge.pdf`: it embeds each front as a 750x1050 JPEG
+(extract with the PyMuPDF snippet below and copy byte-for-byte). Its
+**"Individual Coconuts"** subfolder (`1a5DEB1G-gmbDGzpQqJfNF01j31x94cMP`) has
+one 640x896 PNG per card, named by duels.ink number (`01-scar.png` …), and
+gets new cards before the sheet does — use it only for a card not yet on the
+sheet. Same revision either way; the sheet's 750 is an upscale of ~640
+masters, so there's no real detail to gain beyond it. The Drive connector
+can see these folders but can't list a link-shared folder's children; Drive's
+public folder view can, and files download without auth:
+
+```bash
+curl -sSL "https://drive.google.com/embeddedfolderview?id=<folder id>" -o list.html
+# file ids + names: 'file/d/<id>' ... 'flip-entry-title"><name>'
+curl -sSL "https://drive.usercontent.google.com/download?id=<file id>&export=download&confirm=t" -o <name>
+```
+
+When a wave ships, diff the existing faces against this folder too — it's
+where text revisions land (see step 4).
 
 If the art arrives as a **print-ready PDF** of the whole set, extract the
 fronts with PyMuPDF rather than screenshotting:
@@ -94,8 +112,10 @@ bg.paste(im, (0, 0), im)
 bg.save(f'public/coconut-cards/{id}.jpg', 'JPEG', quality=90, optimize=True, progressive=True)
 ```
 
-750x1050 is exactly 300 DPI at 2.5"x3.5" and is what the existing faces use;
-640x896 (~256 DPI) is acceptable. Never upscale to hit a number. If the art is
+Every face is 750x1050 (300 DPI at 2.5"x3.5"). Take it from the print sheet
+when the card is there; otherwise Lanczos-upscale the 640x896 PNG to 750x1050
+(`bg.resize((750, 1050), Image.LANCZOS)` before saving) — that matches how the
+sheet's own faces were produced. Swap in the sheet's copy once it ships. If the art is
 already JPEG at the right size, copy it byte-for-byte rather than re-encoding.
 
 Reject a face stamped **"FOR BETA TEST ONLY"** or obviously greyed out — that's
@@ -124,18 +144,23 @@ the deck builder, so they read as a contradiction.
 ### 5. Find duels.ink's card id (optional field)
 
 duels.ink declares the Coconut card in a decklist with a `Coconut: <id>`
-header, ids matching `/^coconut-(\d+)$/`. Their ids come from their own client
-bundle, which lists the precon decks:
+header, ids matching `/^coconut-(\d+)$/`. The full catalog (what
+https://duels.ink/cards/coconut renders) lives in a **lazy-loaded
+`cards-data-<hash>.js` chunk**, not the main `index-<hash>.js` bundle. The main
+bundle only carries the precon decks' `coconutCardId`s, which lag the catalog
+by many cards — grepping it alone once made 11 carried cards look missing.
 
 ```bash
 curl -sS --compressed https://duels.ink/ -o /tmp/home.html
 grep -aoE 'src="/assets/index-[^"]*\.js"' /tmp/home.html      # hashed, changes
 curl -sS --compressed https://duels.ink/assets/index-XXXX.js -o /tmp/app.js
-grep -aoE '"id":"coconut-[a-z0-9-]+","name":"[^"]{0,60}".{0,200}?"coconutCardId":"coconut-[0-9]+"' /tmp/app.js
+grep -aoE 'assets/cards-data-[^"]+\.js' /tmp/app.js | head -1   # hashed, changes
+curl -sS --compressed https://duels.ink/assets/cards-data-XXXX.js -o /tmp/cards.js
+grep -aoE '"id":"coconut-[0-9]+","number":[0-9]+,"name":"[^"]*","subtitle":("[^"]*"|null),"full_name":"[^"]*","colors":\[[^]]*\]' /tmp/cards.js | sort -u
 ```
 
-Numbering follows the order cards appear on the official print sheet, which is
-a useful cross-check when a precon doesn't name one.
+Match on `full_name` against `baseFullName`; its `colors` are a free
+cross-check on `inks`.
 
 **duels.ink lags the releases.** If the new card isn't there, simply omit
 `duelsId` — the export falls back to the `# Coconut Card:` comment, which still
@@ -175,11 +200,10 @@ These are the easy ones to miss:
 | File | What |
 |---|---|
 | `src/lib/__tests__/coconutFormat.test.js` | `expect(COCONUT_CARDS.length).toBe(25)` |
-| `src/lib/__tests__/coconutDecklistText.test.js` | the two `toBe(18)` duels.ink id assertions — only if you set a `duelsId` |
-| `CLAUDE.md` | "all 25", "25 beta Coconut cards", "so all 25 are bundled", "Add all 25" |
+| `src/lib/__tests__/coconutDecklistText.test.js` | the two `toBe(29)` duels.ink id assertions — only if you set a `duelsId` |
+| `docs/agents/coconut.md` | "all 25", "25 beta Coconut cards", "so all 25 are bundled", "Add all 25" |
 
-Also refresh CLAUDE.md's "catalog stops at `coconut-018`" line if duels.ink has
-extended its range.
+Also refresh that doc's "catalog runs to `coconut-029`" line.
 
 ### 8. Verify
 

@@ -1,0 +1,16 @@
+name: Ratings Recompute
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  recompute:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recompute Tournament History player ratings
+        run: |
+          curl --fail-with-body -sS -X POST \
+            "https://www.inkbornforge.com/api/tournament-history?endpoint=recompute-ratings" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

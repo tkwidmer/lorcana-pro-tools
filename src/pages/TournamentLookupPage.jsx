@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import {
   fetchEventDetails,
   getTournamentStructure,
-  fetchTournamentStandings,
+  fetchAllStandings,
+  extractEventId,
   fetchAllRegistrations,
   fetchAllRoundMatches,
   formatTiebreakers,
@@ -672,11 +673,6 @@ export function TournamentLookupPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allStandings])
 
-  function extractEventId(url) {
-    const match = url.match(/\/events\/(\d+)/)
-    return match ? match[1] : null
-  }
-
   function toggleFavorite(playerId, name) {
     setFavorites(toggleFavoriteStorage(playerId, name))
   }
@@ -692,24 +688,6 @@ export function TournamentLookupPage() {
 
   function removeRecentTournament(eventId) {
     setRecents(removeRecent(eventId))
-  }
-
-  // Fetches every page of standings for a round and normalizes match_points
-  // to the current total — the standings snapshot field is stale mid-event.
-  async function fetchAllStandingsPages(roundId) {
-    const allResults = []
-    let page = 1
-    let hasMore = true
-    while (hasMore) {
-      const data = await fetchTournamentStandings(roundId, page, 50)
-      allResults.push(...data.results)
-      hasMore = data.next_page_number !== null
-      page = data.next_page_number || page + 1
-    }
-    return allResults.map((entry) => ({
-      ...entry,
-      match_points: entry.user_event_status?.total_match_points ?? entry.match_points,
-    }))
   }
 
   async function loadStandings(url) {
@@ -765,7 +743,7 @@ export function TournamentLookupPage() {
       setRosterMode(false)
       setActiveTab('standings')
 
-      const normalized = await fetchAllStandingsPages(tournamentStructure.currentRoundId)
+      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId)
       setAllStandings(normalized)
 
       // Fetch registrations best-effort (non-blocking); key by user.id for reliable lookup
@@ -803,7 +781,7 @@ export function TournamentLookupPage() {
         return
       }
 
-      const normalized = await fetchAllStandingsPages(tournamentStructure.currentRoundId)
+      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId)
       setAllStandings(normalized)
 
       // The event just started (or standings just generated for the first
@@ -1235,17 +1213,19 @@ export function TournamentLookupPage() {
 
       {/* Bracket tab (elimination phase, visualized as a bracket) */}
       {allStandings && !player && activeTab === 'bracket' && (
-        <EliminationBracket
-          allMatches={allMatches}
-          phaseName={structure?.eliminationPhaseName}
-          onSelectPairing={setSelectedPairing}
-          badges={pairingBadges}
-          favorites={favorites}
-          team={team}
-          toggleFavorite={toggleFavorite}
-          toggleTeam={toggleTeam}
-          currentEventId={currentEventId}
-        />
+        <div className="space-y-3">
+          <EliminationBracket
+            allMatches={allMatches}
+            phaseName={structure?.eliminationPhaseName}
+            onSelectPairing={setSelectedPairing}
+            badges={pairingBadges}
+            favorites={favorites}
+            team={team}
+            toggleFavorite={toggleFavorite}
+            toggleTeam={toggleTeam}
+            currentEventId={currentEventId}
+          />
+        </div>
       )}
 
       {/* Roster tab (pre-tournament — no standings yet) */}

@@ -42,7 +42,7 @@ function InkIcon({ ink, size = 20 }) {
 }
 
 function coconutDisplayName(coconutCard) {
-  return `${coconutCard.name} – "${coconutCard.version}"`
+  return coconutCard.version ? `${coconutCard.name} – "${coconutCard.version}"` : coconutCard.name
 }
 
 function getCoconutCardImageUrl(coconutCard) {
@@ -214,7 +214,7 @@ function PickCoconutCardView({ onPick, onCancel }) {
                         <h3 className="text-sm font-bold text-gray-900">{cc.name}</h3>
                         {cc.inks.map(i => <InkIcon key={i} ink={i} size={14} />)}
                       </div>
-                      <p className="text-xs text-gray-500 italic mb-2">"{cc.version}"</p>
+                      {cc.version && <p className="text-xs text-gray-500 italic mb-2">"{cc.version}"</p>}
                       <p className="text-xs text-gray-600 whitespace-pre-line">{cc.ability}</p>
                     </div>
                   </button>

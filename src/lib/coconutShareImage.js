@@ -284,7 +284,7 @@ export async function generateCoconutDeckShareImage({ deckName, coconutName, coc
   ctx.font = '13px ui-sans-serif, system-ui, sans-serif'
   ctx.fillStyle = 'rgba(255,255,255,0.6)'
   ctx.textAlign = 'center'
-  ctx.fillText('lorcana-pro-tools.vercel.app', W / 2, H - FOOTER_H / 2 + 4)
+  ctx.fillText('inkbornforge.com', W / 2, H - FOOTER_H / 2 + 4)
 
   return canvas
 }

@@ -9,6 +9,7 @@ describe('routeTitle', () => {
   it('suffixes known pages with the site name', () => {
     expect(routeTitle('/deck-insights')).toBe('Deck Insights · InkbornForge')
     expect(routeTitle('/analytics')).toBe('Analytics · InkbornForge')
+    expect(routeTitle('/deck-doctor')).toBe('Deck Doctor · InkbornForge')
   })
 
   it('matches dynamic routes by prefix', () => {
@@ -20,6 +21,11 @@ describe('routeTitle', () => {
     expect(routeTitle('/blog')).toBe('Blog · InkbornForge')
     expect(routeTitle('/blog/welcome-to-the-blog')).toBe('Welcome to the InkbornForge blog · InkbornForge')
     expect(routeTitle('/blog/no-such-post')).toBe('InkbornForge')
+  })
+
+  it('titles the results archive and its sub-routes', () => {
+    expect(routeTitle('/results')).toBe('Tournament Results · InkbornForge')
+    expect(routeTitle('/results/players/123')).toBe('Tournament Results · InkbornForge')
   })
 
   it('falls back to the bare site name for unknown routes', () => {

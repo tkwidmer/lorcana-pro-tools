@@ -155,7 +155,7 @@ export function archetypeMatchupSummary(stats, archetypeKey, { minGames = 30 } =
 // The single build-variant profile (within one aggregated archetype) with
 // the largest sample — used as the source for card-lift data, since lift
 // isn't meaningfully additive across variants the way games/wins are.
-function representativeProfile(stats, archetypeKey) {
+export function representativeProfile(stats, archetypeKey) {
   const aggregates = aggregateArchetypes(stats?.profiles)
   const agg = aggregates.find(a => a.key === archetypeKey)
   if (!agg) return null

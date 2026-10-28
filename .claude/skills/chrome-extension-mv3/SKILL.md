@@ -1,6 +1,6 @@
 ---
 name: chrome-extension-mv3
-description: Load this before reading, modifying, or debugging anything in chrome-extension/ (manifest.json, patch.js, relay.js, background.js, bridge.js, popup.html/css) or GameScraperPage.jsx's message-listening side. Covers both the official Manifest V3 API docs and this repo's specific 4-script message-relay chain, which is easy to break silently by editing the wrong script or the wrong JS "world".
+description: Read before editing chrome-extension/ (patch.js, relay.js, background.js, bridge.js, manifest.json) or GameScraperPage's message listener: the 4-script relay chain across JS worlds breaks silently when the wrong script is edited.
 ---
 
 # Chrome Extension (Manifest V3)
@@ -9,7 +9,7 @@ description: Load this before reading, modifying, or debugging anything in chrom
 shared source, built by `build-extension.js` into
 `/public/lorcana-extension.zip`. It has a real external spec (Chrome's MV3
 docs) plus repo-specific data-flow tribal knowledge that isn't written down
-anywhere except CLAUDE.md and the code itself.
+anywhere except `docs/agents/duels-data.md` and the code itself.
 
 ## When to use
 
@@ -43,7 +43,7 @@ Before touching:
 
 ## This repo's message chain — read before editing any single script
 
-The 5-step flow (from CLAUDE.md) when spectating a duels.ink game:
+The 5-step flow (from `docs/agents/duels-data.md`) when spectating a duels.ink game:
 
 1. User visits `duels.ink/spectate/{uuid}`
 2. `patch.js` (**MAIN world**, `document_start`) patches

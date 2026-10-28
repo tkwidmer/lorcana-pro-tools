@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
+import { formatRating } from '../lib/resultsArchive'
 import { PlayerMatchHistory } from './PlayerMatchHistory'
 
 // Player-shaped stub so PlayerMatchHistory (built for a standings-entry
@@ -34,7 +36,7 @@ function TopCutList({ events }) {
 // one side — more top-cut lines, wrapped event names — can't push only that
 // column's "Match History" table down; each grid row sizes to its tallest
 // cell independently.
-function PlayerSummaryCard({ label, history, loading, error }) {
+function PlayerSummaryCard({ label, playerId, history, loading, error }) {
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-bold text-gray-900">{label}</h3>
@@ -48,7 +50,13 @@ function PlayerSummaryCard({ label, history, loading, error }) {
           <>
             <div className="flex gap-4 mb-2">
               <div>
-                <div className="text-lg font-bold text-gray-900">{history.eventsPlayed}</div>
+                <div className="text-lg font-bold text-gray-900">{history.rating ? formatRating(history.rating) : '—'}</div>
+                <div className="text-xs text-gray-500">
+                  {history.rating?.rank ? `Rating · #${history.rating.rank}` : history.rating ? 'Rating · provisional' : 'Rating'}
+                </div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-gray-900">{history.majorsPlayed}</div>
                 <div className="text-xs text-gray-500">Majors played</div>
               </div>
               <div>
@@ -57,6 +65,11 @@ function PlayerSummaryCard({ label, history, loading, error }) {
               </div>
             </div>
             <TopCutList events={history.events} />
+            {history.eventsPlayed > 0 && (
+              <Link to={`/results/players/${playerId}`} className="inline-block mt-2 text-xs text-forge-ink hover:underline">
+                Full history →
+              </Link>
+            )}
           </>
         )}
       </div>
@@ -123,7 +136,9 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
           <h2 className="text-sm font-semibold text-gray-900">{p1.name} vs {p2.name}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+          </div>
         </div>
 
         <div className="overflow-y-auto p-4 space-y-4">
@@ -138,7 +153,7 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
             </div>
           ) : priorMatches.length === 0 ? (
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700">
-              First meeting — no prior matches found in imported majors.
+              First meeting — no prior matches found in imported events.
             </div>
           ) : priorMatches.length >= MIN_RIVALRY_MEETINGS ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
@@ -162,12 +177,14 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <PlayerSummaryCard
               label={p1.name}
+              playerId={p1.id}
               history={historyA}
               loading={!historyA && !errorA}
               error={errorA}
             />
             <PlayerSummaryCard
               label={p2.name}
+              playerId={p2.id}
               history={historyB}
               loading={!historyB && !errorB}
               error={errorB}

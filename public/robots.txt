@@ -13,4 +13,4 @@ Disallow: /admin
 Disallow: /settings
 Disallow: /auth/callback
 
-Sitemap: https://lorcana-pro-tools.vercel.app/sitemap.xml
+Sitemap: https://www.inkbornforge.com/sitemap.xml

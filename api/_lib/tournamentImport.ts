@@ -123,6 +123,36 @@ export function deriveTournamentStructure(eventDetails: any): TournamentStructur
   }
 }
 
+// RPH's elimination phase, by the same rule getTournamentStructure() uses
+// client-side (src/lib/tournamentApi.js). Swiss phase names vary wildly
+// across organizers ("Phase 1", "Day 1 Swiss", ""), so the bracket is
+// identified by round_type, never by name.
+export function eliminationPhaseName(eventDetails: any): string | null {
+  const phase = (eventDetails?.tournament_phases ?? []).find(
+    (p: any) => p.round_type === 'RANKED_SINGLE_ELIMINATION'
+  )
+  return phase?.phase_name ?? null
+}
+
+// Calendar date of the event where it was played: RPH gives start_datetime
+// with an offset plus an IANA timezone. Formatting in that zone (en-CA gives
+// YYYY-MM-DD) avoids a late-evening US event landing on the next UTC day.
+// Falls back to the UTC date when the timezone is missing or unknown.
+export function eventDateOf(eventDetails: any): string | null {
+  const start = eventDetails?.start_datetime
+  if (!start) return null
+  const date = new Date(start)
+  if (Number.isNaN(date.getTime())) return null
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: eventDetails?.timezone || 'UTC',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(date)
+  } catch {
+    return date.toISOString().slice(0, 10)
+  }
+}
+
 export async function fetchFinalStandings(roundId: string): Promise<any[]> {
   const allResults: any[] = []
   let page = 1

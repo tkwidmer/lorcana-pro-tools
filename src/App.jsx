@@ -22,14 +22,26 @@ import { PlayerProfilePage } from './pages/PlayerProfilePage'
 import { DeckComparisonPage } from './pages/DeckComparisonPage'
 import { DecklistInspectorPage } from './pages/DecklistInspectorPage'
 import { DecklistOverlayPage } from './pages/DecklistOverlayPage'
+import { StreamOverlayPage } from './pages/StreamOverlayPage'
+import { StreamOverlayViewPage } from './pages/StreamOverlayViewPage'
+import { StreamOverlayControlPage } from './pages/StreamOverlayControlPage'
+import { StreamOverlayNotesPage } from './pages/StreamOverlayNotesPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { MatchHistoryPage } from './pages/MatchHistoryPage'
 import { GamelogViewerPage } from './pages/GamelogViewerPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { WinrateMatrixPage } from './pages/WinrateMatrixPage'
 import { MetaSynthesisPage } from './pages/MetaSynthesisPage'
+import { StockDecksPage } from './pages/StockDecksPage'
+import { ForgeDecksPage } from './pages/ForgeDecksPage'
 import { PracticePlanPage } from './pages/PracticePlanPage'
+import { DeckDoctorPage } from './pages/DeckDoctorPage'
+import { FieldBreakdownPage } from './pages/FieldBreakdownPage'
 import { TournamentLookupPage } from './pages/TournamentLookupPage'
+import { ResultsPage } from './pages/ResultsPage'
+import { ResultsEventPage } from './pages/ResultsEventPage'
+import { ResultsPlayerPage } from './pages/ResultsPlayerPage'
+import { ResultsRatingsPage } from './pages/ResultsRatingsPage'
 import { StoreLookupPage } from './pages/StoreLookupPage'
 import { LoreTrackerPage } from './pages/LoreTrackerPage'
 import { LoginPage } from './pages/LoginPage'
@@ -48,7 +60,7 @@ function RoutedContent() {
     if (description) description.setAttribute('content', routeDescription(location.pathname))
 
     const canonical = document.querySelector('link[rel="canonical"]')
-    if (canonical) canonical.setAttribute('href', `https://lorcana-pro-tools.vercel.app${location.pathname}`)
+    if (canonical) canonical.setAttribute('href', `https://www.inkbornforge.com${location.pathname}`)
   }, [location.pathname])
 
   return (
@@ -66,6 +78,8 @@ function RoutedContent() {
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
         <Route path="/coconut-deck-builder" element={<CoconutDeckBuilderPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
+        <Route path="/stock-decks" element={<StockDecksPage />} />
+        <Route path="/forge-decks" element={<ForgeDecksPage />} />
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/rules/:doc/changes" element={<RulesChangesPage />} />
         <Route path="/rules/:doc/:chapterSlug" element={<RulesDocumentPage />} />
@@ -74,14 +88,20 @@ function RoutedContent() {
         <Route path="/replay-analyzer" element={<Navigate to="/analytics" replace />} />
         <Route path="/game-scraper" element={<SupporterRoute><GameScraperPage /></SupporterRoute>} />
         <Route path="/library" element={<SupporterRoute><LibraryPage /></SupporterRoute>} />
-        <Route path="/scouting/game/:uuid" element={<SupporterRoute><ScoutedGamePage /></SupporterRoute>} />
-        <Route path="/players/:name" element={<SupporterRoute><PlayerProfilePage /></SupporterRoute>} />
+        <Route path="/scouting/game/:uuid" element={<SupporterRoute previewPath="/library"><ScoutedGamePage /></SupporterRoute>} />
+        <Route path="/players/:name" element={<SupporterRoute previewPath="/library"><PlayerProfilePage /></SupporterRoute>} />
         <Route path="/deck-comparison" element={<DeckComparisonPage />} />
         <Route path="/decklist-inspector" element={<SupporterRoute><DecklistInspectorPage /></SupporterRoute>} />
         {/* Unguarded: an OBS Browser Source has no Supabase session, and this
             read-only view carries its decklist entirely in the URL — no
             account data is exposed. */}
         <Route path="/decklist-inspector/overlay" element={<DecklistOverlayPage />} />
+        <Route path="/stream-overlay" element={<SupporterRoute><StreamOverlayPage /></SupporterRoute>} />
+        {/* Unguarded for the same reason: the OBS Browser Source has no session,
+            and the view only renders what the control panel broadcasts. */}
+        <Route path="/stream-overlay/view" element={<StreamOverlayViewPage />} />
+        <Route path="/stream-overlay/control" element={<StreamOverlayControlPage />} />
+        <Route path="/stream-overlay/notes" element={<StreamOverlayNotesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/match-history" element={<SupporterRoute><MatchHistoryPage /></SupporterRoute>} />
         <Route path="/gamelog" element={<GamelogViewerPage />} />
@@ -91,7 +111,13 @@ function RoutedContent() {
         <Route path="/winrate-matrix" element={<WinrateMatrixPage />} />
         <Route path="/meta-synthesis" element={<SupporterRoute><MetaSynthesisPage /></SupporterRoute>} />
         <Route path="/practice-plan" element={<SupporterRoute><PracticePlanPage /></SupporterRoute>} />
+        <Route path="/deck-doctor" element={<SupporterRoute><DeckDoctorPage /></SupporterRoute>} />
+        <Route path="/field-breakdown" element={<SupporterRoute><FieldBreakdownPage /></SupporterRoute>} />
         <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />
+        <Route path="/results" element={<ResultsPage />} />
+        <Route path="/results/events/:eventId" element={<ResultsEventPage />} />
+        <Route path="/results/players/:playerId" element={<ResultsPlayerPage />} />
+        <Route path="/results/ratings" element={<ResultsRatingsPage />} />
         <Route path="/store-lookup" element={<StoreLookupPage />} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />

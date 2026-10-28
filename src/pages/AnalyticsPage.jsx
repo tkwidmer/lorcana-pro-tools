@@ -24,6 +24,7 @@ import {
 import { DeckStats, ChallengeStats } from '../components/analytics/StatTables'
 import { LeakReport } from '../components/analytics/LeakReport'
 import { GamelogDetail } from '../components/analytics/GamelogDetail'
+import { TurningPoints } from '../components/analytics/TurningPoints'
 import { Button } from '../components/ui/Button'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Input } from '../components/ui/Field'
@@ -51,6 +52,7 @@ export function AnalyticsPage() {
   const [personalOpen, setPersonalOpen] = useState(true)
   const [metagameOpen, setMetagameOpen] = useState(true)
   const [matchupOpen, setMatchupOpen] = useState(true)
+  const [turningPointsOpen, setTurningPointsOpen] = useState(true)
   const [cardImpactOpen, setCardImpactOpen] = useState(true)
   const [cardImpactTrendOpen, setCardImpactTrendOpen] = useState(false)
   const [trendOpen, setTrendOpen] = useState(true)
@@ -111,6 +113,19 @@ export function AnalyticsPage() {
     const allGames = await getAllGamelogs()
     setGames([...allGames].sort((a, b) => (b.playedAt ?? b.savedAt) - (a.playedAt ?? a.savedAt)))
   }
+
+  // One-off upgrade on read: records saved before the parser kept `plays` get it
+  // from their raw logs and are written back, after the games have rendered.
+  useEffect(() => {
+    const stale = games.filter(g => !g.plays && g._rawLogs?.length)
+    if (!stale.length) return
+    Promise.all(stale.map(g => saveGamelog(g.id, { ...g, plays: parseGamelog(g.id, g._rawLogs).plays }, g._rawLogs)))
+      .then(saved => {
+        const byId = new Map(saved.map(g => [g.id, g]))
+        setGames(prev => prev.map(g => byId.get(g.id) ?? g))
+      })
+      .catch(e => setError(`Failed to update stored games: ${e.message}`))
+  }, [games])
 
   async function processZipFile(file) {
     setLoading(true)
@@ -793,6 +808,26 @@ export function AnalyticsPage() {
           {matchupOpen && (
             <div className="mt-6">
               <MatchupMatrixView games={filteredGames} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Turning points */}
+      {enrichedGames.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setTurningPointsOpen(o => !o)}
+            className="w-full flex items-center justify-between py-3 border-b-2 border-gray-900 hover:border-forge transition-colors group"
+          >
+            <span className="font-display text-xl font-medium uppercase tracking-wide text-gray-900">Turning Points</span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${turningPointsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {turningPointsOpen && (
+            <div className="mt-6">
+              <TurningPoints games={enrichedGames} />
             </div>
           )}
         </div>

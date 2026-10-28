@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useSupporter } from '../hooks/useSupporter'
 import {
   importTournamentEvent,
   fetchRecentTournamentImports,
   fetchSuggestedTournamentImports,
+  recomputeRatings,
 } from '../lib/tournamentHistoryApi'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -27,6 +28,10 @@ export function AdminTournamentImportPage() {
   const [suggestionsError, setSuggestionsError] = useState(null)
   // eventId -> 'importing' | 'done' | 'error'
   const [suggestionStatus, setSuggestionStatus] = useState({})
+  // "Import all": null, or { done, total } while running
+  const [bulk, setBulk] = useState(null)
+  // Recompute ratings: null, 'running', { players, elapsedMs } or { error }
+  const [recompute, setRecompute] = useState(null)
 
   useEffect(() => {
     if (!isLoading && !isAdmin) navigate('/', { replace: true })
@@ -74,15 +79,38 @@ export function AdminTournamentImportPage() {
     }
   }
 
+  // Imported rows leave the list; a failed one stays with its error.
   async function handleImportSuggestion(suggestion) {
     setSuggestionStatus((prev) => ({ ...prev, [suggestion.eventId]: 'importing' }))
     try {
       await importTournamentEvent(suggestion.eventUrl)
       setSuggestionStatus((prev) => ({ ...prev, [suggestion.eventId]: 'done' }))
       setSuggestions((prev) => prev.filter((s) => s.eventId !== suggestion.eventId))
-      loadRecent()
+      return true
     } catch (err) {
       setSuggestionStatus((prev) => ({ ...prev, [suggestion.eventId]: err.message || 'Failed' }))
+      return false
+    }
+  }
+
+  // One at a time: each import is its own serverless call that fetches every
+  // round from the Play Hub, and the archive upsert is per event.
+  async function handleImportAll() {
+    const pending = suggestions.filter((s) => !suggestionStatus[s.eventId] || suggestionStatus[s.eventId] === 'importing')
+    setBulk({ done: 0, total: pending.length, failed: 0 })
+    for (const s of pending) {
+      const ok = await handleImportSuggestion(s)
+      setBulk((b) => ({ ...b, done: b.done + 1, failed: b.failed + (ok ? 0 : 1) }))
+    }
+    loadRecent()
+  }
+
+  async function handleRecompute() {
+    setRecompute('running')
+    try {
+      setRecompute(await recomputeRatings())
+    } catch (err) {
+      setRecompute({ error: err.message || 'Failed to recompute ratings' })
     }
   }
 
@@ -128,6 +156,24 @@ export function AdminTournamentImportPage() {
             )}
           </Card>
 
+          <Card className="p-6" title="Player ratings">
+            <p className="text-xs text-gray-500 mb-4">
+              Rebuilds every Glicko rating from the whole archive. Runs nightly at 03:00 UTC; run it now after an import
+              to update <Link to="/results/ratings" className="hover:underline">Player Ratings</Link> today.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={handleRecompute} disabled={recompute === 'running'}>
+                {recompute === 'running' ? 'Recomputing…' : 'Recompute ratings'}
+              </Button>
+              {recompute?.players != null && (
+                <span className="text-sm text-gray-500">
+                  {recompute.players.toLocaleString()} players rated in {(recompute.elapsedMs / 1000).toFixed(1)}s
+                </span>
+              )}
+              {recompute?.error && <span className="text-sm text-red-600">{recompute.error}</span>}
+            </div>
+          </Card>
+
           <Card className="p-6" title="Recently imported events">
             {recentLoading ? (
               <p className="text-sm text-gray-500">Loading…</p>
@@ -171,10 +217,27 @@ export function AdminTournamentImportPage() {
             </button>
           </div>
           <p className="text-xs text-gray-500 mb-4">
-            DLCs, CCQs, ACQs, and independently-run big-money events discovered on the Play Hub that
-            aren't in the archive yet. Name-based discovery — a floor, not a ceiling; a real event with
-            an unrelated name won't show up here.
+            DLCs, Championships, Last Chance Qualifiers, CCQs, ACQs, independently-run big-money events, and
+            200+ player, 5+ round side events of a DLC weekend — on the Play Hub with results posted, not in the archive yet. Name-based discovery — a
+            floor, not a ceiling; a real event with an unrelated name won't show up here.
           </p>
+
+          {!suggestionsLoading && !suggestionsError && suggestions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <span className="text-sm text-gray-900">
+                {suggestions.length} event{suggestions.length === 1 ? '' : 's'} to import ·{' '}
+                {suggestions.reduce((n, s) => n + (s.startingPlayerCount ?? 0), 0).toLocaleString()} players
+              </span>
+              <Button size="sm" variant="primary" onClick={handleImportAll} disabled={Boolean(bulk) && bulk.done < bulk.total}>
+                {bulk && bulk.done < bulk.total ? `Importing ${bulk.done + 1} of ${bulk.total}…` : `Import all ${suggestions.length}`}
+              </Button>
+              {bulk && bulk.done === bulk.total && (
+                <span className="text-xs text-gray-500">
+                  Done: {bulk.total - bulk.failed} imported{bulk.failed ? `, ${bulk.failed} failed (see below)` : ''}
+                </span>
+              )}
+            </div>
+          )}
 
           {suggestionsLoading ? (
             <p className="text-sm text-gray-500">Searching the Play Hub…</p>
@@ -191,7 +254,10 @@ export function AdminTournamentImportPage() {
                 const isError = status && status !== 'importing' && status !== 'done'
                 return (
                   <li key={s.eventId} className="border border-gray-100 rounded p-3">
-                    <p className="text-sm font-medium text-gray-900 leading-snug">{s.eventName}</p>
+                    <p className="text-sm font-medium text-gray-900 leading-snug">
+                      <span className="mr-2 font-display text-xs uppercase tracking-wider text-forge-ink">{s.label}</span>
+                      {s.eventName}
+                    </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {s.storeName ?? 'Unknown store'}
                       {s.startDatetime ? ` · ${new Date(s.startDatetime).toLocaleDateString()}` : ''}

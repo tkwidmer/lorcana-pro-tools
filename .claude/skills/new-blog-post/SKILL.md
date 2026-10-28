@@ -1,12 +1,12 @@
 ---
 name: new-blog-post
-description: Start a new InkbornForge blog post — creates content/blog/<slug>.md with today's date, InkbornForge as the default author, and `draft: true` so it won't publish yet, then helps the user write it. Use when the user says "new blog post", "start a post", "draft an article", "write a guest post", or similar. Also covers previewing a draft and publishing it (removing the draft flag).
+description: Scaffold a draft InkbornForge blog post in content/blog/ with today's date and draft: true, then help write, preview and publish it. Use for "new blog post", "draft an article", "guest post".
 ---
 
 # New blog post
 
-Blog posts are markdown files in `content/blog/`. Read CLAUDE.md's "Blog"
-section if you haven't this session — it covers the frontmatter rules and how
+Blog posts are markdown files in `content/blog/`. Read the "Blog" section of
+`docs/agents/content.md` if you haven't this session — it covers the frontmatter rules and how
 posts are built. The short version: the build fails on a missing field, a bad
 date, a non-`https://` `authorUrl`, or a non-slug filename, and a post with
 `draft: true` shows up in `npm run dev` but is left out of production builds
@@ -68,8 +68,7 @@ Markdown notes for the body:
 
 **Previewing:** `npm run dev`, then open `/blog/<slug>` (the draft is also
 listed on `/blog` with a Draft badge). For the Claude Code web app, follow
-CLAUDE.md's "Screenshots & Manual Verification" section and screenshot the
-local dev server.
+`docs/agents/ui-screenshots.md` and screenshot the local dev server.
 
 ## 4. Publish
 

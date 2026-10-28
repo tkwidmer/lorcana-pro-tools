@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
+import { METAFY_URL } from '../lib/access'
 
 const SUBSTACK_URL = 'https://inkbornforge.substack.com'
-const METAFY_URL = 'https://metafy.gg/@inkbornforge'
 
 // Site-wide footer — mirrors Nav's border/spacing/link conventions. Hidden on
 // /lore-tracker and the Decklist Inspector's OBS overlay view for the same
@@ -9,7 +9,7 @@ const METAFY_URL = 'https://metafy.gg/@inkbornforge'
 export function Footer() {
   const { pathname } = useLocation()
   if (pathname === '/lore-tracker') return null
-  if (pathname === '/decklist-inspector/overlay') return null
+  if (pathname === '/decklist-inspector/overlay' || pathname.startsWith('/stream-overlay/')) return null
 
   return (
     <footer className="no-print border-t-2 border-gray-900 mt-16">

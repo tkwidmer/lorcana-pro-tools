@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getTournamentStructure, formatTiebreakers, analyzeAdvancement, analyzeId } from '../tournamentApi'
+import { getTournamentStructure, formatTiebreakers, analyzeAdvancement, analyzeId, extractEventId } from '../tournamentApi'
 
 const roundComplete = (id, n) => ({ id, round_number: n, status: 'COMPLETE', standings_status: 'GENERATED' })
 const roundInProgress = (id, n) => ({ id, round_number: n, status: 'IN_PROGRESS', standings_status: 'GENERATED' })
@@ -17,6 +17,14 @@ const makeEventDetails = (overrides = {}) => ({
   top_cut_size: 8,
   tiebreakers: [],
   ...overrides,
+})
+
+describe('extractEventId', () => {
+  it('reads the numeric id from a Play Hub event link', () => {
+    expect(extractEventId('https://tcg.ravensburgerplay.com/events/12345/standings')).toBe('12345')
+    expect(extractEventId('12345')).toBe(null)
+    expect(extractEventId(null)).toBe(null)
+  })
 })
 
 describe('getTournamentStructure', () => {
@@ -53,6 +61,21 @@ describe('getTournamentStructure', () => {
     const structure = getTournamentStructure(details)
     expect(structure.currentRoundId).toBe('r2')
     expect(structure.currentRoundNumber).toBe(2)
+  })
+
+  it('reports the active round even before its standings are generated', () => {
+    const details = makeEventDetails({
+      tournament_phases: [{
+        round_type: 'SWISS', phase_name: 'Swiss', number_of_rounds: 6,
+        rounds: [roundComplete('r1', 1), roundComplete('r2', 2), { id: 'r3', round_number: 3, status: 'IN_PROGRESS', standings_status: 'PENDING' }, { id: 'r4', round_number: 4, status: 'UPCOMING' }],
+      }],
+    })
+    const structure = getTournamentStructure(details)
+    expect(structure.currentRoundId).toBe('r2')
+    expect(structure.activeRoundId).toBe('r3')
+    expect(structure.activeRoundNumber).toBe(3)
+    expect(structure.activePhaseType).toBe('SWISS')
+    expect(getTournamentStructure(makeEventDetails({ tournament_phases: [{ round_type: 'SWISS', phase_name: 'Swiss', number_of_rounds: 6, rounds: [{ id: 'r1', round_number: 1, status: 'UPCOMING' }] }] })).activeRoundId).toBeNull()
   })
 
   it('reports swiss rounds remaining', () => {

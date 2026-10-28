@@ -270,6 +270,14 @@ function StoreCard({ result }) {
             Website ↗
           </a>
         )}
+        <a
+          href={`https://tcg.ravensburgerplay.com/stores/${result.storeId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline"
+        >
+          RPH page ↗
+        </a>
       </div>
 
       <div className="flex flex-wrap gap-1.5 mb-3">

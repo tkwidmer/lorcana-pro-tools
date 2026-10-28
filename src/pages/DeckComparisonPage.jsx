@@ -1,35 +1,12 @@
 import { useState, useMemo } from 'react'
 import { parseDeckListToMap } from '../lib/parseDeckList'
+import { computeDelta } from '../lib/decklistDelta'
 import { PageHeader } from '../components/ui/PageHeader'
 
 function totalCards(cardMap) {
   let total = 0
   for (const count of cardMap.values()) total += count
   return total
-}
-
-function computeDelta(currentMap, newMap) {
-  const toAdd = []
-  const toRemove = []
-
-  for (const [name, newCount] of newMap) {
-    const currentCount = currentMap.get(name) || 0
-    if (newCount > currentCount) {
-      toAdd.push({ name, count: newCount - currentCount })
-    }
-  }
-
-  for (const [name, currentCount] of currentMap) {
-    const newCount = newMap.get(name) || 0
-    if (currentCount > newCount) {
-      toRemove.push({ name, count: currentCount - newCount })
-    }
-  }
-
-  toAdd.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-  toRemove.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-
-  return { toAdd, toRemove }
 }
 
 function DeltaSection({ title, items, colorClass, bgClass, borderClass, emptyMessage }) {

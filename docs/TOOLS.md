@@ -192,7 +192,7 @@ Pick one of your decks from match history (or paste a list) and see it beside th
 ### Deck Iteration Lab
 `/deck-lab` · Supporter · needs a duels.ink token
 
-Every version of each deck you've played, read from your full match history. A version is one distinct list; swapping a card for another printing of it isn't a new version, and going back to an old list reuses its version. Each version shows when you played it, its record and win rate with a 95% range (faded under 10 games), and the cards changed from the previous version. Compare any two versions to see the win-rate difference with its range, a plain verdict (ahead with reasonable confidence, no clear difference, or how many more games each version needs), and both records by opponent colors. `?deck=<deck id>` opens a deck directly.
+Every version of each constructed deck you still have on duels.ink, read from your full match history; sealed and draft games and deleted decks are left out. A version is one distinct list; swapping a card for another printing of it isn't a new version, and going back to an old list reuses its version. Each version shows when you played it, its record and win rate with a 95% range (faded under 10 games), and the cards changed from the previous version. Compare any two versions to see the win-rate difference with its range, a plain verdict (ahead with reasonable confidence, no clear difference, or how many more games each version needs), and both records by opponent colors. `?deck=<deck id>` opens a deck directly.
 
 ### Gamelog Viewer
 `/gamelog?id=<gamelog id>` · Free · needs a duels.ink token

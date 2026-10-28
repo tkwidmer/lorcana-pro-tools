@@ -4,6 +4,7 @@ import { getToken, subscribeTokens, fetchAllMatchHistory, fetchDecks } from '../
 import { useCards } from '../hooks/useCards'
 import { buildCardIdToName } from '../lib/cardIdResolver'
 import { fromMatchHistoryRow, buildDeckVersions } from '../lib/deckVersions'
+import { isLimited } from '../lib/deckDoctor'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Select } from '../components/ui/Field'
@@ -12,12 +13,6 @@ import { DeckListCard } from '../components/DeckListCard'
 import { DeckVersionTimeline } from '../components/deckVersions/DeckVersionTimeline'
 import { DeckVersionCompare } from '../components/deckVersions/DeckVersionCompare'
 
-const DECK_NAMES_KEY = 'lorcana_deck_names'
-
-function readDeckNames() {
-  try { return JSON.parse(localStorage.getItem(DECK_NAMES_KEY)) ?? {} } catch { return {} }
-}
-
 export function DeckLabPage() {
   // Tokens load from Supabase after sign-in, possibly after first render.
   const hasToken = !!useSyncExternalStore(subscribeTokens, getToken)
@@ -25,7 +20,8 @@ export function DeckLabPage() {
   const [games, setGames] = useState(null)
   const [loaded, setLoaded] = useState(0)
   const [loadError, setLoadError] = useState(null)
-  const [deckNames, setDeckNames] = useState(readDeckNames)
+  // Your current duels.ink decks, id → name. A deck missing here was deleted, so it isn't shown.
+  const [activeDecks, setActiveDecks] = useState(null)
   const [pick, setPick] = useState({})
   const { cards, loading: cardsLoading } = useCards()
 
@@ -34,20 +30,26 @@ export function DeckLabPage() {
     // ponytail: pages are fetched back to back; a history past ~20 pages (5,000 games) can hit duels.ink's 20 requests/minute limit and fail.
     fetchAllMatchHistory({ limit: 250, maxPages: Infinity, onPage: setLoaded })
       .then(setGames)
-      .catch(err => setLoadError(err.message))
+      .catch(err => setLoadError(`your match history (${err.message})`))
     fetchDecks()
-      .then(data => setDeckNames(prev => ({ ...prev, ...Object.fromEntries((data.decks ?? []).filter(d => d.id && d.name).map(d => [d.id, d.name])) })))
-      .catch(() => {}) // names are cosmetic; decks fall back to their colors
+      .then(data => setActiveDecks(new Map(data.decks.map(d => [d.id, d.name]))))
+      .catch(err => setLoadError(`your deck list (${err.message})`))
   }, [hasToken])
 
   const built = useMemo(() => {
-    if (!games || cardsLoading) return null
+    if (!games || !activeDecks || cardsLoading) return null
     try {
-      return buildDeckVersions(games.map(fromMatchHistoryRow), buildCardIdToName(cards))
+      const built = buildDeckVersions(games.filter(g => !isLimited(g)).map(fromMatchHistoryRow), buildCardIdToName(cards))
+      // Most recently played first, so the deck you're iterating on now is the default.
+      const decks = built.decks
+        .filter(d => activeDecks.has(d.deckKey))
+        .map(d => ({ ...d, lastPlayed: d.versions.flatMap(v => v.spans).reduce((max, s) => (s.to > max ? s.to : max), '') }))
+        .sort((a, b) => b.lastPlayed.localeCompare(a.lastPlayed))
+      return { ...built, decks }
     } catch (err) {
       return { error: err.message }
     }
-  }, [games, cards, cardsLoading])
+  }, [games, activeDecks, cards, cardsLoading])
 
   const colorsByDeck = useMemo(() => {
     const out = {}
@@ -71,13 +73,13 @@ export function DeckLabPage() {
   const setLabel = (side, label) => setPick({ ...labels, deckKey: deck.deckKey, [side]: label })
 
   const entries = v => [...v.cards].map(([name, count]) => ({ key: name, name, count, card: cardByName[name] ?? null }))
-  const deckTitle = d => deckNames[d.deckKey] ?? 'Unnamed deck'
+  const deckTitle = d => activeDecks.get(d.deckKey) || 'Unnamed deck'
 
   return (
     <div className="w-full px-6 py-8">
       <PageHeader
         title="Deck Iteration Lab"
-        description="Every version of each deck you've played on duels.ink, with its record, the cards you changed, and whether the data can actually tell two versions apart yet."
+        description="Every version of each constructed deck you still have on duels.ink, with its record, the cards you changed, and whether the data can actually tell two versions apart yet."
       />
 
       {!hasToken && (
@@ -85,7 +87,7 @@ export function DeckLabPage() {
           Add your duels.ink API token in <Link to="/settings" className="underline">Settings</Link> to load your match history.
         </p>
       )}
-      {loadError && <p className="text-red-700">Couldn't load match history: {loadError}</p>}
+      {loadError && <p className="text-red-700">Couldn't load {loadError}.</p>}
       {built?.error && <p className="text-red-700">Couldn't build deck versions: {built.error}</p>}
       {hasToken && !loadError && !built && (
         <p className="text-gray-500">Loading match history… {loaded.toLocaleString()} games so far</p>
@@ -94,10 +96,10 @@ export function DeckLabPage() {
       {deck && (
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-3">
-            <Select value={deck.deckKey} onChange={e => setSearchParams({ deck: e.target.value })} aria-label="Deck">
+            <Select value={deck.deckKey} onChange={e => setSearchParams({ deck: e.target.value })} aria-label="Deck" className="max-w-full">
               {decks.map(d => (
                 <option key={d.deckKey} value={d.deckKey}>
-                  {deckTitle(d)} · {d.games} games · {d.versions.length} {d.versions.length === 1 ? 'version' : 'versions'}
+                  {deckTitle(d)} · last played {new Date(d.lastPlayed).toLocaleDateString()} · {d.games} games · {d.versions.length} {d.versions.length === 1 ? 'version' : 'versions'}
                 </option>
               ))}
             </Select>
@@ -135,7 +137,7 @@ export function DeckLabPage() {
         <p className="mt-6 text-sm text-gray-500">
           {built.unassigned.length > 0
             ? `Unassigned: ${built.unassigned.length.toLocaleString()} games have no deck id or no recorded list, so they aren't in any version.`
-            : !deck && 'No games with a deck list yet.'}
+            : !deck && 'None of your current duels.ink decks has games yet.'}
         </p>
       )}
     </div>

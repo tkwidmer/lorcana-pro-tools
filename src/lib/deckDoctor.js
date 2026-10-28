@@ -50,7 +50,8 @@ export function countsFromPasted(entries, cards, knownIds) {
   return m
 }
 
-function isLimited(g) {
+// Sealed and draft games: their decks are built per event, not iterated on.
+export function isLimited(g) {
   const s = `${g.queue_id ?? ''} ${g.queue_name ?? ''}`.toLowerCase()
   return s.includes('sealed') || s.includes('draft')
 }

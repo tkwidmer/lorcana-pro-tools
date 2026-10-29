@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { getDocument, getVersionMeta, getPreviousVersionMeta, loadVersionDiff } from '../lib/rules'
 import { wordDiff } from '../lib/rules/diff'
 import { PageHeader } from '../components/ui/PageHeader'
+import { RuleText } from '../components/RuleText'
 
 function WordDiff({ oldText, newText }) {
   const parts = wordDiff(oldText, newText)
@@ -19,18 +20,6 @@ function WordDiff({ oldText, newText }) {
     >
       {part.value}
     </span>
-  ))
-}
-
-function RuleText({ text, className = '' }) {
-  if (!text) return null
-  return text.split('\n\n').map((paragraph, i) => (
-    <p
-      key={i}
-      className={`${className} ${i > 0 ? 'mt-2' : ''} ${/^Example[^a-z]/.test(paragraph) ? 'italic text-gray-500' : ''}`}
-    >
-      {paragraph}
-    </p>
   ))
 }
 

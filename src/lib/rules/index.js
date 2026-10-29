@@ -103,6 +103,14 @@ export function ruleDepth(id) {
   return id.split('.').length - 1
 }
 
+// The source documents mark list items with a leading "• " (top level) or
+// "o " (nested), as exported from Word. Level 0 is a plain paragraph.
+export function bulletLevel(paragraph) {
+  if (paragraph.startsWith('• ')) return { level: 1, text: paragraph.slice(2) }
+  if (paragraph.startsWith('o ')) return { level: 2, text: paragraph.slice(2) }
+  return { level: 0, text: paragraph }
+}
+
 // Diff between a version and the one immediately before it — async, since
 // it needs both versions' entries loaded. Resolves null when there's no
 // earlier version to compare against (e.g. the first release, or a

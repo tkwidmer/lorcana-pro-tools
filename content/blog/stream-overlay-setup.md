@@ -4,7 +4,6 @@ date: 2026-10-30
 description: A step-by-step guide to running a tournament feature-match stream with the InkbornForge Stream Overlay, from your first table to OBS, the tablet scorekeeper and the break screen.
 author: InkbornForge
 authorUrl: https://inkbornforge.substack.com
-draft: true
 ---
 
 The [Stream Overlay](/stream-overlay) puts a full tournament broadcast package on your feature match: player names, records and inks, live lore and game score, the round clock, decklists, player histories, the room's metagame, and a break screen with standings or the bracket. You run it from one browser tab, it shows up in OBS as a single Browser Source, and the players keep score themselves on a tablet at the table.

@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useCards } from '../hooks/useCards'
 import { buildCardIndex } from '../lib/cardAnalysis'
-import { BUCKET_ORDER, BUCKET_LABEL, buildBuckets, matchDeckList, inkFill } from '../lib/decklistShared'
-import { CardBar } from '../components/DecklistCardBar'
+import { BUCKET_ORDER, buildBuckets, matchDeckList, inkFill } from '../lib/decklistShared'
 import { useSearchParams } from 'react-router-dom'
 import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices } from '../lib/streamOverlay'
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices, deckCardWidth, CARD_ASPECT } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
 // Name size classes per slot, big → small, with the character budget each
@@ -147,17 +146,17 @@ function SideColumn({ player, side, isWinner }) {
 }
 
 // A player's decklist laid over the gameplay cam while the panel has it
-// shown: the Decklist Inspector's own card rows (CardBar), bucketed by type,
-// zoomed up to read at 1080p and flowed into two columns. The frame's theme
-// colors the chrome; the rows keep their ink colors.
+// shown: the card images, characters then actions / songs, items and
+// locations, each by cost (buildBuckets), sized as large as fits the whole
+// deck. The frame's theme colors the chrome.
+// ponytail: grid box estimated from the panel's layout (1200×870 less border,
+// header and padding); re-measure if the panel's chrome changes.
+const DECK_GRID = { width: 1160, height: 770, gap: 8 }
+
 function DeckPanel({ player, cardIndex }) {
   const buckets = buildBuckets(matchDeckList(player.decklist, cardIndex))
-  // Zoom so two columns always hold the deck: the body is ~770px tall inside
-  // the frame, a CardBar row ~34.5px and a bucket header ~32px before zoom.
-  // ponytail: estimated heights, not measured; re-measure if CardBar changes.
-  const rows = Object.values(buckets).reduce((s, b) => s + b.length, 0)
-  const headers = BUCKET_ORDER.filter(t => buckets[t].length).length
-  const zoom = Math.min(1.4, (2 * 770 * 0.95) / (rows * 34.5 + headers * 32))
+  const entries = BUCKET_ORDER.flatMap(type => buckets[type])
+  const cardWidth = deckCardWidth(entries.length, DECK_GRID.width, DECK_GRID.height, DECK_GRID.gap)
   return (
     <div
       className="absolute flex flex-col bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden"
@@ -167,15 +166,11 @@ function DeckPanel({ player, cardIndex }) {
         <span className="text-3xl uppercase tracking-wide">{player.name || ' '}</span>
         <span className="flex gap-2">{player.inks.map(ink => <InkIcon key={ink} color={ink} size={36} />)}</span>
       </div>
-      <div className="flex-1 min-h-0 px-4 py-3 columns-2 gap-4" style={{ zoom }}>
-        {BUCKET_ORDER.map(type => buckets[type].length > 0 && (
-          <div key={type} className="mb-3">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-(--on-fill)/60 mb-1">
-              {BUCKET_LABEL[type]} ({buckets[type].reduce((s, e) => s + e.count, 0)})
-            </h3>
-            <div className="space-y-0.5">
-              {buckets[type].map(entry => <CardBar key={entry.key} entry={entry} />)}
-            </div>
+      <div className="flex-1 min-h-0 px-4 py-3 flex flex-wrap content-center justify-center" style={{ gap: DECK_GRID.gap }}>
+        {entries.map(({ key, name, count, card }) => (
+          <div key={key} className="relative" style={{ width: cardWidth, height: cardWidth * CARD_ASPECT }}>
+            <img src={card.images.thumbnail} alt={name} className="w-full h-full object-contain" />
+            <span className="absolute bottom-1 right-1 rounded px-2 text-2xl font-bold tabular-nums bg-(--fill) text-(--on-fill) border-2 border-(--accent)">×{count}</span>
           </div>
         ))}
       </div>

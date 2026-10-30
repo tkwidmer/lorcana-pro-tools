@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, deckCardWidth,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
@@ -322,5 +322,14 @@ describe('streamOverlay RPH', () => {
     })
     expect(featureMatchPatch({ eventName: '', round: '', rphEventId: 1, players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null }))
       .not.toHaveProperty('timer_ends_at')
+  })
+})
+
+describe('streamOverlay deck grid', () => {
+  it('sizes cards as large as fits the whole deck', () => {
+    // 20 cards in 1160×770: 7 columns of 3 rows, width-bound at 158px (6 columns need 4 rows of 134px).
+    expect(deckCardWidth(20, 1160, 770, 8)).toBe(158)
+    // A single card is bound by the box height, not the width.
+    expect(deckCardWidth(1, 1160, 770, 8)).toBe(551)
   })
 })

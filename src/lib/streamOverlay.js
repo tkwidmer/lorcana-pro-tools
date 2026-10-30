@@ -27,6 +27,22 @@ export function nameSizeClass(name, sizes) {
   return (sizes.find(([, maxChars]) => name.length <= maxChars) ?? sizes[sizes.length - 1])[0]
 }
 
+// Card image aspect (LorcanaJSON thumbnails are 367×512).
+export const CARD_ASPECT = 512 / 367
+
+// The largest card width (whole pixels) that fits `n` cards into a
+// width × height box with `gap` between them, over every column count.
+export function deckCardWidth(n, width, height, gap) {
+  let best = 0
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols)
+    const byWidth = (width - (cols - 1) * gap) / cols
+    const byHeight = (height - (rows - 1) * gap) / rows / CARD_ASPECT
+    best = Math.max(best, Math.min(byWidth, byHeight))
+  }
+  return Math.floor(best)
+}
+
 // The site's own look: ink black fill, forge gold accent (src/index.css).
 export const DEFAULT_THEME = { fill: '#17171a', accent: '#b5832a' }
 

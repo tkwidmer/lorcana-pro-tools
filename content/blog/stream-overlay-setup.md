@@ -93,7 +93,7 @@ The space over the gameplay cam can hold one thing at a time. Each **Show on str
 
 **A decklist.** Click **Show on stream** under either player's decklist to lay it over the gameplay cam.
 
-![A player's decklist over the gameplay cam, grouped by type and sorted by cost](/blog/stream-overlay-setup/view-deck.jpg)
+![A player's decklist over the gameplay cam as card images: characters, then actions and songs, items and locations, each by cost](/blog/stream-overlay-setup/view-deck.jpg)
 
 **The player card.** From the **Player card** card, put both players' histories and their head-to-head on screen. It's a good fit between games.
 

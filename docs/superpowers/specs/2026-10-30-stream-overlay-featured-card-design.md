@@ -17,6 +17,10 @@ When a caster talks about a card ("he's holding up Be Prepared", "this is the Be
 
 Each mock is the real panel or view rendered from a mocked row, with the proposed picker and card added on top. The striped green stands in for the gameplay cam.
 
+**Toggle** (panel, Event card, under Lore display; the dashed outline only marks the new control):
+
+![Featured cards toggle on the panel](../../screenshots/stream-overlay-featured-card-toggle.png)
+
 **Picker** (panel, Player cards, Ryan's Bruno Madrigal featured):
 
 ![Featured card picker on the panel](../../screenshots/stream-overlay-featured-card-picker.png)
@@ -31,7 +35,12 @@ Each mock is the real panel or view rendered from a mocked row, with the propose
 
 ## What the operator sees (panel)
 
-In each **Player** card, under the decklist field, a **Featured card** row: the matched deck as small thumbnails (about 56 px wide, wrapping), in `buildBuckets()` order, so a 60-card list is 15 to 25 tiles.
+**Featured cards: Off / On** in the Event card, under Lore display and built the same way (two buttons, the current one in forge). It is per table and starts **Off**, so existing tables look exactly as they do today.
+
+- **Off:** no picker on the panel, no card on the view. The `pN_featured` picks are kept, so turning it back on brings back the same cards.
+- **On:** the picker rows appear and a picked card shows on stream.
+
+With it on, in each **Player** card, under the decklist field, a **Featured card** row: the matched deck as small thumbnails (about 56 px wide, wrapping), in `buildBuckets()` order, so a 60-card list is 15 to 25 tiles.
 
 - Click a tile: that card goes on stream on that player's side. The tile gets the forge border.
 - Click the featured tile again: it comes off.
@@ -62,11 +71,14 @@ Migration `027_stream_tables_featured_card.sql`:
 
 ```sql
 ALTER TABLE public.stream_tables
+  ADD COLUMN IF NOT EXISTS featured_cards boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS p1_featured text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS p2_featured text NOT NULL DEFAULT '';
 ```
 
-plus `stream_table_public()` extended with both columns (the 026 function, two keys added).
+plus `stream_table_public()` extended with the three columns (the 026 function, three keys added).
+
+`featured_cards` is event setup, like `lore_track`: `clearTablePatch()` and `featureMatchPatch()` leave it alone.
 
 The value is the card's name as written in that side's decklist (the entry's `name`), `''` for none. The view resolves it with the same `cardIndex.get(toSimpleName(name))` lookup `matchDeckList()` uses. No image URL is stored: one source of truth, and the row stays a list of what the operator chose.
 
@@ -74,14 +86,14 @@ The value is the card's name as written in that side's decklist (the entry's `na
 
 | File | Change |
 |---|---|
-| `src/lib/streamOverlay.js` | `featured` joins `SIDE_FIELDS` (swap mirrors it); `rowToState()` adds `players[].featured`; `clearTablePatch()` and `featureMatchPatch()` set both to `''`; `HOTKEYS.x = { clearFeatured: true }` |
-| `src/pages/StreamOverlayPage.jsx` | `FeaturedPicker` under `DecklistField` in each Player card; the X hotkey writes `{ p1_featured: '', p2_featured: '' }` |
-| `src/pages/StreamOverlayViewPage.jsx` | `SideColumn` gets the card slot after the pips, rendered when `featured` resolves to a card; it takes `cardIndex` |
+| `src/lib/streamOverlay.js` | `featured` joins `SIDE_FIELDS` (swap mirrors it); `rowToState()` adds `featuredCards` and `players[].featured`; `clearTablePatch()` and `featureMatchPatch()` set both to `''`; `HOTKEYS.x = { clearFeatured: true }` |
+| `src/pages/StreamOverlayPage.jsx` | Featured cards Off / On under Lore display; `FeaturedPicker` under `DecklistField` in each Player card while it's on; the X hotkey writes `{ p1_featured: '', p2_featured: '' }` |
+| `src/pages/StreamOverlayViewPage.jsx` | `SideColumn` gets the card slot after the pips, rendered when `featuredCards` is on and `featured` resolves to a card; it takes `cardIndex` |
 | `src/index.css` | one `--animate-feature-in` keyframe (opacity 0 → 1, 250 ms) in the `@theme` block |
-| `src/lib/__tests__/streamOverlay.test.js` | fixture row gets both columns; swap mirrors, clear and new pairing reset, `rowToState` maps, X maps |
+| `src/lib/__tests__/streamOverlay.test.js` | fixture row gets the three columns; swap mirrors, clear and new pairing reset, `rowToState` maps, X maps |
 | `docs/agents/stream-overlay.md` | migration table row, hotkey list, remove it from "deliberately not built" |
 
-Screenshots for the PR: the view in both lore displays with a card featured, and the panel's picker row with one tile selected.
+Screenshots for the PR: the view in both lore displays with a card featured, the panel's toggle, and its picker row with one tile selected.
 
 ## The reference tool's settings, and why most aren't here
 

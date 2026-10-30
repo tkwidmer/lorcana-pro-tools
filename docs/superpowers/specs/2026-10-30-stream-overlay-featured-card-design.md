@@ -35,17 +35,17 @@ Each mock is the real panel or view rendered from a mocked row, with the propose
 
 ## What the operator sees (panel)
 
-**Featured cards: Off / 10 seconds / Stay** in the Event card, under Lore display and built the same way (a row of buttons, the current one in forge). It is per table and starts **Off**, so existing tables look exactly as they do today. Turning it on means picking **10 seconds**, the default way to use it; **Stay** is the exception for a long discussion of one card.
+**Featured cards: Off / 15 seconds / Stay** in the Event card, under Lore display and built the same way (a row of buttons, the current one in forge). It is per table and starts **Off**, so existing tables look exactly as they do today. Turning it on means picking **15 seconds**, the default way to use it; **Stay** is the exception for a long discussion of one card.
 
 - **Off:** no picker on the panel, no card on the view.
-- **10 seconds:** a picked card shows for 10 seconds, then fades out on its own.
+- **15 seconds:** a picked card shows for 15 seconds, then fades out on its own.
 - **Stay:** a picked card stays until it's taken off.
 
 With either on, in each **Player** card, under the decklist field, a **Featured card** row: the matched deck as small thumbnails (about 56 px wide, wrapping), in `buildBuckets()` order, so a 60-card list is 15 to 25 tiles.
 
 - Click a tile: that card goes on stream on that player's side. The tile has the forge border while the card is on stream, and loses it when the card fades out.
 - Click the tile while it's on stream: it comes off now.
-- Click a tile that isn't on stream (including the one that just faded): it shows again, with a fresh 10 seconds.
+- Click a tile that isn't on stream (including the one that just faded): it shows again, with a fresh 15 seconds.
 - Clicking another tile replaces it (one featured card per side).
 - Hovering a tile shows the card's name (`title`), since 56 px art is hard to read.
 - No decklist matched: the row says "Paste a decklist to feature its cards".
@@ -64,7 +64,7 @@ The card sits in its player's side column, never over the game. A `flex-1 min-h-
 Measured in the mocks at 1920×1080. The winner slot and the lore keep their places, so nothing below the card moves when it appears.
 
 - It fades in once the image has loaded (`onLoad`), so a 1468×2048 JPG never paints half-loaded on stream.
-- In **10 seconds** mode it fades out (500 ms) at 10 seconds from the pick. The view already re-renders every 250 ms for the clock (`now`), so the card's visibility is `now < featuredAt + 10 000` and its opacity drops over the last 500 ms. That is one rule, from the row, so an OBS source reloaded after the card has faded shows nothing.
+- In **15 seconds** mode it fades out (500 ms) at 15 seconds from the pick. The view already re-renders every 250 ms for the clock (`now`), so the card's visibility is `now < featuredAt + 15 000` and its opacity drops over the last 500 ms. That is one rule, from the row, so an OBS source reloaded after the card has faded shows nothing.
 - Taken off by a click or X, it disappears without a fade.
 - It doesn't share the slot over the cam, so a deck, player card or metagame can be up at the same time. The break screen doesn't show it.
 - If the decklist is edited and the card no longer matches, nothing shows. The panel doesn't write a cleanup.
@@ -85,7 +85,7 @@ ALTER TABLE public.stream_tables
 
 plus `stream_table_public()` extended with the five columns (the 026 function, five keys added).
 
-A pick writes `pN_featured` (the name) and `pN_featured_at` (the panel's `new Date().toISOString()`). The view compares that to its own clock, as it already does for `timer_ends_at`, so the two machines' clocks need to agree to within a second or so, as the round timer already assumes. `FEATURED_SECONDS = 10` lives in `streamOverlay.js`; it is fixed, not a setting.
+A pick writes `pN_featured` (the name) and `pN_featured_at` (the panel's `new Date().toISOString()`). The view compares that to its own clock, as it already does for `timer_ends_at`, so the two machines' clocks need to agree to within a second or so, as the round timer already assumes. `FEATURED_SECONDS = 15` lives in `streamOverlay.js`; it is fixed, not a setting.
 
 `featured_cards` is event setup, like `lore_track`: `clearTablePatch()` and `featureMatchPatch()` leave it alone.
 
@@ -96,10 +96,10 @@ The value is the card's name as written in that side's decklist (the entry's `na
 | File | Change |
 |---|---|
 | `src/lib/streamOverlay.js` | `FEATURED_SECONDS`; `featured` and `featured_at` join `SIDE_FIELDS` (swap mirrors them); `rowToState()` adds `featuredCards` and `players[].featured` / `featuredAt`; a pure `featuredVisible(mode, featuredAt, now)` returns the card's opacity (0 when hidden), used by the view and by the panel's tile border; `clearTablePatch()` and `featureMatchPatch()` reset both sides; `HOTKEYS.x = { clearFeatured: true }` |
-| `src/pages/StreamOverlayPage.jsx` | Featured cards Off / 10 seconds / Stay under Lore display; `FeaturedPicker` under `DecklistField` in each Player card while it's on; the X hotkey writes `{ p1_featured: '', p2_featured: '' }` |
+| `src/pages/StreamOverlayPage.jsx` | Featured cards Off / 15 seconds / Stay under Lore display; `FeaturedPicker` under `DecklistField` in each Player card while it's on; the X hotkey writes `{ p1_featured: '', p2_featured: '' }` |
 | `src/pages/StreamOverlayViewPage.jsx` | `SideColumn` gets the card slot after the pips, rendered while `featuredVisible()` is above 0 and `featured` resolves to a card; it takes `cardIndex` and `now` |
 | `src/index.css` | one `--animate-feature-in` keyframe (opacity 0 → 1, 250 ms) in the `@theme` block |
-| `src/lib/__tests__/streamOverlay.test.js` | fixture row gets the five columns; swap mirrors, clear and new pairing reset, `rowToState` maps, X maps; `featuredVisible()` at 0 s, 9.75 s, 10 s and in Stay mode |
+| `src/lib/__tests__/streamOverlay.test.js` | fixture row gets the five columns; swap mirrors, clear and new pairing reset, `rowToState` maps, X maps; `featuredVisible()` at 0 s, 14.75 s, 15 s and in Stay mode |
 | `docs/agents/stream-overlay.md` | migration table row, hotkey list, remove it from "deliberately not built" |
 
 Screenshots for the PR: the view in both lore displays with a card featured, the panel's toggle, and its picker row with one tile selected.
@@ -113,7 +113,7 @@ The screenshot's Room settings has per-slot Animation, Speed, Rounded corners, C
 | Animation, Speed | One fixed fade-in. Add a column when an organizer asks for another. |
 | Rounded corners | Always on: a printed card is rounded. |
 | Card back | Not built. A flip from the back is a reveal effect; the cards here are already public in the decklists. |
-| Auto-clear after N seconds | Built in: **10 seconds** is the default way to show a card, **Stay** turns it off. The seconds are fixed at 10. |
+| Auto-clear after N seconds | Built in: **15 seconds** is the default way to show a card, **Stay** turns it off. The seconds are fixed at 15: long enough to notice the card and read its ability while the caster talks about it. |
 | Caster slot | Not in v1 (see open questions). |
 
 ## Open questions

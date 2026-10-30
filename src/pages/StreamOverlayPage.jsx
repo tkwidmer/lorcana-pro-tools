@@ -368,6 +368,12 @@ export function StreamOverlayPage() {
             </Labeled>
             <Button size="sm" onClick={() => write(row.id, { theme_fill: DEFAULT_THEME.fill, theme_accent: DEFAULT_THEME.accent })}>Reset to InkbornForge</Button>
           </div>
+          <Labeled label="Lore display">
+            <div className="flex items-center gap-2" role="group" aria-label="Lore display">
+              <Button size="sm" variant={row.lore_track ? 'secondary' : 'primary'} aria-pressed={!row.lore_track} onClick={() => setField('lore_track', false)}>Counter</Button>
+              <Button size="sm" variant={row.lore_track ? 'primary' : 'secondary'} aria-pressed={row.lore_track} onClick={() => setField('lore_track', true)}>Track</Button>
+            </div>
+          </Labeled>
         </Card>
 
         <Card title="Round timer" className="p-5">

@@ -23,6 +23,10 @@ const FALLBACK_THEME = { ...DEFAULT_THEME, text: themeTextColor(DEFAULT_THEME.fi
 // Square cutout: tall enough for a portrait player cam, and the operator
 // positions the camera source behind it in OBS.
 const CAM_HEIGHT = SIDE_WIDTH
+// The lore track's strip, against the inner edge of each side column.
+const TRACK_WIDTH = 72
+// Rows on the track: the WIN label, then 20 down to 0 (START).
+const TRACK_ROW_H = OVERLAY_HEIGHT / (WINNING_LORE + 2)
 
 // The single OBS Browser Source for a gameplay stream: a 1920×1080 frame with
 // opaque side columns (square player cam cutout, name, record, inks, game-win
@@ -56,6 +60,8 @@ export function StreamOverlayViewPage() {
 
   const state = row && rowToState(row)
   const winner = state && winnerIndex(state.players)
+  // Panels over the gameplay cam sit 40px inside the columns (and tracks).
+  const edge = SIDE_WIDTH + (state?.loreTrack ? TRACK_WIDTH : 0) + 40
 
   if (state?.mode === 'break') return <BreakScreen state={state} now={now} />
 
@@ -71,11 +77,13 @@ export function StreamOverlayViewPage() {
       )}
       {state && (
         <>
-          <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} />
-          <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} />
-          {state.deckShown > 0 && !state.cardShown && !state.metaShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} />}
-          {state.cardShown && !state.metaShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} />}
-          {state.metaShown && <MetaPanel state={state} framed />}
+          <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} showLore={!state.loreTrack} />
+          <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} showLore={!state.loreTrack} />
+          {state.loreTrack && <LoreTrack lore={state.players[0].lore} side="left" />}
+          {state.loreTrack && <LoreTrack lore={state.players[1].lore} side="right" />}
+          {state.deckShown > 0 && !state.cardShown && !state.metaShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} edge={edge} />}
+          {state.cardShown && !state.metaShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} edge={edge} />}
+          {state.metaShown && <MetaPanel state={state} framed edge={edge} />}
           <TopBanner state={state} now={now} winner={winner} />
         </>
       )}
@@ -83,7 +91,7 @@ export function StreamOverlayViewPage() {
   )
 }
 
-function SideColumn({ player, side, isWinner }) {
+function SideColumn({ player, side, isWinner, showLore }) {
   return (
     <div
       className={`absolute top-0 bottom-0 flex flex-col ${side === 'left' ? 'left-0 border-r-4' : 'right-0 border-l-4'} border-(--accent)`}
@@ -126,10 +134,12 @@ function SideColumn({ player, side, isWinner }) {
         )}
       </div>
 
-      <div className="mt-2 text-center">
-        <div className="text-base uppercase tracking-[0.3em] text-(--on-fill)/60">Lore</div>
-        <div className={`text-[9rem] leading-none text-(--accent) tabular-nums ${player.lore >= WINNING_LORE ? 'animate-pulse' : ''}`}>{player.lore}</div>
-      </div>
+      {showLore && (
+        <div className="mt-2 text-center">
+          <div className="text-base uppercase tracking-[0.3em] text-(--on-fill)/60">Lore</div>
+          <div className={`text-[9rem] leading-none text-(--accent) tabular-nums ${player.lore >= WINNING_LORE ? 'animate-pulse' : ''}`}>{player.lore}</div>
+        </div>
+      )}
 
       {/* Brand lockup, bottom-right like the reference streams; mirrors Nav's. */}
       <div className="mt-6 mb-5 h-8 flex items-center justify-center gap-2">
@@ -145,6 +155,37 @@ function SideColumn({ player, side, isWinner }) {
   )
 }
 
+// The alternate lore display: a full-height strip against the column's inner
+// edge, WIN at the top, 20 down to START, with the accent marker climbing to
+// the player's lore (held at 20 beyond it, pulsing there as the cue to tap the
+// game win, as the big number does).
+function LoreTrack({ lore, side }) {
+  const at = Math.min(lore, WINNING_LORE)
+  const rows = Array.from({ length: WINNING_LORE + 1 }, (_, i) => WINNING_LORE - i)
+  return (
+    <div
+      className={`absolute top-0 bottom-0 bg-(--fill) border-(--accent) ${side === 'left' ? 'border-r-4' : 'border-l-4'}`}
+      style={{ width: TRACK_WIDTH, [side]: SIDE_WIDTH }}
+      aria-label={`${lore} lore`}
+    >
+      <div
+        className={`absolute left-1/2 -translate-x-1/2 rounded-full bg-(--accent) transition-[top] duration-300 ${lore >= WINNING_LORE ? 'animate-pulse' : ''}`}
+        style={{ width: TRACK_ROW_H - 4, height: TRACK_ROW_H - 4, top: (WINNING_LORE - at + 1) * TRACK_ROW_H + 2 }}
+      />
+      <div className="relative flex items-center justify-center text-xl uppercase tracking-[0.2em] text-(--accent)" style={{ height: TRACK_ROW_H }}>Win</div>
+      {rows.map(n => (
+        <div
+          key={n}
+          className={`relative flex items-center justify-center tabular-nums leading-none ${n === 0 ? 'text-sm uppercase tracking-[0.1em]' : 'text-3xl'} ${n === at ? 'text-(--fill)' : 'text-(--on-fill)/60'}`}
+          style={{ height: TRACK_ROW_H }}
+        >
+          {n === 0 ? 'Start' : n}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // A player's decklist laid over the gameplay cam while the panel has it
 // shown: the card images, characters then actions / songs, items and
 // locations, each by cost (buildBuckets), sized as large as fits the whole
@@ -153,14 +194,15 @@ function SideColumn({ player, side, isWinner }) {
 // header and padding); re-measure if the panel's chrome changes.
 const DECK_GRID = { width: 1160, height: 770, gap: 8 }
 
-function DeckPanel({ player, cardIndex }) {
+function DeckPanel({ player, cardIndex, edge }) {
   const buckets = buildBuckets(matchDeckList(player.decklist, cardIndex))
   const entries = BUCKET_ORDER.flatMap(type => buckets[type])
-  const cardWidth = deckCardWidth(entries.length, DECK_GRID.width, DECK_GRID.height, DECK_GRID.gap)
+  const gridWidth = DECK_GRID.width - 2 * (edge - SIDE_WIDTH - 40)
+  const cardWidth = deckCardWidth(entries.length, gridWidth, DECK_GRID.height, DECK_GRID.gap)
   return (
     <div
       className="absolute flex flex-col bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden"
-      style={{ left: SIDE_WIDTH + 40, right: SIDE_WIDTH + 40, top: 170, bottom: 40 }}
+      style={{ left: edge, right: edge, top: 170, bottom: 40 }}
     >
       <div className="flex items-center justify-center gap-4 px-6 py-3 border-b-4 border-(--accent)">
         <span className="text-3xl uppercase tracking-wide">{player.name || ' '}</span>
@@ -186,12 +228,12 @@ const ordinal = n => `${n}${(n % 100 > 10 && n % 100 < 14) ? 'th' : ['th', 'st',
 // (side events included) between. The data
 // is the row's `player_card` (buildPlayerCard), written by Tournament
 // Lookup's send — the view has no session to query the archive itself.
-function PlayerCardPanel({ state, card }) {
+function PlayerCardPanel({ state, card, edge }) {
   const { wins, draws, matches } = card.headToHead
   const [a, b] = state.players
   const lead = wins[0] === wins[1] ? (wins[0] + draws === 0 ? 'First meeting' : 'Series tied') : `${(wins[0] > wins[1] ? a : b).name} leads`
   return (
-    <div className="absolute flex bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden" style={{ left: SIDE_WIDTH + 40, right: SIDE_WIDTH + 40, top: 170, bottom: 40 }}>
+    <div className="absolute flex bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden" style={{ left: edge, right: edge, top: 170, bottom: 40 }}>
       <PlayerHalf player={a} history={card.players[0]} align="left" />
       <div className="w-[300px] shrink-0 border-x-4 border-(--accent) flex flex-col items-center px-5 py-8 text-center">
         <div className="text-base uppercase tracking-[0.35em] text-(--on-fill)/60">Head to head</div>
@@ -356,7 +398,7 @@ function BreakScreen({ state, now }) {
 // Inspector paints a deck), the share and the deck count beside it. Framed
 // over the gameplay cam (same box as the player card) or bare on the break
 // screen. Type and row height step down as the list grows.
-function MetaPanel({ state, note, framed }) {
+function MetaPanel({ state, note, framed, edge }) {
   const meta = metaSlices(state.metaText, state.metaPlayers)
   if (!meta) return null
   const n = meta.slices.length
@@ -381,7 +423,7 @@ function MetaPanel({ state, note, framed }) {
   )
   if (framed) {
     return (
-      <div className="absolute flex flex-col bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden" style={{ left: SIDE_WIDTH + 40, right: SIDE_WIDTH + 40, top: 170, bottom: 40 }}>
+      <div className="absolute flex flex-col bg-(--fill)/95 border-4 border-(--accent) rounded-lg overflow-hidden" style={{ left: edge, right: edge, top: 170, bottom: 40 }}>
         <div className="pt-6 text-center">
           <span className="text-2xl uppercase tracking-[0.4em] text-(--on-fill)/60">Metagame</span>
           {meta.players && <span className="ml-6 text-2xl uppercase tracking-wide text-(--accent)">{meta.players} players</span>}

@@ -104,6 +104,9 @@ export function rowToState(row) {
     metaText: row.meta_text,
     metaPlayers: row.meta_players,
     metaShown: row.meta_shown,
+    // Lore as a climbing START→WIN track beside each column instead of the
+    // big number at the bottom of it.
+    loreTrack: row.lore_track,
     // Wall-time target while running (ms since epoch), null while paused.
     timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
     timerRemainingMs: row.timer_remaining_ms,

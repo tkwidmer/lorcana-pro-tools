@@ -17,7 +17,7 @@ When a caster talks about a card ("he's holding up Be Prepared", "this is the Be
 
 Each mock is the real panel or view rendered from a mocked row, with the proposed picker and card added on top. The striped green stands in for the gameplay cam.
 
-**Toggle** (panel, Event card, under Lore display; the dashed outline only marks the new control):
+**Toggle** (panel, Event card, under Lore display):
 
 ![Featured cards toggle on the panel](../../screenshots/stream-overlay-featured-card-toggle.png)
 

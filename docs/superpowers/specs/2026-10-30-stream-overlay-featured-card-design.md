@@ -13,6 +13,22 @@ When a caster talks about a card ("he's holding up Be Prepared", "this is the Be
 - The slot over the gameplay cam is exclusive: deck, player card or metagame, never two at once.
 - Per-side columns are mirrored by `swapSidesPatch()` through `SIDE_FIELDS`, cleared by `clearTablePatch()` and by `featureMatchPatch()` on a new pairing.
 
+## Mocks
+
+Both mocks are the real panel and view rendered from a mocked row, with the proposed picker and card added on top. The striped green stands in for the gameplay cam.
+
+**Picker** (panel, Player cards, Ryan's Bruno Madrigal featured):
+
+![Featured card picker on the panel](../../screenshots/stream-overlay-featured-card-picker.png)
+
+**View**, one side featured:
+
+![Featured card on the overlay, left side](../../screenshots/stream-overlay-featured-card-view.png)
+
+**View**, both sides featured:
+
+![Featured cards on the overlay, both sides](../../screenshots/stream-overlay-featured-card-view-both.png)
+
 ## What the operator sees (panel)
 
 In each **Player** card, under the decklist field, a **Featured card** row: the matched deck as small thumbnails (about 56 px wide, wrapping), in `buildBuckets()` order, so a 60-card list is 15 to 25 tiles.
@@ -20,6 +36,7 @@ In each **Player** card, under the decklist field, a **Featured card** row: the 
 - Click a tile: that card goes on stream on that player's side. The tile gets the forge border.
 - Click the featured tile again: it comes off.
 - Clicking another tile replaces it (one featured card per side).
+- Hovering a tile shows the card's name (`title`), since 56 px art is hard to read.
 - No decklist matched: the row says "Paste a decklist to feature its cards".
 
 Hotkey **X** takes both featured cards off (letters only, as the other hotkeys). There is no hotkey per card: a Stream Deck can't name a card.

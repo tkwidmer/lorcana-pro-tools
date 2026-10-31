@@ -92,15 +92,15 @@ function registrationsToRosterEntries(regs) {
       player: { id: r.user.id, best_identifier: r.user.best_identifier },
       user_event_status: { best_identifier: r.best_identifier },
       rank: null,
-      record: `${r.matches_won ?? 0}-${r.matches_drawn ?? 0}-${r.matches_lost ?? 0}`,
+      record: `${r.matches_won ?? 0}-${r.matches_lost ?? 0}-${r.matches_drawn ?? 0}`,
       match_points: r.total_match_points ?? 0,
     }))
     .sort((a, b) => a.user_event_status.best_identifier.localeCompare(b.user_event_status.best_identifier))
 }
 
-// Parses a "W-D-L" record string into integer parts, defaulting missing/malformed segments to 0.
+// Parses RPH's "W-L-D" record string into integer parts, defaulting missing/malformed segments to 0.
 function parseRecord(record) {
-  const [w, d, l] = String(record ?? '').split('-').map((n) => parseInt(n, 10))
+  const [w, l, d] = String(record ?? '').split('-').map((n) => parseInt(n, 10))
   return { w: w || 0, d: d || 0, l: l || 0 }
 }
 
@@ -1310,8 +1310,8 @@ export function TournamentLookupPage() {
           {teamSummary && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-                <div className="font-bold text-gray-900">{teamSummary.wins}-{teamSummary.draws}-{teamSummary.losses}</div>
-                <div className="text-xs text-gray-500">Combined W-D-L</div>
+                <div className="font-bold text-gray-900">{teamSummary.wins}-{teamSummary.losses}-{teamSummary.draws}</div>
+                <div className="text-xs text-gray-500">Combined W-L-D</div>
               </div>
               <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
                 <div className="font-bold text-gray-900">
@@ -1452,7 +1452,7 @@ export function TournamentLookupPage() {
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold text-gray-900">{tiebreakers.record}</div>
-                <p className="text-xs text-gray-500 mt-1">W-D-L</p>
+                <p className="text-xs text-gray-500 mt-1">W-L-D</p>
               </div>
             </div>
 

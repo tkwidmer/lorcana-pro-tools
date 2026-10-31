@@ -2,13 +2,14 @@ import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
   timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, deckCardWidth,
+  featuredPhase, FEATURED_SECONDS, FEATURED_FADE_MS, CLEAR_FEATURED_PATCH,
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', sponsor2_logo_url: 'https://x/s2.png', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '', meta_text: '', meta_players: null, meta_shown: false, lore_track: false,
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', sponsor2_logo_url: 'https://x/s2.png', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '', meta_text: '', meta_players: null, meta_shown: false, lore_track: false, featured_cards: 'fade',
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
-  p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0, p1_decklist: '4 Elsa',
-  p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1, p2_decklist: '',
+  p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0, p1_decklist: '4 Elsa', p1_featured: 'Elsa', p1_featured_at: '2026-10-31T12:00:00+00:00',
+  p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1, p2_decklist: '', p2_featured: '', p2_featured_at: null,
   ...overrides,
 })
 
@@ -16,7 +17,9 @@ describe('streamOverlay row mapping', () => {
   it('turns a row into the render shape, parsing the clock target', () => {
     const s = rowToState(row({ timer_ends_at: '2026-05-24T23:38:39+00:00' }))
     expect(s.timerEndsAt).toBe(Date.parse('2026-05-24T23:38:39+00:00'))
-    expect(s.players[0]).toEqual({ name: 'Ryan', record: '5-0-2', inks: ['amethyst', 'emerald'], lore: 12, gameWins: 0, decklist: '4 Elsa' })
+    expect(s.players[0]).toEqual({ name: 'Ryan', record: '5-0-2', inks: ['amethyst', 'emerald'], lore: 12, gameWins: 0, decklist: '4 Elsa', featured: 'Elsa', featuredAt: Date.parse('2026-10-31T12:00:00+00:00') })
+    expect(s.players[1].featuredAt).toBeNull()
+    expect(s.featuredCards).toBe('fade')
     expect(s.deckShown).toBe(0)
     expect(s.playerCard).toBeNull()
     expect(s.cardShown).toBe(false)
@@ -37,7 +40,8 @@ describe('streamOverlay row mapping', () => {
     expect(hotkeyAction(key('2'))).toEqual({ toggleDeck: 2 })
     expect(hotkeyAction(key('3'))).toEqual({ toggleCard: true })
     expect(hotkeyAction(key('N'))).toEqual({ nextGame: true })
-    expect(hotkeyAction(key('x'))).toBeNull()
+    expect(hotkeyAction(key('X'))).toEqual({ clearFeatured: true })
+    expect(hotkeyAction(key('z'))).toBeNull()
     expect(hotkeyAction(key('q', { ctrlKey: true }))).toBeNull()
     expect(hotkeyAction(key('q', { target: { tagName: 'INPUT' } }))).toBeNull()
     expect(hotkeyAction(key('q', { target: { tagName: 'DIV', isContentEditable: true } }))).toBeNull()
@@ -103,8 +107,8 @@ describe('streamOverlay row mapping', () => {
 
   it('clears the pairing but keeps the event setup', () => {
     const p = clearTablePatch()
-    expect(p).toMatchObject({ p1_name: '', p2_name: '', p1_inks: [], p2_lore: 0, p1_game_wins: 0, p2_decklist: '', deck_shown: 0, card_shown: false, player_card: null, mode: 'live', standings: null, bracket: null, break_panel: '' })
-    for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'sponsor2_logo_url', 'theme_fill', 'theme_accent', 'timer_ends_at', 'timer_remaining_ms', 'rph_event_id', 'round', 'note']) expect(p).not.toHaveProperty(kept)
+    expect(p).toMatchObject({ p1_name: '', p2_name: '', p1_inks: [], p2_lore: 0, p1_game_wins: 0, p2_decklist: '', p1_featured: '', p2_featured_at: null, deck_shown: 0, card_shown: false, player_card: null, mode: 'live', standings: null, bracket: null, break_panel: '' })
+    for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'sponsor2_logo_url', 'theme_fill', 'theme_accent', 'timer_ends_at', 'timer_remaining_ms', 'rph_event_id', 'round', 'note', 'lore_track', 'featured_cards']) expect(p).not.toHaveProperty(kept)
   })
 
   it('captions the round: the elimination phase in top cut, else Round N', () => {
@@ -259,6 +263,9 @@ describe('streamOverlay row mapping', () => {
     expect(p.p1_inks).toEqual(['amber'])
     expect(p.p2_lore).toBe(12)
     expect(p.p1_game_wins).toBe(1)
+    expect(p.p2_featured).toBe('Elsa')
+    expect(p.p2_featured_at).toBe('2026-10-31T12:00:00+00:00')
+    expect(p.p1_featured_at).toBeNull()
   })
 })
 
@@ -316,8 +323,8 @@ describe('streamOverlay RPH', () => {
     })
     expect(p).toEqual({
       timer_ends_at: null, timer_remaining_ms: 70 * 60 * 1000, rph_event_id: 528227, event_name: 'Open', round: 'Top 16',
-      p1_name: 'Ryan', p1_record: '5-2-0', p1_lore: 0, p1_game_wins: 0, p1_decklist: '',
-      p2_name: 'Dylan', p2_record: '5-0-2', p2_lore: 0, p2_game_wins: 0, p2_decklist: '',
+      p1_name: 'Ryan', p1_record: '5-2-0', p1_lore: 0, p1_game_wins: 0, p1_decklist: '', p1_featured: '', p1_featured_at: null,
+      p2_name: 'Dylan', p2_record: '5-0-2', p2_lore: 0, p2_game_wins: 0, p2_decklist: '', p2_featured: '', p2_featured_at: null,
       deck_shown: 0, player_card: null, card_shown: false,
     })
     expect(featureMatchPatch({ eventName: '', round: '', rphEventId: 1, players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null }))
@@ -331,5 +338,31 @@ describe('streamOverlay deck grid', () => {
     expect(deckCardWidth(20, 1160, 770, 8)).toBe(158)
     // A single card is bound by the box height, not the width.
     expect(deckCardWidth(1, 1160, 770, 8)).toBe(551)
+  })
+})
+
+describe('streamOverlay featured cards', () => {
+  const at = Date.parse('2026-10-31T12:00:00Z')
+  const sec = n => at + n * 1000
+
+  it('shows a fading card for FEATURED_SECONDS, fading over the last FEATURED_FADE_MS', () => {
+    expect(FEATURED_SECONDS).toBe(15)
+    expect(featuredPhase('fade', 'Elsa', at, sec(0))).toBe('shown')
+    expect(featuredPhase('fade', 'Elsa', at, sec(15) - FEATURED_FADE_MS - 1)).toBe('shown')
+    expect(featuredPhase('fade', 'Elsa', at, sec(14.75))).toBe('fading')
+    expect(featuredPhase('fade', 'Elsa', at, sec(15))).toBe('hidden')
+    expect(featuredPhase('fade', 'Elsa', at, sec(600))).toBe('hidden')
+  })
+
+  it('keeps a card up in stay mode, and shows nothing when off or with no card', () => {
+    expect(featuredPhase('stay', 'Elsa', at, sec(600))).toBe('shown')
+    expect(featuredPhase('stay', 'Elsa', null, sec(0))).toBe('shown')
+    expect(featuredPhase('off', 'Elsa', at, sec(0))).toBe('hidden')
+    expect(featuredPhase('fade', '', at, sec(0))).toBe('hidden')
+    expect(featuredPhase('fade', 'Elsa', null, sec(0))).toBe('hidden')
+  })
+
+  it('X clears both sides', () => {
+    expect(CLEAR_FEATURED_PATCH).toEqual({ p1_featured: '', p1_featured_at: null, p2_featured: '', p2_featured_at: null })
   })
 })

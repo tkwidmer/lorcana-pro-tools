@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCards } from '../hooks/useCards'
 import { buildCardIndex } from '../lib/cardAnalysis'
 import { parseDeckList } from '../lib/parseDeckList'
-import { matchDeckList } from '../lib/decklistShared'
 import { VALID_INKS } from '../lib/inkColors'
 import { fetchEventDetails, getTournamentStructure, extractEventId, fetchAllStandings, fetchAllRoundMatches, fetchRoundMatches } from '../lib/tournamentApi'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
@@ -14,7 +13,9 @@ import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks, clearTablePatch,
   activeRoundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, metaSlices,
+  featuredPhase, CLEAR_FEATURED_PATCH, FEATURED_SECONDS,
 } from '../lib/streamOverlay'
+import { BUCKET_ORDER, buildBuckets, matchDeckList } from '../lib/decklistShared'
 import { InkIcon } from '../components/InkIcons'
 import { StreamPairingPicker } from '../components/StreamPairingPicker'
 import cardeFieldExport from '../../scripts/carde-field-export.js?raw'
@@ -152,6 +153,11 @@ export function StreamOverlayPage() {
       e.preventDefault()
       if (action.nextGame) {
         resetLore(rowId, controllerKey).catch(e => setError(e.message))
+        return
+      }
+      if (action.clearFeatured) {
+        setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...CLEAR_FEATURED_PATCH } : t)))
+        updateTable(rowId, CLEAR_FEATURED_PATCH).catch(e => setError(e.message))
         return
       }
       if (action.toggleMode || action.toggleDeck || action.toggleCard || action.toggleMeta) {
@@ -374,6 +380,13 @@ export function StreamOverlayPage() {
               <Button size="sm" variant={row.lore_track ? 'primary' : 'secondary'} aria-pressed={row.lore_track} onClick={() => setField('lore_track', true)}>Track</Button>
             </div>
           </Labeled>
+          <Labeled label="Featured cards">
+            <div className="flex items-center gap-2" role="group" aria-label="Featured cards">
+              {[['off', 'Off'], ['fade', `${FEATURED_SECONDS} seconds`], ['stay', 'Stay']].map(([value, label]) => (
+                <Button key={value} size="sm" variant={row.featured_cards === value ? 'primary' : 'secondary'} aria-pressed={row.featured_cards === value} onClick={() => setField('featured_cards', value)}>{label}</Button>
+              ))}
+            </div>
+          </Labeled>
         </Card>
 
         <Card title="Round timer" className="p-5">
@@ -464,7 +477,7 @@ export function StreamOverlayPage() {
 
         <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
-            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck · <Kbd>3</Kbd> player card · <Kbd>4</Kbd> metagame · <Kbd>N</Kbd> next game (lore to 0). Click outside any field first.
+            Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck · <Kbd>3</Kbd> player card · <Kbd>4</Kbd> metagame · <Kbd>N</Kbd> next game (lore to 0) · <Kbd>X</Kbd> takes the featured cards off. Click outside any field first.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="primary" onClick={() => resetLore(row.id, row.controller_key).catch(e => setError(e.message))}>Next game: lore to 0</Button>
@@ -511,6 +524,14 @@ export function StreamOverlayPage() {
               }}
               onToggleShow={() => write(row.id, { deck_shown: row.deck_shown === side ? 0 : side, card_shown: false, meta_shown: false })}
             />
+
+            {row.featured_cards !== 'off' && (
+              <FeaturedPicker
+                player={player} cardIndex={cardIndex}
+                onStream={featuredPhase(row.featured_cards, player.featured, player.featuredAt, now) !== 'hidden'}
+                onPick={name => write(row.id, { [`p${side}_featured`]: name, [`p${side}_featured_at`]: name ? new Date().toISOString() : null })}
+              />
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <Counter label="Lore" value={player.lore} onChange={d => adjust(side, 'lore', d)} />
@@ -579,6 +600,41 @@ function DecklistField({ text, cardIndex, shown, onChange, onToggleShow }) {
         </Button>
       </div>
     </Labeled>
+  )
+}
+
+// A side's matched deck as small tiles, characters first then by cost.
+// Clicking a tile puts that card on stream in the player's side column, or
+// shows it again after it faded; clicking the card that's on stream takes it
+// off. `onStream` says whether the featured card is showing right now.
+function FeaturedPicker({ player, cardIndex, onStream, onPick }) {
+  const buckets = buildBuckets(matchDeckList(player.decklist, cardIndex))
+  const entries = BUCKET_ORDER.flatMap(type => buckets[type])
+  return (
+    <div>
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Featured card</span>
+        {entries.length > 0 && <span className="text-xs text-gray-500">Click to show beside {player.name || 'this player'} · click again to hide · <Kbd>X</Kbd> hides both</span>}
+      </div>
+      {entries.length === 0
+        ? <p className="text-xs text-gray-500">Paste a decklist to feature its cards.</p>
+        : (
+          <div className="flex flex-wrap gap-1.5">
+            {entries.map(({ key, name, card }) => {
+              const showing = onStream && name === player.featured
+              return (
+                <button
+                  key={key} type="button" title={name} aria-pressed={showing}
+                  onClick={() => onPick(showing ? '' : name)}
+                  className={`w-14 rounded border-[3px] ${showing ? 'border-forge' : 'border-transparent hover:border-gray-300'}`}
+                >
+                  <img src={card.images.thumbnail} alt={name} className="block w-full rounded-sm" loading="lazy" />
+                </button>
+              )
+            })}
+          </div>
+        )}
+    </div>
   )
 }
 

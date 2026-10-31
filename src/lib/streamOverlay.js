@@ -27,6 +27,23 @@ export function nameSizeClass(name, sizes) {
   return (sizes.find(([, maxChars]) => name.length <= maxChars) ?? sizes[sizes.length - 1])[0]
 }
 
+// How long a featured card stays on stream in the 'fade' mode, and the fade
+// out at the end of it.
+export const FEATURED_SECONDS = 15
+export const FEATURED_FADE_MS = 500
+
+// Where a side's featured card is: 'hidden', 'shown', or 'fading' over its
+// last FEATURED_FADE_MS. `mode` is the row's featured_cards ('off' / 'fade' /
+// 'stay'); `featuredAt` is when it was picked (ms since epoch). Both the view
+// and the panel's picker read it, so the tile's highlight matches the stream.
+export function featuredPhase(mode, name, featuredAt, now) {
+  if (mode === 'off' || !name) return 'hidden'
+  if (mode === 'stay') return 'shown'
+  const left = featuredAt + FEATURED_SECONDS * 1000 - now
+  if (!(left > 0)) return 'hidden'
+  return left <= FEATURED_FADE_MS ? 'fading' : 'shown'
+}
+
 // Card image aspect (LorcanaJSON thumbnails are 367×512).
 export const CARD_ASPECT = 512 / 367
 
@@ -107,6 +124,9 @@ export function rowToState(row) {
     // Lore as a climbing START→WIN track beside each column instead of the
     // big number at the bottom of it.
     loreTrack: row.lore_track,
+    // 'off' / 'fade' / 'stay': whether each side's featured card shows, and
+    // whether it fades out after FEATURED_SECONDS.
+    featuredCards: row.featured_cards,
     // Wall-time target while running (ms since epoch), null while paused.
     timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
     timerRemainingMs: row.timer_remaining_ms,
@@ -118,6 +138,10 @@ export function rowToState(row) {
       lore: row[`p${n}_lore`],
       gameWins: row[`p${n}_game_wins`],
       decklist: row[`p${n}_decklist`],
+      // The featured card's name as written in the decklist ('' for none) and
+      // when it was picked (ms since epoch, null when never).
+      featured: row[`p${n}_featured`],
+      featuredAt: row[`p${n}_featured_at`] ? Date.parse(row[`p${n}_featured_at`]) : null,
     })),
   }
 }
@@ -237,22 +261,22 @@ export function featureMatchPatch({ eventName, round, players, timer, rphEventId
     card_shown: false,
     event_name: eventName,
     round,
-    p1_name: players[0].name, p1_record: players[0].record, p1_lore: 0, p1_game_wins: 0, p1_decklist: '',
-    p2_name: players[1].name, p2_record: players[1].record, p2_lore: 0, p2_game_wins: 0, p2_decklist: '',
+    p1_name: players[0].name, p1_record: players[0].record, p1_lore: 0, p1_game_wins: 0, p1_decklist: '', p1_featured: '', p1_featured_at: null,
+    p2_name: players[1].name, p2_record: players[1].record, p2_lore: 0, p2_game_wins: 0, p2_decklist: '', p2_featured: '', p2_featured_at: null,
     deck_shown: 0,
   }
 }
 
-const SIDE_FIELDS = ['name', 'record', 'inks', 'lore', 'game_wins', 'decklist']
+const SIDE_FIELDS = ['name', 'record', 'inks', 'lore', 'game_wins', 'decklist', 'featured', 'featured_at']
 
-// "Clear table" between matches: both players, their decklists, the player
-// card, the break-screen snapshots and anything shown over the cam. The
+// "Clear table" between matches: both players, their decklists and featured
+// cards, the player card, the break-screen snapshots and anything shown over the cam. The
 // event name, logos, theme, timer, linked RPH event, round and note stay —
 // they're the operator's setup for the event, not the pairing's.
 export function clearTablePatch() {
   const patch = { mode: 'live', deck_shown: 0, card_shown: false, meta_shown: false, player_card: null, standings: null, bracket: null, break_panel: '' }
   for (const n of [1, 2]) {
-    Object.assign(patch, { [`p${n}_name`]: '', [`p${n}_record`]: '', [`p${n}_inks`]: [], [`p${n}_lore`]: 0, [`p${n}_game_wins`]: 0, [`p${n}_decklist`]: '' })
+    Object.assign(patch, { [`p${n}_name`]: '', [`p${n}_record`]: '', [`p${n}_inks`]: [], [`p${n}_lore`]: 0, [`p${n}_game_wins`]: 0, [`p${n}_decklist`]: '', [`p${n}_featured`]: '', [`p${n}_featured_at`]: null })
   }
   return patch
 }
@@ -501,7 +525,8 @@ export function metaSlices(text, players) {
 
 // Operator hotkeys on the control panel (and so a Stream Deck sending keys):
 // left-hand keys for the left player, right-hand keys for the right player,
-// B flips Live / Break. Letters only, so any key sender can produce them.
+// B flips Live / Break, X takes both featured cards off. Letters only, so any
+// key sender can produce them.
 export const HOTKEYS = {
   q: { side: 1, field: 'lore', delta: 1 }, a: { side: 1, field: 'lore', delta: -1 },
   w: { side: 1, field: 'game_wins', delta: 1 }, s: { side: 1, field: 'game_wins', delta: -1 },
@@ -512,7 +537,11 @@ export const HOTKEYS = {
   3: { toggleCard: true },
   4: { toggleMeta: true },
   n: { nextGame: true },
+  x: { clearFeatured: true },
 }
+
+// Takes both sides' featured cards off (the X hotkey).
+export const CLEAR_FEATURED_PATCH = { p1_featured: '', p1_featured_at: null, p2_featured: '', p2_featured_at: null }
 
 // The action for a keydown, or null: a plain key with no modifier, and never
 // while the operator is typing in a field.

@@ -436,8 +436,10 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                         const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
                         const isBye = match.match_is_bye
                         const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
-                        const w = match.games_won_by_winner
-                        const l = match.games_won_by_loser
+                        // Games from the columns' point of view (Player 1 – Player 2);
+                        // RPH reports them winner-first.
+                        const p1Games = p1Won ? match.games_won_by_winner : match.games_won_by_loser
+                        const p2Games = p1Won ? match.games_won_by_loser : match.games_won_by_winner
                         const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
                         const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id), currentEventId)
                         const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
@@ -485,7 +487,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                               {isRivalry && (
                                 <span title="These players have met before" className="mr-1">🔁</span>
                               )}
-                              {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${w}-${l}`}
+                              {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${p1Games}-${p2Games}`}
                             </td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`inline-flex items-center justify-end gap-1 font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>

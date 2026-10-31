@@ -7,7 +7,7 @@ import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices, deckCardWidth, CARD_ASPECT, featuredPhase, FEATURED_FADE_MS } from '../lib/streamOverlay'
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices, deckCardWidth, CARD_ASPECT, featuredPhase, FEATURED_FADE_MS, latestResult, resultLine } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
 // Name size classes per slot, big → small, with the character budget each
@@ -85,6 +85,7 @@ export function StreamOverlayViewPage() {
           {state.cardShown && !state.metaShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} edge={edge} />}
           {state.metaShown && <MetaPanel state={state} framed edge={edge} />}
           <TopBanner state={state} now={now} winner={winner} />
+          <ResultTicker results={state.results} now={now} />
         </>
       )}
     </div>
@@ -361,6 +362,41 @@ function TopBanner({ state, now, winner }) {
         <Stat label="Time" value={formatClock(remaining)} warn={state.timerEndsAt !== null && remaining < 5 * 60 * 1000} />
       </div>
       {state.note && <div className="mt-2 text-xl uppercase tracking-[0.3em] text-(--on-fill)/70 max-w-[1100px] truncate">{state.note}</div>}
+    </div>
+  )
+}
+
+// The linked event's most recently reported result, bottom-center below the
+// panels over the cam (they stop 40px above the frame's bottom edge). A new
+// result slides it in for RESULT_HOLD_MS; one arriving while it's up swaps the
+// text and restarts the hold. The panel writes results at most once per RPH
+// poll (15 s), so in a big round the strip stays up and shows the newest one
+// every poll, skipping those between. The result already on the row when the
+// view loads counts as seen, so reloading the source doesn't replay it.
+const RESULT_HOLD_MS = 20 * 1000
+
+function ResultTicker({ results, now }) {
+  const m = latestResult(results)
+  const key = m ? `${m.table}@${m.reportedAt}` : null
+  const [arrival, setArrival] = useState({ key, at: null })
+  if (arrival.key !== key) setArrival({ key, at: key ? now : null })
+  const shown = arrival.at !== null && now - arrival.at < RESULT_HOLD_MS
+  const line = m && resultLine(m)
+  // Mounted while empty too, so the round's first result slides in.
+  return (
+    <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 ${shown ? 'translate-y-0' : 'translate-y-full'} transition-transform duration-500 h-10 flex items-center gap-4 px-6 bg-(--fill) border-x-4 border-t-4 border-(--accent) rounded-t-lg text-xl uppercase tracking-wide whitespace-nowrap max-w-[1100px]`}>
+      {m && (
+        <>
+          <span className="text-(--accent)">Latest result</span>
+          <span className="text-(--on-fill)/70">{m.table != null ? `Table ${m.table}` : results.round}</span>
+          <span className="flex items-baseline gap-3 min-w-0">
+            <span className="truncate">{line.first}</span>
+            <span className="normal-case tracking-normal text-lg text-(--on-fill)/60">{line.verb}</span>
+            <span className={`truncate ${m.winner === null ? '' : 'text-(--on-fill)/70'}`}>{line.second}</span>
+            {line.score && <span className="tabular-nums text-(--accent)">{line.score}</span>}
+          </span>
+        </>
+      )}
     </div>
   )
 }

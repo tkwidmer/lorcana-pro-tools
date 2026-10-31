@@ -342,8 +342,26 @@ function matchSummary(m) {
 export function buildResultsSnapshot(matches, structure) {
   const rows = [...matches]
     .sort((a, b) => (a.table_number ?? 0) - (b.table_number ?? 0))
-    .map(m => ({ table: m.table_number ?? null, done: m.status === 'COMPLETE', ...matchSummary(m) }))
+    .map(m => {
+      const done = m.status === 'COMPLETE'
+      // Play Hub's updated_at moves when the match is reported.
+      return { table: m.table_number ?? null, done, reportedAt: done ? m.updated_at : null, ...matchSummary(m) }
+    })
   return { round: activeRoundLabel(structure), matches: rows }
+}
+
+// The round's most recently reported result for the view's ticker, or null.
+// Byes aren't results anyone reported.
+export function latestResult(results) {
+  const reported = (results?.matches ?? []).filter(m => m.done && !m.bye && m.reportedAt)
+  return reported.reduce((a, b) => (Date.parse(b.reportedAt) > Date.parse(a.reportedAt) ? b : a), reported[0] ?? null)
+}
+
+// One result as the ticker reads it.
+export function resultLine(m) {
+  if (m.winner === null) return `${m.p1} and ${m.p2} draw`
+  const [w, l] = m.winner === 0 ? [m.p1, m.p2] : [m.p2, m.p1]
+  return `${w} def. ${l}${m.score ? ` ${m.score}` : ''}`
 }
 
 // The top cut as the break screen shows it, from the event's matches: the elimination phase's rounds in order, each match's two names,

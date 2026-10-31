@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, deckCardWidth,
+  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, latestResult, resultLine, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, deckCardWidth,
   featuredPhase, FEATURED_SECONDS, FEATURED_FADE_MS, CLEAR_FEATURED_PATCH,
 } from '../streamOverlay'
 
@@ -170,6 +170,26 @@ describe('streamOverlay row mapping', () => {
       [2, 'Cy', 'Di', null, null, false, false],
       [3, 'Ed', null, 0, null, true, true],
     ])
+  })
+
+  it('picks the most recently reported result for the ticker, skipping byes and open matches', () => {
+    const rel = (order, id) => ({ player_order: order, player: { id, best_identifier: id }, user_event_status: { best_identifier: id } })
+    const matches = [
+      { table_number: 1, status: 'COMPLETE', updated_at: '2026-08-26T19:11:10+00:00', player_match_relationships: [rel(1, 'Ann'), rel(2, 'Bo')], winning_player: 'Bo', games_won_by_winner: 2, games_won_by_loser: 1 },
+      { table_number: 2, status: 'COMPLETE', updated_at: '2026-08-26T19:29:47+00:00', player_match_relationships: [rel(1, 'Cy'), rel(2, 'Di')], winning_player: 'Cy', games_won_by_winner: 2, games_won_by_loser: 0 },
+      { table_number: 3, status: 'IN_PROGRESS', updated_at: '2026-08-26T19:40:00+00:00', player_match_relationships: [rel(1, 'Ed'), rel(2, 'Fy')], winning_player: null },
+      { table_number: 4, status: 'COMPLETE', updated_at: '2026-08-26T19:45:00+00:00', match_is_bye: true, player_match_relationships: [rel(1, 'Gu')], winning_player: 'Gu' },
+    ]
+    const snap = buildResultsSnapshot(matches, { activePhaseType: 'SWISS', activeRoundNumber: 2 })
+    expect(snap.matches[0].reportedAt).toBe('2026-08-26T19:11:10+00:00')
+    expect(snap.matches[2].reportedAt).toBeNull()
+    const latest = latestResult(snap)
+    expect(latest.table).toBe(2)
+    expect(resultLine(latest)).toBe('Cy def. Di 2-0')
+    expect(resultLine(snap.matches[0])).toBe('Bo def. Ann 2-1')
+    expect(resultLine({ p1: 'Ed', p2: 'Fy', winner: null, score: null })).toBe('Ed and Fy draw')
+    expect(latestResult(null)).toBeNull()
+    expect(latestResult({ round: 'Round 1', matches: [snap.matches[2]] })).toBeNull()
   })
 
   it('parses the metagame text as counts or percentages', () => {

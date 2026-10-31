@@ -7,7 +7,7 @@ import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices, deckCardWidth, CARD_ASPECT, featuredPhase, FEATURED_FADE_MS } from '../lib/streamOverlay'
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices, deckCardWidth, CARD_ASPECT, featuredPhase, FEATURED_FADE_MS, latestResult, resultLine } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
 // Name size classes per slot, big → small, with the character budget each
@@ -85,6 +85,7 @@ export function StreamOverlayViewPage() {
           {state.cardShown && !state.metaShown && state.playerCard && <PlayerCardPanel state={state} card={state.playerCard} edge={edge} />}
           {state.metaShown && <MetaPanel state={state} framed edge={edge} />}
           <TopBanner state={state} now={now} winner={winner} />
+          <ResultTicker results={state.results} />
         </>
       )}
     </div>
@@ -361,6 +362,20 @@ function TopBanner({ state, now, winner }) {
         <Stat label="Time" value={formatClock(remaining)} warn={state.timerEndsAt !== null && remaining < 5 * 60 * 1000} />
       </div>
       {state.note && <div className="mt-2 text-xl uppercase tracking-[0.3em] text-(--on-fill)/70 max-w-[1100px] truncate">{state.note}</div>}
+    </div>
+  )
+}
+
+// The linked event's most recently reported result, bottom-center below the
+// panels over the cam (they stop 40px above the frame's bottom edge).
+function ResultTicker({ results }) {
+  const m = latestResult(results)
+  if (!m) return null
+  return (
+    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-10 flex items-center gap-4 px-6 bg-(--fill) border-x-4 border-t-4 border-(--accent) rounded-t-lg text-xl uppercase tracking-wide whitespace-nowrap max-w-[1100px]">
+      <span className="text-(--accent)">Latest result</span>
+      <span className="text-(--on-fill)/70">{m.table != null ? `Table ${m.table}` : results.round}</span>
+      <span className="truncate">{resultLine(m)}</span>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 # Featured card on the Stream Overlay
 
-**Status:** draft for review. Supporter (the panel is gated; the view stays unguarded).
+**Status:** built (migration 027). Supporter (the panel is gated; the view stays unguarded).
 
 ## Problem
 
@@ -89,17 +89,16 @@ A pick writes `pN_featured` (the name) and `pN_featured_at` (the panel's `new Da
 
 `featured_cards` is event setup, like `lore_track`: `clearTablePatch()` and `featureMatchPatch()` leave it alone.
 
-The value is the card's name as written in that side's decklist (the entry's `name`), `''` for none. The view resolves it with the same `cardIndex.get(toSimpleName(name))` lookup `matchDeckList()` uses. No image URL is stored: one source of truth, and the row stays a list of what the operator chose.
+The value is the card's name as written in that side's decklist (the entry's `name`), `''` for none. The view finds it with `matchDeckList()` on that side's decklist. No image URL is stored: one source of truth, and the row stays a list of what the operator chose.
 
 ## Code changes
 
 | File | Change |
 |---|---|
-| `src/lib/streamOverlay.js` | `FEATURED_SECONDS`; `featured` and `featured_at` join `SIDE_FIELDS` (swap mirrors them); `rowToState()` adds `featuredCards` and `players[].featured` / `featuredAt`; a pure `featuredVisible(mode, featuredAt, now)` returns the card's opacity (0 when hidden), used by the view and by the panel's tile border; `clearTablePatch()` and `featureMatchPatch()` reset both sides; `HOTKEYS.x = { clearFeatured: true }` |
+| `src/lib/streamOverlay.js` | `FEATURED_SECONDS`; `featured` and `featured_at` join `SIDE_FIELDS` (swap mirrors them); `rowToState()` adds `featuredCards` and `players[].featured` / `featuredAt`; a pure `featuredPhase(mode, name, featuredAt, now)` returns `hidden`, `shown` or `fading`, used by the view and by the panel's tile border; `clearTablePatch()` and `featureMatchPatch()` reset both sides; `HOTKEYS.x = { clearFeatured: true }` |
 | `src/pages/StreamOverlayPage.jsx` | Featured cards Off / 15 seconds / Stay under Lore display; `FeaturedPicker` under `DecklistField` in each Player card while it's on; the X hotkey writes `{ p1_featured: '', p2_featured: '' }` |
-| `src/pages/StreamOverlayViewPage.jsx` | `SideColumn` gets the card slot after the pips, rendered while `featuredVisible()` is above 0 and `featured` resolves to a card; it takes `cardIndex` and `now` |
-| `src/index.css` | one `--animate-feature-in` keyframe (opacity 0 → 1, 250 ms) in the `@theme` block |
-| `src/lib/__tests__/streamOverlay.test.js` | fixture row gets the five columns; swap mirrors, clear and new pairing reset, `rowToState` maps, X maps; `featuredVisible()` at 0 s, 14.75 s, 15 s and in Stay mode |
+| `src/pages/StreamOverlayViewPage.jsx` | `SideColumn` gets the card slot after the pips, rendered while `featuredPhase()` isn't `hidden` and `featured` resolves to a card; the column's lower block gets `min-h-0` so the card can't squeeze the cam cutout |
+| `src/lib/__tests__/streamOverlay.test.js` | fixture row gets the five columns; swap mirrors, clear and new pairing reset, `rowToState` maps, X maps; `featuredPhase()` at 0 s, 14.75 s, 15 s and in Stay and Off |
 | `docs/agents/stream-overlay.md` | migration table row, hotkey list, remove it from "deliberately not built" |
 
 Screenshots for the PR: the view in both lore displays with a card featured, the panel's toggle, and its picker row with one tile selected.

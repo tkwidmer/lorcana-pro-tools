@@ -7,7 +7,7 @@ import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
 import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
 import {
-  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices, deckCardWidth, CARD_ASPECT } from '../lib/streamOverlay'
+  OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices, deckCardWidth, CARD_ASPECT, featuredPhase, FEATURED_FADE_MS } from '../lib/streamOverlay'
 
 const SIDE_WIDTH = 320
 // Name size classes per slot, big → small, with the character budget each
@@ -77,8 +77,8 @@ export function StreamOverlayViewPage() {
       )}
       {state && (
         <>
-          <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} showLore={!state.loreTrack} />
-          <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} showLore={!state.loreTrack} />
+          <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} showLore={!state.loreTrack} featured={featuredOf(state, 0, cardIndex, now)} />
+          <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} showLore={!state.loreTrack} featured={featuredOf(state, 1, cardIndex, now)} />
           {state.loreTrack && <LoreTrack lore={state.players[0].lore} side="left" />}
           {state.loreTrack && <LoreTrack lore={state.players[1].lore} side="right" />}
           {state.deckShown > 0 && !state.cardShown && !state.metaShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} edge={edge} />}
@@ -91,7 +91,17 @@ export function StreamOverlayViewPage() {
   )
 }
 
-function SideColumn({ player, side, isWinner, showLore }) {
+// A side's featured card while it's on stream: the card from that side's
+// decklist and its phase (featuredPhase), or null.
+function featuredOf(state, i, cardIndex, now) {
+  const player = state.players[i]
+  const phase = featuredPhase(state.featuredCards, player.featured, player.featuredAt, now)
+  if (phase === 'hidden') return null
+  const card = matchDeckList(player.decklist, cardIndex).find(e => e.name === player.featured)?.card
+  return card ? { card, phase, key: `${player.featured}@${player.featuredAt}` } : null
+}
+
+function SideColumn({ player, side, isWinner, showLore, featured }) {
   return (
     <div
       className={`absolute top-0 bottom-0 flex flex-col ${side === 'left' ? 'left-0 border-r-4' : 'right-0 border-l-4'} border-(--accent)`}
@@ -101,7 +111,7 @@ function SideColumn({ player, side, isWinner, showLore }) {
           dark fill starts below it, so nothing paints over the cam. */}
       <div className="w-full border-b-4 border-(--accent)" style={{ height: CAM_HEIGHT }} />
 
-      <div className="flex-1 w-full bg-(--fill) flex flex-col items-center">
+      <div className="flex-1 min-h-0 w-full bg-(--fill) flex flex-col items-center">
       <div className="mt-6 px-4 w-full text-center">
         {/* Fixed-height line so a shrunken name doesn't move what's below it. */}
         <div className={`h-10 flex items-center justify-center uppercase tracking-wide leading-tight ${nameSizeClass(player.name, COLUMN_NAME_SIZES)}`}>
@@ -125,6 +135,11 @@ function SideColumn({ player, side, isWinner, showLore }) {
           </svg>
         ))}
       </div>
+
+      {/* The featured card takes the free height between the pips and the
+          winner slot, so the lore display decides its size: small beside the
+          big lore number, larger with the lore track. */}
+      {featured && <FeaturedCard key={featured.key} card={featured.card} fading={featured.phase === 'fading'} />}
 
       {/* Fixed-height slot just above the lore, so the lore block never moves
           and both columns stay aligned whether or not there's a winner. */}
@@ -151,6 +166,21 @@ function SideColumn({ player, side, isWinner, showLore }) {
         )}
       </div>
       </div>
+    </div>
+  )
+}
+
+// Fades in once the full-size image has loaded (so it never paints half
+// loaded on stream) and out over its last FEATURED_FADE_MS.
+function FeaturedCard({ card, fading }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <div className="flex-1 min-h-0 w-full flex items-center justify-center px-5 pt-5">
+      <img
+        src={card.images.full} alt={card.fullName} onLoad={() => setLoaded(true)}
+        className={`max-w-full max-h-full rounded-xl border-[3px] border-(--accent) transition-opacity ${loaded && !fading ? 'opacity-100' : 'opacity-0'}`}
+        style={{ transitionDuration: `${FEATURED_FADE_MS}ms` }}
+      />
     </div>
   )
 }

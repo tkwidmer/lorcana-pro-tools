@@ -24,6 +24,7 @@ A tournament gameplay overlay for OBS. One `stream_tables` row is a **table** (a
 | `results` (jsonb) | 023 | panel's linked-event poll |
 | `meta_text`, `meta_players`, `meta_shown` | 024 | panel Metagame card |
 | `lore_track` | 026 | panel Event card (Lore display: Counter / Track) |
+| `featured_cards` (`off` / `fade` / `stay`), `p1_featured`/`p2_featured`, `p1_featured_at`/`p2_featured_at` | 027 | panel Event card (Featured cards) and each Player card's picker |
 
 `rowToState(row)` in `streamOverlay.js` is the one mapping from row to render shape; add a column there and in the fixture row in the test file, and extend `stream_table_public()` in the migration so the public read and broadcast carry it.
 
@@ -37,7 +38,7 @@ Verified once against the real project with an anonymous client: direct table re
 
 ## Four surfaces
 
-- **Panel** `/stream-overlay` (`StreamOverlayPage.jsx`, supporter-gated). Lists the owner's tables; the first is an explicit click, never auto-created (a mount effect that created one ran twice under StrictMode and made two). Every edit is an optimistic local change plus a column `update` (`updateTable()`). From the row's broadcasts the panel adopts **only** the four score columns and `rph_event_id`; adopting the echo of a keystroke would clobber the next one. Selected table in localStorage `lorcana_stream_table`. Hotkeys (`HOTKEYS` / `hotkeyAction()`): Q/A W/S left player lore and game wins, I/K O/L right, B Live/Break, 1/2 a deck, 3 the player card, 4 the metagame, N Next game; letters only, ignored with a modifier or while typing.
+- **Panel** `/stream-overlay` (`StreamOverlayPage.jsx`, supporter-gated). Lists the owner's tables; the first is an explicit click, never auto-created (a mount effect that created one ran twice under StrictMode and made two). Every edit is an optimistic local change plus a column `update` (`updateTable()`). From the row's broadcasts the panel adopts **only** the four score columns and `rph_event_id`; adopting the echo of a keystroke would clobber the next one. Selected table in localStorage `lorcana_stream_table`. Hotkeys (`HOTKEYS` / `hotkeyAction()`): Q/A W/S left player lore and game wins, I/K O/L right, B Live/Break, 1/2 a deck, 3 the player card, 4 the metagame, N Next game, X both featured cards off; letters only, ignored with a modifier or while typing.
 - **View** `/stream-overlay/view?table=<id>` (`StreamOverlayViewPage.jsx`, unguarded, the one OBS Browser Source). Fixed 1920×1080 frame: opaque side columns with a transparent square cutout for each player cam, a top banner (logos, round, timer), everything else transparent. Winner is derived (`winnerIndex()` at `MAX_GAME_WINS`), shown in a reserved fixed-height slot so the other column never moves. `mode = 'break'` renders the opaque break screen instead: `breakHeadline()` from the score (2 wins "Final", 0-0 "Next match", else "Match in progress"), the round clock while it has time, and the `break_panel`. A player's name steps down a size class as it outgrows its slot (`nameSizeClass()`); the lore number pulses at `WINNING_LORE` (20) as a cue only, never an automatic win. With `lore_track` on, the big lore number leaves the column and a full-height `LoreTrack` strip (WIN, 20 down to START, an accent marker on the player's lore) sits against each column's inner edge; the panels over the gameplay cam move in by its width (`edge`), and the space it frees at the bottom of the column is unused.
 - **Controller** `/stream-overlay/control?table=<id>&key=<controller key>` (unguarded): a tablet at the table, lore and game-win taps per player, the round clock across the top.
 - **Caster notes** `/stream-overlay/notes?table=<id>` (unguarded): the row as text for a second screen: `casterPoints()` per player, archive finishes, decklists, head-to-head, the round's `results` and live score, the full `standings` in columns across the bottom.
@@ -50,9 +51,15 @@ The panel's Event card writes a Play Hub event id to `rph_event_id` (`extractEve
 
 Polling, not push: RPH's Pusher channel was never observed to broadcast (see the `ravensburger-tournament-api` skill).
 
+## Featured cards
+
+A card from a player's decklist shown in that player's side column, between the game-win pips and the lore. Per table, `featured_cards` is `off` (the default), `fade` (the panel's "15 seconds") or `stay`. With it on, each Player card has a picker (`FeaturedPicker`): the matched deck as tiles; a click writes `pN_featured` (the name as written in the decklist) and `pN_featured_at` (the panel's clock); clicking the card that's on stream clears it. `featuredPhase(mode, name, at, now)` says whether a side's card is `shown`, `fading` (its last `FEATURED_FADE_MS`) or `hidden` (after `FEATURED_SECONDS`, 15, in `fade` mode), and both the view and the picker's highlight read it, so the view compares the panel's timestamp to its own clock as the round timer does. The view resolves the name through `matchDeckList()` on that side's decklist, so a card edited out of the list simply stops showing.
+
+The card's slot is `flex-1 min-h-0` in the column's lower block, which is itself `min-h-0`: the card takes the free height, so the lore display sizes it (162×224 beside the big lore number, 276×383 with the lore track). Without `min-h-0` on the lower block, the full-size image's natural height pushed the column and squeezed the cam cutout. The card is not in the slot over the cam, so a deck, player card or metagame can show at the same time; the break screen doesn't show it.
+
 ## The slot over the cam
 
-Decklist (`deck_shown`), player card (`card_shown`) and metagame (`meta_shown`) share one slot; every toggle that shows one hides the others. `swapSidesPatch()` mirrors every per-side column and carries a shown deck with its player. `clearTablePatch()` clears the pairing (players, decklists, player card, snapshots, anything shown) and keeps the event setup (name, logos, theme, timer, link, round, note, metagame text).
+Decklist (`deck_shown`), player card (`card_shown`) and metagame (`meta_shown`) share one slot; every toggle that shows one hides the others. `swapSidesPatch()` mirrors every per-side column and carries a shown deck with its player. `clearTablePatch()` clears the pairing (players, decklists, featured cards, player card, snapshots, anything shown) and keeps the event setup (name, logos, theme, timer, link, round, note, metagame text).
 
 **Metagame** (`metaSlices()`): `meta_text` lines `<name> <decks>` or `<name> <n>%`, grouped into ink pairs by the inks the name starts with; no ink reads as Other, as do pairs under `META_OTHER_MAX_SHARE` (5%) in a room over `META_OTHER_MIN_PLAYERS` (50). `MetaPanel` draws one bar per pair painted half in each ink. Three ways to fill it, all producing `Emerald/Steel 8` lines: carde.io's decklists PDF dropped on the card (`readDecklistsPdf()` in `lib/cardePdf.js`, pdf.js legacy build because the current build needs `Math.sumPrecise` and `Promise.try`), the `scripts/carde-field-export.js` bookmarklet run on the carde.io admin page, or Field Breakdown's "Copy for Stream Overlay".
 
@@ -73,7 +80,8 @@ Every surface renders from a mocked row with no Supabase: see `docs/agents/ui-sc
 - The first version kept state in the panel's localStorage on a Broadcast channel with a heartbeat: one stream per browser profile, and the panel tab as a single point of failure (background tabs throttle timers). The row replaced it.
 - "Send to Stream Overlay" buttons once lived on Tournament Lookup; they hid the flow on a player tool, so the linked event moved into the panel.
 - The metagame chart was a pie, then per-archetype bars, before one bar per ink pair.
-- Deliberately not built, cheap to add: featured-card art over the cam, any layout other than 1920×1080.
+- Deliberately not built, cheap to add: any layout other than 1920×1080.
+- The featured card was first specced over the gameplay area; it moved into the side column so it never covers the game (`docs/superpowers/specs/2026-10-30-stream-overlay-featured-card-design.md`).
 
 ## Decklist Inspector and its overlay
 

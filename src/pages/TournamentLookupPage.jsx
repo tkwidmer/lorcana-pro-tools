@@ -440,7 +440,9 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                         const p2Won = match.winning_player === p2?.player.id
                         const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
                         const isBye = match.match_is_bye
-                        const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
+                        // An assigned loss (no-show, late entry) is one player, COMPLETE, with no winner.
+                        const isLoss = match.match_is_loss
+                        const inProgress = !isBye && !isDraw && !isLoss && (match.status !== 'COMPLETE' || match.winning_player == null)
                         // Games from the columns' point of view (Player 1 – Player 2);
                         // RPH reports them winner-first.
                         const p1Games = p1Won ? match.games_won_by_winner : match.games_won_by_loser
@@ -492,7 +494,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                               {isRivalry && (
                                 <span title="These players have met before" className="mr-1">🔁</span>
                               )}
-                              {isBye ? 'BYE' : isDraw ? 'DRAW' : inProgress ? 'In Progress' : `${p1Games}-${p2Games}`}
+                              {isBye ? 'BYE' : isDraw ? 'DRAW' : isLoss ? 'LOSS' : inProgress ? 'In Progress' : `${p1Games}-${p2Games}`}
                             </td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`inline-flex items-center justify-end gap-1 font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>

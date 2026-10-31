@@ -48,6 +48,8 @@ function matchResultForPlayer(match, playerId) {
   }
   const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
   const oppName = opp?.user_event_status.best_identifier ?? '—'
+  // An assigned loss (no-show, late entry) is one player, COMPLETE, with no winner.
+  if (match.match_is_loss) return { result: 'LOSS', score: '—', opponent: oppName }
   // A round can be reported to the app before every match in it has a
   // winner — an unfinished match has no winning_player yet, which must not
   // be read as a loss.

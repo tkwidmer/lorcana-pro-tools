@@ -371,11 +371,17 @@ function TopBanner({ state, now, winner }) {
 function ResultTicker({ results }) {
   const m = latestResult(results)
   if (!m) return null
+  const line = resultLine(m)
   return (
     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-10 flex items-center gap-4 px-6 bg-(--fill) border-x-4 border-t-4 border-(--accent) rounded-t-lg text-xl uppercase tracking-wide whitespace-nowrap max-w-[1100px]">
       <span className="text-(--accent)">Latest result</span>
       <span className="text-(--on-fill)/70">{m.table != null ? `Table ${m.table}` : results.round}</span>
-      <span className="truncate">{resultLine(m)}</span>
+      <span className="flex items-baseline gap-3 min-w-0">
+        <span className="truncate">{line.first}</span>
+        <span className="normal-case tracking-normal text-lg text-(--on-fill)/60">{line.verb}</span>
+        <span className={`truncate ${m.winner === null ? '' : 'text-(--on-fill)/70'}`}>{line.second}</span>
+        {line.score && <span className="tabular-nums text-(--accent)">{line.score}</span>}
+      </span>
     </div>
   )
 }

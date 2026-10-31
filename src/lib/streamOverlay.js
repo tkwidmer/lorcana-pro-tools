@@ -357,11 +357,12 @@ export function latestResult(results) {
   return reported.reduce((a, b) => (Date.parse(b.reportedAt) > Date.parse(a.reportedAt) ? b : a), reported[0] ?? null)
 }
 
-// One result as the ticker reads it.
+// One result as the ticker reads it: two names around a verb the view
+// styles apart from them, then the game score.
 export function resultLine(m) {
-  if (m.winner === null) return `${m.p1} and ${m.p2} draw`
-  const [w, l] = m.winner === 0 ? [m.p1, m.p2] : [m.p2, m.p1]
-  return `${w} def. ${l}${m.score ? ` ${m.score}` : ''}`
+  if (m.winner === null) return { first: m.p1, verb: 'drew with', second: m.p2, score: null }
+  const [first, second] = m.winner === 0 ? [m.p1, m.p2] : [m.p2, m.p1]
+  return { first, verb: 'beat', second, score: m.score }
 }
 
 // The top cut as the break screen shows it, from the event's matches: the elimination phase's rounds in order, each match's two names,

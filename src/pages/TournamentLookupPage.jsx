@@ -730,13 +730,22 @@ export function TournamentLookupPage() {
       }))
 
       if (!tournamentStructure?.currentRoundId) {
-        // No round has generated standings yet (tournament hasn't started, or
-        // pairings for round 1 aren't posted) — fall back to the registered
+        // No round has generated standings yet — fall back to the registered
         // roster so users can start favoriting/team-tagging players early.
+        // That includes all of round 1: RPH posts its pairings (and their
+        // results as they come in) before it generates any standings, so
+        // once a round has started its matches load and show beside it.
         const regs = await fetchAllRegistrations(eventId)
         setRoster(registrationsToRosterEntries(regs))
         setRosterMode(true)
-        setActiveTab('roster')
+        setActiveTab(tournamentStructure?.activeRoundId ? 'matches' : 'roster')
+        if (tournamentStructure?.activeRoundId) {
+          setMatchesLoading(true)
+          fetchAllRoundMatches(eventId, eventDetails)
+            .then((matches) => setAllMatches(matches))
+            .catch(() => setAllMatches([]))
+            .finally(() => setMatchesLoading(false))
+        }
         return
       }
 
@@ -774,9 +783,15 @@ export function TournamentLookupPage() {
       setStructure(tournamentStructure)
 
       if (!tournamentStructure?.currentRoundId) {
-        // Still pre-tournament — just refresh the roster (new registrations).
+        // No standings yet — refresh the roster (new registrations) and, once
+        // round 1 has started, its matches.
         const regs = await fetchAllRegistrations(currentEventId)
         setRoster(registrationsToRosterEntries(regs))
+        if (tournamentStructure?.activeRoundId) {
+          fetchAllRoundMatches(currentEventId, eventDetails)
+            .then((matches) => setAllMatches(matches))
+            .catch(() => {})
+        }
         setLastLiveUpdateAt(Date.now())
         return
       }
@@ -946,7 +961,9 @@ export function TournamentLookupPage() {
       {structure && (
         <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
           {!structure.currentRoundId && (
-            <span className="text-amber-700 font-medium">Not started yet</span>
+            <span className="text-amber-700 font-medium">
+              {structure.activeRoundId ? `Round ${structure.activeRoundNumber} in progress · standings once it finishes` : 'Not started yet'}
+            </span>
           )}
           {structure.currentRoundId && (structure.isElimination ? (
             <span>
@@ -1052,25 +1069,25 @@ export function TournamentLookupPage() {
               Roster
             </Tab>
           ) : (
-            <>
-              <Tab active={activeTab === 'standings'} onClick={() => setActiveTab('standings')}>
-                Standings
-              </Tab>
-              <Tab active={activeTab === 'matches'} onClick={() => setActiveTab('matches')}>
-                Matches
-                {matchesLoading && (
-                  <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60" />
-                )}
-                {!matchesLoading && allMatches && (
-                  <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({allMatches.length})</span>
-                )}
-              </Tab>
-              {structure?.eliminationPhaseName && allMatches?.some((m) => m.phase_name === structure.eliminationPhaseName) && (
-                <Tab active={activeTab === 'bracket'} onClick={() => setActiveTab('bracket')}>
-                  Bracket
-                </Tab>
+            <Tab active={activeTab === 'standings'} onClick={() => setActiveTab('standings')}>
+              Standings
+            </Tab>
+          )}
+          {(!rosterMode || structure?.activeRoundId) && (
+            <Tab active={activeTab === 'matches'} onClick={() => setActiveTab('matches')}>
+              Matches
+              {matchesLoading && (
+                <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60" />
               )}
-            </>
+              {!matchesLoading && allMatches && (
+                <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({allMatches.length})</span>
+              )}
+            </Tab>
+          )}
+          {structure?.eliminationPhaseName && allMatches?.some((m) => m.phase_name === structure.eliminationPhaseName) && (
+            <Tab active={activeTab === 'bracket'} onClick={() => setActiveTab('bracket')}>
+              Bracket
+            </Tab>
           )}
           <Tab active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')}>
             ★ Favorites
@@ -1195,7 +1212,7 @@ export function TournamentLookupPage() {
       )}
 
       {/* Matches tab */}
-      {allStandings && !player && activeTab === 'matches' && (
+      {(allStandings || allMatches || matchesLoading) && !player && activeTab === 'matches' && (
         <MatchesTab
           allMatches={allMatches}
           matchesLoading={matchesLoading}
@@ -1232,8 +1249,9 @@ export function TournamentLookupPage() {
       {rosterMode && roster && !player && activeTab === 'roster' && (
         <div className="space-y-3">
           <div className="text-sm text-gray-700 border border-gray-200 bg-gray-50 rounded-lg p-4">
-            No active round yet — standings aren't published for this event. Here's the registered
-            roster so you can favorite or team-tag players ahead of round 1.
+            {structure?.activeRoundId
+              ? `Round ${structure.activeRoundNumber} is under way and RPH hasn't published standings yet. Its pairings and results are on the Matches tab; here's the registered roster so you can favorite or team-tag players.`
+              : "No active round yet — standings aren't published for this event. Here's the registered roster so you can favorite or team-tag players ahead of round 1."}
           </div>
           <Input
             type="text"

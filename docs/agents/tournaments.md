@@ -12,6 +12,8 @@ Read before touching Tournament Lookup, Store Lookup, Field Breakdown, the `/res
 - `analyzeId` → ID safety analysis: compares player's points buffer vs cut line, counts players who could pass them if everyone wins
 - `analyzeAdvancement` → status (secured/possible/eliminated) toward the next phase cutoff
 
+Until a round has generated standings (`currentRoundId` is null) the page shows the registered roster instead of standings. That covers all of round 1: RPH posts a round's pairings and results before it generates any standings, so once a round has started (`activeRoundId`) the page also loads its matches and shows the Matches tab beside the Roster, landing on Matches. Gating matches on standings once hid every round-1 pairing of a 778-player DLC.
+
 ## ID analysis
 
 `analyzeId()` in `tournamentApi.js`: after an ID, a player gains 1 point. It counts how many players below the cut could leapfrog them if those players all win (+3 pts), and classifies safe (≥3 point buffer), borderline (1–2) or danger (0 or outside the cut).

@@ -400,6 +400,8 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
             if (searchActive && filteredMatches.length === 0) return null
             const phaseName = roundMatches[0]?.phase_name
             const expanded = isRoundExpanded(roundNum)
+            // RPH marks a match COMPLETE once reported; byes and assigned losses are COMPLETE too.
+            const unreported = roundMatches.filter((m) => m.status !== 'COMPLETE').length
             const displayMatches = [...(searchActive ? filteredMatches : roundMatches)].sort(
               (a, b) => matchPriority(a, favorites, team) - matchPriority(b, favorites, team)
             )
@@ -412,7 +414,10 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                   <span className="text-gray-400 text-xs w-3">{expanded ? '▾' : '▸'}</span>
                   <span className="text-sm font-semibold text-gray-800">Round {roundNum}</span>
                   {phaseName && <span className="text-xs text-gray-400">{phaseName}</span>}
-                  <span className="ml-auto text-xs text-gray-400">
+                  {unreported > 0 && (
+                    <span className="ml-auto text-xs font-medium text-amber-700">{unreported} left to report</span>
+                  )}
+                  <span className={`${unreported > 0 ? '' : 'ml-auto '}text-xs text-gray-400`}>
                     {searchActive && filteredMatches.length !== roundMatches.length
                       ? `${filteredMatches.length} / ${roundMatches.length} matches`
                       : `${roundMatches.length} matches`}

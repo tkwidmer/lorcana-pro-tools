@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input } from '../components/ui/Field'
 import { Tabs, Tab } from '../components/ui/Tabs'
+import { InkIcons } from '../components/InkIcons'
 import { ArchiveFootnote, ArchiveLoading, ArchiveError } from '../components/ResultsArchive'
 
 function eventSummaryLine(event) {
@@ -57,6 +58,8 @@ function EventView({ eventId }) {
 
   const { event, bracket } = data
   const hasBracket = bracket.length > 0
+  // Inks are unknown (null) until a source fills them; hide the column until one does.
+  const hasInks = data.standings.some((s) => s.inks)
 
   return (
     <div className="w-full px-6 py-8">
@@ -98,6 +101,7 @@ function EventView({ eventId }) {
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
                   <th className="py-2 pr-4 text-right">Rank</th>
                   <th className="py-2 pr-4">Player</th>
+                  {hasInks && <th className="py-2 pr-4">Inks</th>}
                   <th className="py-2 pr-4">Record</th>
                   <th className="py-2 pr-4 text-right">Points</th>
                   <th className="py-2" />
@@ -112,6 +116,11 @@ function EventView({ eventId }) {
                         {s.playerName}
                       </Link>
                     </td>
+                    {hasInks && (
+                      <td className="py-1.5 pr-4">
+                        <InkIcons colors={s.inks ?? []} size={16} emptyFallback={<span className="text-gray-400">—</span>} />
+                      </td>
+                    )}
                     <td className="py-1.5 pr-4 tabular-nums">{s.record ?? '—'}</td>
                     <td className="py-1.5 pr-4 text-right tabular-nums">{s.matchPoints ?? '—'}</td>
                     <td className="py-1.5">{s.madeTopCut && <Badge>Top cut</Badge>}</td>

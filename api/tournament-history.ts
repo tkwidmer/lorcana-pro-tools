@@ -30,7 +30,9 @@ import {
   recomputeRatings,
   getTopRatings,
   getPlayerRating,
+  setStandingInks,
 } from './_lib/tournamentHistorySupabase.js'
+import { matchDeckInks } from './_lib/deckInks.js'
 import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournamentDiscovery.js'
 import { isMajor, isSideEvent } from './_lib/sideEvents.js'
 
@@ -465,6 +467,27 @@ async function handleRecomputeRatings(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+// Admin upload of an inkdecks.com decklist export for one archived event:
+// each deck's author is matched to a standing by exact name (deckInks.ts) and
+// that standing's ink pair is set. Returns what was set and what was not, so
+// the admin can see which authors need a second look.
+async function handleInkPairs(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireAdmin(req, res))) return
+  const { eventId, decks } = req.body ?? {}
+  if (typeof eventId !== 'string' || !ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
+  if (!Array.isArray(decks) || decks.length === 0) return res.status(400).json({ error: 'decks must be a non-empty array' })
+  try {
+    const row = await getEventByRphId(eventId)
+    if (!row) return res.status(404).json({ error: 'Event not found' })
+    const match = matchDeckInks(await getEventStandings(row.id), decks)
+    await setStandingInks(row.id, match.updates)
+    return res.status(200).json(match)
+  } catch (err) {
+    console.error('tournament-history ink-pairs failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to save ink pairs' })
+  }
+}
+
 async function handleRecentImports(req: VercelRequest, res: VercelResponse) {
   const userId = await requireAdmin(req, res)
   if (!userId) return
@@ -554,11 +577,12 @@ async function handleSuggestedImports(req: VercelRequest, res: VercelResponse) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const endpoint = str(req.query.endpoint)
 
-  if (endpoint === 'import' || endpoint === 'recompute-ratings') {
+  if (endpoint === 'import' || endpoint === 'recompute-ratings' || endpoint === 'ink-pairs') {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')
       return res.status(405).json({ error: 'Method not allowed' })
     }
+    if (endpoint === 'ink-pairs') return handleInkPairs(req, res)
     return endpoint === 'import' ? handleImport(req, res) : handleRecomputeRatings(req, res)
   }
 

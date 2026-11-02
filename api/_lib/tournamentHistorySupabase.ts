@@ -85,6 +85,28 @@ export async function upsertStandings(eventId: string, rows: StandingRow[]): Pro
   return rows.length
 }
 
+// Sets the ink pair on the given standings of one event (the admin ink-pair
+// upload). An upsert on the existing (event_id, rph_player_id) rows writes
+// every pair in one request; player_name is sent only because it is NOT NULL.
+export async function setStandingInks(
+  eventId: string,
+  rows: Array<{ playerId: string; playerName: string; inks: string[] }>
+): Promise<void> {
+  if (rows.length === 0) return
+  const supabase = getSupabaseServiceClient()
+  const { error } = await supabase.from('tournament_history_standings').upsert(
+    rows.map((r) => ({
+      event_id: eventId,
+      rph_player_id: r.playerId,
+      player_name: r.playerName,
+      inks: r.inks,
+      updated_at: new Date().toISOString(),
+    })),
+    { onConflict: 'event_id,rph_player_id' }
+  )
+  if (error) throw error
+}
+
 export interface MatchRow {
   rphMatchId: string
   roundNumber: number

@@ -6,6 +6,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { StatCard } from '../components/StatCard'
+import { InkIcons } from '../components/InkIcons'
 import { ArchiveFootnote, ArchiveLoading, ArchiveError } from '../components/ResultsArchive'
 
 const RESULT_CLASS = { win: 'text-green-700', loss: 'text-red-700', draw: 'text-gray-500', bye: 'text-gray-400' }
@@ -127,7 +128,9 @@ function PlayerView({ playerId }) {
     )
   }
 
-  const { record, bestFinish, rivals } = summary
+  const { record, bestFinish, rivals, inkPairs } = summary
+  // Inks are unknown (null) until a source fills them; hide the column until one does.
+  const hasInks = inkPairs.length > 0
   return (
     <div className="w-full px-6 py-8">
       <PageHeader
@@ -157,6 +160,30 @@ function PlayerView({ playerId }) {
         <StatCard size="lg" label="Match record" value={formatRecord(record)} />
       </div>
 
+      {hasInks && (
+        <Card title="Decks played" className="p-4 mb-6">
+          <table className="w-full text-sm">
+            <tbody>
+              {inkPairs.map((p) => (
+                <tr key={p.inks.join('/')} className="border-b border-gray-100">
+                  <td className="py-1.5 pr-4">
+                    <span className="inline-flex items-center gap-2">
+                      <InkIcons colors={p.inks} size={18} />
+                      <span className="font-medium text-gray-900 capitalize">{p.inks.join(' / ')}</span>
+                    </span>
+                  </td>
+                  <td className="py-1.5 pr-4 text-gray-500">
+                    {p.events} {p.events === 1 ? 'event' : 'events'}
+                    {p.topCuts > 0 && ` · ${p.topCuts} top ${p.topCuts === 1 ? 'cut' : 'cuts'}`}
+                  </td>
+                  <td className="py-1.5 tabular-nums">{formatRecord(p)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
       <Card title="Events" className="p-4 mb-6">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -164,6 +191,7 @@ function PlayerView({ playerId }) {
               <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
                 <th className="py-2 pr-4">Date</th>
                 <th className="py-2 pr-4">Event</th>
+                {hasInks && <th className="py-2 pr-4">Inks</th>}
                 <th className="py-2 pr-4">Finish</th>
                 <th className="py-2 pr-4">Record</th>
                 <th className="py-2" />
@@ -187,6 +215,11 @@ function PlayerView({ playerId }) {
                         {e.eventName}
                       </Link>
                     </td>
+                    {hasInks && (
+                      <td className="py-2 pr-4">
+                        <InkIcons colors={e.inks ?? []} size={16} emptyFallback={<span className="text-gray-400">—</span>} />
+                      </td>
+                    )}
                     <td className="py-2 pr-4 tabular-nums">
                       {e.rank != null ? `#${e.rank}` : '—'}
                       {e.startingPlayerCount ? ` of ${e.startingPlayerCount}` : ''}
@@ -196,7 +229,7 @@ function PlayerView({ playerId }) {
                   </tr>
                   {open === e.eventId && (
                     <tr>
-                      <td colSpan={5} className="bg-gray-50 px-3">
+                      <td colSpan={hasInks ? 6 : 5} className="bg-gray-50 px-3">
                         <EventRounds eventId={e.eventId} playerId={playerId} />
                       </td>
                     </tr>

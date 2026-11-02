@@ -94,6 +94,17 @@ export async function importTournamentEvent(eventUrl) {
   })
 }
 
+// Admin: set an archived event's ink pairs from an inkdecks.com decklist
+// export (the parsed JSON array). Resolves to { updates, unmatched,
+// ambiguous, invalid }.
+export async function uploadEventInkPairs(eventId, decks) {
+  return apiFetch('?endpoint=ink-pairs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventId, decks }),
+  })
+}
+
 // Matches the server's generated `player_pair` column format (LEAST:GREATEST)
 // so client-computed pair keys always agree with the DB's — see
 // supabase/migrations/008_tournament_history.sql.

@@ -51,11 +51,23 @@ const MAX_RIVALS = 10
 export function playerSummary({ events, matches, playerId }) {
   const record = { wins: 0, losses: 0, draws: 0 }
   const byOpponent = new Map()
+  // The ink pair each event was played with, and per pair its events, cuts and record.
+  const inksByEvent = new Map(events.filter((e) => e.inks).map((e) => [e.eventId, e.inks]))
+  const byPair = new Map()
+  for (const e of events) {
+    if (!e.inks) continue
+    const p = byPair.get(e.inks.join('/')) ?? { inks: e.inks, events: 0, topCuts: 0, wins: 0, losses: 0, draws: 0 }
+    p.events += 1
+    if (e.madeTopCut) p.topCuts += 1
+    byPair.set(e.inks.join('/'), p)
+  }
   for (const match of matches) {
     const { result, opponent } = matchOutcome(match, playerId)
     if (result === 'bye') continue
     const key = result === 'win' ? 'wins' : result === 'loss' ? 'losses' : 'draws'
     record[key] += 1
+    const inks = inksByEvent.get(match.eventId)
+    if (inks) byPair.get(inks.join('/'))[key] += 1
     const r = byOpponent.get(opponent.id) ?? { playerId: opponent.id, playerName: opponent.name, meetings: 0, wins: 0, losses: 0, draws: 0 }
     r.meetings += 1
     r[key] += 1
@@ -80,6 +92,7 @@ export function playerSummary({ events, matches, playerId }) {
     bestFinish,
     record,
     rivals,
+    inkPairs: [...byPair.values()].sort((a, b) => b.events - a.events || b.wins - a.wins),
   }
 }
 

@@ -396,6 +396,7 @@ async function handlePlayer(req: VercelRequest, res: VercelResponse) {
       matchPoints: r.match_points,
       record: r.record,
       madeTopCut: Boolean(r.made_top_cut),
+      inks: r.inks ?? null,
       topCutSize: r.event?.top_cut_size ?? null,
       startingPlayerCount: r.event?.starting_player_count ?? null,
     }))

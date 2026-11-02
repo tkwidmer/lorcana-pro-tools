@@ -84,8 +84,21 @@ describe('playerSummary', () => {
   })
   it('is safe on empty inputs', () => {
     expect(playerSummary({ events: [], matches: [], playerId: 'A' })).toEqual({
-      eventsPlayed: 0, topCuts: 0, bestFinish: null, record: { wins: 0, losses: 0, draws: 0 }, rivals: [],
+      eventsPlayed: 0, topCuts: 0, bestFinish: null, record: { wins: 0, losses: 0, draws: 0 }, rivals: [], inkPairs: [],
     })
+  })
+  it('rolls events with a known ink pair up by pair, with cuts and the record from those events', () => {
+    const inked = [
+      { ...events[0], inks: ['amber', 'emerald'] },
+      { ...events[1], inks: ['emerald', 'steel'] },
+      { ...events[2], inks: ['amber', 'emerald'] },
+      { eventId: 'e4', rank: 3, madeTopCut: false, inks: null },
+    ]
+    const { inkPairs } = playerSummary({ events: inked, matches, playerId: 'A' })
+    expect(inkPairs).toEqual([
+      { inks: ['amber', 'emerald'], events: 2, topCuts: 1, wins: 1, losses: 1, draws: 0 },
+      { inks: ['emerald', 'steel'], events: 1, topCuts: 1, wins: 1, losses: 0, draws: 1 },
+    ])
   })
 })
 

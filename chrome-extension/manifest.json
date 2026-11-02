@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Lorcana Game Scraper",
-  "version": "1.3.5",
-  "description": "Automatically capture live Lorcana Duels gameplay for analysis",
+  "name": "InkbornForge",
+  "version": "1.4.0",
+  "description": "Capture live duels.ink games for InkbornForge, and pull inkDecks pages to JSON in one click.",
   "permissions": [
     "tabs",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
     "https://duels.ink/*",
+    "https://inkdecks.com/*",
     "https://www.inkbornforge.com/*",
     "http://localhost:5173/*",
     "http://localhost:4173/*"
@@ -42,7 +44,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Lorcana Game Scraper"
+    "default_title": "InkbornForge"
   },
   "icons": {
     "16": "icons/icon-16.png",

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { resolveInkName } from '../lib/inkColors'
 import { saveGame } from '../lib/scoutedGames'
 import { GameView } from '../components/GameView'
@@ -214,35 +214,14 @@ function makeBookmarkletCode(uuid, origin) {
 }
 
 function ExtensionPanel({ active }) {
-  const downloadUrl = `${window.location.origin}/lorcana-extension.zip`
-
   return (
-    <details className="mt-2" open>
-      <summary className="text-xs font-medium text-green-700 cursor-pointer select-none flex items-center gap-2">
-        Chrome Extension {active && <span className="inline-block bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full">● Connected</span>}
-      </summary>
-      <div className="mt-2 space-y-3">
-        <p className="text-xs text-gray-600">
-          Install the Lorcana Game Scraper extension for automatic game capture. No setup per game — just visit a spectate link and the data loads automatically.
-        </p>
-
-        <div className="bg-green-50 border border-green-200 rounded p-3 space-y-2">
-          <div className="text-xs font-semibold text-green-900">Installation:</div>
-          <ol className="text-xs text-green-800 space-y-1 ml-4 list-decimal">
-            <li><a href={downloadUrl} download className="text-green-700 hover:text-green-900 underline font-medium">Download the extension</a></li>
-            <li>Extract the zip file</li>
-            <li>Open <code className="bg-white px-1 rounded text-xs">chrome://extensions</code></li>
-            <li>Turn on <strong>Developer mode</strong> (top-right toggle)</li>
-            <li>Click <strong>Load unpacked</strong></li>
-            <li>Select the extracted <code className="bg-white px-1 rounded text-xs">chrome-extension</code> folder</li>
-          </ol>
-        </div>
-
-        <p className="text-xs text-gray-500 italic">
-          Once installed, visiting any duels.ink spectate page automatically captures the game.
-        </p>
-      </div>
-    </details>
+    <p className="mt-2 text-xs text-gray-600 flex items-center gap-2">
+      <span>
+        The <Link to="/extension" className="underline font-medium">InkbornForge Chrome extension</Link> captures
+        any duels.ink spectate page automatically.
+      </span>
+      {active && <span className="inline-block bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full">● Connected</span>}
+    </p>
   )
 }
 

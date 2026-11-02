@@ -50,7 +50,9 @@ The Analytics section of that name (`components/analytics/TurningPoints.jsx`) an
 
 ## Chrome Extension
 
-`/chrome-extension/` is a separate artifact built with Manifest V3. `npm run build` calls `build-extension.js` which packages it into `/public/lorcana-extension.zip`. It does not share source with the main React app.
+`/chrome-extension/` is a separate artifact built with Manifest V3. `npm run build` calls `build-extension.js` which packages it into `/public/lorcana-extension.zip`. It does not share source with the main React app. Users download it from `/extension` (`ExtensionPage`, which reads the version from the manifest). Bump `manifest.json`'s `version` and run `node build-extension.js` to ship a change; the zip in `public/` is committed.
+
+The popup (`popup.html`) also carries **inkDecks pull**: `inkdecks-parsers.js` (DOM parsers and the URL router, exposed as `globalThis.InkdecksParsers`) and `inkdecks-popup.js` export inkdecks.com pages to JSON. Both load as classic scripts into one global scope, so a top-level name declared in both breaks the popup silently; reach the parsers through `InkdecksParsers`.
 
 Data flow when spectating a duels.ink game:
 

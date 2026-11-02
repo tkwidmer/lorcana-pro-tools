@@ -25,6 +25,9 @@ Before touching:
 - `src/pages/GameScraperPage.jsx`'s message-listening side (the consumer of
   what `bridge.js` posts)
 - `chrome-extension/README.md` (repo-specific setup/load-unpacked notes)
+- `chrome-extension/popup.html`, `inkdecks-parsers.js`, `inkdecks-popup.js` —
+  the popup's inkDecks pull (separate from the game-capture chain below; both
+  scripts share one global scope, so never redeclare a top-level name)
 
 ## Official MV3 reference (fetch when the detail isn't repo-specific)
 

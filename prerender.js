@@ -21,6 +21,7 @@ const PORT = 4174
 const ROUTES = [
   '/',
   '/proxy',
+  '/extension',
   '/coconut-deck-builder',
   '/limited-guide',
   '/rules',

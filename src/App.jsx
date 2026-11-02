@@ -16,6 +16,7 @@ import { RulesDocumentPage } from './pages/RulesDocumentPage'
 import { RulesChangesPage } from './pages/RulesChangesPage'
 import { DeckInsightsPage } from './pages/DrawOddsPage'
 import { GameScraperPage } from './pages/GameScraperPage'
+import { ExtensionPage } from './pages/ExtensionPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { ScoutedGamePage } from './pages/ScoutedGamePage'
 import { PlayerProfilePage } from './pages/PlayerProfilePage'
@@ -77,6 +78,7 @@ function RoutedContent() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
+        <Route path="/extension" element={<ExtensionPage />} />
         <Route path="/coconut-deck-builder" element={<CoconutDeckBuilderPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />
         <Route path="/stock-decks" element={<StockDecksPage />} />

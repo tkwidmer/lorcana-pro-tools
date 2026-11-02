@@ -14,6 +14,7 @@ const TITLES = {
   '/login': 'Sign in',
   '/sitemap': 'Sitemap',
   '/proxy': 'Proxy Generator',
+  '/extension': 'Chrome Extension',
   '/coconut-deck-builder': 'Coconut Deck Builder',
   '/limited-guide': 'Limited Guide',
   '/rules': 'Rules',
@@ -77,6 +78,7 @@ const HOME_DESCRIPTION =
 // Other routes fall back to HOME_DESCRIPTION.
 const DESCRIPTIONS = {
   '/sitemap': 'Every page on InkbornForge, in one place.',
+  '/extension': 'The InkbornForge Chrome extension: capture live duels.ink games and export inkDecks pages to JSON.',
   '/proxy': 'Search Disney Lorcana cards and build printable black & white proxy sheets, 9 cards per page.',
   '/coconut-deck-builder': 'Build a singleton [Format Coconut] deck around one of the 18 beta Coconut cards, with ink and copy-count rules enforced automatically.',
   '/limited-guide': 'A Disney Lorcana limited format reference covering the BREAD framework, mana curves, and uninkable card counts.',

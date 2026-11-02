@@ -105,6 +105,9 @@ function MobileMenu({ onNavigate }) {
       <Link to="/blog" onClick={onNavigate} className="block px-6 py-3 font-display uppercase tracking-wider text-sm">
         Blog
       </Link>
+      <Link to="/extension" onClick={onNavigate} className="block px-6 py-3 font-display uppercase tracking-wider text-sm">
+        Extension
+      </Link>
     </div>
   )
 }
@@ -233,15 +236,18 @@ export function Nav() {
               </button>
             )
           })}
-          <Link
-            to="/blog"
-            onClick={closeMenu}
-            className={`flex items-center px-3 font-display text-[13px] uppercase tracking-wider border-b-2 transition-colors ${
-              pathname.startsWith('/blog') ? 'border-forge text-on-ink' : 'border-transparent text-on-ink/65 hover:text-on-ink'
-            }`}
-          >
-            Blog
-          </Link>
+          {[['/blog', 'Blog'], ['/extension', 'Extension']].map(([to, label]) => (
+            <Link
+              key={to}
+              to={to}
+              onClick={closeMenu}
+              className={`flex items-center px-3 font-display text-[13px] uppercase tracking-wider border-b-2 transition-colors ${
+                pathname.startsWith(to) ? 'border-forge text-on-ink' : 'border-transparent text-on-ink/65 hover:text-on-ink'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
 
         <div className="ml-auto flex items-center gap-4">

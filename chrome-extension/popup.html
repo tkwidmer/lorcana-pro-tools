@@ -6,22 +6,38 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Lorcana Game Scraper</h1>
-    <p class="status">✓ Extension active</p>
-    <div class="info">
-      <h2>How to use:</h2>
-      <ol>
-        <li>Open a duels.ink spectate link</li>
-        <li>The extension will automatically capture game data</li>
-        <li>Return to InkbornForge to view the game</li>
-      </ol>
+  <header>
+    <img src="icons/icon-48.png" alt="">
+    <h1>InkbornForge</h1>
+  </header>
+
+  <section>
+    <h2>Game Scraper</h2>
+    <p>Open a duels.ink spectate link and the game is captured automatically.
+      <a href="https://www.inkbornforge.com/game-scraper" target="_blank">Open Game Scraper →</a></p>
+  </section>
+
+  <section>
+    <h2>inkDecks pull</h2>
+    <label for="u">Page URL</label>
+    <input id="u" placeholder="https://inkdecks.com/lorcana-tournaments/..." autocomplete="off">
+
+    <div class="row">
+      <button id="fetch" class="primary">Fetch all pages</button>
+      <button id="dom">Parse this page</button>
     </div>
-    <div class="links">
-      <a href="https://www.inkbornforge.com/game-scraper" target="_blank">
-        Open Game Scraper →
-      </a>
-    </div>
-  </div>
+
+    <div id="st">Reading the current tab…</div>
+    <div id="acts"><button id="dl">Download JSON</button><button id="cp">Copy</button></div>
+
+    <p class="hint" id="hint" hidden>
+      <strong>Fetch all pages</strong> requests each page itself (covers a full tournament list).
+      <strong>Parse this page</strong> uses no network: it reads the page you already have open,
+      so it works even if fetching is refused, but only covers that one page.
+    </p>
+  </section>
+
+  <script src="inkdecks-parsers.js"></script>
+  <script src="inkdecks-popup.js"></script>
 </body>
 </html>

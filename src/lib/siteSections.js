@@ -9,6 +9,12 @@ export const SECTIONS = [
     navLabel: 'Resources',
     tools: [
       {
+        path: '/extension',
+        name: 'Chrome Extension',
+        icon: 'puzzle',
+        description: 'The InkbornForge browser extension: captures live duels.ink games for the Game Scraper, and exports any inkDecks page to JSON in one click.',
+      },
+      {
         path: '/proxy',
         name: 'Proxy Generator',
         icon: 'printer',

@@ -86,7 +86,7 @@ export function HomePage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         <PromoCard
           href={METAFY_URL}
           target="_blank"
@@ -105,6 +105,13 @@ export function HomePage() {
           title="Join us on Substack"
           body="Strategy articles, tool updates, and Lorcana news — straight to your inbox."
           cta="Subscribe"
+        />
+        <PromoCard
+          to="/extension"
+          icon="/inkborn_forge_mark_64.png"
+          title="Get the InkbornForge Chrome extension"
+          body="Capture live duels.ink games and export inkDecks pages to JSON in one click."
+          cta="Download"
         />
       </div>
 

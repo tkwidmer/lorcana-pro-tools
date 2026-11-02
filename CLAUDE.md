@@ -49,6 +49,7 @@ Pages in `src/pages/` are self-contained; shared logic lives in `src/lib/` as pu
 | `/blog`, `/blog/:slug` | `BlogIndexPage`, `BlogPostPage` | Posts from `content/blog/` |
 | `/login`, `/auth/callback` | `LoginPage`, `AuthCallbackPage` | Google OAuth via Supabase |
 | `/proxy` | `ProxyGeneratorPage` | B&W proxy print sheets, plus Coconut card faces |
+| `/extension` | `ExtensionPage` | Download and install the InkbornForge Chrome extension (Game Scraper capture + inkDecks pull) |
 | `/coconut-deck-builder` | `CoconutDeckBuilderPage` | [Format Coconut] singleton deck builder |
 | `/limited-guide` | `LimitedGuidePage` | Static limited-format reference |
 | `/rules`, `/rules/:doc`, `/rules/:doc/changes` | `RulesPage`, `RulesDocumentPage`, `RulesChangesPage` | Versioned official documents with diffs |
@@ -82,7 +83,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 
 ### Components (`src/components/`)
 
-`Nav` (ink-black bar, one dropdown per catalog section, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` (the gate: tool name, description, a preview screenshot and a Metafy call to action) + `MetafyAccessSteps` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `analytics/TurningPoints` (Analytics) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*`, `deckVersions/*` (`DeckVersionTimeline`, `DeckVersionCompare`) and `analytics/*` sub-views.
+`Nav` (ink-black bar, one dropdown per catalog section, Blog and Extension links, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` (the gate: tool name, description, a preview screenshot and a Metafy call to action) + `MetafyAccessSteps` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `analytics/TurningPoints` (Analytics) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*`, `deckVersions/*` (`DeckVersionTimeline`, `DeckVersionCompare`) and `analytics/*` sub-views.
 
 ### Hooks (`src/hooks/`)
 

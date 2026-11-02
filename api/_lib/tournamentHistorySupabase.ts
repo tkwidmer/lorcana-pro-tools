@@ -332,7 +332,7 @@ export function getEventStandings(eventDbId: string) {
   return fetchAllRanges<any>(() =>
     supabase
       .from('tournament_history_standings')
-      .select('rph_player_id, player_name, rank, match_points, record, made_top_cut')
+      .select('rph_player_id, player_name, rank, match_points, record, made_top_cut, inks')
       .eq('event_id', eventDbId)
       .order('rank', { ascending: true, nullsFirst: false })
       .order('id') // stable order across .range() pages

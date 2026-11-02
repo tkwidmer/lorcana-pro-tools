@@ -1,4 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
+import { dangerouslyDeleteByTag } from '@vercel/functions'
 import { requireAdmin, requireSession } from './_lib/requireAdmin.js'
 import {
   fetchEventDetailsServer,
@@ -54,6 +55,8 @@ const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 const PUBLIC_CACHE = 'public, s-maxage=300, stale-while-revalidate=3600'
 const SEARCH_CACHE = 'public, s-maxage=60, stale-while-revalidate=300'
 const SEARCH_MIN_CHARS = 3
+// Tags the edge-cached `event` read so an admin write can purge it.
+const eventCacheTag = (eventId: string) => `event-${eventId}`
 
 function str(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
@@ -341,6 +344,7 @@ async function handleEvent(req: VercelRequest, res: VercelResponse) {
       phase ? getEventMatches(row.id, phase) : Promise.resolve([]),
     ])
     res.setHeader('Cache-Control', PUBLIC_CACHE)
+    res.setHeader('Vercel-Cache-Tag', eventCacheTag(eventId))
     return res.status(200).json({
       event: eventShape(row),
       standings: standings.map((s: any) => ({
@@ -481,6 +485,8 @@ async function handleInkPairs(req: VercelRequest, res: VercelResponse) {
     if (!row) return res.status(404).json({ error: 'Event not found' })
     const match = matchDeckInks(await getEventStandings(row.id), decks)
     await setStandingInks(row.id, match.updates)
+    // Delete, not invalidate: invalidate would serve the stale copy once more.
+    await dangerouslyDeleteByTag(eventCacheTag(eventId))
     return res.status(200).json(match)
   } catch (err) {
     console.error('tournament-history ink-pairs failed:', err instanceof Error ? err.message : err)

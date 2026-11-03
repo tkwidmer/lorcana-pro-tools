@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseColors, parseGamelog } from '../parseGamelog'
+import realGame from '../../../fixtures/gamelogs/019e5363-fdf8-7089-9e2e-87aa4b543bd1.json'
 
 describe('parseColors', () => {
   it('splits slash-separated color strings', () => {
@@ -209,5 +210,33 @@ describe('parseGamelog - inferred decklist', () => {
     const mickey = opp.find(c => c.cardId === '2-1')
     expect(elsa?.count).toBe(2)
     expect(mickey?.count).toBe(1)
+  })
+
+  it('counts opening-hand copies on top of drawn copies', () => {
+    const logs = [
+      entry('INITIAL_HAND', 2, 0, { initialHandCards: [{ id: '1-1', name: 'Elsa' }, { id: '2-1', name: 'Mickey' }] }),
+      entry('MULLIGAN', 2, 0, { mulliganedCards: [{ id: '2-1', name: 'Mickey' }], drawnCards: [{ id: '1-1', name: 'Elsa' }] }),
+      entry('CARD_DRAWN', 2, 1, { cardName: 'Elsa', cardId: '1-1', instanceId: 'inst-a' }),
+    ]
+    const opp = parseGamelog('x', logs, { yourPlayerNum: 1 }).inferredOppDecklist
+    expect(opp).toEqual([{ cardId: '1-1', count: 3 }, { cardId: '2-1', count: 1 }])
+  })
+
+  // duels.ink serves each player a perspective-filtered log: entries visible only to the
+  // opponent (their CARD_DRAWN, INITIAL_HAND, MULLIGAN...) arrive with empty data.
+  it('infers from revealed cards when the opponent draws are blanked', () => {
+    const filtered = realGame.map(e => (e.visibility === 2 ? { ...e, data: {} } : e))
+    expect(filtered.some(e => e.player === 2 && e.type === 'CARD_DRAWN' && e.data.cardId)).toBe(false)
+
+    const inferred = parseGamelog('x', filtered, { yourPlayerNum: 1 }).inferredOppDecklist
+    const full = Object.fromEntries(parseGamelog('x', realGame, { yourPlayerNum: 1 }).inferredOppDecklist.map(c => [c.cardId, c.count]))
+    const byId = Object.fromEntries(inferred.map(c => [c.cardId, c.count]))
+
+    expect(Object.keys(byId).sort()).toEqual(Object.keys(full).sort())
+    for (const [id, n] of Object.entries(byId)) expect(n).toBeLessThanOrEqual(full[id])
+    // Pawpsicle: 5 plays (Tamatoa recurs it) but no instanceId on any of them → 1, not 5.
+    expect(byId['2-169']).toBe(1)
+    // Monstro: two distinct instanceIds attack → 2 copies.
+    expect(byId['8-64']).toBe(2)
   })
 })

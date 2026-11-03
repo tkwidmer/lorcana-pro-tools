@@ -69,8 +69,13 @@ export function parseGamelog(id, logs, meta = {}) {
   // how this decides recover vs. removal.
   let pendingReturnSource = null
 
-  // Track unique instanceIds from CARD_DRAWN per player for opponent decklist inference
-  const instanceCards = { 1: new Map(), 2: new Map() }
+  // Opponent decklist inference. duels.ink serves a perspective-filtered log: the opponent's
+  // CARD_DRAWN and INITIAL_HAND/MULLIGAN arrive with empty data, but their public events
+  // (played, inked, quest, attack, destroyed...) keep cardId, and some keep instanceId.
+  // Every event's cardId/instanceId names a card owned by that event's `player`.
+  const drawnInstances = { 1: new Map(), 2: new Map() } // instanceId → cardId, CARD_DRAWN only
+  const seenInstances = { 1: new Map(), 2: new Map() } // instanceId → cardId, any event
+  const revealedCards = { 1: new Set(), 2: new Set() } // cardId seen in any event
 
   // Per-player-turn tempo aggregation for leak/mistake detection.
   // NOTE: turnNumber is a *round* shared by both players (the first player gets
@@ -134,8 +139,12 @@ export function parseGamelog(id, logs, meta = {}) {
       pData.mulliganDrawn = (d.drawnCards ?? []).filter(c => c?.name)
     }
 
-    if (type === 'CARD_DRAWN' && p && d.instanceId && d.cardId) {
-      instanceCards[p].set(d.instanceId, { cardId: d.cardId, cardName: d.cardName ?? d.cardId })
+    if (d.cardId) {
+      revealedCards[p].add(d.cardId)
+      if (d.instanceId) {
+        seenInstances[p].set(d.instanceId, d.cardId)
+        if (type === 'CARD_DRAWN') drawnInstances[p].set(d.instanceId, d.cardId)
+      }
     }
 
     const cardRefs = []
@@ -398,42 +407,33 @@ export function parseGamelog(id, logs, meta = {}) {
   if (curSeg) turnSegments.push(curSeg)
   const turns = turnSegments
 
-  // Build inferred opponent decklist from instanceId tracking + hand data.
-  // Counts are lower bounds: exact for drawn cards, max-simultaneous for opening hand cards.
+  // Inferred opponent decklist: a lower bound on copies per card, the max of
+  //   - unique instanceIds seen in any of their events (the only signal that counts copies
+  //     in a filtered log; plays and inks carry no instanceId),
+  //   - unique drawn instanceIds + post-mulligan hand copies (opening-hand cards never fire
+  //     CARD_DRAWN, so these are distinct copies; empty in a filtered log),
+  //   - 1 for any card revealed at all, including mulliganed cards.
+  // Play/ink counts are not copies: Tamatoa-style recursion and bounces replay the same card.
   const buildInferredDecklist = (oppPlayerNum) => {
     const oppData = players[oppPlayerNum]
-    const cardCounts = {} // cardId → { count, name }
+    const count = {} // cardId → count
+    const bump = (counts, id) => { counts[id] = (counts[id] ?? 0) + 1 }
+    const raise = (counts) => { for (const [id, n] of Object.entries(counts)) count[id] = Math.max(count[id] ?? 0, n) }
 
-    // Step 1: unique instanceIds from CARD_DRAWN → exact copies that cycled through deck
-    for (const { cardId, cardName } of instanceCards[oppPlayerNum].values()) {
-      if (!cardCounts[cardId]) cardCounts[cardId] = { count: 0, name: cardName }
-      cardCounts[cardId].count++
-    }
+    for (const id of revealedCards[oppPlayerNum]) count[id] = 1
+    for (const c of oppData.mulliganSent) count[c.id] = Math.max(count[c.id] ?? 0, 1)
 
-    // Step 2: post-mulligan hand snapshot (kept + replacement draws)
-    // Cards held from initial hand may never appear in CARD_DRAWN if played/inked directly
-    const handCounts = {}
-    for (const card of (oppData.mulliganKept ?? [])) {
-      handCounts[card.id] = (handCounts[card.id] ?? 0) + 1
-      if (!cardCounts[card.id]) cardCounts[card.id] = { count: 0, name: card.name }
-    }
-    for (const card of (oppData.mulliganDrawn ?? [])) {
-      handCounts[card.id] = (handCounts[card.id] ?? 0) + 1
-      if (!cardCounts[card.id]) cardCounts[card.id] = { count: 0, name: card.name }
-    }
-    for (const [cardId, handCount] of Object.entries(handCounts)) {
-      cardCounts[cardId].count = Math.max(cardCounts[cardId].count, handCount)
-    }
+    const seen = {}
+    for (const id of seenInstances[oppPlayerNum].values()) bump(seen, id)
+    raise(seen)
 
-    // Step 3: mulliganed cards go back to deck — ensure count ≥ 1 even if never redrawn
-    for (const card of (oppData.mulliganSent ?? [])) {
-      if (!cardCounts[card.id]) cardCounts[card.id] = { count: 0, name: card.name }
-      if (cardCounts[card.id].count === 0) cardCounts[card.id].count = 1
-    }
+    const drawnPlusHand = {}
+    for (const id of drawnInstances[oppPlayerNum].values()) bump(drawnPlusHand, id)
+    for (const c of [...oppData.mulliganKept, ...oppData.mulliganDrawn]) bump(drawnPlusHand, c.id)
+    raise(drawnPlusHand)
 
-    return Object.entries(cardCounts)
-      .filter(([, { count }]) => count > 0)
-      .map(([cardId, { count }]) => ({ cardId, count }))
+    return Object.entries(count)
+      .map(([cardId, n]) => ({ cardId, count: n }))
       .sort((a, b) => b.count - a.count || a.cardId.localeCompare(b.cardId))
   }
 

@@ -44,7 +44,7 @@ server.registerTool('get_match_history', {
 }, async args => text(await json(`/api/me/match-history?${query({ format: 'json', ...args })}`)))
 
 server.registerTool('get_game', {
-  description: "One of your games parsed from its gamelog: winner, turn-by-turn ink/lore/plays, every card played, challenges, lore progression, mulligans, per-card stats for both players and the opponent's decklist inferred from what they revealed. Pass your_player from the match-history row so 'you' is resolved.",
+  description: "One of your games parsed from its gamelog: winner, turn-by-turn ink/lore/plays, every card played, challenges, lore progression, mulligans, per-card stats for both players. The log is your perspective: the opponent's draws and hand are hidden, so their p1/p2 cardList holds only the cards they revealed (played, inked, discarded). Pass your_player from the match-history row so 'you' is resolved.",
   inputSchema: {
     game_id: z.string().describe('game_id from get_match_history'),
     your_player: z.union([z.literal(1), z.literal(2)]).optional().describe('your_player from the match-history row'),
@@ -53,9 +53,11 @@ server.registerTool('get_game', {
   const res = await duels(`/g/${encodeURIComponent(game_id)}`)
   const logs = JSON.parse(gunzipSync(Buffer.from(await res.arrayBuffer())).toString('utf8'))
   const game = parseGamelog(game_id, logs, { yourPlayerNum: your_player })
-  // cards duplicates cardList, keyed by name.
+  // cards duplicates cardList, keyed by name. inferredOppDecklist is built from the
+  // opponent's draws, which a perspective-filtered log blanks, so it is always empty here.
   delete game.p1.cards
   delete game.p2.cards
+  delete game.inferredOppDecklist
   return text(game)
 })
 

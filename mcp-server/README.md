@@ -8,7 +8,7 @@ A local (stdio) [MCP](https://modelcontextprotocol.io) server that lets Claude, 
 |---|---|
 | `whoami` | The account behind the token |
 | `get_match_history` | Your finished games, newest first, with filters (`from`, `to`, `source`, `queue`) and `next_cursor` paging |
-| `get_game` | One game parsed from its gamelog by `src/lib/parseGamelog.js`: turns, plays, challenges, lore curve, mulligans, per-card stats, the opponent's inferred decklist |
+| `get_game` | One game parsed from its gamelog by `src/lib/parseGamelog.js`: turns, plays, challenges, lore curve, mulligans, per-card stats for both players (the opponent's only covers cards they revealed: the log is your perspective) |
 | `list_my_decks`, `get_deck` | Your saved decks; one deck's card list |
 | `get_meta_stats` | Community ink-pair win rates and matchups (the documented fields of `/api/stats/meta`) |
 
@@ -21,7 +21,7 @@ A local (stdio) [MCP](https://modelcontextprotocol.io) server that lets Claude, 
 cd mcp-server && npm install
 ```
 
-3. Register it with your client.
+3. Register it with your client. Inside this repo, `.mcp.json` already registers it for Claude Code (local and cloud sessions) with `DUELS_TOKEN` from the environment; in a cloud environment, add `cd mcp-server && npm install` to its setup script. Elsewhere:
 
 Claude Code:
 

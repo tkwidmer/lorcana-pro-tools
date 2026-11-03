@@ -14,5 +14,6 @@
       "Bash(npm run lint)",
       "Bash(npm run build)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": ["duels-ink"]
 }

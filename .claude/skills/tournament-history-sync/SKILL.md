@@ -179,6 +179,15 @@ is an offline discovery script rather than a browser-facing feature.
   server-side** — if a task needs "biggest events regardless of name," the
   only option is a full crawl (see "Finding major events by attendance"
   below), not a filter param.
+- **Name hits need 32+ players** (`MIN_NAME_MATCH_PLAYERS`,
+  `max(registered_user_count, starting_player_count)`); template hits have
+  no floor. `name=CCQ` also matches "CCQ Practice Session!", "Road to
+  Barcelona CCQ", "Preparatorio CCQ", "CCQ PL Trial", "(RHS-CCQ-SIDE)" and
+  the like, and `5K` matches "Torneo Express 5K". On 2026-11-03 every name
+  hit under 32 was one of those (8 suggested, all 4–14 players); the
+  smallest real one was ACQ Malaysia at 47. Older imports from before the
+  floor are still in the archive; `isMajor` (100+) keeps them out of the
+  majors count.
 - Only events with `display_status == "complete"` are considered import
   candidates — an event still `upcoming` naturally gets picked up on some
   future run once it actually happens, no special handling needed.

@@ -28,6 +28,14 @@ const SIDE_EVENT_WINDOW_DAYS = 3
 const MIN_SIDE_EVENT_PLAYERS = 200
 const MIN_SIDE_EVENT_ROUNDS = 5
 
+// Name-search hits need this many players. `name=` is a substring match, so
+// "CCQ" also returns practice nights, feeders ("Road to…", "Preparatorio",
+// "Win a ticket"), trials and side events, and "5K" returns locals. On
+// 2026-11-03 every name hit under 32 players was one of those; the smallest
+// real one was ACQ Malaysia at 47. Template hits (DLC, Championship, LCQ)
+// have no floor: DLC Brazil ran with 34.
+const MIN_NAME_MATCH_PLAYERS = 32
+
 // Ravensburger's own internal QA/test fixtures show up at these obviously-fake
 // stores with huge fake attendee counts — confirmed in a manual crawl.
 const FAKE_STORE_NAMES = new Set(['Ravensburger HQ', 'Totally Legit Card Shack'])
@@ -92,6 +100,10 @@ function roundCount(e: DiscoveredEvent): number {
   return (e.tournament_phases ?? []).reduce((n, p) => n + (p.rounds?.length ?? 0), 0)
 }
 
+function playerCount(e: DiscoveredEvent): number {
+  return Math.max(e.registered_user_count ?? 0, e.starting_player_count ?? 0)
+}
+
 // Fetches every event matching a known DLC/Championship/CCQ/ACQ/prize-pool
 // naming convention, deduped by event id. Does not filter by
 // display_status/already-imported/fake-store — callers apply those.
@@ -122,7 +134,7 @@ export async function discoverCandidateEvents(): Promise<DiscoveredEvent[]> {
   ])
   nameSearches.forEach((results, i) => {
     for (const e of results) {
-      if (!seen.has(e.id)) seen.set(e.id, { ...e, label: NAME_SEARCH_TERMS[i][1] })
+      if (!seen.has(e.id) && playerCount(e) >= MIN_NAME_MATCH_PLAYERS) seen.set(e.id, { ...e, label: NAME_SEARCH_TERMS[i][1] })
     }
   })
 
@@ -133,8 +145,7 @@ export async function discoverCandidateEvents(): Promise<DiscoveredEvent[]> {
     const weekends = parents.filter((p) => p.store!.id === storeId).map((p) => Date.parse(p.start_datetime!))
     for (const e of storeEvents[i]) {
       if (seen.has(e.id) || !e.start_datetime) continue
-      const players = Math.max(e.registered_user_count ?? 0, e.starting_player_count ?? 0)
-      if (players < MIN_SIDE_EVENT_PLAYERS || roundCount(e) < MIN_SIDE_EVENT_ROUNDS) continue
+      if (playerCount(e) < MIN_SIDE_EVENT_PLAYERS || roundCount(e) < MIN_SIDE_EVENT_ROUNDS) continue
       const t = Date.parse(e.start_datetime)
       if (weekends.some((w) => Math.abs(t - w) <= SIDE_EVENT_WINDOW_DAYS * 86_400_000)) seen.set(e.id, { ...e, label: 'Side' })
     }

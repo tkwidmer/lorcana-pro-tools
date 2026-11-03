@@ -120,6 +120,8 @@ Paper surfaces, an ink-black nav bar, condensed caps display type, one forge-gol
 
 Vercel functions in `api/*.ts`, flat files only (a nested route once deployed green and silently served the SPA shell). **Vercel Hobby caps a deployment at 12 functions; the count is 9.** A new endpoint joins an existing `?endpoint=` dispatcher (`duels.ts`, `tournament-history.ts`, `metafy.ts`) or `tournament.ts`'s `?type=` switch rather than adding a file; the `vercel-proxy-pattern` skill has the shape. Routes: `duels` (every duels.ink call), `tournament` (Ravensburger), `tournament-history` (the archive, Supabase), `duels-tokens` (encrypted token store), `card-image` (allow-listed image proxy), `metafy`, `discord-interactions`, `discord-tournament-tick`, `subscribe-substack`. `/api/cards` is a rewrite to LorcanaJSON, not a function. Details, secrets and the integrations: `docs/agents/api-routes.md`.
 
+`mcp-server/` is a separate local stdio MCP server (own `package.json`, `DUELS_TOKEN` env var) exposing a user's duels.ink games to MCP clients; it imports `src/lib/parseGamelog.js`, so a change to the parser's output shape changes its `get_game` tool. See `mcp-server/README.md`.
+
 Scheduled GitHub Actions: `tournament-tracker-tick.yml` and `metafy-reconcile-tick.yml` call their ticks every 30 minutes; `meta-digest.yml` runs `scripts/meta-digest.mjs` every Monday and commits a draft meta digest post to `main` (`docs/agents/content.md`).
 
 ### Storage

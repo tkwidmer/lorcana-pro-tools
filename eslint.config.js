@@ -27,4 +27,8 @@ export default defineConfig([
       'react-hooks/immutability': 'error',
     },
   },
+  {
+    files: ['mcp-server/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
 ])

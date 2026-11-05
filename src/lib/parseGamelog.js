@@ -292,7 +292,9 @@ export function parseGamelog(id, logs, meta = {}) {
         turn: entry.turnNumber,
         player: p,
         attackerName: d.cardName,
-        defenderName: d.targetCardName,
+        // Gamelogs (/g/) name the defender in data.targetCardName; replay files (/r/)
+        // omit it and carry it as the second card ref ("challenged {card:1} with {card:0}").
+        defenderName: d.targetCardName ?? entry.cardRefs?.[1]?.name,
         attackerBanished: d.attackerBanished,
         defenderBanished: d.defenderBanished,
         attackerStrength: (d.attackerBaseStrength ?? 0) + (d.attackerChallengerBonus ?? 0),

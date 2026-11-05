@@ -60,6 +60,24 @@ server.registerTool('get_game', {
   return text(game)
 })
 
+server.registerTool('get_replay', {
+  description: "Any duels.ink game from its public replay link (duels.ink/replay/<id> or duels.ink/r/<id>), including games that aren't yours, e.g. a teammate's. Returns the same parse as get_game, from the perspective of the player who saved the replay (perspective), plus playerNames, the ink pairs, and that player's full decklist as card ids. The other player's cards are only what they revealed.",
+  inputSchema: { replay: z.string().describe('Replay URL or bare replay id') },
+}, async ({ replay }) => {
+  const id = replay.trim().replace(/\/+$/, '').split('/').pop()
+  const res = await fetch(`${BASE}/r/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error(`duels.ink ${res.status} on /r/${id}`)
+  const r = JSON.parse(gunzipSync(Buffer.from(await res.arrayBuffer())).toString('utf8'))
+  const game = parseGamelog(r.gameId, r.logs, { yourPlayerNum: r.perspective })
+  delete game.p1.cards
+  delete game.p2.cards
+  const { myInks, opponentInks } = r.baseSnapshot.coinTossInks
+  return text({
+    playerNames: r.playerNames, perspective: r.perspective, perspectiveInks: myInks, opponentInks,
+    perspectiveDecklist: r.decklist, ...game,
+  })
+})
+
 server.registerTool('list_my_decks', {
   description: 'Your saved duels.ink decks (ids, names, colors).',
 }, async () => text(await json('/api/decks')))

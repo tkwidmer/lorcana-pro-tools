@@ -135,6 +135,14 @@ describe('parseGamelog - card tracking', () => {
     expect(result.challenges[0].attackerBanished).toBe(true)
     expect(result.challenges[0].defenderBanished).toBe(false)
   })
+
+  it('reads the defender from cardRefs in replay-file logs, which omit targetCardName', () => {
+    const logs = [{
+      ...entry('CARD_ATTACK', 2, 3, { cardName: 'Higgins - Undercover Officer', attackerBanished: false, defenderBanished: false }),
+      cardRefs: [{ id: '10-5', name: 'Higgins - Undercover Officer' }, { id: '12-47', name: "Will o' the Wisp - Forest Spirit" }],
+    }]
+    expect(parseGamelog('x', logs, {}).challenges[0].defenderName).toBe("Will o' the Wisp - Forest Spirit")
+  })
 })
 
 describe('parseGamelog - meta fields', () => {

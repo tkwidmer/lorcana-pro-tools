@@ -137,6 +137,32 @@ describe('parseGamelog - card tracking', () => {
   })
 })
 
+describe('parseGamelog - +lore buffs', () => {
+  const sneezy = (target) => entry('ABILITY_TRIGGERED', 1, 5, {
+    abilitySourceCardId: '12-42', abilitySourceCardName: 'Sneezy - Startlingly Loud', abilityName: 'GESUNDHEIT',
+    effectDescriptionKeys: [{ key: 'givesStatModifierToTarget', params: { sign: '+', amount: 1, stat: '[LORE]', target: '{target}' } }],
+    targetCardId: '14-222', targetCardName: target,
+  })
+  const quest = (name, loreGained, turn = 5) => entry('CARD_QUEST', 1, turn, { cardName: name, loreGained })
+
+  it("moves the buff's lore from the quester to the buff's source", () => {
+    const game = parseGamelog('x', [sneezy('Flash'), quest('Flash', 3)], {})
+    expect(game.p1.cards['Flash'].loreGained).toBe(2)
+    expect(game.p1.cards['Sneezy - Startlingly Loud'].loreGained).toBe(1)
+  })
+
+  it('drops an unused buff at the end of the turn', () => {
+    const game = parseGamelog('x', [sneezy('Flash'), entry('TURN_END', 1, 5), quest('Flash', 2, 6)], {})
+    expect(game.p1.cards['Flash'].loreGained).toBe(2)
+    expect(game.p1.cards['Sneezy - Startlingly Loud'].loreGained).toBe(0)
+  })
+
+  it('leaves a non-quest LORE_GAINED untouched', () => {
+    const game = parseGamelog('x', [sneezy('Flash'), entry('LORE_GAINED', 1, 5, { cardName: 'Flash', loreGained: 1 })], {})
+    expect(game.p1.cards['Flash'].loreGained).toBe(1)
+  })
+})
+
 describe('parseGamelog - meta fields', () => {
   it('derives player names from meta', () => {
     const logs = [entry('GAME_END', null, 5, { winner: 1 })]

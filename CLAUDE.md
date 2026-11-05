@@ -18,6 +18,10 @@ Unit tests: `src/lib/__tests__/<lib>.test.js`, one per pure-logic lib in `src/li
 1. Include the Vercel preview link, read from the vercel[bot] comment per the `vercel-preview-url` skill (the URL cannot be derived from the branch name).
 2. Include screenshots for UI changes, before/after when a layout changed, saved under `docs/screenshots/` and referenced by raw GitHub URL.
 
+## Lorcana deckbuilding
+
+Lorcana has **no sideboard**, in Bo1 or Bo3: a constructed deck is the 60 cards (up to 4 copies each), and nothing is swapped between games. Matchup answers ("tech") go in the main deck, usually the last 4–6 slots, ideally inkable so they are never dead in the wrong matchup. In deck advice say "tech slots", never "sideboard".
+
 ## Stack
 
 React 19 + React Router 7 + Tailwind CSS 4 + Vite 8 on Vercel; serverless routes in `api/*.ts`; Supabase + Google OAuth. A user's own game data stays client-side (IndexedDB, localStorage). Supabase holds the session, a `profiles` table of supporter tiers, the admin-imported Tournament History archive, and each supporter's Stream Overlay tables. Local `.env` needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; every server-side secret is listed in `docs/agents/api-routes.md`.

@@ -137,6 +137,46 @@ describe('parseGamelog - card tracking', () => {
   })
 })
 
+describe('parseGamelog - Junior Woodchuck Guidebook', () => {
+  // Shapes from a real gamelog: activating THE BOOK KNOWS EVERYTHING logs no ability event, only
+  // two CARD_DRAWN in one tick; a draw ability logs ABILITY_TRIGGERED just before its draws.
+  const at = (ts, type, player, data = {}) => ({ ...entry(type, player, 5, data), timestamp: ts })
+  const book = { cardId: '10-66', cardName: 'Junior Woodchuck Guidebook' }
+  const drawn = (ts, name) => at(ts, 'CARD_DRAWN', 1, { cardId: name, cardName: name })
+
+  it('credits nothing for playing it, even when unrelated draws follow', () => {
+    const logs = [
+      at(1000, 'CARD_PLAYED', 1, book),
+      at(2000, 'TURN_DRAW', 1),
+      drawn(2000, 'A'),
+      at(3000, 'ABILITY_TRIGGERED', 1, { abilitySourceCardName: 'Friends', abilitySourceCardId: '1-64', effectDescriptionKeys: [{ key: 'drawsCards', params: { count: 2 } }] }),
+      drawn(3000, 'B'),
+      drawn(3000, 'C'),
+    ]
+    const cards = parseGamelog('x', logs).p1.cards
+    expect(cards['Junior Woodchuck Guidebook'].effectDraws).toBe(0)
+    expect(cards['Friends'].effectDraws).toBe(2)
+  })
+
+  it('credits 2 draws per activation, including one on a later turn', () => {
+    const logs = [
+      at(1000, 'CARD_PLAYED', 1, book),
+      at(1000, 'CARD_PLAYED', 1, book),
+      drawn(2500, 'A'),
+      drawn(2500, 'B'),
+      at(9000, 'TURN_DRAW', 1),
+      drawn(9000, 'C'),
+      drawn(12000, 'D'),
+      drawn(12000, 'E'),
+    ]
+    expect(parseGamelog('x', logs).p1.cards['Junior Woodchuck Guidebook'].effectDraws).toBe(4)
+  })
+
+  it('credits 2 per activation in a real game (5 copies played, all activated)', () => {
+    expect(parseGamelog('x', realGame).p2.cards['Junior Woodchuck Guidebook'].effectDraws).toBe(10)
+  })
+})
+
 describe('parseGamelog - +lore buffs', () => {
   const sneezy = (target) => entry('ABILITY_TRIGGERED', 1, 5, {
     abilitySourceCardId: '12-42', abilitySourceCardName: 'Sneezy - Startlingly Loud', abilityName: 'GESUNDHEIT',

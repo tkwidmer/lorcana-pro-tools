@@ -1,7 +1,15 @@
-// Cards that draw when played (card ID → draw count).
-// Used to attribute subsequent CARD_DRAWN events when ABILITY_TRIGGERED isn't fired on-play.
-const ON_PLAY_DRAWS = {
-  '10-66': 2, // Junior Woodchuck Guidebook
+const GUIDEBOOK = { id: '10-66', name: 'Junior Woodchuck Guidebook' }
+
+// Junior Woodchuck Guidebook's THE BOOK KNOWS EVERYTHING (⟳, 1 ⬡, banish this item — draw 2)
+// logs no ability event. Every other draw source logs ABILITY_TRIGGERED or TURN_DRAW right before
+// its CARD_DRAWN events; the activation is a bare pair of same-tick CARD_DRAWN for one player.
+// The opponent's CARD_DRAWN has empty data, so this reads only type, player and timestamp.
+function isGuidebookActivation(logs, i) {
+  const [prev, a, b, c] = [logs[i - 1], logs[i], logs[i + 1], logs[i + 2]]
+  const sameDraw = e => e?.type === 'CARD_DRAWN' && e.player === a.player && e.timestamp === a.timestamp
+  const announced = ['ABILITY_TRIGGERED', 'TURN_DRAW'].includes(prev?.type)
+  const continuesBurst = prev?.type === 'CARD_DRAWN' && prev.timestamp === a.timestamp
+  return !announced && !continuesBurst && sameDraw(b) && !sameDraw(c)
 }
 
 export async function decompressGzip(arrayBuffer) {
@@ -58,8 +66,7 @@ export function parseGamelog(id, logs, meta = {}) {
   }
 
   const lastPlayedByPlayer = { 1: null, 2: null }
-  let pendingDrawSource = null
-  let pendingDrawCount = 0
+  const guidebooksInPlay = { 1: 0, 2: 0 }
   // Source of the most recent banish-type / damage-counter ABILITY_TRIGGERED, used to attribute
   // the CARD_DESTROYED / DAMAGE_COUNTERS_PUT events that immediately follow it (see below).
   let pendingRemovalSource = null
@@ -88,7 +95,7 @@ export function parseGamelog(id, logs, meta = {}) {
   const turnSegments = []
   let curSeg = null
 
-  for (const entry of logs) {
+  for (const [i, entry] of logs.entries()) {
     const p = entry.player === 1 || entry.player === '1' ? 1 : entry.player === 2 || entry.player === '2' ? 2 : null
     const type = entry.type
     const d = entry.data ?? {}
@@ -162,16 +169,10 @@ export function parseGamelog(id, logs, meta = {}) {
       const c = ensureCard(p, card.name, card.id)
       if (type === 'CARD_DRAWN') {
         c.drawn++
-        if (pendingDrawCount > 0 && pendingDrawSource && pendingDrawSource.player === p) {
-          ensureCard(p, pendingDrawSource.name, pendingDrawSource.id).effectDraws++
-          pendingDrawCount--
-          if (pendingDrawCount <= 0) { pendingDrawSource = null; pendingDrawCount = 0 }
-        }
       } else if (type === 'CARD_PLAYED') {
         c.played++
         lastPlayedByPlayer[p] = { name: card.name, id: card.id }
-        const drawCount = ON_PLAY_DRAWS[card.id]
-        if (drawCount) { pendingDrawSource = { ...card, player: p }; pendingDrawCount = drawCount }
+        if (card.id === GUIDEBOOK.id) guidebooksInPlay[p]++
         // Track singer: the character that exerted to sing this song
         if (d.singerCardName && d.singerCardId && card.name === d.cardName) {
           ensureCard(p, d.singerCardName, d.singerCardId).sings++
@@ -267,6 +268,11 @@ export function parseGamelog(id, logs, meta = {}) {
     if (type === 'DAMAGE_DEALT' && d.abilitySourceCardId && d.abilitySourceCardName) {
       const causedBy = p === 1 ? 2 : 1
       ensureCard(causedBy, d.abilitySourceCardName, d.abilitySourceCardId).effectRemovals++
+    }
+
+    if (type === 'CARD_DRAWN' && guidebooksInPlay[p] > 0 && isGuidebookActivation(logs, i)) {
+      ensureCard(p, GUIDEBOOK.name, GUIDEBOOK.id).effectDraws += 2
+      guidebooksInPlay[p]--
     }
 
     // CARD_REVEALED with revealDestination === 'hand' means an on-play ability fetched a card

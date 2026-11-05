@@ -34,7 +34,7 @@ This is the most complex data flow in the app:
 4. The result is saved to IndexedDB via `gamelogHistory.js` and displayed in `AnalyticsPage` or `GameView`
 
 Key parsing details in `parseGamelog.js`:
-- `ON_PLAY_DRAWS` map tracks cards that draw on play (e.g. Junior Woodchuck Guidebook → 2 draws); uses `pendingDrawSource`/`pendingDrawCount` to attribute subsequent `CARD_DRAWN` events to the source card
+- Junior Woodchuck Guidebook's activation (draw 2) logs no ability event, only two same-tick `CARD_DRAWN` not preceded by `ABILITY_TRIGGERED`/`TURN_DRAW`; `isGuidebookActivation` credits those to the Guidebook while the player has an unactivated copy in play (`guidebooksInPlay`)
 - `CARD_PUT_INTO_INKWELL` with `fromZone === 'field'` means the *other* player caused the removal (e.g. Let It Go, Hades) — attribute as effectRemovals on the other player's last played card
 - `lastPlayedByPlayer` tracks the most recently played card per player for effect attribution
 - `plays: [{ turn, player, cardName, cardId }]` lists every `CARD_PLAYED` in event order; `turns[].plays` is only a count

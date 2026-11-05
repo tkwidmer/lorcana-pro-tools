@@ -1,6 +1,6 @@
 # duels.ink MCP server
 
-A local (stdio) [MCP](https://modelcontextprotocol.io) server that lets Claude, or any MCP client, read your own duels.ink games with your personal API token. The token stays on your machine: the server talks to `https://duels.ink` directly, not through InkbornForge.
+A local (stdio) [MCP](https://modelcontextprotocol.io) server that lets Claude, or any MCP client, read your own duels.ink games with your personal API token, and look up cards in [LorcanaJSON](https://lorcanajson.org). The token stays on your machine: the server talks to `https://duels.ink` and `https://lorcanajson.org` directly, not through InkbornForge.
 
 ## Tools
 
@@ -11,6 +11,10 @@ A local (stdio) [MCP](https://modelcontextprotocol.io) server that lets Claude, 
 | `get_game` | One game parsed from its gamelog by `src/lib/parseGamelog.js`: turns, plays, challenges, lore curve, mulligans, per-card stats for both players (the opponent's only covers cards they revealed: the log is your perspective), and `inferredOppDecklist`, a minimum copy count per revealed opponent card |
 | `list_my_decks`, `get_deck` | Your saved decks; one deck's card list |
 | `get_meta_stats` | Community ink-pair win rates and matchups (the documented fields of `/api/stats/meta`) |
+| `get_cards` | LorcanaJSON details for duels.ink card ids (`14-222`, promo `12-P3-51`): cost, inkwell, stats, rules text, Core/Infinity legality, and every id that prints the same card |
+| `search_cards` | The LorcanaJSON card pool filtered by deck inks, format, type, subtype, cost, inkwell, willpower, lore and rules text; one row per card name |
+
+The card tools fetch `allCards.json` once per server process (about 10 MB) and filter it with `src/lib/cardSearch.js`.
 
 ## Setup
 

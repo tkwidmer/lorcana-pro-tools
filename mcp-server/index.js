@@ -6,6 +6,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { parseGamelog } from '../src/lib/parseGamelog.js'
+import { searchCards, getCardsByIds } from '../src/lib/cardSearch.js'
 
 const BASE = 'https://duels.ink'
 const TOKEN = process.env.DUELS_TOKEN?.trim()
@@ -86,6 +87,43 @@ server.registerTool('get_meta_stats', {
     },
     totalGames: activity.totalGames, colorPairs, matchups, updatedAt,
   })
+})
+
+// LorcanaJSON card data: one ~10 MB static file, no auth. Fetched once per process.
+// Field reference: https://lorcanajson.org/ ("Card data fields explanation").
+let allCards
+async function lorcanaJson() {
+  if (!allCards) {
+    const res = await fetch('https://lorcanajson.org/files/current/en/allCards.json')
+    if (!res.ok) throw new Error(`lorcanajson.org ${res.status}`)
+    allCards = await res.json()
+  }
+  return allCards
+}
+
+server.registerTool('get_cards', {
+  description: 'Card details from LorcanaJSON for duels.ink card ids (the ids in decklists, gamelogs and match history, e.g. 14-222 or the promo id 12-P3-51): name, type, color, cost, inkwell (false = uninkable), strength/willpower/lore, rules text, Core/Infinity legality, and every id that prints the same card.',
+  inputSchema: { ids: z.array(z.string()).min(1).max(100) },
+}, async ({ ids }) => text(getCardsByIds((await lorcanaJson()).cards, ids)))
+
+server.registerTool('search_cards', {
+  description: 'Search the full LorcanaJSON card pool, one row per card name (all its ids listed), sorted by cost. colors keeps cards whose every ink is in the list, so ["Amethyst","Steel"] is what an Amethyst/Steel deck can play. total is the match count before limit.',
+  inputSchema: {
+    colors: z.array(z.enum(['Amber', 'Amethyst', 'Emerald', 'Ruby', 'Sapphire', 'Steel'])).optional().describe("The deck's inks"),
+    format: z.enum(['Core', 'Infinity']).optional().describe('Only cards legal in this format'),
+    type: z.enum(['Character', 'Action', 'Item', 'Location']).optional(),
+    subtype: z.string().optional().describe('e.g. Song, Floodborn, Hero'),
+    costMin: z.number().int().optional(),
+    costMax: z.number().int().optional(),
+    inkwell: z.boolean().optional().describe('true = inkable only, false = uninkable only'),
+    minWillpower: z.number().int().optional(),
+    minLore: z.number().int().optional(),
+    text: z.string().optional().describe('Case-insensitive match on name and rules text, e.g. Evasive, "move to a location"'),
+    limit: z.number().int().min(1).max(500).default(50),
+  },
+}, async args => {
+  const { metadata, cards } = await lorcanaJson()
+  return text({ formatVersion: metadata.formatVersion, ...searchCards(cards, args) })
 })
 
 await server.connect(new StdioServerTransport())

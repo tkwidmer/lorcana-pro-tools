@@ -3,7 +3,7 @@
     "duels-ink": {
       "command": "node",
       "args": ["mcp-server/index.js"],
-      "env": { "DUELS_TOKEN": "${DUELS_TOKEN}" }
+      "env": { "DUELS_TOKEN": "${DUELS_TOKEN}", "DUELS_TOKENS": "${DUELS_TOKENS:-}" }
     }
   }
 }

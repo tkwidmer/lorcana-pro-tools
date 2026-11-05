@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// duels.ink MCP server (stdio). Reads your own games with a personal API token.
+// duels.ink MCP server (stdio). Reads your own games with a personal API token, and teammates'
+// games with theirs (DUELS_TOKENS).
 // API reference: https://duels.ink/api-docs.md
 import { gunzipSync } from 'node:zlib'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -13,9 +14,22 @@ const BASE = 'https://duels.ink'
 const TOKEN = process.env.DUELS_TOKEN?.trim()
 if (!TOKEN) throw new Error('DUELS_TOKEN is not set. Mint one at https://duels.ink/account → API Tokens.')
 
-async function duels(path) {
+// Teammates' tokens, optional: DUELS_TOKENS="megan=<token>,ibai=<token>". Each name becomes an
+// `account` choice on the tools that read one player's games or decks; "me" is DUELS_TOKEN.
+const TOKENS = { me: TOKEN }
+for (const entry of (process.env.DUELS_TOKENS ?? '').split(',').map(s => s.trim()).filter(Boolean)) {
+  const eq = entry.indexOf('=')
+  const name = entry.slice(0, Math.max(eq, 0)).trim()
+  const token = entry.slice(eq + 1).trim()
+  if (eq < 1 || !token) throw new Error(`DUELS_TOKENS: each entry must be name=token (got an entry starting "${entry.slice(0, Math.max(eq, 0)) || '?'}")`)
+  if (TOKENS[name]) throw new Error(`DUELS_TOKENS: account "${name}" appears twice`)
+  TOKENS[name] = token
+}
+const account = z.enum(Object.keys(TOKENS)).default('me').describe('Whose duels.ink account to read: "me" or a teammate configured in DUELS_TOKENS')
+
+async function duels(path, acct = 'me') {
   // Gamelogs 302 to a CDN; fetch drops Authorization on the cross-origin hop, which the CDN doesn't need.
-  const res = await fetch(BASE + path, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const res = await fetch(BASE + path, { headers: { Authorization: `Bearer ${TOKENS[acct]}` } })
   if (!res.ok) {
     const retry = res.headers.get('retry-after')
     throw new Error(`duels.ink ${res.status} on ${path}${retry ? ` (retry after ${retry}s)` : ''}: ${(await res.text()).slice(0, 300)}`)
@@ -23,15 +37,16 @@ async function duels(path) {
   return res
 }
 
-const json = async path => (await duels(path)).json()
+const json = async (path, acct) => (await duels(path, acct)).json()
 const text = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }] })
 const query = params => new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)]))
 
 const server = new McpServer({ name: 'duels-ink', version: '0.1.0' })
 
 server.registerTool('whoami', {
-  description: 'The duels.ink account behind the token: stable user id, display name, avatar.',
-}, async () => text(await json('/api/me')))
+  description: 'The duels.ink account behind a token: stable user id, display name, avatar.',
+  inputSchema: { account },
+}, async ({ account }) => text(await json('/api/me', account)))
 
 server.registerTool('get_match_history', {
   description: 'Your finished duels.ink games, newest first, one row per game (result, lore, decks colors, your decklist, opponent name and colors, MMR, went_first, game_id). Page with next_cursor. The opponent decklist is never included; use get_game to see what they played.',
@@ -42,17 +57,19 @@ server.registerTool('get_match_history', {
     to: z.string().optional().describe('Exclusive upper bound, ISO 8601'),
     source: z.string().optional().describe("Comma-separated subset of 'matchmaking', 'private', 'bot'"),
     queue: z.string().optional().describe('Comma-separated queue ids, e.g. core-bo1, infinity-bo3'),
+    account,
   },
-}, async args => text(await json(`/api/me/match-history?${query({ format: 'json', ...args })}`)))
+}, async ({ account, ...args }) => text(await json(`/api/me/match-history?${query({ format: 'json', ...args })}`, account)))
 
 server.registerTool('get_game', {
   description: "One of your games parsed from its gamelog: winner, turn-by-turn ink/lore/plays, every card played, challenges, lore progression, mulligans, per-card stats for both players. The log is your perspective: the opponent's draws and hand are hidden, so their p1/p2 cardList holds only the cards they revealed (played, inked, discarded). inferredOppDecklist lists each revealed opponent card id with a minimum copy count (played/inked counts are not copies: recursion replays a card); it needs your_player. Pass your_player from the match-history row so 'you' is resolved.",
   inputSchema: {
     game_id: z.string().describe('game_id from get_match_history'),
     your_player: z.union([z.literal(1), z.literal(2)]).optional().describe('your_player from the match-history row'),
+    account: account.describe('The account whose match history the game_id came from'),
   },
-}, async ({ game_id, your_player }) => {
-  const res = await duels(`/g/${encodeURIComponent(game_id)}`)
+}, async ({ game_id, your_player, account }) => {
+  const res = await duels(`/g/${encodeURIComponent(game_id)}`, account)
   const logs = JSON.parse(gunzipSync(Buffer.from(await res.arrayBuffer())).toString('utf8'))
   const game = parseGamelog(game_id, logs, { yourPlayerNum: your_player })
   // cards duplicates cardList, keyed by name.
@@ -80,13 +97,14 @@ server.registerTool('get_replay', {
 })
 
 server.registerTool('list_my_decks', {
-  description: 'Your saved duels.ink decks (ids, names, colors).',
-}, async () => text(await json('/api/decks')))
+  description: 'Saved duels.ink decks (ids, names, colors) of an account.',
+  inputSchema: { account },
+}, async ({ account }) => text(await json('/api/decks', account)))
 
 server.registerTool('get_deck', {
   description: 'One deck with its full card list, by deck id (your_deck_id from match history, or a community deck id).',
-  inputSchema: { deck_id: z.string() },
-}, async ({ deck_id }) => text(await json(`/api/decks/${encodeURIComponent(deck_id)}`)))
+  inputSchema: { deck_id: z.string(), account: account.describe("The account that owns the deck, for a private deck; community decks read with any") },
+}, async ({ deck_id, account }) => text(await json(`/api/decks/${encodeURIComponent(deck_id)}`, account)))
 
 server.registerTool('get_meta_stats', {
   description: 'Community ink-pair win rates and matchups for a queue (public aggregates). Rates are 0–100. A matchup row is written once with colorsA sorted before colorsB; flip it when your deck is side B. Weigh rates by games.',

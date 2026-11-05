@@ -48,4 +48,14 @@ Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-The server exits at startup if `DUELS_TOKEN` is not set. duels.ink errors (401 bad token, 429 with its `Retry-After`) come back as tool errors. API reference: https://duels.ink/api-docs.md
+### Teammates' accounts
+
+Put teammates' tokens in one more variable, `DUELS_TOKENS`, as comma-separated `name=token` pairs:
+
+```
+DUELS_TOKENS=megan=<token>,ibai=<token>,jon=<token>
+```
+
+Each name becomes a choice for the `account` parameter on `whoami`, `get_match_history`, `get_game`, `list_my_decks` and `get_deck` (the default, `me`, is `DUELS_TOKEN`). Adding a teammate is one more pair in the secret; nothing else changes. Each teammate should mint a token just for this, so they can revoke it. A token reads its owner's whole account. Store `DUELS_TOKENS` the same way as `DUELS_TOKEN` (an environment secret in a cloud environment, an exported variable locally); `.mcp.json` passes it through and treats it as optional. `get_replay` needs no token, so a teammate's public replay link works without theirs.
+
+The server exits at startup if `DUELS_TOKEN` is not set, or if a `DUELS_TOKENS` entry is not `name=token` or repeats a name. duels.ink errors (401 bad token, 429 with its `Retry-After`) come back as tool errors. API reference: https://duels.ink/api-docs.md

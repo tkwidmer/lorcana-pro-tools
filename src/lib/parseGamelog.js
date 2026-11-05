@@ -68,6 +68,10 @@ export function parseGamelog(id, logs, meta = {}) {
   // CARD_RETURNED event that immediately follows it — see the CARD_RETURNED handling below for
   // how this decides recover vs. removal.
   let pendingReturnSource = null
+  // +lore buffs on a named character (e.g. Sneezy - Startlingly Loud's GESUNDHEIT: "chosen
+  // character gets +1 lore this turn"). The buffed character's quest reports the boosted total,
+  // so the buff's share is moved from the quester to the buff's source when it quests this turn.
+  const pendingLoreBuffs = []
 
   // Opponent decklist inference. duels.ink serves a perspective-filtered log: the opponent's
   // CARD_DRAWN and INITIAL_HAND/MULLIGAN arrive with empty data, but their public events
@@ -278,12 +282,24 @@ export function parseGamelog(id, logs, meta = {}) {
     // different event type, so both need identical handling.
     if ((type === 'CARD_QUEST' || type === 'LORE_GAINED') && d.cardName) {
       const gain = d.loreGained ?? 0
-      ensureCard(p, d.cardName, d.cardId).loreGained += gain
+      const quester = ensureCard(p, d.cardName, d.cardId)
+      quester.loreGained += gain
+      const buff = type === 'CARD_QUEST' ? pendingLoreBuffs.findIndex(b => b.player === p && b.target === d.cardName) : -1
+      if (buff >= 0) {
+        const { source, amount } = pendingLoreBuffs.splice(buff, 1)[0]
+        const moved = Math.min(amount, gain)
+        quester.loreGained -= moved
+        ensureCard(p, source.name, source.id).loreGained += moved
+      }
       if (d.newLoreTotal != null) {
         loreByPlayer[p] = d.newLoreTotal
         loreEvents.push({ turn: entry.turnNumber ?? 0, player: p, total: d.newLoreTotal })
       }
     }
+
+    // A character quests at most once per turn and only on its own turn, so a +lore buff that
+    // hasn't been used by the end of the turn never will be.
+    if (type === 'TURN_END') pendingLoreBuffs.length = 0
 
     // CARD_ATTACK comes in two events per challenge: the first has names only,
     // the second has full combat stats including banished flags — only use the second.
@@ -398,8 +414,11 @@ export function parseGamelog(id, logs, meta = {}) {
         // Stat-modifier effects (e.g. Della's Moon Lullaby's -2 strength to a target) — buffs
         // and debuffs alike, matched by substring since the key varies by target shape
         // (single target, all characters, your/opposing characters).
-        else if (kLower.includes('givesstatmodifier'))
+        else if (kLower.includes('givesstatmodifier')) {
           c.statModifiers++
+          if (ek.params?.stat === '[LORE]' && ek.params?.sign === '+' && d.targetCardName)
+            pendingLoreBuffs.push({ player: p, target: d.targetCardName, amount: ek.params.amount ?? 1, source: { name: d.abilitySourceCardName, id: d.abilitySourceCardId } })
+        }
       }
     }
   }

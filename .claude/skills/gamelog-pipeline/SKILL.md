@@ -39,13 +39,14 @@ Before touching:
 
 ## Non-obvious invariants — read before editing the parser
 
-- **`ON_PLAY_DRAWS` map** (top of the file): cards that draw on play (e.g.
-  Junior Woodchuck Guidebook, `'10-66': 2`) don't always fire a distinct
-  `ABILITY_TRIGGERED` event. `pendingDrawSource`/`pendingDrawCount` are set
-  when such a card is played, then the *next* `CARD_DRAWN` event(s) get
-  attributed back to that source card instead of counted as a plain draw.
-  Adding a new on-play-draw card means adding it to this map, not writing a
-  one-off special case.
+- **Draw attribution comes from the event right before the draws.** Every
+  draw source logs `ABILITY_TRIGGERED` (draw keys in `effectDescriptionKeys`)
+  or `TURN_DRAW` in the same tick as its `CARD_DRAWN` events. The one known
+  exception is Junior Woodchuck Guidebook's activated THE BOOK KNOWS
+  EVERYTHING, which logs nothing but two same-tick `CARD_DRAWN`.
+  `isGuidebookActivation` detects that pair while the player has an
+  unactivated Guidebook in play (`guidebooksInPlay`). Playing the item draws
+  nothing; a copy may be activated on a later turn.
 - **`CARD_PUT_INTO_INKWELL` with `fromZone === 'field'` means the *other*
   player* caused it** (effects like Let It Go, Hades pulling a card back to
   hand/inkwell) — this gets attributed as an `effectRemovals` increment on

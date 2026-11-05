@@ -7,6 +7,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { parseGamelog } from '../src/lib/parseGamelog.js'
 import { searchCards, getCardsByIds } from '../src/lib/cardSearch.js'
+import { replayLogsToGamelog } from '../src/lib/replayLogs.js'
 
 const BASE = 'https://duels.ink'
 const TOKEN = process.env.DUELS_TOKEN?.trim()
@@ -68,7 +69,7 @@ server.registerTool('get_replay', {
   const res = await fetch(`${BASE}/r/${encodeURIComponent(id)}`)
   if (!res.ok) throw new Error(`duels.ink ${res.status} on /r/${id}`)
   const r = JSON.parse(gunzipSync(Buffer.from(await res.arrayBuffer())).toString('utf8'))
-  const game = parseGamelog(r.gameId, r.logs, { yourPlayerNum: r.perspective })
+  const game = parseGamelog(r.gameId, replayLogsToGamelog(r.logs), { yourPlayerNum: r.perspective })
   delete game.p1.cards
   delete game.p2.cards
   const { myInks, opponentInks } = r.baseSnapshot.coinTossInks

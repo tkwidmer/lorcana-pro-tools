@@ -46,12 +46,14 @@ import { ResultsPlayerPage } from './pages/ResultsPlayerPage'
 import { ResultsRatingsPage } from './pages/ResultsRatingsPage'
 import { TeamsPage } from './pages/TeamsPage'
 import { TeamPage } from './pages/TeamPage'
+import { TeamManagePage } from './pages/TeamManagePage'
 import { StoreLookupPage } from './pages/StoreLookupPage'
 import { LoreTrackerPage } from './pages/LoreTrackerPage'
 import { LoginPage } from './pages/LoginPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { AdminPage } from './pages/AdminPage'
 import { AdminTournamentImportPage } from './pages/AdminTournamentImportPage'
+import { AdminTeamsPage } from './pages/AdminTeamsPage'
 import { SupporterRoute } from './components/SupporterRoute'
 
 function RoutedContent() {
@@ -126,10 +128,12 @@ function RoutedContent() {
         <Route path="/results/ratings" element={<ResultsRatingsPage />} />
         <Route path="/teams" element={<TeamsPage />} />
         <Route path="/teams/:slug" element={<TeamPage />} />
+        <Route path="/teams/:slug/manage" element={<TeamManagePage />} />
         <Route path="/store-lookup" element={<StoreLookupPage />} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/tournament-import" element={<AdminTournamentImportPage />} />
+        <Route path="/admin/teams" element={<AdminTeamsPage />} />
         {/* Redirects from old routes */}
         <Route path="/game-library" element={<Navigate to="/analytics" replace />} />
         <Route path="/shared" element={<Navigate to="/library" replace />} />

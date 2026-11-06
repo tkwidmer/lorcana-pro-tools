@@ -380,6 +380,12 @@ export function StreamOverlayPage() {
               <Button size="sm" variant={row.lore_track ? 'primary' : 'secondary'} aria-pressed={row.lore_track} onClick={() => setField('lore_track', true)}>Track</Button>
             </div>
           </Labeled>
+          <Labeled label="Player cams">
+            <div className="flex items-center gap-2" role="group" aria-label="Player cams">
+              <Button size="sm" variant={row.hide_cams ? 'secondary' : 'primary'} aria-pressed={!row.hide_cams} onClick={() => setField('hide_cams', false)}>Show</Button>
+              <Button size="sm" variant={row.hide_cams ? 'primary' : 'secondary'} aria-pressed={row.hide_cams} onClick={() => setField('hide_cams', true)}>Hide</Button>
+            </div>
+          </Labeled>
           <Labeled label="Featured cards">
             <div className="flex items-center gap-2" role="group" aria-label="Featured cards">
               {[['off', 'Off'], ['fade', `${FEATURED_SECONDS} seconds`], ['stay', 'Stay']].map(([value, label]) => (

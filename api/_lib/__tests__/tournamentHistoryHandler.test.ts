@@ -33,8 +33,10 @@ describe('team-member-save validation', () => {
     const left = await call('POST', { endpoint: 'team-member-save' }, { ...base, joinedOn: '2025-01-01', leftOn: future })
     expect(left.status).toBe(400)
   })
-  it('still asks for a session once the dates are sane', async () => {
-    const out = await call('POST', { endpoint: 'team-member-save' }, { ...base, joinedOn: '2025-01-01', leftOn: null })
-    expect(out.status).toBe(401)
+  it('still asks for a session once the dates are sane, with or without a start date', async () => {
+    const dated = await call('POST', { endpoint: 'team-member-save' }, { ...base, joinedOn: '2025-01-01', leftOn: null })
+    expect(dated.status).toBe(401)
+    const unknownStart = await call('POST', { endpoint: 'team-member-save' }, { ...base, joinedOn: '', leftOn: '2026-01-01' })
+    expect(unknownStart.status).toBe(401)
   })
 })

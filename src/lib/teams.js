@@ -2,9 +2,10 @@
 // (spec: docs/superpowers/specs/2026-11-06-team-tracker-design.md). Members
 // arrive in the API's shape: { id, playerId, playerName, joinedOn, leftOn }.
 
-// Current members by join date; former members by most recent departure.
+// Current members by join date (unknown starts first, they are the longest
+// standing); former members by most recent departure.
 export function splitRoster(members) {
-  const current = members.filter((m) => m.leftOn === null).sort((a, b) => a.joinedOn.localeCompare(b.joinedOn))
+  const current = members.filter((m) => m.leftOn === null).sort((a, b) => (a.joinedOn ?? '').localeCompare(b.joinedOn ?? ''))
   const former = members.filter((m) => m.leftOn !== null).sort((a, b) => b.leftOn.localeCompare(a.leftOn))
   return { current, former }
 }
@@ -44,8 +45,10 @@ function monthYear(yyyyMmDd) {
   return new Date(`${yyyyMmDd}T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 
+// A null joinedOn is an unknown start: the member counts since before the archive.
 export function formatMembership({ joinedOn, leftOn }) {
-  return leftOn ? `${monthYear(joinedOn)} – ${monthYear(leftOn)}` : `Since ${monthYear(joinedOn)}`
+  if (leftOn) return `${joinedOn ? monthYear(joinedOn) : 'Before the archive'} – ${monthYear(leftOn)}`
+  return joinedOn ? `Since ${monthYear(joinedOn)}` : 'Since before the archive'
 }
 
 // Up to two initials for a team without a logo.

@@ -1,8 +1,10 @@
 // Pure Team Tracker rules shared by api/tournament-history.ts's team
 // endpoints (spec: docs/superpowers/specs/2026-11-06-team-tracker-design.md).
 // Membership on a date is the one rule everything hangs on: a player counts
-// for an event when joined_on <= event_date <= left_on (open-ended when
-// left_on is null). Dates are ISO yyyy-mm-dd strings and compare lexically.
+// for an event when joined_on <= event_date <= left_on. A null joined_on is
+// an unknown start ("since before the archive") and counts from the
+// beginning; a null left_on is open-ended. Dates are ISO yyyy-mm-dd strings
+// and compare lexically.
 
 export const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
@@ -15,7 +17,7 @@ export interface MemberRow {
   team_id: string
   rph_player_id: string
   player_name: string
-  joined_on: string
+  joined_on: string | null
   left_on: string | null
 }
 
@@ -63,9 +65,9 @@ export interface TeamEvent {
   results: TeamEventResult[]
 }
 
-export function isMemberOn(member: { joined_on: string; left_on: string | null }, date: string | null): boolean {
+export function isMemberOn(member: { joined_on: string | null; left_on: string | null }, date: string | null): boolean {
   if (!date) return false
-  return member.joined_on <= date && (member.left_on === null || member.left_on >= date)
+  return (member.joined_on === null || member.joined_on <= date) && (member.left_on === null || member.left_on >= date)
 }
 
 const byRank = (a: TeamEventResult, b: TeamEventResult) => (a.rank ?? Infinity) - (b.rank ?? Infinity)

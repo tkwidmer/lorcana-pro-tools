@@ -106,7 +106,7 @@ function PlayerPicker({ onPick, disabled }) {
 // them on the server (a dissolve or reinstate) remounts the row with fresh
 // inputs instead of keeping the old values in local state.
 function MemberRow({ member, teamId, readOnly, onSaved, onError }) {
-  const [joinedOn, setJoinedOn] = useState(member.joinedOn)
+  const [joinedOn, setJoinedOn] = useState(member.joinedOn ?? '')
   const [leftOn, setLeftOn] = useState(member.leftOn ?? '')
 
   async function save(next) {
@@ -116,13 +116,13 @@ function MemberRow({ member, teamId, readOnly, onSaved, onError }) {
         teamId,
         playerId: member.playerId,
         playerName: member.playerName,
-        joinedOn: next.joinedOn,
+        joinedOn: next.joinedOn || null,
         leftOn: next.leftOn || null,
       })
       onSaved()
     } catch (err) {
       onError(writeError(err))
-      setJoinedOn(member.joinedOn)
+      setJoinedOn(member.joinedOn ?? '')
       setLeftOn(member.leftOn ?? '')
     }
   }
@@ -151,7 +151,7 @@ function MemberRow({ member, teamId, readOnly, onSaved, onError }) {
           value={joinedOn}
           disabled={readOnly}
           onChange={(e) => setJoinedOn(e.target.value)}
-          onBlur={() => { if (joinedOn !== member.joinedOn) save({ joinedOn, leftOn }) }}
+          onBlur={() => { if ((joinedOn || null) !== member.joinedOn) save({ joinedOn, leftOn }) }}
           className="py-1"
         />
       </td>
@@ -160,7 +160,7 @@ function MemberRow({ member, teamId, readOnly, onSaved, onError }) {
           type="date"
           value={leftOn}
           disabled={readOnly}
-          min={joinedOn}
+          min={joinedOn || undefined}
           onChange={(e) => setLeftOn(e.target.value)}
           onBlur={() => { if ((leftOn || null) !== member.leftOn) save({ joinedOn, leftOn }) }}
           className="py-1"
@@ -221,7 +221,7 @@ export function TeamManagePage() {
   const [access, setAccess] = useState(null) // { admin, canEdit } once my-teams resolves
   const [loaded, setLoaded] = useState(null) // { slug, data } | { slug, error }
   const [form, setForm] = useState(null) // { name, url }
-  const [newJoinedOn, setNewJoinedOn] = useState(today)
+  const [newJoinedOn, setNewJoinedOn] = useState('') // blank = unknown start
   const [status, setStatus] = useState(null) // { kind: 'error' | 'ok', text }
   const [busy, setBusy] = useState(false)
   const fileRef = useRef(null)
@@ -298,7 +298,7 @@ export function TeamManagePage() {
 
   const addMember = (p) =>
     run(`Added ${p.playerName}`, () =>
-      saveTeamMember({ teamId: team.id, playerId: p.playerId, playerName: p.playerName, joinedOn: newJoinedOn, leftOn: null })
+      saveTeamMember({ teamId: team.id, playerId: p.playerId, playerName: p.playerName, joinedOn: newJoinedOn || null, leftOn: null })
     )
 
   return (
@@ -369,12 +369,14 @@ export function TeamManagePage() {
             <div className="flex flex-wrap items-end gap-3 mb-1">
               <div className="flex-1 min-w-64"><PlayerPicker onPick={addMember} disabled={readOnly} /></div>
               <label className="block">
-                <span className="block text-xs text-gray-500 uppercase tracking-wide mb-1">Joined</span>
+                <span className="block text-xs text-gray-500 uppercase tracking-wide mb-1">Joined (optional)</span>
                 <Input type="date" value={newJoinedOn} max={today()} onChange={(e) => setNewJoinedOn(e.target.value)} disabled={readOnly} />
               </label>
             </div>
             <p className="text-xs text-gray-400 mb-6">
               Players must have appeared in an archived event to be found; that is what ties a member to RPH's player id.
+              Leave Joined blank if you don't know it: the member then counts for every archived event. Set it once known and
+              earlier events drop off.
             </p>
           </>
         )}
@@ -387,7 +389,7 @@ export function TeamManagePage() {
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
                 <th className="py-1.5 pr-4">Player</th>
-                <th className="py-1.5 pr-4">Joined</th>
+                <th className="py-1.5 pr-4">Joined <span className="normal-case tracking-normal font-normal">(blank = unknown)</span></th>
                 <th className="py-1.5 pr-4">Left</th>
                 <th className="py-1.5"></th>
               </tr>
@@ -401,8 +403,8 @@ export function TeamManagePage() {
         )}
         {!disbanded && (
           <p className="text-xs text-gray-400 mt-2">
-            Dates save when you leave the field. Clearing a leaving date reinstates the member. Delete is for a row added by
-            mistake; a departure gets a leaving date.
+            Dates save when you leave the field. A blank Joined date counts the member since before the archive. Clearing a
+            leaving date reinstates the member. Delete is for a row added by mistake; a departure gets a leaving date.
           </p>
         )}
 

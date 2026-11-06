@@ -51,6 +51,20 @@ describe('formatMembership', () => {
     expect(formatMembership({ joinedOn: '2025-01-10', leftOn: '2026-10-30' })).toBe('Jan 2025 – Oct 2026')
     expect(formatMembership({ joinedOn: '2025-01-10', leftOn: null })).toBe('Since Jan 2025')
   })
+  it('words an unknown start as before the archive', () => {
+    expect(formatMembership({ joinedOn: null, leftOn: null })).toBe('Since before the archive')
+    expect(formatMembership({ joinedOn: null, leftOn: '2026-10-30' })).toBe('Before the archive – Oct 2026')
+  })
+})
+
+describe('splitRoster with unknown starts', () => {
+  it('puts members with no start date first among current members', () => {
+    const { current } = splitRoster([
+      { id: 'a', playerId: '1', playerName: 'Dated', joinedOn: '2025-01-10', leftOn: null },
+      { id: 'b', playerId: '2', playerName: 'Unknown', joinedOn: null, leftOn: null },
+    ])
+    expect(current.map((m) => m.playerName)).toEqual(['Unknown', 'Dated'])
+  })
 })
 
 describe('teamInitials', () => {

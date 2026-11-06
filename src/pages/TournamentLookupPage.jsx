@@ -16,13 +16,14 @@ import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
 import { EliminationBracket } from '../components/EliminationBracket'
 import { FavoriteStar, TeamBadge } from '../components/PlayerTags'
 import { usePairingBadges } from '../hooks/usePairingBadges'
-import { pairKeyOf, fetchTeams, fetchTeam } from '../lib/tournamentHistoryApi'
-import { rosterMap, teamLiveSummary } from '../lib/teams'
+import { pairKeyOf, fetchTeams } from '../lib/tournamentHistoryApi'
+import { teamLiveSummary, teamsAtEvent } from '../lib/teams'
+import { TeamLogo } from '../components/TeamLogo'
 import { LiveMajorsList } from '../components/LiveMajorsList'
 import { useLiveMajors } from '../hooks/useLiveMajors'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
 import { Button } from '../components/ui/Button'
-import { Input, Select } from '../components/ui/Field'
+import { Input } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs, Tab } from '../components/ui/Tabs'
 
@@ -524,15 +525,18 @@ export function TournamentLookupPage() {
     team: searchParams.get('team'),
   }))
 
-  // The Team tab: a team from the Team Tracker directory, chosen by slug and
-  // carried in the URL (?team=) like the event, so a team page can deep-link
-  // straight to "this team at this event". `team` keeps the { [id]: { name } }
-  // shape the tables, match filter and ticker already read.
+  // The Teams tab: every Team Tracker directory team with a member in this
+  // event, ranked, with a drill-in per team. The drilled team's slug rides in
+  // the URL (?team=) like the event, so a team page can deep-link straight to
+  // "this team at this event". `team` keeps the { [id]: { name } } shape the
+  // tables, match filter and ticker already read, for the drilled team.
   const [teams, setTeams] = useState([])
   const [teamSlug, setTeamSlug] = useState(initialParams.team)
-  const [teamMembers, setTeamMembers] = useState([])
-  const team = useMemo(() => rosterMap(teamMembers), [teamMembers])
   const selectedTeam = teams.find((t) => t.slug === teamSlug) ?? null
+  const team = useMemo(
+    () => Object.fromEntries((selectedTeam?.members ?? []).map((m) => [String(m.playerId), { name: m.playerName }])),
+    [selectedTeam]
+  )
   const liveMajors = useLiveMajors()
 
   useEffect(() => {
@@ -541,18 +545,8 @@ export function TournamentLookupPage() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    if (!teamSlug) return
-    let cancelled = false
-    fetchTeam(teamSlug)
-      .then((data) => { if (!cancelled) setTeamMembers(data.members) })
-      .catch(() => { if (!cancelled) setTeamMembers([]) })
-    return () => { cancelled = true }
-  }, [teamSlug])
-
   function pickTeam(slug) {
     setTeamSlug(slug || null)
-    if (!slug) setTeamMembers([])
   }
 
   const [roster, setRoster] = useState(null)
@@ -861,6 +855,7 @@ export function TournamentLookupPage() {
     .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0))
 
   const teamSummary = teamLiveSummary(teamEntries, structure?.topCutSize)
+  const teamRows = teamsAtEvent(teams, rosterOrStandings, structure?.topCutSize)
 
   const tiebreakers = player ? formatTiebreakers(player, structure?.tiebreakers) : null
   const idAnalysis = player && structure ? analyzeId(player, allStandings, structure) : null
@@ -1107,9 +1102,9 @@ export function TournamentLookupPage() {
             )}
           </Tab>
           <Tab active={activeTab === 'team'} onClick={() => setActiveTab('team')}>
-            Team
-            {teamEntries.length > 0 && (
-              <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({teamEntries.length})</span>
+            Teams
+            {teamRows.length > 0 && (
+              <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({teamRows.length})</span>
             )}
           </Tab>
         </Tabs>
@@ -1302,35 +1297,77 @@ export function TournamentLookupPage() {
       {/* Team tab */}
       {(allStandings || roster) && !player && activeTab === 'team' && (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="block">
-              <span className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Team</span>
-              <Select value={teamSlug ?? ''} onChange={(e) => pickTeam(e.target.value)} className="min-w-64">
-                <option value="">Pick a team…</option>
-                {teams.map((t) => (
-                  <option key={t.slug} value={t.slug}>{t.name}</option>
-                ))}
-              </Select>
-            </label>
-            {selectedTeam ? (
-              <>
-                <Link to={`/teams/${selectedTeam.slug}`} className="text-sm text-forge-ink hover:underline">Team page →</Link>
-                <span className="ml-auto text-sm text-gray-500">
-                  {teamEntries.length} of {Object.keys(team).length} members in this event
-                </span>
-              </>
-            ) : (
-              <span className="text-sm text-gray-500">
-                Teams and rosters come from the <Link to="/teams" className="text-forge-ink hover:underline">Team Tracker</Link>.
-              </span>
-            )}
-          </div>
           {!selectedTeam ? (
-            <p className="text-sm text-gray-500 py-10 text-center px-4 border border-dashed border-gray-300 rounded-lg bg-white">
-              Pick a team to see its players in this event's standings and pairings.
-            </p>
+            <>
+              <p className="text-sm text-gray-500">
+                Every <Link to="/teams" className="text-forge-ink hover:underline">Team Tracker</Link> team with a member in this event,
+                by combined match points. Tap a team to see its players.
+              </p>
+              {teamRows.length === 0 ? (
+                <p className="text-sm text-gray-500 py-10 text-center px-4 border border-dashed border-gray-300 rounded-lg bg-white">
+                  No directory team has a member in this event.
+                </p>
+              ) : (
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                      <tr>
+                        <th className="text-left px-4 py-2 w-12">#</th>
+                        <th className="text-left px-4 py-2">Team</th>
+                        <th className="text-right px-4 py-2">Members</th>
+                        <th className="text-right px-4 py-2">Record</th>
+                        <th className="text-right px-4 py-2">Pts</th>
+                        <th className="text-right px-4 py-2">Best</th>
+                        {structure?.topCutSize && <th className="text-right px-4 py-2">In top {structure.topCutSize}</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamRows.map((row, i) => (
+                        <tr
+                          key={row.slug}
+                          onClick={() => pickTeam(row.slug)}
+                          className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <td className="px-4 py-2.5 text-gray-500 font-medium">{i + 1}</td>
+                          <td className="px-4 py-2.5">
+                            <span className="inline-flex items-center gap-2 font-medium text-gray-900">
+                              <TeamLogo name={row.name} logoUrl={row.logoUrl} size="h-6 w-6" className="text-[10px]" />
+                              {row.name}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">
+                            {row.inEvent}<span className="text-gray-400"> / {row.rosterSize}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-mono text-gray-900">
+                            {row.summary.wins}-{row.summary.losses}-{row.summary.draws}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-900">{row.points}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
+                            {row.summary.bestRank === null ? '—' : `#${row.summary.bestRank}`}
+                          </td>
+                          {structure?.topCutSize && <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{row.summary.inCut}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           ) : (
             <>
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => pickTeam(null)} className="text-sm font-medium text-forge-ink hover:underline">
+                  ← All teams
+                </button>
+                <span className="inline-flex items-center gap-2 font-medium text-gray-900">
+                  <TeamLogo name={selectedTeam.name} logoUrl={selectedTeam.logoUrl} size="h-6 w-6" className="text-[10px]" />
+                  {selectedTeam.name}
+                </span>
+                <Link to={`/teams/${selectedTeam.slug}`} className="text-sm text-forge-ink hover:underline">Team page →</Link>
+                <span className="ml-auto text-sm text-gray-500">
+                  {teamEntries.length} of {selectedTeam.members.length} members in this event
+                </span>
+              </div>
               {teamSummary && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">

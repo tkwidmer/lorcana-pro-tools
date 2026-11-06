@@ -656,10 +656,14 @@ async function handleTeams(_req: VercelRequest, res: VercelResponse) {
       const mine = members.filter((m) => m.team_id === t.id)
       const ids = new Set(mine.map((m) => m.rph_player_id))
       const events = groupTeamEvents(mine, rows.filter((r) => ids.has(r.rph_player_id)))
+      const current = mine.filter((m) => m.left_on === null)
       return {
         ...teamShape(t),
-        memberCount: mine.filter((m) => m.left_on === null).length,
-        formerCount: mine.filter((m) => m.left_on !== null).length,
+        memberCount: current.length,
+        formerCount: mine.length - current.length,
+        // The current roster, so Tournament Lookup can rank every team in a
+        // live event from one read.
+        members: current.map((m) => ({ playerId: m.rph_player_id, playerName: m.player_name })),
         lastEvent: lastEventOf(events),
       }
     })

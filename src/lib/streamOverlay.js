@@ -88,12 +88,19 @@ export function themeTextColor(fillHex) {
   return luminance > 0.4 ? '#17171a' : '#f2f1ee'
 }
 
+// `banner` fills the top banner only, `fill` everything else; a blank
+// `theme_banner` means the banner matches the fill.
+function themeOf(row) {
+  const banner = row.theme_banner || row.theme_fill
+  return { fill: row.theme_fill, banner, accent: row.theme_accent, text: themeTextColor(row.theme_fill), bannerText: themeTextColor(banner) }
+}
+
 // A row (from get_stream_table / the owner's select / a broadcast payload)
 // → what the pages render.
 export function rowToState(row) {
   return {
     mode: row.mode,
-    theme: { fill: row.theme_fill, accent: row.theme_accent, text: themeTextColor(row.theme_fill) },
+    theme: themeOf(row),
     eventName: row.event_name,
     eventLogoUrl: row.event_logo_url,
     sponsorLogoUrl: row.sponsor_logo_url,

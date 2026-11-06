@@ -170,3 +170,23 @@ export function filterRealCandidates(events: DiscoveredEvent[]): DiscoveredEvent
       )
   )
 }
+
+export const LIVE_WINDOW_DAYS = 14
+
+// The live counterpart of filterRealCandidates: what a caster or team page
+// wants to open now. In-progress events first, then upcoming ones that start
+// within the window; an `upcoming` event whose start is already past is a
+// store that never flipped the status, not a live event.
+export function filterLiveCandidates(events: DiscoveredEvent[], now: Date, windowDays = LIVE_WINDOW_DAYS): DiscoveredEvent[] {
+  const horizon = now.getTime() + windowDays * 86_400_000
+  const live: DiscoveredEvent[] = []
+  const upcoming: DiscoveredEvent[] = []
+  for (const e of events) {
+    if (FAKE_STORE_NAMES.has(e.store?.name ?? '') || !e.start_datetime) continue
+    const t = Date.parse(e.start_datetime)
+    if (e.display_status === 'inProgress') live.push(e)
+    else if (e.display_status === 'upcoming' && t >= now.getTime() && t <= horizon) upcoming.push(e)
+  }
+  const byStart = (a: DiscoveredEvent, b: DiscoveredEvent) => Date.parse(a.start_datetime!) - Date.parse(b.start_datetime!)
+  return [...live.sort(byStart), ...upcoming.sort(byStart)]
+}

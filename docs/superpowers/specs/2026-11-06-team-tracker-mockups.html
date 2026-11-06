@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Team Tracker mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#f2f1ee;--white:#fbfaf8;--ink:#17171a;--forge:#b5832a;--forge-ink:#8a5a12;--forge-soft:#f1e5cc;
+    --g50:#ebe9e4;--g100:#e3e0da;--g200:#d5d2cb;--g300:#bfbbb3;--g400:#8f8b84;--g500:#6b6862;--g600:#57544f;--g700:#403e3a;--g900:#17171a;
+    --green:#2f7a3e;--green-bg:#e4efe4;--red:#a33a2e;--amber:#9a6b12;--amber-bg:#f6ecd6}
+  *{box-sizing:border-box}
+  body{margin:0;background:#dedbd4;font-family:"Source Sans 3",system-ui,sans-serif;color:var(--g900);font-size:14px;line-height:1.4}
+  .deck{max-width:1180px;margin:0 auto;padding:32px 24px 80px}
+  .deck>h1{font-family:Oswald;font-weight:500;font-size:30px;margin:0 0 4px}
+  .deck>p.lead{color:var(--g600);margin:0 0 28px}
+  .screen{margin:0 0 44px}
+  .screen>h2{font-family:Oswald;text-transform:uppercase;letter-spacing:.06em;font-weight:500;font-size:18px;margin:0 0 6px}
+  .screen>p.note{color:var(--g600);margin:0 0 10px;max-width:900px}
+  .frame{background:var(--paper);border:1px solid var(--g300);border-radius:4px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+  .nav{background:var(--ink);color:var(--paper);height:46px;display:flex;align-items:center;padding:0 24px;gap:22px;font-size:13px}
+  .nav b{font-family:Oswald;font-weight:500;letter-spacing:.04em;font-size:16px;margin-right:8px}
+  .nav span{opacity:.75}.nav span.on{opacity:1;border-bottom:2px solid var(--forge);padding-bottom:2px}
+  .nav .url{margin-left:auto;background:#2a2927;color:#bfbbb3;font-family:ui-monospace,monospace;font-size:11px;padding:3px 8px;border-radius:2px}
+  .page{padding:28px 24px 32px}
+  .eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--forge-ink);margin:0 0 4px}
+  h1.t{font-family:Oswald;font-weight:500;font-size:32px;margin:0;line-height:1.1}
+  .desc{color:var(--g500);margin:4px 0 0}
+  .hdr{display:flex;align-items:flex-end;gap:16px;margin-bottom:26px}
+  .hdr .actions{margin-left:auto;display:flex;gap:8px}
+  .card{background:var(--white);border:1px solid var(--g200);border-radius:3px;padding:18px}
+  .card h3{font-family:Oswald;text-transform:uppercase;letter-spacing:.05em;font-weight:500;font-size:15px;margin:0 0 12px}
+  .grid{display:grid;gap:18px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}.g13{grid-template-columns:1fr 2fr}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--g500);padding:6px 12px 6px 0;border-bottom:1px solid var(--g200);font-weight:600}
+  td{padding:8px 12px 8px 0;border-top:1px solid var(--g100);vertical-align:middle}
+  tr:first-child td{border-top:0}
+  .r{text-align:right}
+  a,.lnk{color:var(--g900);text-decoration:underline;text-decoration-color:var(--g300)}
+  .btn{display:inline-block;border:1px solid var(--g900);background:var(--g900);color:var(--paper);padding:6px 12px;border-radius:3px;font-weight:600;font-size:13px}
+  .btn.forge{background:var(--forge);border-color:var(--forge);color:var(--ink)}
+  .btn.ghost{background:transparent;color:var(--g900)}
+  .btn.sm{padding:3px 8px;font-size:12px}
+  .btn.danger{background:transparent;border-color:var(--g300);color:var(--red)}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:2px;border:1px solid var(--g300);color:var(--g600);text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
+  .badge.forge{background:var(--forge-soft);border-color:#e0cfa3;color:var(--forge-ink)}
+  .badge.green{background:var(--green-bg);border-color:#bcd6bc;color:var(--green)}
+  .badge.amber{background:var(--amber-bg);border-color:#e8d4a3;color:var(--amber)}
+  .badge.muted{color:var(--g400);border-color:var(--g200)}
+  .tbadge{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:2px;background:var(--forge);color:var(--ink);font-size:11px;font-weight:700;margin-left:6px;vertical-align:middle}
+  .star{color:var(--forge);margin-right:4px}
+  .ink{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:2px;vertical-align:-2px;border:1px solid rgba(0,0,0,.15)}
+  .amber{background:#e0a21b}.amethyst{background:#7d3fa3}.emerald{background:#2d8a4e}.ruby{background:#c0392b}.sapphire{background:#2b65c9}.steel{background:#6d7681}
+  .tabs{display:flex;gap:22px;border-bottom:1px solid var(--g200);margin-bottom:16px}
+  .tab{font-family:Oswald;text-transform:uppercase;letter-spacing:.06em;font-size:14px;padding:8px 0;color:var(--g500)}
+  .tab.on{color:var(--g900);border-bottom:2px solid var(--forge);margin-bottom:-1px}
+  .tab small{font-family:"Source Sans 3";text-transform:none;letter-spacing:0;color:var(--g400);font-size:12px}
+  .tile{background:var(--white);border:1px solid var(--g200);border-radius:3px;padding:12px;text-align:center}
+  .tile b{display:block;font-size:20px;font-family:Oswald;font-weight:500}.tile span{font-size:12px;color:var(--g500)}
+  .input{display:flex;align-items:center;border:1px solid var(--g300);background:var(--white);border-radius:3px;padding:7px 10px;color:var(--g400);font-size:14px}
+  .input.filled{color:var(--g900)}
+  .select{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--g300);background:var(--white);border-radius:3px;padding:7px 10px;font-size:14px;min-width:260px}
+  .select::after{content:"▾";margin-left:auto;color:var(--g500)}
+  label.l{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--g500);font-weight:600;margin-bottom:4px}
+  .list{border:1px solid var(--g200);border-radius:3px;background:var(--white)}
+  .list .row{display:flex;align-items:center;gap:12px;padding:9px 12px;border-top:1px solid var(--g100)}
+  .list .row:first-child{border-top:0}
+  .live{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-weight:600;font-size:12px}
+  .live i{width:8px;height:8px;border-radius:50%;background:#3fae57;display:inline-block;box-shadow:0 0 0 3px rgba(63,174,87,.25)}
+  .muted{color:var(--g500)}.small{font-size:12px}.sec{margin-top:22px}
+  .empty{padding:36px;text-align:center;color:var(--g500);background:var(--white);border:1px dashed var(--g300);border-radius:3px}
+  .callout{font-size:12px;color:var(--g600);background:var(--g50);border-left:3px solid var(--forge);padding:8px 10px;margin:0 0 14px}
+  .dropdown{position:relative}
+  .dropdown .menu{position:absolute;left:0;right:0;top:40px;background:var(--white);border:1px solid var(--g300);border-radius:3px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:2}
+  .dropdown .menu div{padding:8px 10px;border-top:1px solid var(--g100);display:flex;justify-content:space-between}
+  .dropdown .menu div:first-child{border-top:0}.dropdown .menu div.hl{background:var(--forge-soft)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--g600);margin:14px 0 0}
+  .num{font-variant-numeric:tabular-nums}
+  .kbd{font-family:ui-monospace,monospace;font-size:12px;background:var(--g50);padding:1px 5px;border-radius:2px}
+</style>
+</head>
+<body>
+<div class="deck">
+  <h1>Team Tracker: mockups</h1>
+  <p class="lead">Every new page and interaction from the 2026-11-06 spec, in the site's tokens (paper surfaces, ink nav, Oswald display type, one forge accent). Sample data is illustrative. Dark mode comes from the palette remap and is not drawn separately.</p>
+
+  <!-- 1. /teams -->
+  <section class="screen">
+    <h2>1 · /teams — team directory (public)</h2>
+    <p class="note">Catalog entry "Team Tracker" under Tournament Tools. One table; the whole row links to the team. "Last major" is the newest archived event a member played while on the team, with the team's best finish there.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/teams</span></div>
+      <div class="page">
+        <div class="hdr"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Team Tracker</h1><p class="desc">Every team's current roster and how it finished at the majors in the Tournament History archive.</p></div></div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Team</th><th class="r">Members</th><th>Last major</th><th>Date</th><th class="r">Best finish</th><th class="r">Top cuts</th></tr></thead>
+            <tbody>
+              <tr><td><a>Inkborn Forge</a></td><td class="r num">7</td><td><a>DLC Atlanta 2026</a> <span class="badge green">Live</span></td><td class="muted">Nov 7, 2026</td><td class="r num">—</td><td class="r num">—</td></tr>
+              <tr><td><a>Team Cavalier</a></td><td class="r num">11</td><td><a>DLC Bangkok 2026</a></td><td class="muted">Oct 24, 2026</td><td class="r num">2nd</td><td class="r num">3</td></tr>
+              <tr><td><a>Gloomstone Gaming</a></td><td class="r num">5</td><td><a>CCQ Manchester</a></td><td class="muted">Oct 18, 2026</td><td class="r num">9th</td><td class="r num">0</td></tr>
+              <tr><td><a>Les Encreurs</a></td><td class="r num">8</td><td><a>DLC Paris 2026</a></td><td class="muted">Sep 20, 2026</td><td class="r num">1st</td><td class="r num">2</td></tr>
+              <tr><td><a>Seven Seas</a></td><td class="r num">4</td><td class="muted">No archived events yet</td><td></td><td class="r num">—</td><td class="r num">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small muted" style="margin-top:12px">Teams are curated by the site. Missing yours, or a roster out of date? <a>Tell us on Discord</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. /teams/:slug -->
+  <section class="screen">
+    <h2>2 · /teams/inkborn-forge — team page (public)</h2>
+    <p class="note">Three blocks. <b>Live and upcoming majors</b> comes from the new <span class="kbd">live-majors</span> endpoint; the "registered" count is the current roster intersected with each event's registrations, fetched client-side. "View team live" deep-links into Tournament Lookup with <span class="kbd">?event=…&amp;tab=team&amp;team=inkborn-forge</span>. <b>Roster</b> splits current and former by <span class="kbd">left_on</span>. <b>Results</b> is one block per archived event, members who were on the team on that date, by rank.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/teams/inkborn-forge</span></div>
+      <div class="page">
+        <p class="small"><a>← All teams</a></p>
+        <div class="hdr"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Inkborn Forge</h1><p class="desc">7 current members · 2 former · <a>inkbornforge.com</a></p></div>
+          <div class="actions"><span class="badge forge">Playing now · DLC Atlanta 2026</span><span class="btn ghost sm">Manage roster</span></div></div>
+
+        <div class="grid g4" style="margin-bottom:18px">
+          <div class="tile"><b class="num">7</b><span>Current members</span></div>
+          <div class="tile"><b class="num">12</b><span>Archived majors played</span></div>
+          <div class="tile"><b class="num">5</b><span>Top cuts</span></div>
+          <div class="tile"><b class="num">2nd</b><span>Best finish · DLC Bangkok 2026</span></div>
+        </div>
+
+        <div class="card">
+          <h3>Live and upcoming majors</h3>
+          <div class="list">
+            <div class="row"><span class="live"><i></i>Live</span><span class="badge">DLC</span><b>Disney Lorcana Challenge Atlanta 2026</b><span class="muted small">Fanfinity · 812 players · Round 6 of 9</span><span class="muted" style="margin-left:auto"><b class="num" style="color:var(--g900)">4</b> of 7 registered</span><span class="btn forge sm">View team live →</span></div>
+            <div class="row"><span class="badge amber">In 2 days</span><span class="badge">CCQ</span><b>CCQ Lyon · Challenge Championship Qualifier</b><span class="muted small">Magic Bazar · 214 registered · Sat Nov 8</span><span class="muted" style="margin-left:auto"><b class="num" style="color:var(--g900)">1</b> of 7 registered</span><span class="btn ghost sm">Open in Tournament Lookup →</span></div>
+            <div class="row"><span class="badge amber">In 9 days</span><span class="badge">DLC</span><b>Disney Lorcana Challenge São Paulo 2026</b><span class="muted small">Epic Game · 96 registered · Sat Nov 15</span><span class="muted" style="margin-left:auto">None registered yet</span><span class="btn ghost sm">Open in Tournament Lookup →</span></div>
+          </div>
+          <p class="small muted" style="margin:10px 0 0">In-progress events and those starting within 14 days, from the Play Hub. Registrations refresh when you reload.</p>
+          <p class="callout" style="margin:12px 0 0">"Manage roster" in the header shows only to an admin or to this team's manager (from the session-gated <span class="kbd">my-teams</span> read); everyone else sees the page without it.</p>
+        </div>
+
+        <div class="grid g13 sec">
+          <div class="card">
+            <h3>Roster</h3>
+            <table>
+              <thead><tr><th>Player</th><th>Since</th><th class="r">Rating</th></tr></thead>
+              <tbody>
+                <tr><td><a>Marco Delgado</a></td><td class="muted">Jan 2025</td><td class="r num">1,812 <span class="small muted">#6</span></td></tr>
+                <tr><td><a>Priya Natarajan</a></td><td class="muted">Jan 2025</td><td class="r num">1,744 <span class="small muted">#19</span></td></tr>
+                <tr><td><a>Jonas Weber</a></td><td class="muted">Mar 2025</td><td class="r num">1,701</td></tr>
+                <tr><td><a>Alex "Fenwick" Hart</a></td><td class="muted">Aug 2025</td><td class="r num">1,655</td></tr>
+                <tr><td><a>Sofia Lindqvist</a></td><td class="muted">Aug 2025</td><td class="r num">1,590</td></tr>
+                <tr><td><a>Daniel Osei</a></td><td class="muted">Feb 2026</td><td class="r num">1,544</td></tr>
+                <tr><td><a>Mina Kobayashi</a></td><td class="muted">Sep 2026</td><td class="r num muted">provisional</td></tr>
+              </tbody>
+            </table>
+            <p class="small" style="margin:14px 0 6px"><a>▾ Former members (2)</a></p>
+            <table class="small">
+              <tbody>
+                <tr><td class="muted"><a>Tom Reyes</a></td><td class="muted">Jan 2025 – Oct 2026</td></tr>
+                <tr><td class="muted"><a>Ana Costa</a></td><td class="muted">Mar 2025 – Feb 2026</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <div class="card">
+              <h3 style="display:flex;gap:10px;align-items:baseline"><a style="text-transform:none;letter-spacing:0">Disney Lorcana Challenge Bangkok 2026</a><span class="small muted" style="font-family:'Source Sans 3';text-transform:none;letter-spacing:0">Oct 24, 2026 · 778 players · Top 32</span><span class="badge forge" style="margin-left:auto">Best 2nd</span></h3>
+              <table>
+                <thead><tr><th class="r">Rank</th><th>Player</th><th>Record</th><th>Inks</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td class="r num">2</td><td><a>Marco Delgado</a></td><td class="num">11-2-0</td><td><i class="ink amethyst"></i><i class="ink steel"></i></td><td><span class="badge forge">Top cut</span></td></tr>
+                  <tr><td class="r num">14</td><td><a>Priya Natarajan</a></td><td class="num">9-3-1</td><td><i class="ink emerald"></i><i class="ink steel"></i></td><td><span class="badge forge">Top cut</span></td></tr>
+                  <tr><td class="r num">57</td><td><a>Jonas Weber</a></td><td class="num">8-4-0</td><td><i class="ink ruby"></i><i class="ink sapphire"></i></td><td><span class="badge muted">Day 2</span></td></tr>
+                  <tr><td class="r num">203</td><td><a>Sofia Lindqvist</a></td><td class="num">6-3-0</td><td><i class="ink amber"></i><i class="ink steel"></i></td><td></td></tr>
+                  <tr><td class="r num">411</td><td><a>Tom Reyes</a> <span class="badge muted">Former</span></td><td class="num">4-5-0</td><td></td><td></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card" style="margin-top:14px">
+              <h3 style="display:flex;gap:10px;align-items:baseline"><a style="text-transform:none;letter-spacing:0">CCQ Manchester</a><span class="small muted" style="font-family:'Source Sans 3';text-transform:none;letter-spacing:0">Oct 18, 2026 · 188 players · Top 8</span><span class="badge forge" style="margin-left:auto">Best 5th</span></h3>
+              <table>
+                <tbody>
+                  <tr><td class="r num" style="width:60px">5</td><td><a>Daniel Osei</a></td><td class="num">7-2-0</td><td><i class="ink amethyst"></i><i class="ink steel"></i></td><td><span class="badge forge">Top cut</span></td></tr>
+                  <tr><td class="r num">31</td><td><a>Mina Kobayashi</a></td><td class="num">5-4-0</td><td></td><td></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="small muted" style="margin:12px 0 0">10 more events · <a>Show all</a></p>
+          </div>
+        </div>
+        <p class="callout" style="margin-top:18px">A member appears on an event only when <span class="kbd">joined_on ≤ event_date ≤ left_on</span>. Tom Reyes played Bangkok on Oct 24 and left on Oct 30, so he is on that event with a Former tag; anything he plays from now on is not. His events after leaving are not shown.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Tournament Lookup landing -->
+  <section class="screen">
+    <h2>3 · /tournament-lookup — landing with live and upcoming majors</h2>
+    <p class="note">The existing landing (URL input, Recents) gains a second list from the same <span class="kbd">live-majors</span> endpoint. Clicking a row loads that event exactly as pasting its URL would.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/tournament-lookup</span></div>
+      <div class="page">
+        <div class="hdr"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Tournament Lookup</h1><p class="desc">Paste a Ravensburger Play event URL to load live standings, pairings and your ID odds.</p></div></div>
+        <div style="display:flex;gap:8px;margin-bottom:22px"><div class="input" style="flex:1">https://tcg.ravensburgerplay.com/events/…</div><span class="btn forge">Load</span></div>
+        <div class="grid g2">
+          <div>
+            <label class="l">Live and upcoming majors</label>
+            <div class="list">
+              <div class="row"><span class="live"><i></i>Live</span><span class="badge">DLC</span><div><b>Disney Lorcana Challenge Atlanta 2026</b><div class="small muted">Fanfinity · 812 players · Round 6 of 9</div></div><span class="muted" style="margin-left:auto">→</span></div>
+              <div class="row"><span class="live"><i></i>Live</span><span class="badge">Side</span><div><b>Atlanta Double-Up Saturday</b><div class="small muted">Fanfinity · 236 players · Round 3 of 6</div></div><span class="muted" style="margin-left:auto">→</span></div>
+              <div class="row"><span class="badge amber">Nov 8</span><span class="badge">CCQ</span><div><b>CCQ Lyon · Challenge Championship Qualifier</b><div class="small muted">Magic Bazar · 214 registered</div></div><span class="muted" style="margin-left:auto">→</span></div>
+              <div class="row"><span class="badge amber">Nov 15</span><span class="badge">DLC</span><div><b>Disney Lorcana Challenge São Paulo 2026</b><div class="small muted">Epic Game · 96 registered</div></div><span class="muted" style="margin-left:auto">→</span></div>
+            </div>
+            <p class="small muted" style="margin:8px 0 0">From the Play Hub: DLC, Championship, LCQ, CCQ, ACQ, prize-pool and large side events, in progress or within 14 days.</p>
+          </div>
+          <div>
+            <label class="l">Recent</label>
+            <div class="list">
+              <div class="row"><b>Disney Lorcana Challenge Bangkok 2026</b><span class="muted" style="margin-left:auto">×</span></div>
+              <div class="row"><b>CCQ Manchester</b><span class="muted" style="margin-left:auto">×</span></div>
+              <div class="row"><b>Randolph 5K</b><span class="muted" style="margin-left:auto">×</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4a. Team tab empty -->
+  <section class="screen">
+    <h2>4a · Tournament Lookup → Team tab, no team picked</h2>
+    <p class="note">"My Team" becomes "Team". The tab holds a picker over the directory; the per-player "T" toggle is gone. Picking writes <span class="kbd">?team=&lt;slug&gt;</span> to the URL, nothing to localStorage.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">…/tournament-lookup?event=1240077&amp;tab=team</span></div>
+      <div class="page">
+        <div class="hdr" style="margin-bottom:14px"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Tournament Lookup</h1></div></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;background:var(--g50);border:1px solid var(--g200);padding:10px 12px;border-radius:3px;margin-bottom:16px;font-size:13px"><span><b>Round</b> 6 of 9</span><span><b>3</b> rounds remaining</span><span>Top <b>32</b> cut</span><span><b>812</b> players</span><span class="live" style="margin-left:auto"><i></i>Live</span><span class="num" style="font-family:ui-monospace,monospace">31:07 left</span></div>
+        <div class="tabs"><span class="tab">Standings</span><span class="tab">Matches</span><span class="tab">★ Favorites <small>(3)</small></span><span class="tab on">Team</span></div>
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px"><div><label class="l">Team</label><div class="select"><span class="muted">Pick a team…</span></div></div><span class="small muted">Teams and rosters come from the <a>Team Tracker</a>.</span></div>
+        <div class="empty">Pick a team to see its players in this event's standings and pairings.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4b. Team tab picked -->
+  <section class="screen">
+    <h2>4b · Tournament Lookup → Team tab, Inkborn Forge picked</h2>
+    <p class="note">Same summary tiles as today, now over the team's current roster present in the standings. Members carry the T badge (display only) in Standings, Roster and Matches; the Matches tab's filter chip reads "Team" and the activity ticker reports their results first.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">…/tournament-lookup?event=1240077&amp;tab=team&amp;team=inkborn-forge</span></div>
+      <div class="page">
+        <div class="tabs"><span class="tab">Standings</span><span class="tab">Matches</span><span class="tab">★ Favorites <small>(3)</small></span><span class="tab on">Team <small>(4)</small></span></div>
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px"><div><label class="l">Team</label><div class="select"><b>Inkborn Forge</b></div></div><a class="small">Team page →</a><span class="small muted" style="margin-left:auto">4 of 7 members in this event</span></div>
+        <div class="grid g4" style="margin-bottom:14px">
+          <div class="tile"><b class="num">19-4-1</b><span>Combined W-L-D</span></div>
+          <div class="tile"><b class="num">#3–#188</b><span>Rank spread</span></div>
+          <div class="tile"><b class="num">4</b><span>Members playing</span></div>
+          <div class="tile"><b class="num">2 / 4</b><span>In top 32</span></div>
+        </div>
+        <div class="card" style="padding:0 14px">
+          <table>
+            <thead><tr><th class="r">Rank</th><th>Player</th><th>Record</th><th class="r">Points</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="r num">3</td><td><span class="star">★</span><a>Marco Delgado</a><span class="tbadge">T</span></td><td class="num">6-0-0</td><td class="r num">18</td><td><span class="badge green">Safe</span></td></tr>
+              <tr><td class="r num">21</td><td><a>Priya Natarajan</a><span class="tbadge">T</span></td><td class="num">5-1-0</td><td class="r num">15</td><td><span class="badge amber">Borderline</span></td></tr>
+              <tr><td class="r num">88</td><td><a>Jonas Weber</a><span class="tbadge">T</span></td><td class="num">4-2-0</td><td class="r num">12</td><td></td></tr>
+              <tr><td class="r num">188</td><td><a>Daniel Osei</a><span class="tbadge">T</span></td><td class="num">4-1-1</td><td class="r num">13</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="legend"><span><span class="tbadge" style="margin:0 4px 0 0">T</span> team member (from the directory, not toggleable)</span><span><span class="star">★</span> personal favorite (unchanged)</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5a. Admin -->
+  <section class="screen">
+    <h2>5a · /admin/teams — create teams, assign managers (admin only)</h2>
+    <p class="note">Linked from <span class="kbd">/admin</span>. Admins create teams and choose each team's <b>manager</b>: any signed-in user, found by email with the same profile search the grant form uses. The roster itself is edited on the manage page (5b), the same one the manager uses, so there is one editor.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/admin/teams</span></div>
+      <div class="page">
+        <div class="hdr"><div><p class="eyebrow">Admin</p><h1 class="t">Teams</h1><p class="desc">Create teams and hand each one to a manager. Managers edit rosters; only admins create teams, change slugs or change managers.</p></div><div class="actions"><span class="btn ghost">← Admin</span></div></div>
+        <div class="grid g13">
+          <div class="card">
+            <h3>New team</h3>
+            <label class="l">Name</label><div class="input filled" style="margin-bottom:10px">Pastimes Pros</div>
+            <label class="l">Slug</label><div class="input filled" style="margin-bottom:4px">pastimes-pros</div>
+            <p class="small muted" style="margin:0 0 10px">inkbornforge.com/teams/pastimes-pros · lowercase, digits, hyphens</p>
+            <label class="l">Link (optional)</label><div class="input" style="margin-bottom:12px">https://</div>
+            <span class="btn forge">Create team</span>
+          </div>
+          <div class="card">
+            <h3>Teams</h3>
+            <table>
+              <thead><tr><th>Team</th><th class="r">Members</th><th>Manager</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><a>Inkborn Forge</a> <span class="small muted">inkborn-forge</span></td><td class="r num">7</td><td>marco.delgado@…com <a class="small">Change</a> · <a class="small">Remove</a></td><td class="r"><span class="btn sm">Manage roster</span></td></tr>
+                <tr><td><a>Team Cavalier</a> <span class="small muted">team-cavalier</span></td><td class="r num">11</td>
+                  <td><div class="dropdown" style="max-width:300px"><div class="input filled small" style="padding:4px 8px">cavalier</div>
+                    <div class="menu" style="top:30px"><div class="hl"><span>captain@teamcavalier.gg</span><span class="small muted">supporter</span></div><div><span>j.cavalieri@gmail.com</span><span class="small muted"></span></div></div></div></td>
+                  <td class="r"><span class="btn sm">Manage roster</span></td></tr>
+                <tr><td><a>Gloomstone Gaming</a> <span class="small muted">gloomstone-gaming</span></td><td class="r num">5</td><td class="muted">No manager · <a class="small">Assign</a></td><td class="r"><span class="btn sm">Manage roster</span></td></tr>
+                <tr><td><a>Les Encreurs</a> <span class="small muted">les-encreurs</span></td><td class="r num">8</td><td>lea@lesencreurs.fr <a class="small">Change</a> · <a class="small">Remove</a></td><td class="r"><span class="btn sm">Manage roster</span></td></tr>
+                <tr><td><a>Seven Seas</a> <span class="small muted">seven-seas</span></td><td class="r num">4</td><td class="muted">No manager · <a class="small">Assign</a></td><td class="r"><span class="btn sm">Manage roster</span></td></tr>
+              </tbody>
+            </table>
+            <p class="small muted" style="margin:10px 0 0">A manager must have signed in once (they need a profile). Removing a manager leaves the team and roster untouched. Manager emails appear here only; nothing public shows who manages a team.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5b. Manage page -->
+  <section class="screen">
+    <h2>5b · /teams/inkborn-forge/manage — roster editor (admin or the team's manager)</h2>
+    <p class="note">Reached from "Manage roster" on the team page or the admin list. Name and link are editable by both roles; slug and manager are read-only here. Adding a member searches the archive's players (existing <span class="kbd">search-players</span>), so every member is keyed by RPH player id from the start; the joined date defaults to today. "Left" is a date field per row; clearing it reinstates the member. Delete is for mistakes, not departures. Anyone else who opens this URL sees "Only this team's manager or an admin can edit the roster" and a link back to the team.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/teams/inkborn-forge/manage</span></div>
+      <div class="page">
+        <p class="small"><a>← Inkborn Forge</a></p>
+        <div class="hdr"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Manage Inkborn Forge</h1><p class="desc">You manage this team. Changes are public immediately.</p></div></div>
+        <div class="card">
+          <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:6px">
+            <div style="flex:1"><label class="l">Name</label><div class="input filled">Inkborn Forge</div></div>
+            <div style="flex:1"><label class="l">Link</label><div class="input filled">https://inkbornforge.com</div></div>
+            <span class="btn">Save</span>
+          </div>
+          <p class="small muted" style="margin:0 0 18px">Slug <span class="kbd">inkborn-forge</span> · Manager: you · set by an admin</p>
+          <h3>Add member</h3>
+          <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px">
+            <div class="dropdown" style="flex:2"><label class="l">Player (archive search)</label><div class="input filled">kobay</div>
+              <div class="menu">
+                <div class="hl"><span><b>Mina Kobayashi</b> <span class="small muted">id 4471023</span></span><span class="small muted">last seen CCQ Manchester</span></div>
+                <div><span><b>Ken Kobayashi</b> <span class="small muted">id 2210487</span></span><span class="small muted">last seen DLC Tokyo 2026</span></div>
+              </div>
+            </div>
+            <div style="flex:1"><label class="l">Joined</label><div class="input filled">2026-11-06</div></div>
+            <span class="btn forge">Add</span>
+          </div>
+          <p class="small muted" style="margin:0 0 18px">Players must have appeared in an archived event to be found; that is what ties a member to RPH's player id.</p>
+          <h3>Members</h3>
+          <table>
+            <thead><tr><th>Player</th><th>Joined</th><th>Left</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><a>Marco Delgado</a> <span class="small muted">4471020</span></td><td><div class="input filled small" style="display:inline-flex;padding:3px 8px">2025-01-10</div></td><td><div class="input small" style="display:inline-flex;padding:3px 8px;min-width:120px">yyyy-mm-dd</div></td><td class="r"><span class="btn danger sm">Delete</span></td></tr>
+              <tr><td><a>Priya Natarajan</a> <span class="small muted">4471021</span></td><td><div class="input filled small" style="display:inline-flex;padding:3px 8px">2025-01-10</div></td><td><div class="input small" style="display:inline-flex;padding:3px 8px;min-width:120px">yyyy-mm-dd</div></td><td class="r"><span class="btn danger sm">Delete</span></td></tr>
+              <tr><td><a>Jonas Weber</a> <span class="small muted">4471022</span></td><td><div class="input filled small" style="display:inline-flex;padding:3px 8px">2025-03-02</div></td><td><div class="input small" style="display:inline-flex;padding:3px 8px;min-width:120px">yyyy-mm-dd</div></td><td class="r"><span class="btn danger sm">Delete</span></td></tr>
+              <tr style="color:var(--g500)"><td><a style="color:inherit">Tom Reyes</a> <span class="small muted">4471030</span> <span class="badge muted">Former</span></td><td><div class="input filled small" style="display:inline-flex;padding:3px 8px">2025-01-10</div></td><td><div class="input filled small" style="display:inline-flex;padding:3px 8px;min-width:120px">2026-10-30</div></td><td class="r"><span class="btn danger sm">Delete</span></td></tr>
+            </tbody>
+          </table>
+          <p class="small muted" style="margin:10px 0 0">Dates save on blur. A second open membership for the same player on this team is rejected: "Already on this team".</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Player page badges -->
+  <section class="screen">
+    <h2>6 · /results/players/:id — team badges</h2>
+    <p class="note">The only change to the player page: current teams as forge badges linking to the team page, former teams muted with their years.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/results/players/4471020</span></div>
+      <div class="page" style="padding-bottom:20px">
+        <div class="hdr" style="margin-bottom:16px"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Marco Delgado</h1>
+          <p class="desc" style="display:flex;gap:8px;align-items:center;margin-top:8px"><a class="badge forge" style="text-decoration:none">Inkborn Forge</a><span class="badge muted">Seven Seas · 2024–2025</span></p></div></div>
+        <div class="grid g4"><div class="tile"><b class="num">1,812</b><span>Rating · #6</span></div><div class="tile"><b class="num">14</b><span>Majors played</span></div><div class="tile"><b class="num">6</b><span>Top cuts</span></div><div class="tile"><b class="num">2nd</b><span>Best finish</span></div></div>
+        <p class="small muted" style="margin:14px 0 0">… rest of the page unchanged.</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

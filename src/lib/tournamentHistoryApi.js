@@ -121,3 +121,61 @@ export async function fetchPairingBadges(playerIds, pairKeys, excludeEventId) {
   if (excludeEventId) params.set('excludeEventId', excludeEventId)
   return apiFetch(`?${params.toString()}`)
 }
+
+// Team Tracker (docs/agents/tournaments.md "Teams"). The directory, a team
+// and the live majors are public reads; the rest carry the session.
+export async function fetchTeams() {
+  return publicFetch('?endpoint=teams')
+}
+
+export async function fetchTeam(slug) {
+  return publicFetch(`?endpoint=team&slug=${encodeURIComponent(slug)}`)
+}
+
+export async function fetchLiveMajors() {
+  return publicFetch('?endpoint=live-majors')
+}
+
+// { admin, teams: [{ id, slug, name }] } for the signed-in user.
+export async function fetchMyTeams() {
+  return apiFetch('?endpoint=my-teams')
+}
+
+export async function fetchAdminTeams() {
+  return apiFetch('?endpoint=admin-teams')
+}
+
+export async function searchProfiles(query) {
+  return apiFetch(`?endpoint=admin-profile-search&q=${encodeURIComponent(query)}`)
+}
+
+function postJson(endpoint, body) {
+  return apiFetch(`?endpoint=${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+// { id?, slug?, name, url, logoUrl, managerUserId? } → { team }. Without an
+// id it creates (admin only); slug and managerUserId are admin-only fields.
+export async function saveTeam(body) {
+  return postJson('team-save', body)
+}
+
+// { id?, teamId, playerId, playerName, joinedOn, leftOn } → { member }
+export async function saveTeamMember(body) {
+  return postJson('team-member-save', body)
+}
+
+export async function deleteTeamMember(id) {
+  return postJson('team-member-delete', { id })
+}
+
+export async function dissolveTeam(id) {
+  return postJson('team-dissolve', { id })
+}
+
+export async function reinstateTeam(id) {
+  return postJson('team-reinstate', { id })
+}

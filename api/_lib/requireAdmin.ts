@@ -66,3 +66,30 @@ export async function requireSession(req: VercelRequest, res: VercelResponse): P
   }
   return data.user.id
 }
+
+// Resolves the caller's session and admin flag without deciding the outcome:
+// the team endpoints choose between 401/403/409 themselves (canEditTeam in
+// api/_lib/teams.ts). Writes 401 and returns null when there is no valid
+// session.
+export async function requireUserWithTier(
+  req: VercelRequest,
+  res: VercelResponse
+): Promise<{ id: string; isAdmin: boolean } | null> {
+  const auth = req.headers.authorization
+  if (!auth?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing Bearer token' })
+    return null
+  }
+  const supabase = getSupabaseServiceClient()
+  const { data: userData, error } = await supabase.auth.getUser(auth.slice('Bearer '.length))
+  if (error || !userData.user) {
+    res.status(401).json({ error: 'Invalid session' })
+    return null
+  }
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('supporter_tier')
+    .eq('user_id', userData.user.id)
+    .maybeSingle()
+  return { id: userData.user.id, isAdmin: profile?.supporter_tier === 'admin' }
+}

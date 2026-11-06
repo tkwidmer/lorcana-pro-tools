@@ -147,6 +147,12 @@ export const SECTIONS = [
         description: 'The top 100 players in the Tournament History archive by Glicko rating, with each one\'s record, rating deviation and change since their last event.',
       },
       {
+        path: '/teams',
+        name: 'Team Tracker',
+        icon: 'users',
+        description: "Every team's current roster, how it finished at the majors in the Tournament History archive, and the live events its players are in now.",
+      },
+      {
         path: '/field-breakdown',
         name: 'Field Breakdown',
         icon: 'pie',

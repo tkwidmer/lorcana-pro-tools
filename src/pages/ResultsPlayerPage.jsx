@@ -12,6 +12,28 @@ import { ArchiveFootnote, ArchiveLoading, ArchiveError } from '../components/Res
 const RESULT_CLASS = { win: 'text-green-700', loss: 'text-red-700', draw: 'text-gray-500', bye: 'text-gray-400' }
 const RESULT_LABEL = { win: 'Win', loss: 'Loss', draw: 'Draw', bye: 'Bye' }
 
+// Team Tracker memberships: current teams link to the team, former teams
+// (left, or the team disbanded) sit muted with their years.
+function TeamBadges({ teams }) {
+  const year = (d) => d.slice(0, 4)
+  return (
+    <span className="flex flex-wrap items-center gap-1.5 mt-2">
+      {teams.map((t) => {
+        const endedOn = t.leftOn ?? t.disbandedOn
+        return endedOn ? (
+          <Badge key={`${t.slug}-${t.joinedOn}`} tone="neutral">
+            {t.name} · {year(t.joinedOn)}–{year(endedOn)}
+          </Badge>
+        ) : (
+          <Link key={`${t.slug}-${t.joinedOn}`} to={`/teams/${t.slug}`} className="hover:underline">
+            <Badge>{t.name}</Badge>
+          </Link>
+        )
+      })}
+    </span>
+  )
+}
+
 // The rating after each rated event, as a line scaled to its own range.
 function RatingSparkline({ history }) {
   if (history.length < 2) return null
@@ -135,7 +157,12 @@ function PlayerView({ playerId }) {
     <div className="w-full px-6 py-8">
       <PageHeader
         title={data.playerName}
-        description={`Across ${summary.eventsPlayed} imported ${summary.eventsPlayed === 1 ? 'event' : 'events'}`}
+        description={
+          <>
+            Across {summary.eventsPlayed} imported {summary.eventsPlayed === 1 ? 'event' : 'events'}
+            {data.teams?.length > 0 && <TeamBadges teams={data.teams} />}
+          </>
+        }
       />
       <Link to="/results" className="text-sm text-gray-500 hover:underline">← All results</Link>
 

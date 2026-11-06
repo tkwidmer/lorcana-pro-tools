@@ -22,7 +22,7 @@ function TeamBadges({ teams }) {
         const endedOn = t.leftOn ?? t.disbandedOn
         return endedOn ? (
           <Badge key={`${t.slug}-${t.joinedOn}`} tone="neutral">
-            {t.name} · {year(t.joinedOn)}–{year(endedOn)}
+            {t.name} · {t.joinedOn ? `${year(t.joinedOn)}–` : 'until '}{year(endedOn)}
           </Badge>
         ) : (
           <Link key={`${t.slug}-${t.joinedOn}`} to={`/teams/${t.slug}`} className="hover:underline">

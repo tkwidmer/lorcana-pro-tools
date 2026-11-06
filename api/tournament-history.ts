@@ -656,10 +656,14 @@ async function handleTeams(_req: VercelRequest, res: VercelResponse) {
       const mine = members.filter((m) => m.team_id === t.id)
       const ids = new Set(mine.map((m) => m.rph_player_id))
       const events = groupTeamEvents(mine, rows.filter((r) => ids.has(r.rph_player_id)))
+      const current = mine.filter((m) => m.left_on === null)
       return {
         ...teamShape(t),
-        memberCount: mine.filter((m) => m.left_on === null).length,
-        formerCount: mine.filter((m) => m.left_on !== null).length,
+        memberCount: current.length,
+        formerCount: mine.length - current.length,
+        // The current roster, so Tournament Lookup can rank every team in a
+        // live event from one read.
+        members: current.map((m) => ({ playerId: m.rph_player_id, playerName: m.player_name })),
         lastEvent: lastEventOf(events),
       }
     })
@@ -828,15 +832,18 @@ async function handleTeamMemberSave(req: VercelRequest, res: VercelResponse) {
   const { id, teamId, playerId, playerName, joinedOn, leftOn } = req.body ?? {}
   if (typeof playerId !== 'string' || !ID_RE.test(playerId)) return res.status(400).json({ error: 'Invalid playerId' })
   if (typeof playerName !== 'string' || !playerName.trim()) return res.status(400).json({ error: 'playerName required' })
-  if (typeof joinedOn !== 'string' || !DATE_RE.test(joinedOn)) return res.status(400).json({ error: 'joinedOn must be yyyy-mm-dd' })
+  // joinedOn may be empty: an unknown start counts from the beginning of the archive.
+  if (joinedOn != null && joinedOn !== '' && (typeof joinedOn !== 'string' || !DATE_RE.test(joinedOn))) {
+    return res.status(400).json({ error: 'joinedOn must be yyyy-mm-dd' })
+  }
   if (leftOn != null && leftOn !== '' && (typeof leftOn !== 'string' || !DATE_RE.test(leftOn))) {
     return res.status(400).json({ error: 'leftOn must be yyyy-mm-dd' })
   }
-  if (leftOn && leftOn < joinedOn) return res.status(400).json({ error: 'leftOn is before joinedOn' })
+  if (joinedOn && leftOn && leftOn < joinedOn) return res.status(400).json({ error: 'leftOn is before joinedOn' })
   // No future dates: dissolve_team() closes open rows on today's date, and a
   // membership nobody has yet would make the client and server disagree.
   const today = new Date().toISOString().slice(0, 10)
-  if (joinedOn > today || (leftOn && leftOn > today)) return res.status(400).json({ error: 'Dates cannot be in the future' })
+  if ((joinedOn && joinedOn > today) || (leftOn && leftOn > today)) return res.status(400).json({ error: 'Dates cannot be in the future' })
   if (id !== undefined && (typeof id !== 'string' || !UUID_RE.test(id))) return res.status(400).json({ error: 'Invalid id' })
   const ctx = await loadEditableTeam(req, res, teamId, 'write')
   if (!ctx) return
@@ -850,7 +857,7 @@ async function handleTeamMemberSave(req: VercelRequest, res: VercelResponse) {
       team_id: teamId,
       rph_player_id: playerId,
       player_name: playerName.trim(),
-      joined_on: joinedOn,
+      joined_on: joinedOn || null,
       left_on: leftOn || null,
     })
     await dangerouslyDeleteByTag(TEAMS_CACHE_TAG)

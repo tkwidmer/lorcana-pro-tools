@@ -56,7 +56,7 @@ export async function listMembers(teamId: string): Promise<MemberRow[]> {
     .from('team_members')
     .select(MEMBER_COLUMNS)
     .eq('team_id', teamId)
-    .order('joined_on')
+    .order('joined_on', { ascending: true, nullsFirst: true })
     .order('player_name')
   if (error) throw error
   return (data ?? []) as MemberRow[]
@@ -110,7 +110,7 @@ export interface MemberUpsert {
   team_id: string
   rph_player_id: string
   player_name: string
-  joined_on: string
+  joined_on: string | null
   left_on: string | null
 }
 

@@ -18,6 +18,11 @@ describe('isMemberOn', () => {
     expect(isMemberOn(closed, '2026-10-30')).toBe(true)
     expect(isMemberOn(closed, '2026-01-01')).toBe(true)
   })
+  it('an unknown start counts from the beginning of the archive, until any leaving date', () => {
+    expect(isMemberOn({ joined_on: null, left_on: null }, '2025-07-19')).toBe(true)
+    expect(isMemberOn({ joined_on: null, left_on: '2026-01-01' }, '2025-12-31')).toBe(true)
+    expect(isMemberOn({ joined_on: null, left_on: '2026-01-01' }, '2026-01-02')).toBe(false)
+  })
   it('excludes before joining and after leaving, and an event with no date', () => {
     expect(isMemberOn(open, '2025-01-09')).toBe(false)
     expect(isMemberOn(closed, '2026-10-31')).toBe(false)

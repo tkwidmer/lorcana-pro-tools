@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitRoster, rosterMap, teamLiveSummary, formatMembership, teamInitials, parseRecord } from '../teams'
+import { splitRoster, teamLiveSummary, formatMembership, teamInitials, parseRecord, teamsAtEvent } from '../teams'
 
 const members = [
   { id: 'a', playerId: '1', playerName: 'Later Joiner', joinedOn: '2026-02-01', leftOn: null },
@@ -13,12 +13,6 @@ describe('splitRoster', () => {
     const { current, former } = splitRoster(members)
     expect(current.map((m) => m.playerName)).toEqual(['Founder', 'Later Joiner'])
     expect(former.map((m) => m.playerName)).toEqual(['Left Late', 'Left Early'])
-  })
-})
-
-describe('rosterMap', () => {
-  it('maps only current members by player id to the { name } shape Tournament Lookup threads', () => {
-    expect(rosterMap(members)).toEqual({ 1: { name: 'Later Joiner' }, 2: { name: 'Founder' } })
   })
 })
 
@@ -51,6 +45,20 @@ describe('formatMembership', () => {
     expect(formatMembership({ joinedOn: '2025-01-10', leftOn: '2026-10-30' })).toBe('Jan 2025 – Oct 2026')
     expect(formatMembership({ joinedOn: '2025-01-10', leftOn: null })).toBe('Since Jan 2025')
   })
+  it('words an unknown start as before the archive', () => {
+    expect(formatMembership({ joinedOn: null, leftOn: null })).toBe('Since before the archive')
+    expect(formatMembership({ joinedOn: null, leftOn: '2026-10-30' })).toBe('Before the archive – Oct 2026')
+  })
+})
+
+describe('splitRoster with unknown starts', () => {
+  it('puts members with no start date first among current members', () => {
+    const { current } = splitRoster([
+      { id: 'a', playerId: '1', playerName: 'Dated', joinedOn: '2025-01-10', leftOn: null },
+      { id: 'b', playerId: '2', playerName: 'Unknown', joinedOn: null, leftOn: null },
+    ])
+    expect(current.map((m) => m.playerName)).toEqual(['Unknown', 'Dated'])
+  })
 })
 
 describe('teamInitials', () => {
@@ -58,5 +66,37 @@ describe('teamInitials', () => {
     expect(teamInitials('Inkborn Forge')).toBe('IF')
     expect(teamInitials('Gloomstone')).toBe('G')
     expect(teamInitials('les encreurs de paris')).toBe('LE')
+  })
+})
+
+describe('teamsAtEvent', () => {
+  const teams = [
+    { slug: 'a', name: 'Alpha', logoUrl: null, members: [{ playerId: '1', playerName: 'One' }, { playerId: '2', playerName: 'Two' }, { playerId: '9', playerName: 'Absent' }] },
+    { slug: 'b', name: 'Beta', logoUrl: null, members: [{ playerId: '3', playerName: 'Three' }] },
+    { slug: 'c', name: 'Gamma', logoUrl: null, members: [{ playerId: '7', playerName: 'Nobody here' }] },
+  ]
+  const entries = [
+    { player: { id: 1 }, rank: 3, record: '3-0-0', match_points: 9 },
+    { player: { id: 2 }, rank: 40, record: '1-2-0', match_points: 3 },
+    { player: { id: 3 }, rank: 5, record: '3-0-0', match_points: 9 },
+    { player: { id: 4 }, rank: 1, record: '3-0-0', match_points: 9 },
+  ]
+  it('ranks teams with a member in the event by combined points, and omits teams with none', () => {
+    const rows = teamsAtEvent(teams, entries, 32)
+    expect(rows.map((r) => r.slug)).toEqual(['a', 'b'])
+    expect(rows[0]).toMatchObject({ points: 12, inEvent: 2, rosterSize: 3, summary: { wins: 4, losses: 2, draws: 0, bestRank: 3, inCut: 1 } })
+    expect(rows[1]).toMatchObject({ points: 9, inEvent: 1, rosterSize: 1 })
+    expect(rows[0].entries.map((e) => e.player.id)).toEqual([1, 2])
+  })
+  it('breaks a points tie by more wins, then by name', () => {
+    const tied = [
+      { slug: 'x', name: 'Xi', logoUrl: null, members: [{ playerId: '1', playerName: 'One' }] },
+      { slug: 'y', name: 'Yankee', logoUrl: null, members: [{ playerId: '5', playerName: 'Five' }] },
+    ]
+    const rows = teamsAtEvent(tied, [
+      { player: { id: 1 }, rank: 10, record: '2-0-3', match_points: 9 },
+      { player: { id: 5 }, rank: 11, record: '3-0-0', match_points: 9 },
+    ], null)
+    expect(rows.map((r) => r.slug)).toEqual(['y', 'x'])
   })
 })

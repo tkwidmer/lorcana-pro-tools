@@ -1,18 +1,13 @@
-// Pure helpers for the Team Tracker pages and Tournament Lookup's team tab
+// Pure helpers for the Team Tracker pages and Tournament Lookup's Teams tab
 // (spec: docs/superpowers/specs/2026-11-06-team-tracker-design.md). Members
 // arrive in the API's shape: { id, playerId, playerName, joinedOn, leftOn }.
 
-// Current members by join date; former members by most recent departure.
+// Current members by join date (unknown starts first, they are the longest
+// standing); former members by most recent departure.
 export function splitRoster(members) {
-  const current = members.filter((m) => m.leftOn === null).sort((a, b) => a.joinedOn.localeCompare(b.joinedOn))
+  const current = members.filter((m) => m.leftOn === null).sort((a, b) => (a.joinedOn ?? '').localeCompare(b.joinedOn ?? ''))
   const former = members.filter((m) => m.leftOn !== null).sort((a, b) => b.leftOn.localeCompare(a.leftOn))
   return { current, former }
-}
-
-// The { [playerId]: { name } } map Tournament Lookup threads as `team`, from
-// the current roster only: a live event always uses who is on the team now.
-export function rosterMap(members) {
-  return Object.fromEntries(members.filter((m) => m.leftOn === null).map((m) => [String(m.playerId), { name: m.playerName }]))
 }
 
 // Parses RPH's "W-L-D" record string into integer parts, defaulting missing
@@ -40,12 +35,38 @@ export function teamLiveSummary(entries, topCutSize) {
   return summary
 }
 
+// Every directory team with a current member in a live event's standings
+// (or pre-event roster), ranked by combined match points, then wins, then
+// name: the Tournament Lookup Teams tab. `teams` is the `teams` read (each
+// with its current `members`); `entries` are RPH standings rows.
+export function teamsAtEvent(teams, entries, topCutSize) {
+  const byPlayer = new Map(entries.map((e) => [String(e.player.id), e]))
+  return teams
+    .map((t) => {
+      const teamEntries = t.members.map((m) => byPlayer.get(String(m.playerId))).filter(Boolean)
+      return {
+        slug: t.slug,
+        name: t.name,
+        logoUrl: t.logoUrl,
+        rosterSize: t.members.length,
+        inEvent: teamEntries.length,
+        points: teamEntries.reduce((sum, e) => sum + (e.match_points ?? 0), 0),
+        entries: teamEntries,
+        summary: teamLiveSummary(teamEntries, topCutSize),
+      }
+    })
+    .filter((r) => r.inEvent > 0)
+    .sort((a, b) => b.points - a.points || b.summary.wins - a.summary.wins || a.name.localeCompare(b.name))
+}
+
 function monthYear(yyyyMmDd) {
   return new Date(`${yyyyMmDd}T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 
+// A null joinedOn is an unknown start: the member counts since before the archive.
 export function formatMembership({ joinedOn, leftOn }) {
-  return leftOn ? `${monthYear(joinedOn)} – ${monthYear(leftOn)}` : `Since ${monthYear(joinedOn)}`
+  if (leftOn) return `${joinedOn ? monthYear(joinedOn) : 'Before the archive'} – ${monthYear(leftOn)}`
+  return joinedOn ? `Since ${monthYear(joinedOn)}` : 'Since before the archive'
 }
 
 // Up to two initials for a team without a logo.

@@ -44,6 +44,7 @@ import { ResultsPage } from './pages/ResultsPage'
 import { ResultsEventPage } from './pages/ResultsEventPage'
 import { ResultsPlayerPage } from './pages/ResultsPlayerPage'
 import { ResultsRatingsPage } from './pages/ResultsRatingsPage'
+import { TeamsPage } from './pages/TeamsPage'
 import { StoreLookupPage } from './pages/StoreLookupPage'
 import { LoreTrackerPage } from './pages/LoreTrackerPage'
 import { LoginPage } from './pages/LoginPage'
@@ -122,6 +123,7 @@ function RoutedContent() {
         <Route path="/results/events/:eventId" element={<ResultsEventPage />} />
         <Route path="/results/players/:playerId" element={<ResultsPlayerPage />} />
         <Route path="/results/ratings" element={<ResultsRatingsPage />} />
+        <Route path="/teams" element={<TeamsPage />} />
         <Route path="/store-lookup" element={<StoreLookupPage />} />
         <Route path="/lore-tracker" element={<LoreTrackerPage />} />
         <Route path="/admin" element={<AdminPage />} />

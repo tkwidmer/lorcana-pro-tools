@@ -127,6 +127,8 @@ export function rowToState(row) {
     // 'off' / 'fade' / 'stay': whether each side's featured card shows, and
     // whether it fades out after FEATURED_SECONDS.
     featuredCards: row.featured_cards,
+    // No player cam cutouts: the side columns' content starts at the top.
+    hideCams: row.hide_cams,
     // Wall-time target while running (ms since epoch), null while paused.
     timerEndsAt: row.timer_ends_at ? Date.parse(row.timer_ends_at) : null,
     timerRemainingMs: row.timer_remaining_ms,

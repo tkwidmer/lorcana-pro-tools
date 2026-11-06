@@ -77,8 +77,8 @@ export function StreamOverlayViewPage() {
       )}
       {state && (
         <>
-          <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} showLore={!state.loreTrack} featured={featuredOf(state, 0, cardIndex, now)} />
-          <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} showLore={!state.loreTrack} featured={featuredOf(state, 1, cardIndex, now)} />
+          <SideColumn player={state.players[0]} side="left" isWinner={winner === 0} showLore={!state.loreTrack} showCam={!state.hideCams} featured={featuredOf(state, 0, cardIndex, now)} />
+          <SideColumn player={state.players[1]} side="right" isWinner={winner === 1} showLore={!state.loreTrack} showCam={!state.hideCams} featured={featuredOf(state, 1, cardIndex, now)} />
           {state.loreTrack && <LoreTrack lore={state.players[0].lore} side="left" />}
           {state.loreTrack && <LoreTrack lore={state.players[1].lore} side="right" />}
           {state.deckShown > 0 && !state.cardShown && !state.metaShown && <DeckPanel player={state.players[state.deckShown - 1]} cardIndex={cardIndex} edge={edge} />}
@@ -102,7 +102,7 @@ function featuredOf(state, i, cardIndex, now) {
   return card ? { card, phase, key: `${player.featured}@${player.featuredAt}` } : null
 }
 
-function SideColumn({ player, side, isWinner, showLore, featured }) {
+function SideColumn({ player, side, isWinner, showLore, showCam, featured }) {
   return (
     <div
       className={`absolute top-0 bottom-0 flex flex-col ${side === 'left' ? 'left-0 border-r-4' : 'right-0 border-l-4'} border-(--accent)`}
@@ -110,7 +110,7 @@ function SideColumn({ player, side, isWinner, showLore, featured }) {
     >
       {/* Transparent square cutout: place this player's camera behind it in OBS. The
           dark fill starts below it, so nothing paints over the cam. */}
-      <div className="w-full border-b-4 border-(--accent)" style={{ height: CAM_HEIGHT }} />
+      {showCam && <div className="w-full border-b-4 border-(--accent)" style={{ height: CAM_HEIGHT }} />}
 
       <div className="flex-1 min-h-0 w-full bg-(--fill) flex flex-col items-center">
       <div className="mt-6 px-4 w-full text-center">

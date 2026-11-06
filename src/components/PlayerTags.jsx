@@ -1,7 +1,9 @@
-// Shared favorite/team-tag toggle buttons, used by TournamentLookupPage
+// The favorite toggle and the team-member mark, used by TournamentLookupPage
 // (Standings/Matches/Roster/Favorites/Team tabs) and EliminationBracket —
 // pulled out to a standalone file so both can import it without a
-// page <-> component circular import.
+// page <-> component circular import. Favorites are the caster's own
+// (localStorage); team membership comes from the Team Tracker directory
+// (the team picked on the Team tab), so the badge is display-only.
 
 export function FavoriteStar({ active, onToggle, className = '' }) {
   return (
@@ -16,17 +18,13 @@ export function FavoriteStar({ active, onToggle, className = '' }) {
   )
 }
 
-export function TeamBadge({ active, onToggle, className = '' }) {
+export function TeamBadge({ className = '' }) {
   return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onToggle() }}
-      title={active ? 'Remove from my team' : 'Add to my team'}
-      className={`w-5 h-5 rounded-full text-[10px] font-bold leading-none flex items-center justify-center transition-colors ${
-        active ? 'bg-purple-500 text-white hover:bg-purple-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-300'
-      } ${className}`}
+    <span
+      title="Team member"
+      className={`w-5 h-5 rounded-sm text-[10px] font-bold leading-none flex items-center justify-center bg-gray-900 text-white ${className}`}
     >
       T
-    </button>
+    </span>
   )
 }

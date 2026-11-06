@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 import { dangerouslyDeleteByTag } from '@vercel/functions'
-import { requireAdmin, requireSession } from './_lib/requireAdmin.js'
+import { requireAdmin, requireSession, requireUserWithTier } from './_lib/requireAdmin.js'
 import {
   fetchEventDetailsServer,
   deriveTournamentStructure,
@@ -34,7 +34,27 @@ import {
   setStandingInks,
 } from './_lib/tournamentHistorySupabase.js'
 import { matchDeckInks } from './_lib/deckInks.js'
-import { discoverCandidateEvents, filterRealCandidates } from './_lib/tournamentDiscovery.js'
+import { discoverCandidateEvents, filterRealCandidates, filterLiveCandidates } from './_lib/tournamentDiscovery.js'
+import {
+  listTeams,
+  getTeamBySlug,
+  getTeamById,
+  listMembers,
+  listAllMembers,
+  getMemberById,
+  getStandingsForPlayers,
+  upsertTeam,
+  upsertMember,
+  deleteMember,
+  dissolveTeam,
+  reinstateTeam,
+  listTeamsManagedBy,
+  listTeamsForPlayer,
+  listTeamsWithManagerEmail,
+  memberCounts,
+  findProfileByEmail,
+} from './_lib/teamsSupabase.js'
+import { groupTeamEvents, lastEventOf, canEditTeam, adminOnlyFieldsSent, isValidLogoUrl, isValidSlug } from './_lib/teams.js'
 import { isMajor, isSideEvent } from './_lib/sideEvents.js'
 
 // Single consolidated route for the caster-history archive of imported RPH
@@ -49,6 +69,14 @@ import { isMajor, isSideEvent } from './_lib/sideEvents.js'
 // abuse/cost control. `import`, `recent-imports` and `suggested-imports` are
 // admin-only; `recompute-ratings` takes an admin session or the CRON_SECRET
 // bearer; `pairing-badges` needs any signed-in session.
+//
+// Team Tracker (supabase/migrations/031_teams.sql, docs/agents/tournaments.md
+// "Teams"): `teams`, `team` and `live-majors` are public and edge-cached, the
+// first two under the `teams` cache tag that every team write purges;
+// `my-teams` needs a session; `admin-teams` and `admin-profile-search` are
+// admin-only; the POSTs `team-save`, `team-member-save`, `team-member-delete`
+// and `team-dissolve` take an admin or the team's manager (canEditTeam in
+// api/_lib/teams.ts), `team-reinstate` an admin.
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 
@@ -57,6 +85,12 @@ const SEARCH_CACHE = 'public, s-maxage=60, stale-while-revalidate=300'
 const SEARCH_MIN_CHARS = 3
 // Tags the edge-cached `event` read so an admin write can purge it.
 const eventCacheTag = (eventId: string) => `event-${eventId}`
+const TEAMS_CACHE_TAG = 'teams'
+const LIVE_CACHE = 'public, s-maxage=300, stale-while-revalidate=3600'
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+// The logo check needs the project URL the public bucket is served from.
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 
 function str(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
@@ -385,10 +419,11 @@ async function handlePlayer(req: VercelRequest, res: VercelResponse) {
   const playerId = str(req.query.playerId)
   if (!playerId || !ID_RE.test(playerId)) return res.status(400).json({ error: 'Invalid playerId' })
   try {
-    const [history, matchRows, rating] = await Promise.all([
+    const [history, matchRows, rating, teamRows] = await Promise.all([
       getPlayerHistory(playerId),
       getPlayerMatches(playerId),
       getPlayerRating(playerId),
+      listTeamsForPlayer(playerId),
     ])
     if (history.length === 0) return res.status(404).json({ error: 'Player not found' })
     const events = history.map((r: any) => ({
@@ -407,12 +442,22 @@ async function handlePlayer(req: VercelRequest, res: VercelResponse) {
       startingPlayerCount: r.event?.starting_player_count ?? null,
     }))
     res.setHeader('Cache-Control', PUBLIC_CACHE)
+    res.setHeader('Vercel-Cache-Tag', TEAMS_CACHE_TAG) // team badges: purged by every team write
     return res.status(200).json({
       playerId,
       playerName: history[0].player_name, // getPlayerHistory sorts newest first
       events,
       matches: matchRows.map((m: any) => matchShape(m, m.event?.rph_event_id ?? null)),
       rating,
+      teams: teamRows
+        .filter((t) => t.team)
+        .map((t) => ({
+          slug: t.team!.slug,
+          name: t.team!.name,
+          joinedOn: t.joined_on,
+          leftOn: t.left_on,
+          disbandedOn: t.team!.disbanded_on,
+        })),
     })
   } catch (err) {
     console.error('tournament-history player failed:', err instanceof Error ? err.message : err)
@@ -580,14 +625,307 @@ async function handleSuggestedImports(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Team Tracker
+
+const errMsg = (err: unknown) => (err instanceof Error ? err.message : err)
+
+// `id` is the uuid writes address; it carries no access by itself.
+function teamShape(t: any) {
+  return {
+    id: t.id,
+    slug: t.slug,
+    name: t.name,
+    url: t.url ?? null,
+    logoUrl: t.logo_url ?? null,
+    disbandedOn: t.disbanded_on ?? null,
+  }
+}
+
+function memberShape(m: any) {
+  return { id: m.id, playerId: m.rph_player_id, playerName: m.player_name, joinedOn: m.joined_on, leftOn: m.left_on }
+}
+
+async function handleTeams(_req: VercelRequest, res: VercelResponse) {
+  try {
+    const [teams, members] = await Promise.all([listTeams(), listAllMembers()])
+    // ponytail: one standings query for every member of every team; page it per team if the directory passes a few thousand members
+    const rows = await getStandingsForPlayers(Array.from(new Set(members.map((m) => m.rph_player_id))))
+    const out = teams.map((t) => {
+      const mine = members.filter((m) => m.team_id === t.id)
+      const ids = new Set(mine.map((m) => m.rph_player_id))
+      const events = groupTeamEvents(mine, rows.filter((r) => ids.has(r.rph_player_id)))
+      return {
+        ...teamShape(t),
+        memberCount: mine.filter((m) => m.left_on === null).length,
+        formerCount: mine.filter((m) => m.left_on !== null).length,
+        lastEvent: lastEventOf(events),
+      }
+    })
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
+    res.setHeader('Vercel-Cache-Tag', TEAMS_CACHE_TAG)
+    return res.status(200).json({ teams: out })
+  } catch (err) {
+    console.error('tournament-history teams failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to load teams' })
+  }
+}
+
+async function handleTeam(req: VercelRequest, res: VercelResponse) {
+  const slug = str(req.query.slug)
+  if (!isValidSlug(slug)) return res.status(400).json({ error: 'Invalid slug' })
+  try {
+    const team = await getTeamBySlug(slug)
+    if (!team) return res.status(404).json({ error: 'Team not found' })
+    const members = await listMembers(team.id)
+    const rows = await getStandingsForPlayers(Array.from(new Set(members.map((m) => m.rph_player_id))))
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
+    res.setHeader('Vercel-Cache-Tag', TEAMS_CACHE_TAG)
+    return res.status(200).json({
+      team: teamShape(team),
+      members: members.map(memberShape),
+      events: groupTeamEvents(members, rows),
+    })
+  } catch (err) {
+    console.error('tournament-history team failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to load team' })
+  }
+}
+
+async function handleLiveMajors(_req: VercelRequest, res: VercelResponse) {
+  try {
+    const live = filterLiveCandidates(await discoverCandidateEvents(), new Date())
+    res.setHeader('Cache-Control', LIVE_CACHE)
+    return res.status(200).json({
+      events: live.map((e) => ({
+        eventId: String(e.id),
+        name: e.name,
+        label: e.label,
+        storeName: e.store?.name ?? null,
+        startDatetime: e.start_datetime,
+        displayStatus: e.display_status,
+        playerCount: Math.max(e.registered_user_count ?? 0, e.starting_player_count ?? 0),
+      })),
+    })
+  } catch (err) {
+    console.error('tournament-history live-majors failed:', errMsg(err))
+    return res.status(502).json({ error: 'Failed to discover live events from Ravensburger Play Hub' })
+  }
+}
+
+async function handleMyTeams(req: VercelRequest, res: VercelResponse) {
+  const user = await requireUserWithTier(req, res)
+  if (!user) return
+  try {
+    return res.status(200).json({ admin: user.isAdmin, teams: await listTeamsManagedBy(user.id) })
+  } catch (err) {
+    console.error('tournament-history my-teams failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to load your teams' })
+  }
+}
+
+async function handleAdminTeams(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireAdmin(req, res))) return
+  try {
+    const [teams, counts] = await Promise.all([listTeamsWithManagerEmail(), memberCounts()])
+    return res.status(200).json({
+      teams: teams.map((t) => ({
+        ...teamShape(t),
+        managerUserId: t.manager_user_id,
+        managerEmail: t.manager_email,
+        ...(counts.get(t.id) ?? { current: 0, former: 0 }),
+      })),
+    })
+  } catch (err) {
+    console.error('tournament-history admin-teams failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to load teams' })
+  }
+}
+
+async function handleAdminProfileSearch(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireAdmin(req, res))) return
+  const q = str(req.query.q)?.trim()
+  if (!q || q.length < SEARCH_MIN_CHARS) return res.status(200).json({ profiles: [] })
+  try {
+    return res.status(200).json({ profiles: await findProfileByEmail(q) })
+  } catch (err) {
+    console.error('tournament-history admin-profile-search failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to search users' })
+  }
+}
+
+// Loads the team and applies canEditTeam, writing 400/401/403/404/409
+// itself; returns the caller and the team when the write may proceed.
+async function loadEditableTeam(req: VercelRequest, res: VercelResponse, teamId: unknown, action: 'write' | 'reinstate') {
+  const user = await requireUserWithTier(req, res)
+  if (!user) return null
+  if (typeof teamId !== 'string' || !UUID_RE.test(teamId)) {
+    res.status(400).json({ error: 'Invalid team id' })
+    return null
+  }
+  const team = await getTeamById(teamId)
+  if (!team) {
+    res.status(404).json({ error: 'Team not found' })
+    return null
+  }
+  const verdict = canEditTeam(user, team, action)
+  if (verdict === 'forbidden') {
+    res.status(403).json({ error: "Only this team's manager or an admin can do that" })
+    return null
+  }
+  if (verdict === 'disbanded') {
+    res.status(409).json({ error: 'Team is disbanded' })
+    return null
+  }
+  return { user, team }
+}
+
+const isUniqueViolation = (err: unknown) => (err as { code?: string } | null)?.code === '23505'
+
+async function handleTeamSave(req: VercelRequest, res: VercelResponse) {
+  const body = req.body ?? {}
+  const { id, slug, name, url, logoUrl, managerUserId } = body
+  if (typeof name !== 'string' || name.trim().length < 1 || name.length > 80) {
+    return res.status(400).json({ error: 'Name must be 1–80 characters' })
+  }
+  if (url != null && url !== '' && !/^https?:\/\//.test(url)) return res.status(400).json({ error: 'Link must start with http' })
+  if (logoUrl != null && logoUrl !== '' && !isValidLogoUrl(logoUrl, SUPABASE_URL)) {
+    return res.status(400).json({ error: 'Logo must be an uploaded file' })
+  }
+  if (managerUserId != null && !UUID_RE.test(managerUserId)) return res.status(400).json({ error: 'Invalid manager' })
+  const patch = { name: name.trim(), url: url || null, logo_url: logoUrl || null }
+  try {
+    if (!id) {
+      if (!(await requireAdmin(req, res))) return
+      if (!isValidSlug(slug)) return res.status(400).json({ error: 'Slug must be 2–48 lowercase letters, digits and hyphens' })
+      const row = await upsertTeam({ ...patch, slug, manager_user_id: managerUserId ?? null })
+      await dangerouslyDeleteByTag(TEAMS_CACHE_TAG)
+      return res.status(200).json({ team: teamShape(row) })
+    }
+    const ctx = await loadEditableTeam(req, res, id, 'write')
+    if (!ctx) return
+    if (!ctx.user.isAdmin && adminOnlyFieldsSent(body)) {
+      return res.status(403).json({ error: 'Only an admin can change the slug or manager' })
+    }
+    if (slug !== undefined && !isValidSlug(slug)) return res.status(400).json({ error: 'Invalid slug' })
+    const row = await upsertTeam({
+      id,
+      ...patch,
+      ...(slug !== undefined && { slug }),
+      ...(managerUserId !== undefined && { manager_user_id: managerUserId }),
+    })
+    await dangerouslyDeleteByTag(TEAMS_CACHE_TAG)
+    return res.status(200).json({ team: teamShape(row) })
+  } catch (err) {
+    if (isUniqueViolation(err)) return res.status(409).json({ error: 'That slug is taken' })
+    console.error('tournament-history team-save failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to save team' })
+  }
+}
+
+async function handleTeamMemberSave(req: VercelRequest, res: VercelResponse) {
+  const { id, teamId, playerId, playerName, joinedOn, leftOn } = req.body ?? {}
+  if (typeof playerId !== 'string' || !ID_RE.test(playerId)) return res.status(400).json({ error: 'Invalid playerId' })
+  if (typeof playerName !== 'string' || !playerName.trim()) return res.status(400).json({ error: 'playerName required' })
+  if (typeof joinedOn !== 'string' || !DATE_RE.test(joinedOn)) return res.status(400).json({ error: 'joinedOn must be yyyy-mm-dd' })
+  if (leftOn != null && leftOn !== '' && (typeof leftOn !== 'string' || !DATE_RE.test(leftOn))) {
+    return res.status(400).json({ error: 'leftOn must be yyyy-mm-dd' })
+  }
+  if (leftOn && leftOn < joinedOn) return res.status(400).json({ error: 'leftOn is before joinedOn' })
+  // No future dates: dissolve_team() closes open rows on today's date, and a
+  // membership nobody has yet would make the client and server disagree.
+  const today = new Date().toISOString().slice(0, 10)
+  if (joinedOn > today || (leftOn && leftOn > today)) return res.status(400).json({ error: 'Dates cannot be in the future' })
+  if (id !== undefined && (typeof id !== 'string' || !UUID_RE.test(id))) return res.status(400).json({ error: 'Invalid id' })
+  const ctx = await loadEditableTeam(req, res, teamId, 'write')
+  if (!ctx) return
+  try {
+    if (id) {
+      const existing = await getMemberById(id)
+      if (!existing || existing.team_id !== teamId) return res.status(404).json({ error: 'Member not found' })
+    }
+    const row = await upsertMember({
+      ...(id && { id }),
+      team_id: teamId,
+      rph_player_id: playerId,
+      player_name: playerName.trim(),
+      joined_on: joinedOn,
+      left_on: leftOn || null,
+    })
+    await dangerouslyDeleteByTag(TEAMS_CACHE_TAG)
+    return res.status(200).json({ member: memberShape(row) })
+  } catch (err) {
+    if (isUniqueViolation(err)) return res.status(409).json({ error: 'Already on this team' })
+    console.error('tournament-history team-member-save failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to save member' })
+  }
+}
+
+async function handleTeamMemberDelete(req: VercelRequest, res: VercelResponse) {
+  const { id } = req.body ?? {}
+  if (typeof id !== 'string' || !UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid id' })
+  try {
+    const existing = await getMemberById(id)
+    if (!existing) return res.status(404).json({ error: 'Member not found' })
+    const ctx = await loadEditableTeam(req, res, existing.team_id, 'write')
+    if (!ctx) return
+    await deleteMember(id)
+    await dangerouslyDeleteByTag(TEAMS_CACHE_TAG)
+    return res.status(200).json({ ok: true })
+  } catch (err) {
+    console.error('tournament-history team-member-delete failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to delete member' })
+  }
+}
+
+async function handleTeamDissolve(req: VercelRequest, res: VercelResponse) {
+  const ctx = await loadEditableTeam(req, res, req.body?.id, 'write')
+  if (!ctx) return
+  try {
+    const disbandedOn = await dissolveTeam(ctx.team.id)
+    await dangerouslyDeleteByTag(TEAMS_CACHE_TAG)
+    return res.status(200).json({ disbandedOn })
+  } catch (err) {
+    // P0003: dissolve_team() found it already disbanded (a race with another editor).
+    if ((err as { code?: string } | null)?.code === 'P0003') return res.status(409).json({ error: 'Team is disbanded' })
+    console.error('tournament-history team-dissolve failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to dissolve team' })
+  }
+}
+
+async function handleTeamReinstate(req: VercelRequest, res: VercelResponse) {
+  const ctx = await loadEditableTeam(req, res, req.body?.id, 'reinstate')
+  if (!ctx) return
+  if (!ctx.team.disbanded_on) return res.status(409).json({ error: 'Team is not disbanded' })
+  try {
+    const reopened = await reinstateTeam(ctx.team.id)
+    await dangerouslyDeleteByTag(TEAMS_CACHE_TAG)
+    return res.status(200).json({ reopened })
+  } catch (err) {
+    console.error('tournament-history team-reinstate failed:', errMsg(err))
+    return res.status(500).json({ error: 'Failed to reinstate team' })
+  }
+}
+
+const TEAM_POST_ENDPOINTS: Record<string, (req: VercelRequest, res: VercelResponse) => Promise<unknown>> = {
+  'team-save': handleTeamSave,
+  'team-member-save': handleTeamMemberSave,
+  'team-member-delete': handleTeamMemberDelete,
+  'team-dissolve': handleTeamDissolve,
+  'team-reinstate': handleTeamReinstate,
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const endpoint = str(req.query.endpoint)
 
-  if (endpoint === 'import' || endpoint === 'recompute-ratings' || endpoint === 'ink-pairs') {
+  const teamPost = endpoint && Object.hasOwn(TEAM_POST_ENDPOINTS, endpoint) ? TEAM_POST_ENDPOINTS[endpoint] : undefined
+  if (endpoint === 'import' || endpoint === 'recompute-ratings' || endpoint === 'ink-pairs' || teamPost) {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')
       return res.status(405).json({ error: 'Method not allowed' })
     }
+    if (teamPost) return teamPost(req, res)
     if (endpoint === 'ink-pairs') return handleInkPairs(req, res)
     return endpoint === 'import' ? handleImport(req, res) : handleRecomputeRatings(req, res)
   }
@@ -620,6 +958,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handlePlayer(req, res)
     case 'ratings':
       return handleRatings(req, res)
+    case 'teams':
+      return handleTeams(req, res)
+    case 'team':
+      return handleTeam(req, res)
+    case 'live-majors':
+      return handleLiveMajors(req, res)
+    case 'my-teams':
+      return handleMyTeams(req, res)
+    case 'admin-teams':
+      return handleAdminTeams(req, res)
+    case 'admin-profile-search':
+      return handleAdminProfileSearch(req, res)
     default:
       return res.status(400).json({ error: 'Missing or invalid endpoint param' })
   }

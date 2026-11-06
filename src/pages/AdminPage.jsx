@@ -131,6 +131,14 @@ export function AdminPage() {
           <Button to="/admin/tournament-import">Import events</Button>
         </Card>
 
+        <Card
+          className="p-6"
+          title="Teams"
+          description="Create teams for the Team Tracker and assign each one a manager who keeps its roster current."
+        >
+          <Button to="/admin/teams">Manage teams</Button>
+        </Card>
+
         <Card className="p-6" title="Grant or revoke access">
           <form onSubmit={search} className="flex gap-2">
             <Input

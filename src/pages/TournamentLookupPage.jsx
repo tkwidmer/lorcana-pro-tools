@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   fetchEventDetails,
   getTournamentStructure,
@@ -16,15 +16,17 @@ import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
 import { EliminationBracket } from '../components/EliminationBracket'
 import { FavoriteStar, TeamBadge } from '../components/PlayerTags'
 import { usePairingBadges } from '../hooks/usePairingBadges'
-import { pairKeyOf } from '../lib/tournamentHistoryApi'
+import { pairKeyOf, fetchTeams, fetchTeam } from '../lib/tournamentHistoryApi'
+import { rosterMap, teamLiveSummary } from '../lib/teams'
+import { LiveMajorsList } from '../components/LiveMajorsList'
+import { useLiveMajors } from '../hooks/useLiveMajors'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
 import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Field'
+import { Input, Select } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs, Tab } from '../components/ui/Tabs'
 
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
-const TEAM_KEY = 'lorcana_tournament_team'
 const RECENTS_KEY = 'lorcana_tournament_recents'
 const MAX_RECENTS = 8
 
@@ -43,23 +45,6 @@ function toggleFavoriteStorage(playerId, name) {
     all[key] = { name, addedAt: Date.now() }
   }
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(all))
-  return all
-}
-
-// Single "my team" tag, keyed the same way as favorites — global across events.
-function getTeam() {
-  try { return JSON.parse(localStorage.getItem(TEAM_KEY) ?? '{}') } catch { return {} }
-}
-
-function toggleTeamStorage(playerId, name) {
-  const all = getTeam()
-  const key = String(playerId)
-  if (all[key]) {
-    delete all[key]
-  } else {
-    all[key] = { name, addedAt: Date.now() }
-  }
-  localStorage.setItem(TEAM_KEY, JSON.stringify(all))
   return all
 }
 
@@ -96,12 +81,6 @@ function registrationsToRosterEntries(regs) {
       match_points: r.total_match_points ?? 0,
     }))
     .sort((a, b) => a.user_event_status.best_identifier.localeCompare(b.user_event_status.best_identifier))
-}
-
-// Parses RPH's "W-L-D" record string into integer parts, defaulting missing/malformed segments to 0.
-function parseRecord(record) {
-  const [w, l, d] = String(record ?? '').split('-').map((n) => parseInt(n, 10))
-  return { w: w || 0, d: d || 0, l: l || 0 }
 }
 
 function formatTime(seconds) {
@@ -161,8 +140,8 @@ const RECOMMENDATION_STYLES = {
 }
 
 // Shared by the Favorites and Team tabs — a flat roster of standings entries
-// with the same favorite/team toggles and click-through as the main Standings table.
-function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, registrationMap, onSelectPlayer, emptyMessage, disableSelect = false }) {
+// with the same favorite toggle, team mark and click-through as the main Standings table.
+function RosterTable({ entries, favorites, team, toggleFavorite, registrationMap, onSelectPlayer, emptyMessage, disableSelect = false }) {
   if (entries.length === 0) {
     return <p className="text-sm text-gray-500 py-8 text-center px-4">{emptyMessage}</p>
   }
@@ -196,10 +175,7 @@ function RosterTable({ entries, favorites, team, toggleFavorite, toggleTeam, reg
                       active={isFavorite}
                       onToggle={() => toggleFavorite(entry.player.id, entry.user_event_status.best_identifier)}
                     />
-                    <TeamBadge
-                      active={onTeam}
-                      onToggle={() => toggleTeam(entry.player.id, entry.user_event_status.best_identifier)}
-                    />
+                    {onTeam && <TeamBadge />}
                   </div>
                 </td>
                 <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank ?? '—'}</td>
@@ -244,8 +220,8 @@ function matchInvolvesFilter(match, filterMode, favorites, team) {
 }
 
 // Bubbles matches involving a tagged player to the top of a round's table so
-// a caster doesn't have to scan hundreds of rows to find them — team tags
-// outrank plain favorites since "my team" is the more deliberate signal.
+// a caster doesn't have to scan hundreds of rows to find them — team members
+// outrank plain favorites since the picked team is the more deliberate signal.
 function matchPriority(match, favorites, team) {
   if (match.player_match_relationships.some((r) => team[String(r.player.id)])) return 0
   if (match.player_match_relationships.some((r) => favorites[String(r.player.id)])) return 1
@@ -255,7 +231,7 @@ function matchPriority(match, favorites, team) {
 const MATCH_FILTER_OPTIONS = [
   { key: 'all', label: 'All' },
   { key: 'favorites', label: '★ Favorites' },
-  { key: 'team', label: 'My Team' },
+  { key: 'team', label: 'Team' },
 ]
 
 // A match counts as "settled" once it has a result worth announcing in the
@@ -268,7 +244,7 @@ function isMatchSettled(match) {
 }
 
 // Human-readable one-liner for the "Tracked Player Activity" ticker, or null
-// if neither player in the match is favorited/team-tagged.
+// if neither player in the match is favorited or on the picked team.
 function describeTrackedMatch(match, favorites, team) {
   const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
   if (!p1 || !p2) return null
@@ -289,7 +265,7 @@ function describeTrackedMatch(match, favorites, team) {
   return `${winnerName} beat ${loserName}${score} — Round ${match.round_number}`
 }
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, toggleTeam, searchTerm, onSearchChange, currentEventId }) {
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, searchTerm, onSearchChange, currentEventId }) {
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
   // only the latest round expanded — large events can have 1000+ matches
@@ -478,12 +454,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                                     onToggle={() => toggleFavorite(p1.player.id, p1.user_event_status.best_identifier)}
                                   />
                                 )}
-                                {p1 && toggleTeam && (
-                                  <TeamBadge
-                                    active={p1OnTeam}
-                                    onToggle={() => toggleTeam(p1.player.id, p1.user_event_status.best_identifier)}
-                                  />
-                                )}
+                                {p1OnTeam && <TeamBadge />}
                                 {p1HasPedigree && (
                                   <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
                                 )}
@@ -502,12 +473,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                                 {p2HasPedigree && (
                                   <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
                                 )}
-                                {p2 && !isBye && toggleTeam && (
-                                  <TeamBadge
-                                    active={p2OnTeam}
-                                    onToggle={() => toggleTeam(p2.player.id, p2.user_event_status.best_identifier)}
-                                  />
-                                )}
+                                {p2OnTeam && <TeamBadge />}
                                 {p2 && !isBye && toggleFavorite && (
                                   <FavoriteStar
                                     active={p2IsFavorite}
@@ -545,7 +511,50 @@ export function TournamentLookupPage() {
   const [matchesLoading, setMatchesLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('standings')
   const [favorites, setFavorites] = useState(getFavorites)
-  const [team, setTeam] = useState(getTeam)
+  // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
+  // share the current URL and it reloads straight into the same event/tab/
+  // search instead of a blank page. Only the *initial* read matters: after
+  // mount, state flows one-way into the URL via the sync effects below, so
+  // we never re-read params and fight the user's own navigation.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [initialParams] = useState(() => ({
+    event: searchParams.get('event'),
+    tab: searchParams.get('tab'),
+    q: searchParams.get('q'),
+    team: searchParams.get('team'),
+  }))
+
+  // The Team tab: a team from the Team Tracker directory, chosen by slug and
+  // carried in the URL (?team=) like the event, so a team page can deep-link
+  // straight to "this team at this event". `team` keeps the { [id]: { name } }
+  // shape the tables, match filter and ticker already read.
+  const [teams, setTeams] = useState([])
+  const [teamSlug, setTeamSlug] = useState(initialParams.team)
+  const [teamMembers, setTeamMembers] = useState([])
+  const team = useMemo(() => rosterMap(teamMembers), [teamMembers])
+  const selectedTeam = teams.find((t) => t.slug === teamSlug) ?? null
+  const liveMajors = useLiveMajors()
+
+  useEffect(() => {
+    fetchTeams()
+      .then((data) => setTeams(data.teams.filter((t) => !t.disbandedOn)))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!teamSlug) return
+    let cancelled = false
+    fetchTeam(teamSlug)
+      .then((data) => { if (!cancelled) setTeamMembers(data.members) })
+      .catch(() => { if (!cancelled) setTeamMembers([]) })
+    return () => { cancelled = true }
+  }, [teamSlug])
+
+  function pickTeam(slug) {
+    setTeamSlug(slug || null)
+    if (!slug) setTeamMembers([])
+  }
+
   const [roster, setRoster] = useState(null)
   const [rosterMode, setRosterMode] = useState(false)
   const [recents, setRecents] = useState(getRecents)
@@ -558,7 +567,7 @@ export function TournamentLookupPage() {
   const pairingBadges = usePairingBadges()
 
   // "Tracked Player Activity" ticker — a running, session-only feed of
-  // completed matches involving a favorited/team-tagged player, newest
+  // completed matches involving a favorited player or a team member, newest
   // first. Session-only and reset per event on purpose: it's about what's
   // happening live while the page is open, not a permanent log.
   const [tickerEvents, setTickerEvents] = useState([])
@@ -609,17 +618,6 @@ export function TournamentLookupPage() {
     return () => clearInterval(id)
   }, [tickerEvents.length])
 
-  // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
-  // share the current URL and it reloads straight into the same event/tab/
-  // search instead of a blank page. Only the *initial* read matters: after
-  // mount, state flows one-way into the URL via the sync effects below, so
-  // we never re-read params and fight the user's own navigation.
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [initialParams] = useState(() => ({
-    event: searchParams.get('event'),
-    tab: searchParams.get('tab'),
-    q: searchParams.get('q'),
-  }))
 
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {
@@ -666,11 +664,13 @@ export function TournamentLookupPage() {
         next.set('tab', activeTab)
         if (searchTerm) next.set('q', searchTerm)
         else next.delete('q')
+        if (teamSlug) next.set('team', teamSlug)
+        else next.delete('team')
         return next
       },
       { replace: true }
     )
-  }, [currentEventId, activeTab, searchTerm, setSearchParams])
+  }, [currentEventId, activeTab, searchTerm, teamSlug, setSearchParams])
 
   // Pedigree badges for the whole Standings list (not just Matches/Bracket)
   // so a caster scanning standings can spot a notable player without
@@ -684,10 +684,6 @@ export function TournamentLookupPage() {
 
   function toggleFavorite(playerId, name) {
     setFavorites(toggleFavoriteStorage(playerId, name))
-  }
-
-  function toggleTeam(playerId, name) {
-    setTeam(toggleTeamStorage(playerId, name))
   }
 
   function selectRecent(recent) {
@@ -740,7 +736,7 @@ export function TournamentLookupPage() {
 
       if (!tournamentStructure?.currentRoundId) {
         // No round has generated standings yet — fall back to the registered
-        // roster so users can start favoriting/team-tagging players early.
+        // roster so users can start favoriting players early.
         // That includes all of round 1: RPH posts its pairings (and their
         // results as they come in) before it generates any standings, so
         // once a round has started its matches load and show beside it.
@@ -864,18 +860,7 @@ export function TournamentLookupPage() {
     .filter((entry) => team[String(entry.player.id)])
     .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0))
 
-  const teamSummary = teamEntries.length > 0 ? teamEntries.reduce((acc, entry) => {
-    const { w, d, l } = parseRecord(entry.record)
-    acc.wins += w
-    acc.draws += d
-    acc.losses += l
-    if (entry.rank != null) {
-      acc.bestRank = Math.min(acc.bestRank, entry.rank)
-      acc.worstRank = Math.max(acc.worstRank, entry.rank)
-      if (structure?.topCutSize && entry.rank <= structure.topCutSize) acc.inCut += 1
-    }
-    return acc
-  }, { wins: 0, draws: 0, losses: 0, bestRank: Infinity, worstRank: -Infinity, inCut: 0 }) : null
+  const teamSummary = teamLiveSummary(teamEntries, structure?.topCutSize)
 
   const tiebreakers = player ? formatTiebreakers(player, structure?.tiebreakers) : null
   const idAnalysis = player && structure ? analyzeId(player, allStandings, structure) : null
@@ -925,6 +910,23 @@ export function TournamentLookupPage() {
           {loading ? 'Loading…' : 'Load Standings'}
         </Button>
       </form>
+
+      {liveMajors && liveMajors.length > 0 && (
+        <div className="mb-6">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Live and upcoming majors</p>
+          <LiveMajorsList
+            events={liveMajors}
+            renderAction={(e) => (
+              <Button size="sm" variant={e.eventId === currentEventId ? 'primary' : 'quiet'} onClick={() => { const url = `https://tcg.ravensburgerplay.com/events/${e.eventId}`; setEventUrl(url); loadStandings(url) }}>
+                {e.eventId === currentEventId ? 'Loaded' : 'Load →'}
+              </Button>
+            )}
+          />
+          <p className="text-xs text-gray-400 mt-2">
+            From the Play Hub: DLC, Championship, LCQ, CCQ, ACQ, prize-pool and large side events, in progress or within 14 days.
+          </p>
+        </div>
+      )}
 
       {recents.length > 0 && (
         <div className="mb-6">
@@ -1105,7 +1107,7 @@ export function TournamentLookupPage() {
             )}
           </Tab>
           <Tab active={activeTab === 'team'} onClick={() => setActiveTab('team')}>
-            My Team
+            Team
             {teamEntries.length > 0 && (
               <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({teamEntries.length})</span>
             )}
@@ -1186,10 +1188,7 @@ export function TournamentLookupPage() {
                                 active={isFavorite}
                                 onToggle={() => toggleFavorite(entry.player.id, entry.user_event_status.best_identifier)}
                               />
-                              <TeamBadge
-                                active={onTeam}
-                                onToggle={() => toggleTeam(entry.player.id, entry.user_event_status.best_identifier)}
-                              />
+                              {onTeam && <TeamBadge />}
                             </div>
                           </td>
                           <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank}</td>
@@ -1230,7 +1229,6 @@ export function TournamentLookupPage() {
           team={team}
           badges={pairingBadges}
           toggleFavorite={toggleFavorite}
-          toggleTeam={toggleTeam}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           currentEventId={currentEventId}
@@ -1248,7 +1246,6 @@ export function TournamentLookupPage() {
             favorites={favorites}
             team={team}
             toggleFavorite={toggleFavorite}
-            toggleTeam={toggleTeam}
             currentEventId={currentEventId}
           />
         </div>
@@ -1259,8 +1256,8 @@ export function TournamentLookupPage() {
         <div className="space-y-3">
           <div className="text-sm text-gray-700 border border-gray-200 bg-gray-50 rounded-lg p-4">
             {structure?.activeRoundId
-              ? `Round ${structure.activeRoundNumber} is under way and RPH hasn't published standings yet. Its pairings and results are on the Matches tab; here's the registered roster so you can favorite or team-tag players.`
-              : "No active round yet — standings aren't published for this event. Here's the registered roster so you can favorite or team-tag players ahead of round 1."}
+              ? `Round ${structure.activeRoundNumber} is under way and RPH hasn't published standings yet. Its pairings and results are on the Matches tab; here's the registered roster so you can favorite players.`
+              : "No active round yet — standings aren't published for this event. Here's the registered roster so you can favorite players ahead of round 1."}
           </div>
           <Input
             type="text"
@@ -1276,7 +1273,6 @@ export function TournamentLookupPage() {
                 favorites={favorites}
                 team={team}
                 toggleFavorite={toggleFavorite}
-                toggleTeam={toggleTeam}
                 registrationMap={registrationMap}
                 onSelectPlayer={() => {}}
                 disableSelect
@@ -1295,7 +1291,6 @@ export function TournamentLookupPage() {
             favorites={favorites}
             team={team}
             toggleFavorite={toggleFavorite}
-            toggleTeam={toggleTeam}
             registrationMap={registrationMap}
             onSelectPlayer={rosterMode ? () => {} : setPlayer}
             disableSelect={rosterMode}
@@ -1307,43 +1302,73 @@ export function TournamentLookupPage() {
       {/* Team tab */}
       {(allStandings || roster) && !player && activeTab === 'team' && (
         <div className="space-y-3">
-          {teamSummary && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-                <div className="font-bold text-gray-900">{teamSummary.wins}-{teamSummary.losses}-{teamSummary.draws}</div>
-                <div className="text-xs text-gray-500">Combined W-L-D</div>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-                <div className="font-bold text-gray-900">
-                  {teamSummary.bestRank === Infinity ? '—' : `#${teamSummary.bestRank}–#${teamSummary.worstRank}`}
-                </div>
-                <div className="text-xs text-gray-500">Rank spread</div>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-                <div className="font-bold text-gray-900">{teamEntries.length}</div>
-                <div className="text-xs text-gray-500">Team members</div>
-              </div>
-              {structure?.topCutSize && (
-                <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-                  <div className="font-bold text-gray-900">{teamSummary.inCut} / {teamEntries.length}</div>
-                  <div className="text-xs text-gray-500">In top {structure.topCutSize}</div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Team</span>
+              <Select value={teamSlug ?? ''} onChange={(e) => pickTeam(e.target.value)} className="min-w-64">
+                <option value="">Pick a team…</option>
+                {teams.map((t) => (
+                  <option key={t.slug} value={t.slug}>{t.name}</option>
+                ))}
+              </Select>
+            </label>
+            {selectedTeam ? (
+              <>
+                <Link to={`/teams/${selectedTeam.slug}`} className="text-sm text-forge-ink hover:underline">Team page →</Link>
+                <span className="ml-auto text-sm text-gray-500">
+                  {teamEntries.length} of {Object.keys(team).length} members in this event
+                </span>
+              </>
+            ) : (
+              <span className="text-sm text-gray-500">
+                Teams and rosters come from the <Link to="/teams" className="text-forge-ink hover:underline">Team Tracker</Link>.
+              </span>
+            )}
+          </div>
+          {!selectedTeam ? (
+            <p className="text-sm text-gray-500 py-10 text-center px-4 border border-dashed border-gray-300 rounded-lg bg-white">
+              Pick a team to see its players in this event's standings and pairings.
+            </p>
+          ) : (
+            <>
+              {teamSummary && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                    <div className="font-bold text-gray-900">{teamSummary.wins}-{teamSummary.losses}-{teamSummary.draws}</div>
+                    <div className="text-xs text-gray-500">Combined W-L-D</div>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                    <div className="font-bold text-gray-900">
+                      {teamSummary.bestRank === null ? '—' : `#${teamSummary.bestRank}–#${teamSummary.worstRank}`}
+                    </div>
+                    <div className="text-xs text-gray-500">Rank spread</div>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                    <div className="font-bold text-gray-900">{teamEntries.length}</div>
+                    <div className="text-xs text-gray-500">Members playing</div>
+                  </div>
+                  {structure?.topCutSize && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                      <div className="font-bold text-gray-900">{teamSummary.inCut} / {teamEntries.length}</div>
+                      <div className="text-xs text-gray-500">In top {structure.topCutSize}</div>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <RosterTable
+                  entries={teamEntries}
+                  favorites={favorites}
+                  team={team}
+                  toggleFavorite={toggleFavorite}
+                  registrationMap={registrationMap}
+                  onSelectPlayer={rosterMode ? () => {} : setPlayer}
+                  disableSelect={rosterMode}
+                  emptyMessage="None of this team's current members are in this event."
+                />
+              </div>
+            </>
           )}
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <RosterTable
-              entries={teamEntries}
-              favorites={favorites}
-              team={team}
-              toggleFavorite={toggleFavorite}
-              toggleTeam={toggleTeam}
-              registrationMap={registrationMap}
-              onSelectPlayer={rosterMode ? () => {} : setPlayer}
-              disableSelect={rosterMode}
-              emptyMessage="No team members yet. Tap the T badge next to a player in the Standings/Roster tab to add them to your team."
-            />
-          </div>
         </div>
       )}
 
@@ -1441,10 +1466,7 @@ export function TournamentLookupPage() {
                     active={Boolean(favorites[String(player.player.id)])}
                     onToggle={() => toggleFavorite(player.player.id, player.user_event_status.best_identifier)}
                   />
-                  <TeamBadge
-                    active={Boolean(team[String(player.player.id)])}
-                    onToggle={() => toggleTeam(player.player.id, player.user_event_status.best_identifier)}
-                  />
+                  {team[String(player.player.id)] && <TeamBadge />}
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Rank #{tiebreakers.rank} of {allStandings?.length}

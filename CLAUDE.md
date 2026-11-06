@@ -79,19 +79,20 @@ Pages in `src/pages/` are self-contained; shared logic lives in `src/lib/` as pu
 | `/tournament-lookup` | `TournamentLookupPage` | Ravensburger live standings, ID analysis, pairing history |
 | `/results`, `/results/events/:id`, `/results/players/:id` | `Results*Page` | Public Tournament History archive |
 | `/results/ratings` | `ResultsRatingsPage` | Glicko player ratings over the archive, top 100 established players |
+| `/teams`, `/teams/:slug`, `/teams/:slug/manage` | `TeamsPage`, `TeamPage`, `TeamManagePage` | Team Tracker: directory, a team's roster and archive results and the live majors its players are in, and the roster editor (admin or the team's manager) |
 | `/lore-tracker` | `LoreTrackerPage` | Mobile lore counter |
 | `/store-lookup` | `StoreLookupPage` | RPH store details and store-tier status |
-| `/admin`, `/admin/tournament-import` | `AdminPage`, `AdminTournamentImportPage` | Supporter grants; archive import |
+| `/admin`, `/admin/tournament-import`, `/admin/teams` | `AdminPage`, `AdminTournamentImportPage`, `AdminTeamsPage` | Supporter grants; archive import; teams and their managers |
 
 Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`SupporterRoute` wraps them; `HomePage` badges them). `/admin` enforces admin itself. Legacy redirects live at the bottom of `App.jsx`. All routes render inside one `ErrorBoundary` keyed on the pathname; `Nav` sits outside it.
 
 ### Components (`src/components/`)
 
-`Nav` (ink-black bar, one dropdown per catalog section, Blog and Extension links, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` (the gate: tool name, description, a preview screenshot and a Metafy call to action) + `MetafyAccessSteps` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `analytics/TurningPoints` (Analytics) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*`, `deckVersions/*` (`DeckVersionTimeline`, `DeckVersionCompare`) and `analytics/*` sub-views.
+`Nav` (ink-black bar, one dropdown per catalog section, Blog and Extension links, ⌘K `ToolSearch`; hidden on `/lore-tracker`, the decklist overlay and every `/stream-overlay/*` route, as is `Footer`) · `ui/` building blocks (`Button`, `Card`, `PageHeader`, `Input`/`Textarea`/`Select`, `Tabs`, `Badge`) · `ErrorBoundary` · `SupporterRoute` (the gate: tool name, description, a preview screenshot and a Metafy call to action) + `MetafyAccessSteps` · `GameView` + `HandPredictor` (scraped-game display) · `SearchBar` + `ProxyCard` (proxy generator) · `ShareCardModal` (canvas share images) · `PlayerMatchHistory`, `PairingHistoryPanel`, `EliminationBracket`, `PlayerTags` (Tournament Lookup) · `TeamLogo`, `LiveMajorsList` (Team Tracker) · `StreamPairingPicker` (Stream Overlay) · `SessionInsights` (Match History) · `analytics/TurningPoints` (Analytics) · `InkIcons`, `ToolIcon`, `StatCard`, `MetaTrendChart`, `DeckListCard`, `DecklistCardBar`, `PostByline`, `PlayerProfileDetail`, `ResultsArchive` · `deckDoctor/*`, `deckVersions/*` (`DeckVersionTimeline`, `DeckVersionCompare`) and `analytics/*` sub-views.
 
 ### Hooks (`src/hooks/`)
 
-`useAuth` (session, ensures a `profiles` row) · `useSupporter` (`isSupporter` is true for `supporter` and `admin`) · `useCards` (card data from `/api/cards`, IndexedDB-cached) · `useTournamentLiveUpdates` (RPH Pusher) · `usePairingBadges` · `useTransparentBackground` (OBS views) · `useTheme`.
+`useAuth` (session, ensures a `profiles` row) · `useSupporter` (`isSupporter` is true for `supporter` and `admin`) · `useCards` (card data from `/api/cards`, IndexedDB-cached) · `useTournamentLiveUpdates` (RPH Pusher) · `usePairingBadges` · `useTransparentBackground` (OBS views) · `useTheme` · `useLiveMajors` (in-progress and upcoming majors).
 
 ### Shared libraries (`src/lib/`)
 
@@ -102,7 +103,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 | Cards and inks | `inkColors.js` (`resolveInkName`, `resolveColors`, `matchupKey`), `cardAnalysis.js` (`buildCardIndex`), `parseDeckList.js`, `decklistShared.js` (`matchDeckList`, `inkFill`, deck URL params), `decklistDelta.js` (`computeDelta`, card adds/removes between two lists), `cardIdResolver.js` (duels.ink card id → card/name; promos are `setCode-promoGrouping-number`), `cardSearch.js` (card-pool filters for the MCP server's `search_cards`/`get_cards`), `replayLogs.js` (rebuilds the gamelog shape from a duels.ink replay file before `parseGamelog`) |
 | duels.ink | `duelsApi.js` (tokens, match history, gamelogs, stats), `parseGamelog.js`, `gameStats.js`, `analyticsAggregation.js`, `cardImpact.js` (WAR), `turningPoints.js` (decisive round, comebacks), `buildWinrateMatrix.js`, `metagameAnalysis.js`, `sessionStats.js`, `opponentDirectory.js`, `playerProfiles.js`, `leakDetection.js`, `handInference.js`, `gameSnapshot.js`, `gameExport.js`/`gameImport.js`, `exportGameIds.js` |
 | Meta stats | `metaSynthesis.js`, `metaDrift.js`, `rankTiers.js`, `archetypeStats.js`, `deckDoctor.js`, `stockDecks.js`, `forgeDecks.js`, `deckVersions.js` (Deck Iteration Lab versions, compared by card name; `docs/FEATURE_PROPOSALS.md` §3), `practiceSim.js`, `drawOddsMath.js`, `monteCarloSim.js` |
-| Tournaments | `tournamentApi.js`, `tournamentLive.js`, `tournamentHistoryApi.js`, `resultsArchive.js`, `bracket.js`, `storeTiers.js`, `trackedStores.js`, `fieldBreakdown.js`, `cardePdf.js` |
+| Tournaments | `tournamentApi.js`, `tournamentLive.js`, `tournamentHistoryApi.js`, `resultsArchive.js`, `teams.js` (Team Tracker roster helpers), `bracket.js`, `storeTiers.js`, `trackedStores.js`, `fieldBreakdown.js`, `cardePdf.js` |
 | Stream Overlay | `streamOverlay.js` (pure, tested), `streamTables.js` (Supabase) |
 | Content | `siteSections.js` (the catalog; new tools need an `icon` in `toolIcons.js`, a test enforces it), `blog.js`, `blogPost.js`, `blogMeta.js`, `frontmatter.js`, `metaDigest.js` (the weekly meta digest post), `rules/` |
 | Coconut | `coconutCards.js`, `coconutFormat.js`, `coconutDecklistText.js` |
@@ -136,7 +137,7 @@ Scheduled GitHub Actions: `tournament-tracker-tick.yml` and `metafy-reconcile-ti
 | IndexedDB `lorcana_gamelogs` | `gamelogs` (parsed imports) |
 | localStorage | `lorcana_theme`, `lorcana_deck_names`, `lorcana_stream_table`, `lorcana_field_breakdown`, `lorcana_lore_tracker`, per-page form state |
 | `chrome.storage.local` | `lorcana_active_games` (extension, 2-hour TTL) |
-| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `tournament_history_events`/`_standings`/`_matches`/`_ratings` (service-role only; `_ratings` rebuilt nightly from the matches) |
+| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `tournament_history_events`/`_standings`/`_matches`/`_ratings` (service-role only; `_ratings` rebuilt nightly from the matches), `teams`/`team_members` (service-role only; the Team Tracker) |
 
 ### Ink icons
 

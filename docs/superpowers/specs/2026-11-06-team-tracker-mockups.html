@@ -75,6 +75,12 @@
   .dropdown .menu div:first-child{border-top:0}.dropdown .menu div.hl{background:var(--forge-soft)}
   .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--g600);margin:14px 0 0}
   .num{font-variant-numeric:tabular-nums}
+  .logo{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--paper);font-family:Oswald;font-size:12px;letter-spacing:.04em;vertical-align:middle;margin-right:10px}
+  .logo.lg{width:64px;height:64px;font-size:22px;margin-right:16px}
+  .logo.none{background:var(--g100);color:var(--g400);border:1px dashed var(--g300)}
+  .danger-zone{border:1px solid #e3c4bf;background:#f7ece9;border-radius:3px;padding:14px;margin-top:22px}
+  .danger-zone h3{color:var(--red);margin-bottom:6px}
+  .notice{background:var(--g50);border:1px solid var(--g200);border-left:3px solid var(--g400);padding:10px 12px;border-radius:3px;margin:0 0 16px;font-size:13px}
   .kbd{font-family:ui-monospace,monospace;font-size:12px;background:var(--g50);padding:1px 5px;border-radius:2px}
 </style>
 </head>
@@ -86,7 +92,7 @@
   <!-- 1. /teams -->
   <section class="screen">
     <h2>1 · /teams — team directory (public)</h2>
-    <p class="note">Catalog entry "Team Tracker" under Tournament Tools. One table; the whole row links to the team. "Last major" is the newest archived event a member played while on the team, with the team's best finish there.</p>
+    <p class="note">Catalog entry "Team Tracker" under Tournament Tools. One table; the whole row links to the team. "Last major" is the newest archived event a member played while on the team, with the team's best finish there. A team without a logo gets an empty mark, never a broken image. Disbanded teams sit under the active ones, muted, with their date.</p>
     <div class="frame">
       <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/teams</span></div>
       <div class="page">
@@ -95,11 +101,17 @@
           <table>
             <thead><tr><th>Team</th><th class="r">Members</th><th>Last major</th><th>Date</th><th class="r">Best finish</th><th class="r">Top cuts</th></tr></thead>
             <tbody>
-              <tr><td><a>Inkborn Forge</a></td><td class="r num">7</td><td><a>DLC Atlanta 2026</a> <span class="badge green">Live</span></td><td class="muted">Nov 7, 2026</td><td class="r num">—</td><td class="r num">—</td></tr>
-              <tr><td><a>Team Cavalier</a></td><td class="r num">11</td><td><a>DLC Bangkok 2026</a></td><td class="muted">Oct 24, 2026</td><td class="r num">2nd</td><td class="r num">3</td></tr>
-              <tr><td><a>Gloomstone Gaming</a></td><td class="r num">5</td><td><a>CCQ Manchester</a></td><td class="muted">Oct 18, 2026</td><td class="r num">9th</td><td class="r num">0</td></tr>
-              <tr><td><a>Les Encreurs</a></td><td class="r num">8</td><td><a>DLC Paris 2026</a></td><td class="muted">Sep 20, 2026</td><td class="r num">1st</td><td class="r num">2</td></tr>
-              <tr><td><a>Seven Seas</a></td><td class="r num">4</td><td class="muted">No archived events yet</td><td></td><td class="r num">—</td><td class="r num">—</td></tr>
+              <tr><td><span class="logo">IF</span><a>Inkborn Forge</a></td><td class="r num">7</td><td><a>DLC Atlanta 2026</a> <span class="badge green">Live</span></td><td class="muted">Nov 7, 2026</td><td class="r num">—</td><td class="r num">—</td></tr>
+              <tr><td><span class="logo" style="background:#5a2d82">TC</span><a>Team Cavalier</a></td><td class="r num">11</td><td><a>DLC Bangkok 2026</a></td><td class="muted">Oct 24, 2026</td><td class="r num">2nd</td><td class="r num">3</td></tr>
+              <tr><td><span class="logo none">—</span><a>Gloomstone Gaming</a></td><td class="r num">5</td><td><a>CCQ Manchester</a></td><td class="muted">Oct 18, 2026</td><td class="r num">9th</td><td class="r num">0</td></tr>
+              <tr><td><span class="logo" style="background:#2b65c9">LE</span><a>Les Encreurs</a></td><td class="r num">8</td><td><a>DLC Paris 2026</a></td><td class="muted">Sep 20, 2026</td><td class="r num">1st</td><td class="r num">2</td></tr>
+              <tr><td><span class="logo none">—</span><a>Seven Seas</a></td><td class="r num">4</td><td class="muted">No archived events yet</td><td></td><td class="r num">—</td><td class="r num">—</td></tr>
+            </tbody>
+          </table>
+          <p class="small muted" style="margin:18px 0 6px;text-transform:uppercase;letter-spacing:.06em;font-weight:600">Former teams</p>
+          <table style="color:var(--g500)">
+            <tbody>
+              <tr><td><span class="logo" style="background:var(--g300);color:var(--g600)">RW</span><a style="color:inherit">Rivermouth Wolves</a> <span class="badge muted">Disbanded Aug 2026</span></td><td class="r num">0 <span class="small">· 6 former</span></td><td><a style="color:inherit">DLC Lille 2026</a></td><td>Jul 12, 2026</td><td class="r num">34th</td><td class="r num">0</td></tr>
             </tbody>
           </table>
         </div>
@@ -116,7 +128,7 @@
       <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/teams/inkborn-forge</span></div>
       <div class="page">
         <p class="small"><a>← All teams</a></p>
-        <div class="hdr"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Inkborn Forge</h1><p class="desc">7 current members · 2 former · <a>inkbornforge.com</a></p></div>
+        <div class="hdr"><span class="logo lg">IF</span><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Inkborn Forge</h1><p class="desc">7 current members · 2 former · <a>inkbornforge.com</a></p></div>
           <div class="actions"><span class="badge forge">Playing now · DLC Atlanta 2026</span><span class="btn ghost sm">Manage roster</span></div></div>
 
         <div class="grid g4" style="margin-bottom:18px">
@@ -302,6 +314,7 @@
                 <tr><td><a>Gloomstone Gaming</a> <span class="small muted">gloomstone-gaming</span></td><td class="r num">5</td><td class="muted">No manager · <a class="small">Assign</a></td><td class="r"><span class="btn sm">Manage roster</span></td></tr>
                 <tr><td><a>Les Encreurs</a> <span class="small muted">les-encreurs</span></td><td class="r num">8</td><td>lea@lesencreurs.fr <a class="small">Change</a> · <a class="small">Remove</a></td><td class="r"><span class="btn sm">Manage roster</span></td></tr>
                 <tr><td><a>Seven Seas</a> <span class="small muted">seven-seas</span></td><td class="r num">4</td><td class="muted">No manager · <a class="small">Assign</a></td><td class="r"><span class="btn sm">Manage roster</span></td></tr>
+                <tr style="color:var(--g500)"><td><a style="color:inherit">Rivermouth Wolves</a> <span class="small muted">rivermouth-wolves</span> <span class="badge muted">Disbanded 2026-08-14</span></td><td class="r num">0</td><td class="muted">cap@rivermouth.gg</td><td class="r"><span class="btn ghost sm">Reinstate</span></td></tr>
               </tbody>
             </table>
             <p class="small muted" style="margin:10px 0 0">A manager must have signed in once (they need a profile). Removing a manager leaves the team and roster untouched. Manager emails appear here only; nothing public shows who manages a team.</p>
@@ -321,10 +334,13 @@
         <p class="small"><a>← Inkborn Forge</a></p>
         <div class="hdr"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Manage Inkborn Forge</h1><p class="desc">You manage this team. Changes are public immediately.</p></div></div>
         <div class="card">
-          <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:6px">
-            <div style="flex:1"><label class="l">Name</label><div class="input filled">Inkborn Forge</div></div>
-            <div style="flex:1"><label class="l">Link</label><div class="input filled">https://inkbornforge.com</div></div>
-            <span class="btn">Save</span>
+          <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:6px">
+            <div><label class="l">Logo</label><span class="logo lg" style="margin:0">IF</span><div style="display:flex;gap:6px;margin-top:6px"><span class="btn ghost sm">Replace</span><span class="btn danger sm">Remove</span></div><p class="small muted" style="margin:6px 0 0">PNG, JPG, WebP or SVG, up to 2 MB. Square works best.</p></div>
+            <div style="flex:1;display:flex;gap:10px;align-items:flex-end">
+              <div style="flex:1"><label class="l">Name</label><div class="input filled">Inkborn Forge</div></div>
+              <div style="flex:1"><label class="l">Link</label><div class="input filled">https://inkbornforge.com</div></div>
+              <span class="btn">Save</span>
+            </div>
           </div>
           <p class="small muted" style="margin:0 0 18px">Slug <span class="kbd">inkborn-forge</span> · Manager: you · set by an admin</p>
           <h3>Add member</h3>
@@ -350,6 +366,61 @@
             </tbody>
           </table>
           <p class="small muted" style="margin:10px 0 0">Dates save on blur. A second open membership for the same player on this team is rejected: "Already on this team".</p>
+          <div class="danger-zone">
+            <h3>Dissolve team</h3>
+            <p class="small" style="margin:0 0 10px;color:var(--g700)">Marks Inkborn Forge disbanded as of today. All 7 current members become former members, the team stays in the directory and on their player pages with its results, and nobody can edit it again. Only an admin can reinstate it.</p>
+            <span class="btn danger">Dissolve Inkborn Forge…</span> <span class="small muted" style="margin-left:8px">asks you to type the team name to confirm</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5c. Disbanded -->
+  <section class="screen">
+    <h2>5c · A disbanded team: public page and the read-only manage page</h2>
+    <p class="note">After dissolution the public page keeps everything historical: no live card, everyone under Former members with the dissolution date as their leaving date, results untouched. The manage page is read-only for the manager and shows the notice; an admin also sees <b>Reinstate</b>, which clears the date and reopens exactly the memberships the dissolution closed. The team disappears from Tournament Lookup's picker because it has no current roster.</p>
+    <div class="frame">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/teams/rivermouth-wolves</span></div>
+      <div class="page" style="padding-bottom:18px">
+        <p class="small"><a>← All teams</a></p>
+        <div class="hdr" style="margin-bottom:16px"><span class="logo lg" style="background:var(--g300);color:var(--g600)">RW</span><div><p class="eyebrow">Tournament Tools</p><h1 class="t" style="color:var(--g600)">Rivermouth Wolves</h1><p class="desc">6 former members · <a>rivermouth.gg</a></p></div><div class="actions"><span class="badge muted" style="font-size:12px;padding:4px 8px">Disbanded Aug 14, 2026</span></div></div>
+        <div class="grid g13">
+          <div class="card"><h3>Former members</h3>
+            <table class="small"><tbody>
+              <tr><td><a>Hannah Brooks</a></td><td class="muted">Feb 2025 – Aug 2026</td></tr>
+              <tr><td><a>Leo Marchetti</a></td><td class="muted">Feb 2025 – Aug 2026</td></tr>
+              <tr><td><a>Yusuf Demir</a></td><td class="muted">Jun 2025 – Aug 2026</td></tr>
+              <tr><td><a>Clara Nguyen</a></td><td class="muted">Jun 2025 – Aug 2026</td></tr>
+              <tr><td><a>Ben Okafor</a></td><td class="muted">Sep 2025 – Aug 2026</td></tr>
+              <tr><td><a>Iris Haddad</a></td><td class="muted">Feb 2025 – Mar 2026</td></tr>
+            </tbody></table>
+            <p class="small muted" style="margin:10px 0 0">Iris left before the team disbanded, so her date stands; the other five were closed by the dissolution.</p>
+          </div>
+          <div class="card"><h3 style="display:flex;gap:10px;align-items:baseline"><a style="text-transform:none;letter-spacing:0">Disney Lorcana Challenge Lille 2026</a><span class="small muted" style="font-family:'Source Sans 3';text-transform:none;letter-spacing:0">Jul 12, 2026 · 540 players · Top 32</span><span class="badge forge" style="margin-left:auto">Best 34th</span></h3>
+            <table><tbody>
+              <tr><td class="r num" style="width:60px">34</td><td><a>Leo Marchetti</a></td><td class="num">8-3-0</td><td><i class="ink sapphire"></i><i class="ink steel"></i></td><td></td></tr>
+              <tr><td class="r num">120</td><td><a>Hannah Brooks</a></td><td class="num">7-4-0</td><td></td><td></td></tr>
+            </tbody></table>
+            <p class="small muted" style="margin:10px 0 0">Results stop at the dissolution date: nothing after Aug 14, 2026 can appear here, because every membership closed that day.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame" style="margin-top:16px">
+      <div class="nav"><b>INKBORNFORGE</b><span>Resources</span><span>Deckbuilding</span><span>Coaching</span><span class="on">Tournaments</span><span>Content Creators</span><span>Blog</span><span class="url">inkbornforge.com/teams/rivermouth-wolves/manage</span></div>
+      <div class="page" style="padding-bottom:18px">
+        <p class="small"><a>← Rivermouth Wolves</a></p>
+        <div class="hdr" style="margin-bottom:14px"><div><p class="eyebrow">Tournament Tools</p><h1 class="t">Manage Rivermouth Wolves</h1></div><div class="actions"><span class="btn forge">Reinstate team</span><span class="small muted" style="margin-left:8px">admins only</span></div></div>
+        <p class="notice"><b>This team was disbanded on Aug 14, 2026</b> and is read-only. Its roster, name, link and logo cannot be changed. An admin can reinstate it, which reopens the five memberships the dissolution closed.</p>
+        <div class="card" style="opacity:.6">
+          <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px"><div style="flex:1"><label class="l">Name</label><div class="input filled">Rivermouth Wolves</div></div><div style="flex:1"><label class="l">Link</label><div class="input filled">https://rivermouth.gg</div></div><span class="btn ghost">Save</span></div>
+          <h3>Members</h3>
+          <table class="small"><tbody>
+            <tr><td>Hannah Brooks</td><td>2025-02-01</td><td>2026-08-14</td><td class="r"><span class="btn danger sm">Delete</span></td></tr>
+            <tr><td>Leo Marchetti</td><td>2025-02-01</td><td>2026-08-14</td><td class="r"><span class="btn danger sm">Delete</span></td></tr>
+            <tr><td class="muted">… 4 more</td><td></td><td></td><td></td></tr>
+          </tbody></table>
         </div>
       </div>
     </div>

@@ -12,9 +12,10 @@ Teams are how the competitive scene organises itself (Team Cavalier, Inkborn, �
 2. **Memberships with dates**: a player may belong to many teams over time. A membership has `joined_on` and an optional `left_on`; a former member stays on the team's past events and disappears from its future ones.
 3. **Live and upcoming majors**: the discovery sweep behind the admin import, filtered to events that are in progress or start within 14 days, on the Tournament Lookup landing and on each team page.
 4. **Team view in Tournament Lookup**: the "My Team" tab becomes "Team", a picker over the directory. Pick a team and the tab shows its current members in the live standings with the existing combined record / rank spread / in-cut summary; the Matches tab's team filter and the activity ticker use the same roster. The per-player "T" toggle and the `lorcana_tournament_team` key are removed.
-5. **Editing**: an admin creates teams on `/admin/teams` and may assign each team a **manager**, any signed-in user, found by email as `/admin` finds supporters. The roster editor at `/teams/:slug/manage` is open to admins and to that team's manager: rename the team, set its link, add a member from the archive's player search, set a member's leaving date, delete a mistaken row. Only an admin can create a team, change its slug or change its manager.
+5. **Editing**: an admin creates teams on `/admin/teams` and may assign each team a **manager**, any signed-in user, found by email as `/admin` finds supporters. The roster editor at `/teams/:slug/manage` is open to admins and to that team's manager: rename the team, set its link, upload a **logo**, add a member from the archive's player search, set a member's leaving date, delete a mistaken row. Only an admin can create a team, change its slug or change its manager.
+6. **Dissolving a team**: a manager or an admin can mark a team disbanded. Every open membership is closed on that date, the team turns read-only (no roster, name, link or logo edits), and it stays in the directory and on players' pages as a former team. Only an admin can reinstate it, which reopens the memberships the dissolution closed.
 
-Not in scope: the Discord bot's favorites, personal favorites, ratings, team logos, user-created teams (a manager edits a roster, never creates a team), aggregate team ratings.
+Not in scope: the Discord bot's favorites, personal favorites, ratings, user-created teams (a manager edits a roster, never creates a team), aggregate team ratings, deleting a team outright (dissolve instead; a row created by mistake is removed in SQL).
 
 ## Data
 
@@ -27,6 +28,8 @@ CREATE TABLE public.teams (
   name       text NOT NULL CHECK (length(name) BETWEEN 1 AND 80),
   url        text,                      -- the team's own site or social link, optional
   manager_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,  -- may edit this team's roster
+  logo_url   text,                      -- public URL in the stream-logos bucket, optional
+  disbanded_on date,                    -- set when dissolved; the team is read-only while non-null
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -45,25 +48,31 @@ CREATE UNIQUE INDEX team_members_open_idx ON public.team_members (team_id, rph_p
 CREATE INDEX team_members_player_idx ON public.team_members (rph_player_id);
 ```
 
+**Logo.** Uploaded from the manage page with the Stream Overlay's existing `uploadLogo()` into the public `stream-logos` bucket (migration `016`: 2 MB, image types only, each signed-in user writes under their own folder), then saved as `logo_url` through `team-save`, which accepts only a URL under that bucket's public path. No new bucket.
+
+**Dissolving.** `team-dissolve` sets `disbanded_on = today` and `left_on = today` on every membership with `left_on IS NULL`, in one transaction (a SQL function `dissolve_team(team_id)`, service-role only). While `disbanded_on` is set, every write to the team or its members is refused with 409 "Team is disbanded", including by the manager. `team-reinstate` (admin only) clears `disbanded_on` and clears `left_on` on the memberships whose `left_on` equals the old `disbanded_on`, so members who had left earlier stay former. Dissolving twice, or reinstating a live team, is a 409.
+
 **Membership on a date** (`isMemberOn(member, date)`, one implementation in `api/_lib/teams.ts`, unit-tested): `joined_on <= date AND (left_on IS NULL OR left_on >= date)`. An event counts for the team when its `event_date` satisfies this for at least one member. Live events always use the current roster (`left_on IS NULL`). Concurrent membership on two teams is allowed; the database only forbids two open rows on the same team.
 
 ## API
 
 All in `api/tournament-history.ts` (`?endpoint=`), no new function. Team reads carry `Vercel-Cache-Tag: teams` and `PUBLIC_CACHE`; every write purges that tag, so an edit is visible on the next request. The public reads never return `manager_user_id` or the manager's email.
 
-**Who may write.** `requireTeamEditor(req, res, teamId)` in `api/_lib/requireAdmin.ts`: a valid session whose user is an admin or is `teams.manager_user_id` for that team; otherwise 403. Creating a team, changing a slug and setting `managerUserId` are admin-only: a manager who sends either field gets 403 rather than having it dropped.
+**Who may write.** `requireTeamEditor(req, res, teamId)` in `api/_lib/requireAdmin.ts`: a valid session whose user is an admin or is `teams.manager_user_id` for that team; otherwise 403. It also loads the team and refuses with 409 when `disbanded_on` is set, except for `team-reinstate`. Creating a team, changing a slug, setting `managerUserId` and reinstating are admin-only: a manager who sends either field gets 403 rather than having it dropped.
 
 | Endpoint | Auth | Returns |
 |---|---|---|
-| `teams` | public | `{ teams: [{ slug, name, url, memberCount, lastEvent: { eventId, eventName, eventDate, bestRank } \| null }] }`, by name |
-| `team&slug=` | public | `{ team: { slug, name, url }, members: [{ id, playerId, playerName, joinedOn, leftOn }], events: [{ ...eventShape, results: [{ playerId, playerName, rank, record, madeTopCut, madeDayTwo, inks }] }] }`, events newest first, results by rank |
+| `teams` | public | `{ teams: [{ slug, name, url, logoUrl, disbandedOn, memberCount, lastEvent: { eventId, eventName, eventDate, bestRank } \| null }] }`, active teams by name, then disbanded teams |
+| `team&slug=` | public | `{ team: { slug, name, url, logoUrl, disbandedOn }, members: [{ id, playerId, playerName, joinedOn, leftOn }], events: [{ ...eventShape, results: [{ playerId, playerName, rank, record, madeTopCut, madeDayTwo, inks }] }] }`, events newest first, results by rank |
 | `live-majors` | public, `s-maxage=300, stale-while-revalidate=3600` | `{ events: [{ eventId, name, label, storeName, startDatetime, displayStatus, playerCount }] }`: `discoverCandidateEvents()` kept where `display_status` is `inProgress`, or `upcoming` with `start_datetime` within 14 days, not a fake store; in progress first, then by start |
 | `player` (existing) | public | adds `teams: [{ slug, name, joinedOn, leftOn }]` |
 | `my-teams` | session | `{ admin, teams: [{ slug, name }] }`: the teams the caller manages; tells the team page and the manage page whether to offer editing |
-| `team-save` (POST) | admin, or the team's manager for `name`/`url` only | `{ id?, slug?, name, url, managerUserId? }` → upsert; returns the row |
+| `team-save` (POST) | admin, or the team's manager for `name`/`url`/`logoUrl` only | `{ id?, slug?, name, url, logoUrl, managerUserId? }` → upsert; returns the row |
+| `team-dissolve` (POST) | admin or manager | `{ id }` → `dissolve_team()`; 409 if already disbanded |
+| `team-reinstate` (POST) | admin | `{ id }`; 409 if not disbanded |
 | `team-member-save` (POST) | admin or manager | `{ id?, teamId, playerId, playerName, joinedOn, leftOn }` → upsert; the unique index rejects a second open membership |
 | `team-member-delete` (POST) | admin or manager | `{ id }` |
-| `admin-teams` | admin | every team with `managerEmail` (joined from `profiles`), for `/admin/teams` |
+| `admin-teams` | admin | every team with `managerEmail` (joined from `profiles`) and `disbandedOn`, for `/admin/teams` |
 
 `team`'s server work: load members, load `tournament_history_standings` for their player ids joined to events (one query, `.in('rph_player_id', ids)`), keep rows where `isMemberOn()` holds for that row's event date, group by event. `teams`' `lastEvent` is the newest such event per team, computed the same way over all teams in one standings query (a few hundred rows at most for the foreseeable directory; ponytail ceiling noted in code).
 
@@ -71,35 +80,35 @@ Supabase helpers join `api/_lib/tournamentHistorySupabase.ts`; the pure grouping
 
 ## Client
 
-- `src/lib/tournamentHistoryApi.js`: `fetchTeams`, `fetchTeam(slug)`, `fetchLiveMajors`, `fetchMyTeams`, `fetchAdminTeams`, `saveTeam`, `saveTeamMember`, `deleteTeamMember`.
+- `src/lib/tournamentHistoryApi.js`: `fetchTeams`, `fetchTeam(slug)`, `fetchLiveMajors`, `fetchMyTeams`, `fetchAdminTeams`, `saveTeam`, `saveTeamMember`, `deleteTeamMember`, `dissolveTeam`, `reinstateTeam`; logo upload is `streamTables.js`'s `uploadLogo()`.
 - `src/lib/teams.js` (pure, `src/lib/__tests__/teams.test.js`): `splitRoster(members)` → `{ current, former }`; `rosterMap(members)` → `{ [playerId]: { name } }`, the shape Tournament Lookup already threads as `team`; `teamLiveSummary(entries, topCutSize)`, the combined W-L-D / rank spread / in-cut reduce moved out of `TournamentLookupPage`.
 
 ### Pages and routes
 
 | Route | Page | Content |
 |---|---|---|
-| `/teams` | `TeamsPage` | Table: team, current members, last major (name, date, best finish). Catalog entry "Team Tracker" under Tournament Tools, icon `users` (new in `toolIcons.js`). Public. |
-| `/teams/:slug` | `TeamPage` | Header (name, link; a "Manage roster" button when `my-teams` says the viewer may). **Live and upcoming majors** card: each event with status, player count and, for the current roster, how many are registered (client-side `fetchAllRegistrations` per event, intersected with the roster), linking to `/tournament-lookup?event=<id>&tab=team&team=<slug>`. **Roster**: current members (name → `/results/players/:id`, joined), former members collapsed with dates. **Results**: one block per archived event, newest first, members' rank / record / top-cut badge, event name → `/results/events/:id`. Public. |
+| `/teams` | `TeamsPage` | Table: logo, team, current members, last major (name, date, best finish). Disbanded teams follow in a muted "Former teams" group with their date. Catalog entry "Team Tracker" under Tournament Tools, icon `users` (new in `toolIcons.js`). Public. |
+| `/teams/:slug` | `TeamPage` | Header (logo, name, link; a "Manage roster" button when `my-teams` says the viewer may). A disbanded team shows a "Disbanded <date>" badge, no live card, everyone under Former members, results intact. **Live and upcoming majors** card: each event with status, player count and, for the current roster, how many are registered (client-side `fetchAllRegistrations` per event, intersected with the roster), linking to `/tournament-lookup?event=<id>&tab=team&team=<slug>`. **Roster**: current members (name → `/results/players/:id`, joined), former members collapsed with dates. **Results**: one block per archived event, newest first, members' rank / record / top-cut badge, event name → `/results/events/:id`. Public. |
 | `/admin/teams` | `AdminTeamsPage` | Linked from `/admin`. Create a team (name, slug, link); the list of teams with each one's manager and a **Manager** picker (email search over `profiles`, as `/admin`'s grant form does; "Remove" clears it); "Manage roster" link per team. Enforces admin like `AdminPage`. |
-| `/teams/:slug/manage` | `TeamManagePage` | For an admin or the team's manager (anyone else sees the gate message and a link back). Name and link editable; slug and manager shown read-only with "set by an admin". Add member (name search via the existing `search-players`, joined date defaults to today), `left_on` date per row (clearing it reinstates), delete row. |
+| `/teams/:slug/manage` | `TeamManagePage` | For an admin or the team's manager (anyone else sees the gate message and a link back). Name, link and logo (file picker, preview, remove) editable; slug and manager shown read-only with "set by an admin". Add member (name search via the existing `search-players`, joined date defaults to today), `left_on` date per row (clearing it reinstates), delete row. A **Dissolve team** action at the bottom behind a confirm that states the consequences. On a disbanded team the page is read-only with a notice; an admin also sees **Reinstate**. |
 | `/results/players/:id` | existing | Team badges under the name: current teams link to `/teams/:slug`; former teams muted with years. |
 
 ### Tournament Lookup changes
 
 - Landing: a **Live and upcoming majors** list beside Recents (from `live-majors`); clicking loads the event.
-- `?team=<slug>` URL param, read like `event` and `tab`. The Team tab holds a `Select` of directory teams (from `teams`); choosing writes the param. No localStorage. With a team selected, `team` (the id → name map) comes from `rosterMap(members)` of that team's current roster, so `RosterTable`, `matchInvolvesFilter`, `matchPriority`, `describeTrackedMatch` and the ticker keep their signatures.
+- `?team=<slug>` URL param, read like `event` and `tab`. The Team tab holds a `Select` of active directory teams (from `teams`, disbanded ones excluded since they have no current roster); choosing writes the param. No localStorage. With a team selected, `team` (the id → name map) comes from `rosterMap(members)` of that team's current roster, so `RosterTable`, `matchInvolvesFilter`, `matchPriority`, `describeTrackedMatch` and the ticker keep their signatures.
 - Removed: `TEAM_KEY`, `getTeam`, `toggleTeamStorage`, `toggleTeam`, the `TeamBadge` toggles and the `toggleTeam` prop. `TeamBadge` becomes display-only (team members still get the badge in Standings, Roster and Matches), and the empty state says "Pick a team to see its players here".
 
 ## Error handling
 
-Team reads 404 on an unknown slug (page shows `ArchiveError`). Writes return the Supabase error message; the duplicate-open-membership case is surfaced as "already on this team". A manager who tries an admin-only field gets 403 and the manage page says "Only an admin can change that". `live-majors` is best effort: on an upstream failure it returns 502 and both surfaces hide the card, as the admin suggested list does today.
+Team reads 404 on an unknown slug (page shows `ArchiveError`). Writes return the Supabase error message; the duplicate-open-membership case is surfaced as "already on this team". A manager who tries an admin-only field gets 403 and the manage page says "Only an admin can change that". A write to a disbanded team gets 409 and the page says "This team is disbanded; an admin can reinstate it". `team-save` rejects a `logoUrl` outside the `stream-logos` public path with 400. `live-majors` is best effort: on an upstream failure it returns 502 and both surfaces hide the card, as the admin suggested list does today.
 
 ## Testing
 
-- `api/_lib/__tests__/teams.test.ts`: `canEditTeam(user, team)` (admin, manager, other), `isMemberOn` boundaries (join day, leave day, open), event grouping drops a former member's later events and keeps earlier ones, `lastEvent` picks the newest.
+- `api/_lib/__tests__/teams.test.ts`: `canEditTeam(user, team)` (admin, manager, other, disbanded), `isValidLogoUrl`, `isMemberOn` boundaries (join day, leave day, open), event grouping drops a former member's later events and keeps earlier ones, `lastEvent` picks the newest.
 - `src/lib/__tests__/teams.test.js`: `splitRoster`, `rosterMap`, `teamLiveSummary` (ported cases from the inline reduce).
 - `access.test.js`'s catalog icon test covers the new entry.
-- Browser check per `docs/agents/ui-screenshots.md`: `/teams`, `/teams/:slug`, the Tournament Lookup Team tab with a picked team, `/admin/teams`, `/teams/:slug/manage`; screenshots under `docs/screenshots/` for the PR.
+- Browser check per `docs/agents/ui-screenshots.md`: `/teams`, `/teams/:slug`, the Tournament Lookup Team tab with a picked team, `/admin/teams`, `/teams/:slug/manage` (live and disbanded); screenshots under `docs/screenshots/` for the PR.
 
 ## Docs
 

@@ -511,6 +511,50 @@ export function TournamentLookupPage() {
   const [matchesLoading, setMatchesLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('standings')
   const [favorites, setFavorites] = useState(getFavorites)
+  // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
+  // share the current URL and it reloads straight into the same event/tab/
+  // search instead of a blank page. Only the *initial* read matters: after
+  // mount, state flows one-way into the URL via the sync effects below, so
+  // we never re-read params and fight the user's own navigation.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [initialParams] = useState(() => ({
+    event: searchParams.get('event'),
+    tab: searchParams.get('tab'),
+    q: searchParams.get('q'),
+    team: searchParams.get('team'),
+  }))
+
+  // The Team tab: a team from the Team Tracker directory, chosen by slug and
+  // carried in the URL (?team=) like the event, so a team page can deep-link
+  // straight to "this team at this event". `team` keeps the { [id]: { name } }
+  // shape the tables, match filter and ticker already read.
+  const [teams, setTeams] = useState([])
+  const [teamSlug, setTeamSlug] = useState(initialParams.team)
+  const [teamMembers, setTeamMembers] = useState([])
+  const team = useMemo(() => rosterMap(teamMembers), [teamMembers])
+  const selectedTeam = teams.find((t) => t.slug === teamSlug) ?? null
+  const liveMajors = useLiveMajors()
+
+  useEffect(() => {
+    fetchTeams()
+      .then((data) => setTeams(data.teams.filter((t) => !t.disbandedOn)))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!teamSlug) return
+    let cancelled = false
+    fetchTeam(teamSlug)
+      .then((data) => { if (!cancelled) setTeamMembers(data.members) })
+      .catch(() => { if (!cancelled) setTeamMembers([]) })
+    return () => { cancelled = true }
+  }, [teamSlug])
+
+  function pickTeam(slug) {
+    setTeamSlug(slug || null)
+    if (!slug) setTeamMembers([])
+  }
+
   const [roster, setRoster] = useState(null)
   const [rosterMode, setRosterMode] = useState(false)
   const [recents, setRecents] = useState(getRecents)
@@ -574,49 +618,6 @@ export function TournamentLookupPage() {
     return () => clearInterval(id)
   }, [tickerEvents.length])
 
-  // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
-  // share the current URL and it reloads straight into the same event/tab/
-  // search instead of a blank page. Only the *initial* read matters: after
-  // mount, state flows one-way into the URL via the sync effects below, so
-  // we never re-read params and fight the user's own navigation.
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [initialParams] = useState(() => ({
-    event: searchParams.get('event'),
-    tab: searchParams.get('tab'),
-    q: searchParams.get('q'),
-    team: searchParams.get('team'),
-  }))
-
-  // The Team tab: a team from the Team Tracker directory, chosen by slug and
-  // carried in the URL (?team=) like the event, so a team page can deep-link
-  // straight to "this team at this event". `team` keeps the { [id]: { name } }
-  // shape the tables, match filter and ticker already read.
-  const [teams, setTeams] = useState([])
-  const [teamSlug, setTeamSlug] = useState(initialParams.team)
-  const [teamMembers, setTeamMembers] = useState([])
-  const team = useMemo(() => rosterMap(teamMembers), [teamMembers])
-  const selectedTeam = teams.find((t) => t.slug === teamSlug) ?? null
-  const liveMajors = useLiveMajors()
-
-  useEffect(() => {
-    fetchTeams()
-      .then((data) => setTeams(data.teams.filter((t) => !t.disbandedOn)))
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (!teamSlug) return
-    let cancelled = false
-    fetchTeam(teamSlug)
-      .then((data) => { if (!cancelled) setTeamMembers(data.members) })
-      .catch(() => { if (!cancelled) setTeamMembers([]) })
-    return () => { cancelled = true }
-  }, [teamSlug])
-
-  function pickTeam(slug) {
-    setTeamSlug(slug || null)
-    if (!slug) setTeamMembers([])
-  }
 
   useEffect(() => {
     if (!structure?.timerEndDatetime || !structure?.timerIsRunning) {

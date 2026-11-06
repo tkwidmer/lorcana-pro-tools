@@ -1,9 +1,8 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 
 const RAVEN_BASE = 'https://api.ravensburgerplay.com/api/v2'
-// Match results are not exposed on RAVEN_BASE without an authenticated session
-// (401 "Authentication credentials were not provided"). The public tournament
-// results page instead reads match data through this Cloudflare-fronted proxy.
+// A Cloudflare-fronted cache of the same API; the Play Hub reads match lists
+// through it (RAVEN_BASE serves them too, as of Nov 2026).
 const HYDRA_BASE = 'https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2'
 
 function str(v: string | string[] | undefined): string | undefined {
@@ -33,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const storeId = str(req.query.storeId)
   const storeNumericId = str(req.query.storeNumericId)
   const page = clampInt(str(req.query.page), 1, 10000)
-  const pageSize = clampInt(str(req.query.pageSize), 10, 200)
+  const pageSize = clampInt(str(req.query.pageSize), 10, 500)
 
   let url: string
 
@@ -51,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     case 'standings':
       if (!roundId) return res.status(400).json({ error: 'Missing roundId' })
       if (!ID_RE.test(roundId)) return res.status(400).json({ error: 'Invalid roundId' })
-      url = `${RAVEN_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/standings/paginated/?page=${page}&page_size=${pageSize}`
+      url = `${RAVEN_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/standings/`
       break
     case 'matches':
       if (!roundId) return res.status(400).json({ error: 'Missing roundId' })

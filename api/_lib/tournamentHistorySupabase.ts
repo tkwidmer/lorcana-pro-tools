@@ -299,7 +299,7 @@ const PAGE = 1000 // PostgREST's default max-rows; .range() pages past it.
 
 // Pages a query in PAGE-row ranges until a short page comes back. `build`
 // must return a fresh query each call (a PostgREST builder is single-use).
-async function fetchAllRanges<T>(build: () => any): Promise<T[]> {
+export async function fetchAllRanges<T>(build: () => any): Promise<T[]> {
   const rows: T[] = []
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await build().range(from, from + PAGE - 1)

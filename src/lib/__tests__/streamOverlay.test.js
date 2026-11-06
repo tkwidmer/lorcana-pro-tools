@@ -6,7 +6,7 @@ import {
 } from '../streamOverlay'
 
 const row = (overrides = {}) => ({
-  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', sponsor2_logo_url: 'https://x/s2.png', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '', meta_text: '', meta_players: null, meta_shown: false, lore_track: false, featured_cards: 'fade', hide_cams: true,
+  id: 't1', name: 'Table 1', mode: 'live', theme_fill: '#17171a', theme_accent: '#b5832a', theme_banner: '', event_name: 'Open', event_logo_url: '', sponsor_logo_url: '', sponsor2_logo_url: 'https://x/s2.png', round: 'Top 16', note: 'Top 8 at 5pm', deck_shown: 0, player_card: null, card_shown: false, standings: null, bracket: null, break_panel: '', meta_text: '', meta_players: null, meta_shown: false, lore_track: false, featured_cards: 'fade', hide_cams: true,
   timer_ends_at: null, timer_remaining_ms: 50 * 60 * 1000, rph_event_id: null,
   p1_name: 'Ryan', p1_record: '5-0-2', p1_inks: ['amethyst', 'emerald'], p1_lore: 12, p1_game_wins: 0, p1_decklist: '4 Elsa', p1_featured: 'Elsa', p1_featured_at: '2026-10-31T12:00:00+00:00',
   p2_name: 'Dylan', p2_record: '5-2-0', p2_inks: ['amber'], p2_lore: 7, p2_game_wins: 1, p2_decklist: '', p2_featured: '', p2_featured_at: null,
@@ -109,7 +109,7 @@ describe('streamOverlay row mapping', () => {
   it('clears the pairing but keeps the event setup', () => {
     const p = clearTablePatch()
     expect(p).toMatchObject({ p1_name: '', p2_name: '', p1_inks: [], p2_lore: 0, p1_game_wins: 0, p2_decklist: '', p1_featured: '', p2_featured_at: null, deck_shown: 0, card_shown: false, player_card: null, mode: 'live', standings: null, bracket: null, break_panel: '' })
-    for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'sponsor2_logo_url', 'theme_fill', 'theme_accent', 'timer_ends_at', 'timer_remaining_ms', 'rph_event_id', 'round', 'note', 'lore_track', 'featured_cards', 'hide_cams']) expect(p).not.toHaveProperty(kept)
+    for (const kept of ['event_name', 'event_logo_url', 'sponsor_logo_url', 'sponsor2_logo_url', 'theme_fill', 'theme_accent', 'theme_banner', 'timer_ends_at', 'timer_remaining_ms', 'rph_event_id', 'round', 'note', 'lore_track', 'featured_cards', 'hide_cams']) expect(p).not.toHaveProperty(kept)
   })
 
   it('captions the round: the elimination phase in top cut, else Round N', () => {
@@ -269,8 +269,9 @@ describe('streamOverlay row mapping', () => {
     expect(themeTextColor('#b00020')).toBe('#f2f1ee')
     expect(themeTextColor('#ffffff')).toBe('#17171a')
     expect(themeTextColor('#f5e6b3')).toBe('#17171a')
-    expect(rowToState(row({ theme_fill: '#ffffff', theme_accent: '#b00020' })).theme)
-      .toEqual({ fill: '#ffffff', accent: '#b00020', text: '#17171a' })
+    expect(rowToState(row({ theme_fill: '#17171a', theme_banner: '#f5e6b3', theme_accent: '#b00020' })).theme)
+      .toEqual({ fill: '#17171a', banner: '#f5e6b3', accent: '#b00020', text: '#f2f1ee', bannerText: '#17171a' })
+    expect(rowToState(row({ theme_fill: '#ffffff' })).theme).toMatchObject({ banner: '#ffffff', bannerText: '#17171a' })
   })
 
   it('swaps every per-side column, and a shown deck follows its player', () => {

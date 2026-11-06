@@ -26,6 +26,7 @@ A tournament gameplay overlay for OBS. One `stream_tables` row is a **table** (a
 | `lore_track` | 026 | panel Event card (Lore display: Counter / Track) |
 | `featured_cards` (`off` / `fade` / `stay`), `p1_featured`/`p2_featured`, `p1_featured_at`/`p2_featured_at` | 027 | panel Event card (Featured cards) and each Player card's picker |
 | `hide_cams` | 029 | panel Event card (Player cams: Show / Hide) |
+| `theme_banner` | 030 | panel Event card (Banner fill; `''` matches `theme_fill`) |
 
 `rowToState(row)` in `streamOverlay.js` is the one mapping from row to render shape; add a column there and in the fixture row in the test file, and extend `stream_table_public()` in the migration so the public read and broadcast carry it.
 
@@ -66,7 +67,7 @@ Decklist (`deck_shown`), player card (`card_shown`) and metagame (`meta_shown`) 
 
 ## Theme
 
-`theme_fill` and `theme_accent` per table, defaulting to `DEFAULT_THEME` (ink black, forge gold). Text color is derived by `themeTextColor()` (WCAG luminance), never stored. The view sets `--fill`, `--accent`, `--on-fill` on the frame root and every color utility reads them (`bg-(--fill)`). Fonts, layout and the InkbornForge lockup stay fixed.
+`theme_fill`, `theme_banner` and `theme_accent` per table, defaulting to `DEFAULT_THEME` (ink black, forge gold); `theme_banner` is `''` until an operator picks a banner color, and a blank banner matches the fill (`themeOf()`), so most tables change one fill and the panel's Match fill button blanks it again. Text color is derived by `themeTextColor()` (WCAG luminance) for the fill and for the banner, never stored. The view sets `--fill`, `--accent`, `--on-fill` on the frame root and every color utility reads them (`bg-(--fill)`); `TopBanner` rebinds `--fill` and `--on-fill` to the banner's pair, so the banner alone takes `theme_banner` (a lighter banner over darker sides, say). The break screen and the panels over the cam stay on `theme_fill`. Fonts, layout and the InkbornForge lockup stay fixed.
 
 ## Applying a migration
 

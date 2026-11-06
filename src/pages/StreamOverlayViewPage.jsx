@@ -351,7 +351,11 @@ function TopBanner({ state, now, winner }) {
   const remaining = timerRemainingMs(state, now)
   const result = winner === null ? null : `${state.players[winner].name} ${state.players[winner].gameWins}-${state.players[1 - winner].gameWins}`
   return (
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center px-8 py-3 bg-(--fill) border-x-4 border-b-4 border-(--accent) rounded-b-lg">
+    // The banner's own fill: rebinding --fill / --on-fill here restyles it alone.
+    <div
+      className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center px-8 py-3 bg-(--fill) text-(--on-fill) border-x-4 border-b-4 border-(--accent) rounded-b-lg"
+      style={{ '--fill': state.theme.banner, '--on-fill': state.theme.bannerText }}
+    >
       <div className="flex items-center gap-8">
         {state.eventLogoUrl
           ? <img src={state.eventLogoUrl} alt={state.eventName} className="h-16 object-contain" />

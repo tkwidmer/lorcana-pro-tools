@@ -369,10 +369,16 @@ export function StreamOverlayPage() {
             <Labeled label="Theme fill">
               <input type="color" value={row.theme_fill} onChange={e => setField('theme_fill', e.target.value)} className="h-9 w-14 cursor-pointer" />
             </Labeled>
+            <Labeled label={row.theme_banner ? 'Banner fill' : 'Banner fill (matches fill)'}>
+              <div className="flex items-center gap-2">
+                <input type="color" value={row.theme_banner || row.theme_fill} onChange={e => setField('theme_banner', e.target.value)} className="h-9 w-14 cursor-pointer" />
+                {row.theme_banner && <Button size="sm" onClick={() => setField('theme_banner', '')}>Match fill</Button>}
+              </div>
+            </Labeled>
             <Labeled label="Theme accent">
               <input type="color" value={row.theme_accent} onChange={e => setField('theme_accent', e.target.value)} className="h-9 w-14 cursor-pointer" />
             </Labeled>
-            <Button size="sm" onClick={() => write(row.id, { theme_fill: DEFAULT_THEME.fill, theme_accent: DEFAULT_THEME.accent })}>Reset to InkbornForge</Button>
+            <Button size="sm" onClick={() => write(row.id, { theme_fill: DEFAULT_THEME.fill, theme_banner: '', theme_accent: DEFAULT_THEME.accent })}>Reset to InkbornForge</Button>
           </div>
           <Labeled label="Lore display">
             <div className="flex items-center gap-2" role="group" aria-label="Lore display">

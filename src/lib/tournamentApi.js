@@ -266,7 +266,7 @@ export async function fetchRoundMatches(eventId, roundId) {
   let page = 1
   let hasMore = true
   while (hasMore) {
-    const data = await fetchEventMatches(eventId, roundId, page, 100)
+    const data = await fetchEventMatches(eventId, roundId, page, 500)
     const { matches, nextPage } = extractMatches(data)
     all.push(...matches)
     hasMore = nextPage !== null
@@ -322,7 +322,7 @@ export async function fetchAllRegistrations(eventId) {
 
   while (hasMore) {
     const response = await fetch(
-      `/api/tournament?type=registrations&eventId=${eventId}&page=${page}&pageSize=50`
+      `/api/tournament?type=registrations&eventId=${eventId}&page=${page}&pageSize=250`
     )
     if (!response.ok) break
     const data = await response.json()
@@ -334,40 +334,20 @@ export async function fetchAllRegistrations(eventId) {
   return allResults
 }
 
-// Every page of a round's standings, with match_points normalized to the
-// current total — the standings snapshot field is stale mid-event.
+// A round's full standings in one call ({ standings, round_number }), with
+// match_points normalized to the current total — the standings snapshot
+// field is stale mid-event.
 export async function fetchAllStandings(roundId) {
-  const all = []
-  let page = 1
-  let hasMore = true
-  while (hasMore) {
-    const data = await fetchTournamentStandings(roundId, page, 50)
-    all.push(...data.results)
-    hasMore = data.next_page_number !== null
-    page = data.next_page_number || page + 1
+  const response = await fetch(`/api/tournament?type=standings&roundId=${roundId}`)
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || error.error || 'Failed to fetch standings')
   }
-  return all.map((entry) => ({
+  const { standings } = await response.json()
+  return standings.map((entry) => ({
     ...entry,
     match_points: entry.user_event_status?.total_match_points ?? entry.match_points,
   }))
-}
-
-export async function fetchTournamentStandings(roundId, page = 1, pageSize = 10) {
-  try {
-    const response = await fetch(
-      `/api/tournament?type=standings&roundId=${roundId}&page=${page}&pageSize=${pageSize}`
-    )
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || error.error || 'Failed to fetch standings')
-    }
-
-    return await response.json()
-  } catch (err) {
-    console.error('Tournament standings fetch error:', err)
-    throw err
-  }
 }
 
 const TIEBREAKER_LABELS = {

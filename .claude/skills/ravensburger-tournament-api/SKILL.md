@@ -20,7 +20,7 @@ already surprised this repo once (see below).
 Before touching:
 - `src/lib/tournamentApi.js` — `fetchEventDetails`, `getTournamentStructure`,
   `fetchEventMatches`/`fetchAllRoundMatches`, `fetchAllRegistrations`,
-  `fetchTournamentStandings`, `analyzeId`, `analyzeAdvancement`
+  `fetchAllStandings`, `analyzeId`, `analyzeAdvancement`
 - `api/tournament.ts` — the Vercel proxy this all routes through (see
   `vercel-proxy-pattern` skill for the general proxy shape; this file has
   tournament-API-specific routing on top of it)
@@ -31,23 +31,43 @@ Before touching:
 - The Discord `/tournament` and `/favorite` commands and
   `api/discord-tournament-tick.ts`
 
-## Two upstream hosts — not one
+## Two upstream hosts — one API
 
-`api/tournament.ts` defines two base URLs and routes to different ones per
-`type`:
+`api/tournament.ts` defines two base URLs:
 
-- `RAVEN_BASE = https://api.ravensburgerplay.com/api/v2` — used for `event`,
-  `registrations`, and `standings`
+- `RAVEN_BASE = https://api.ravensburgerplay.com/api/v2` — `event`,
+  `registrations`, `standings`
 - `HYDRA_BASE = https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2`
-  — used **only** for `matches`
+  — `matches`, `store`
 
-This split exists because **match results are not exposed on `RAVEN_BASE`
-without an authenticated session** (401 "Authentication credentials were not
-provided"). The public tournament results page instead reads match data
-through this Cloudflare-fronted proxy host. If a future task needs a new
-kind of tournament data and the "obvious" `RAVEN_BASE` endpoint 401s, this is
-why — check whether the public results page uses the Hydra proxy for it
-before assuming the data isn't available at all.
+Hydra is a Cloudflare-fronted **cache of the same API** (the Play Hub POSTs
+`hydraproxy/cache/invalidate` after its own mutations). Match lists once
+401'd on `RAVEN_BASE` without a session; as of Nov 2026 they are public on
+both hosts, so the split is now only about caching. If a new endpoint 401s
+on one host, try the other before concluding the data needs a session.
+
+**The API is documented — inside the Play Hub's own bundle.** The
+`tcg.ravensburgerplay.com/_next/static/chunks/*.js` files ship the generated
+API client: every operation as `"<operationId>",0,e=>(e.client??X).get({security:[...],url:"/api/..."})`
+(1,486 operations in Nov 2026, 640 outside `/api/v2/admin` and
+`/api/v2/organize`). Grep the current chunk set for `url:"/api/` to list
+them, and probe a GET with plain `curl` to learn whether it needs auth: the
+`security` array lists what the client *can* send, not what the server
+*requires*. Only ~30 GETs answered 200 unauthenticated, listed under
+"Other public endpoints" below.
+
+**One Carde.io instance, several games.** `GET {RAVEN_BASE}/games/` lists
+8 games (Disney Lorcana is `game: 1`, slug `disney-lorcana`; Riftbound is
+3; UniVersus, Heroscape and others follow). Event, round, match and player
+IDs share one space across games, so an event ID found elsewhere (e.g. on
+zero.gg, a Riftbound results site built on the same API) resolves here.
+Our discovery and store-events calls filter with `game_slug=disney-lorcana`
+(`game=1` also works). Riftbound's per-player Legend arrives as
+`user_event_status.deck_defining_card`; it is `null` for every Lorcana row,
+and the only decklist read
+(`/api/magic-events/{id}/decklists_by_user_event_status/`) is 401 without
+a session even when `settings.decklist_status` is `PUBLISHED`. Play Hub
+still carries no Lorcana decks for us.
 
 ## Known endpoint shapes (routed by `?type=` on `/api/tournament`)
 
@@ -59,16 +79,62 @@ before assuming the data isn't available at all.
   paginated (`page`/`page_size`), response has `results` + `next_page_number`
   (null when done). `fetchAllRegistrations` loops until
   `next_page_number === null`.
-- `standings` → `GET {RAVEN_BASE}/tournament-rounds/{roundId}/standings/paginated/`
-  — paginated, entries have `rank`, `match_points`, `record`,
-  `opponent_match_win_percentage`, `game_win_percentage`,
-  `opponent_game_win_percentage`.
+- `standings` → `GET {RAVEN_BASE}/tournament-rounds/{roundId}/standings/`
+  — **the whole round in one call**: `{ standings: [...], round_number }`
+  (778 rows ≈ 1.1 MB, ~3.5 s upstream). Entries have `rank`,
+  `match_points`, `record`, `opponent_match_win_percentage`,
+  `game_win_percentage`, `opponent_game_win_percentage`, `player`,
+  `user_event_status` (`registration_status`, `total_match_points`, …) —
+  the same entry shape as the paginated variant
+  (`…/standings/paginated/?page=&page_size=`), which `fetchAllStandings`
+  (browser, Discord port) and `fetchFinalStandings` (import) used to loop
+  over 50 at a time. Don't go back to paging.
 - `matches` → `GET {HYDRA_BASE}/tournament-rounds/{roundId}/matches/paginated/?avoid_cache=false`
   — the Hydra-proxied one. Response shape is inconsistent: sometimes
   `{ results: [...], next_page_number }` (paginated), sometimes
   `{ id, matches: [...], round_number, ... }` (a round object with matches
   inline). `extractMatches()` in `tournamentApi.js` normalizes both shapes
   — don't assume one or the other when adding new match-consuming code.
+  `page_size` caps at **500** (one page per round of a 778-player DLC,
+  ~2 MB: every player carries a signed profile-picture URL). Registrations
+  cap at **250** per page. `api/tournament.ts` clamps `pageSize` at 500.
+
+## Other public endpoints (200 without a session, Nov 2026)
+
+Verified against Lorcana event 1233041 (DLC Bangkok) and Riftbound 683264.
+None is wired up yet; use them before building the same thing by hand.
+
+- `GET https://api.ravensburgerplay.com/api/magic-events/{eventId}/tournament_overview/`
+  (note: `/api/`, not `/api/v2/`) — `current_round` (`round_number`,
+  `status`, `pairings_status`, `standings_status`),
+  `number_of_incomplete_matches`, `lifecycle_status`, and per round
+  `started_at`, `completed_at`, `timer_duration_minutes`,
+  `has_manual_pairing_modifications`. This is "how far along is the
+  round" in one call; today `TournamentLookupPage` counts unreported
+  matches from the full match list.
+- `GET …/api/magic-events/{eventId}/` — the event with the store expanded:
+  `twitch_url`, `discord_url`, `legacy_carde_id`, `carde_store_number`.
+- `GET {RAVEN_BASE}/player/events/{eventId}/tv/` + `tv/standings/`,
+  `tv/matches/?round_id=`, `tv/roster/`, `tv/bracket/` — the Play Hub's
+  spectator ("TV") API, page size 500, bracket pre-shaped as rounds with
+  `top`/`bottom` seeds. **Display names only, no player IDs**, so it can't
+  join the archive or favorites; fine for a read-only board.
+- `GET {RAVEN_BASE}/events/{eventId}/team-roster/`,
+  `tournament-rounds/{id}/team-standings/` — team events.
+
+## Fields already in our payloads that nothing reads yet
+
+- Match relationships: `is_starting_player`, `player_order` (who went
+  first). Match: `is_feature_match`, `reports_are_in_conflict`,
+  `time_extension_seconds`, `assigned_judge`, `table_label`,
+  `table_section_label`, `public_table_tags`.
+- Event: `timer_end_datetime`, `timer_is_running`,
+  `timer_paused_at_datetime` (the live round clock),
+  `day_2_start_datetime`, `is_test_event` (discovery excludes
+  Ravensburger's fixtures by store name instead), `settings.decklist_status`.
+- Standings: `user_event_status.registration_status` (`COMPLETE`,
+  `ELIMINATED`, drops). Registrations: `final_place_in_standings`,
+  `matches_won/lost/drawn`, `team_name`.
 
 ## Other quirks to know
 
@@ -250,7 +316,7 @@ confirmed (see above), the integration deliberately does **not** try to
 parse `type`/`entity`/`payload` or apply anything from the message
 directly — it treats every `"message"` event as a generic "something
 changed, go refetch" signal (debounced ~1.5s) and re-runs the same REST
-calls (`fetchEventDetails`/`fetchTournamentStandings`/`fetchAllRegistrations`/
+calls (`fetchEventDetails`/`fetchAllStandings`/`fetchAllRegistrations`/
 `fetchAllRoundMatches`) the manual "Load Standings" button already uses,
 silently, without resetting the open UI state (selected player, active tab,
 search term). This sidesteps the unconfirmed-payload risk entirely — if a

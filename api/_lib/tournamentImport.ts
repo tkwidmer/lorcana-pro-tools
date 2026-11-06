@@ -154,18 +154,8 @@ export function eventDateOf(eventDetails: any): string | null {
 }
 
 export async function fetchFinalStandings(roundId: string): Promise<any[]> {
-  const allResults: any[] = []
-  let page = 1
-  let hasMore = true
-  while (hasMore) {
-    const data = await fetchJson(
-      `${RAVEN_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/standings/paginated/?page=${page}&page_size=50`
-    )
-    allResults.push(...(data.results ?? []))
-    hasMore = data.next_page_number !== null && data.next_page_number !== undefined
-    page = data.next_page_number || page + 1
-  }
-  return allResults
+  const data = await fetchJson(`${RAVEN_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/standings/`)
+  return data.standings
 }
 
 // Normalizes the two possible /matches/paginated/ response shapes, same as
@@ -184,7 +174,7 @@ async function fetchRoundMatches(roundId: string): Promise<any[]> {
     let data: any
     try {
       data = await fetchJson(
-        `${HYDRA_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/matches/paginated/?page=${page}&page_size=100&avoid_cache=false`
+        `${HYDRA_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/matches/paginated/?page=${page}&page_size=500&avoid_cache=false`
       )
     } catch {
       // A round with no reported matches yet (404) is a normal state, same

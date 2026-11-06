@@ -7,7 +7,7 @@ Read before touching Tournament Lookup, Store Lookup, Field Breakdown, the `/res
 `TournamentLookupPage` accepts a Ravensburger tournament URL and extracts the event ID. It uses `tournamentApi.js` for all data:
 - `fetchEventDetails` → raw event + phases + rounds
 - `getTournamentStructure` → resolved current round, top-cut size, rounds remaining, advancement requirements
-- `fetchTournamentStandings` → paginated standings for a specific round
+- `fetchAllStandings` → a round's full standings in one upstream call (`…/standings/`, not the paginated variant)
 - `fetchAllRegistrations` → all registered players (paginated loop)
 - `analyzeId` → ID safety analysis: compares player's points buffer vs cut line, counts players who could pass them if everyone wins
 - `analyzeAdvancement` → status (secured/possible/eliminated) toward the next phase cutoff

@@ -19,6 +19,12 @@ const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 // from the game-stores UUID used for the `store` type above).
 const NUMERIC_ID_RE = /^[0-9]{1,10}$/
 
+// Signed Google Storage image URLs (~1 KB each, one per player per row) are
+// over half of a standings or matches payload and nothing on the site shows
+// them. A JSON.parse reviver returning undefined drops the key.
+const IMAGE_URL_KEYS = new Set(['full_profile_picture_url', 'game_user_profile_picture_url', 'full_header_image_url'])
+const dropImageUrls = (key: string, value: unknown) => (IMAGE_URL_KEYS.has(key) ? undefined : value)
+
 function clampInt(v: string | undefined, def: number, max: number): number {
   const n = parseInt(v ?? '', 10)
   if (!Number.isFinite(n) || n < 1) return def
@@ -91,14 +97,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'Non-JSON response from tournament API' })
     }
 
-    try { JSON.parse(body) } catch {
+    let data: unknown
+    try { data = JSON.parse(body, dropImageUrls) } catch {
       return res.status(502).json({ error: 'Invalid JSON from tournament API' })
     }
 
     res.status(200)
-      .setHeader('Content-Type', contentType)
       .setHeader('Cache-Control', 'max-age=30, s-maxage=30')
-      .send(body)
+      .json(data)
   } catch (e) {
     res.status(502).json({ error: 'Failed to reach tournament API', detail: String(e) })
   }

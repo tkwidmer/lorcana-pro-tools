@@ -195,7 +195,9 @@ export function AdminTeamsPage() {
                         {t.former > 0 && <span className="text-xs text-gray-400"> · {t.former} former</span>}
                       </td>
                       <td className="py-2 pr-4">
-                        {picking === t.id ? (
+                        {disbanded ? (
+                          <span className="text-gray-400">{t.managerEmail ?? 'No manager'}</span>
+                        ) : picking === t.id ? (
                           <ManagerPicker onPick={(p) => setManager(t, p.user_id)} onCancel={() => setPicking(null)} />
                         ) : t.managerEmail ? (
                           <>

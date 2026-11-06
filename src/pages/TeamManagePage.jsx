@@ -32,7 +32,8 @@ const SEARCH_MIN = 3
 const SEARCH_DEBOUNCE_MS = 300
 const LOGO_TYPES = 'image/png,image/jpeg,image/webp,image/svg+xml,image/gif'
 
-const today = () => new Date().toISOString().slice(0, 10)
+// Local calendar date as yyyy-mm-dd (the sv locale formats it that way).
+const today = () => new Date().toLocaleDateString('sv')
 
 // Error text for a failed write, with the two server verdicts that need a
 // different sentence than the server's own.
@@ -101,6 +102,9 @@ function PlayerPicker({ onPick, disabled }) {
   )
 }
 
+// Keyed by the member's dates as well as its id, so a reload that changes
+// them on the server (a dissolve or reinstate) remounts the row with fresh
+// inputs instead of keeping the old values in local state.
 function MemberRow({ member, teamId, readOnly, onSaved, onError }) {
   const [joinedOn, setJoinedOn] = useState(member.joinedOn)
   const [leftOn, setLeftOn] = useState(member.leftOn ?? '')
@@ -390,7 +394,7 @@ export function TeamManagePage() {
             </thead>
             <tbody>
               {[...current, ...former].map((m) => (
-                <MemberRow key={m.id} member={m} teamId={team.id} readOnly={readOnly} onSaved={() => { ok('Saved'); reload() }} onError={fail} />
+                <MemberRow key={`${m.id}:${m.joinedOn}:${m.leftOn ?? ''}`} member={m} teamId={team.id} readOnly={readOnly} onSaved={() => { ok('Saved'); reload() }} onError={fail} />
               ))}
             </tbody>
           </table>

@@ -22,7 +22,7 @@ export function TeamBadge({ className = '' }) {
   return (
     <span
       title="Team member"
-      className={`w-5 h-5 rounded-sm text-[10px] font-bold leading-none flex items-center justify-center bg-forge text-on-forge ${className}`}
+      className={`w-5 h-5 rounded-sm text-[10px] font-bold leading-none flex items-center justify-center bg-gray-900 text-white ${className}`}
     >
       T
     </span>

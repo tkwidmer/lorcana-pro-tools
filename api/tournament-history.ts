@@ -442,6 +442,7 @@ async function handlePlayer(req: VercelRequest, res: VercelResponse) {
       startingPlayerCount: r.event?.starting_player_count ?? null,
     }))
     res.setHeader('Cache-Control', PUBLIC_CACHE)
+    res.setHeader('Vercel-Cache-Tag', TEAMS_CACHE_TAG) // team badges: purged by every team write
     return res.status(200).json({
       playerId,
       playerName: history[0].player_name, // getPlayerHistory sorts newest first
@@ -832,6 +833,10 @@ async function handleTeamMemberSave(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'leftOn must be yyyy-mm-dd' })
   }
   if (leftOn && leftOn < joinedOn) return res.status(400).json({ error: 'leftOn is before joinedOn' })
+  // No future dates: dissolve_team() closes open rows on today's date, and a
+  // membership nobody has yet would make the client and server disagree.
+  const today = new Date().toISOString().slice(0, 10)
+  if (joinedOn > today || (leftOn && leftOn > today)) return res.status(400).json({ error: 'Dates cannot be in the future' })
   if (id !== undefined && (typeof id !== 'string' || !UUID_RE.test(id))) return res.status(400).json({ error: 'Invalid id' })
   const ctx = await loadEditableTeam(req, res, teamId, 'write')
   if (!ctx) return
@@ -882,6 +887,8 @@ async function handleTeamDissolve(req: VercelRequest, res: VercelResponse) {
     await dangerouslyDeleteByTag(TEAMS_CACHE_TAG)
     return res.status(200).json({ disbandedOn })
   } catch (err) {
+    // P0003: dissolve_team() found it already disbanded (a race with another editor).
+    if ((err as { code?: string } | null)?.code === 'P0003') return res.status(409).json({ error: 'Team is disbanded' })
     console.error('tournament-history team-dissolve failed:', errMsg(err))
     return res.status(500).json({ error: 'Failed to dissolve team' })
   }
@@ -912,7 +919,7 @@ const TEAM_POST_ENDPOINTS: Record<string, (req: VercelRequest, res: VercelRespon
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const endpoint = str(req.query.endpoint)
 
-  const teamPost = endpoint ? TEAM_POST_ENDPOINTS[endpoint] : undefined
+  const teamPost = endpoint && Object.hasOwn(TEAM_POST_ENDPOINTS, endpoint) ? TEAM_POST_ENDPOINTS[endpoint] : undefined
   if (endpoint === 'import' || endpoint === 'recompute-ratings' || endpoint === 'ink-pairs' || teamPost) {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')

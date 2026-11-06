@@ -100,10 +100,14 @@ function EventResults({ event }) {
   )
 }
 
+// Remounted per slug so a navigation between teams starts every piece of
+// state (team data, registration counts, manage access) fresh.
 export function TeamPage() {
   const { slug } = useParams()
-  // Keyed by slug so a navigation between teams shows the loader, not the
-  // previous team, without resetting state inside the effect.
+  return <TeamPageBody key={slug} slug={slug} />
+}
+
+function TeamPageBody({ slug }) {
   const [loaded, setLoaded] = useState(null) // { slug, data } | { slug, error }
   const [showAll, setShowAll] = useState(false)
   const canManage = useCanManage(slug)
@@ -181,6 +185,7 @@ export function TeamPage() {
             events={liveEvents}
             renderMeta={(e) => {
               const n = registered[e.eventId]
+              if (currentMembers.length === 0) return <span className="text-sm text-gray-500">No current members</span>
               if (n === undefined) return <span className="text-xs text-gray-400">Checking registrations…</span>
               if (n === 0) return <span className="text-sm text-gray-500">None registered yet</span>
               return <span className="text-sm"><strong className="text-gray-900">{n}</strong> of {currentMembers.length} registered</span>
@@ -189,7 +194,7 @@ export function TeamPage() {
               <Button
                 to={`/tournament-lookup?event=${e.eventId}&tab=team&team=${slug}`}
                 size="sm"
-                variant={registered[e.eventId] > 0 ? 'primary' : 'quiet'}
+                variant={registered[e.eventId] > 0 ? 'secondary' : 'quiet'}
               >
                 {registered[e.eventId] > 0 ? 'View team live →' : 'Open in Tournament Lookup →'}
               </Button>

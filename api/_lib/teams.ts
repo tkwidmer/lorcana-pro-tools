@@ -152,7 +152,20 @@ export function adminOnlyFieldsSent(body: Record<string, unknown>): boolean {
 }
 
 // Logos come from the stream-logos bucket (migration 016); anything else on
-// a public page would be hot-linking an arbitrary image.
+// a public page would be hot-linking an arbitrary image. Compared on the
+// parsed URL, so dot segments cannot climb into another bucket and a
+// trailing slash on the configured project URL does not matter.
+const LOGO_PATH_PREFIX = '/storage/v1/object/public/stream-logos/'
+
 export function isValidLogoUrl(url: unknown, supabaseUrl: string): boolean {
-  return typeof url === 'string' && url.startsWith(`${supabaseUrl}/storage/v1/object/public/stream-logos/`)
+  if (typeof url !== 'string') return false
+  let parsed: URL
+  let base: URL
+  try {
+    parsed = new URL(url)
+    base = new URL(supabaseUrl)
+  } catch {
+    return false
+  }
+  return parsed.origin === base.origin && parsed.pathname.startsWith(LOGO_PATH_PREFIX) && parsed.pathname.length > LOGO_PATH_PREFIX.length
 }

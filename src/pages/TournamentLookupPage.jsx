@@ -220,8 +220,8 @@ function matchInvolvesFilter(match, filterMode, favorites, team) {
 }
 
 // Bubbles matches involving a tagged player to the top of a round's table so
-// a caster doesn't have to scan hundreds of rows to find them — team tags
-// outrank plain favorites since "my team" is the more deliberate signal.
+// a caster doesn't have to scan hundreds of rows to find them — team members
+// outrank plain favorites since the picked team is the more deliberate signal.
 function matchPriority(match, favorites, team) {
   if (match.player_match_relationships.some((r) => team[String(r.player.id)])) return 0
   if (match.player_match_relationships.some((r) => favorites[String(r.player.id)])) return 1
@@ -244,7 +244,7 @@ function isMatchSettled(match) {
 }
 
 // Human-readable one-liner for the "Tracked Player Activity" ticker, or null
-// if neither player in the match is favorited/team-tagged.
+// if neither player in the match is favorited or on the picked team.
 function describeTrackedMatch(match, favorites, team) {
   const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
   if (!p1 || !p2) return null
@@ -567,7 +567,7 @@ export function TournamentLookupPage() {
   const pairingBadges = usePairingBadges()
 
   // "Tracked Player Activity" ticker — a running, session-only feed of
-  // completed matches involving a favorited/team-tagged player, newest
+  // completed matches involving a favorited player or a team member, newest
   // first. Session-only and reset per event on purpose: it's about what's
   // happening live while the page is open, not a permanent log.
   const [tickerEvents, setTickerEvents] = useState([])
@@ -736,7 +736,7 @@ export function TournamentLookupPage() {
 
       if (!tournamentStructure?.currentRoundId) {
         // No round has generated standings yet — fall back to the registered
-        // roster so users can start favoriting/team-tagging players early.
+        // roster so users can start favoriting players early.
         // That includes all of round 1: RPH posts its pairings (and their
         // results as they come in) before it generates any standings, so
         // once a round has started its matches load and show beside it.
@@ -917,7 +917,7 @@ export function TournamentLookupPage() {
           <LiveMajorsList
             events={liveMajors}
             renderAction={(e) => (
-              <Button size="sm" variant={e.eventId === currentEventId ? 'primary' : 'quiet'} onClick={() => loadStandings(`https://tcg.ravensburgerplay.com/events/${e.eventId}`)}>
+              <Button size="sm" variant={e.eventId === currentEventId ? 'primary' : 'quiet'} onClick={() => { const url = `https://tcg.ravensburgerplay.com/events/${e.eventId}`; setEventUrl(url); loadStandings(url) }}>
                 {e.eventId === currentEventId ? 'Loaded' : 'Load →'}
               </Button>
             )}

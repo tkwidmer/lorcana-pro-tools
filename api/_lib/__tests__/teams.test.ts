@@ -120,3 +120,16 @@ describe('field guards', () => {
     expect(isValidSlug('x'.repeat(49))).toBe(false)
   })
 })
+
+describe('isValidLogoUrl hardening', () => {
+  const base = 'https://abc.supabase.co'
+  it('rejects a path that escapes the bucket through dot segments', () => {
+    expect(isValidLogoUrl(`${base}/storage/v1/object/public/stream-logos/../other/x.png`, base)).toBe(false)
+  })
+  it('accepts a real upload URL when the configured base has a trailing slash', () => {
+    expect(isValidLogoUrl(`${base}/storage/v1/object/public/stream-logos/u/1.png`, `${base}/`)).toBe(true)
+  })
+  it('rejects a different origin with the same path', () => {
+    expect(isValidLogoUrl('https://evil.example/storage/v1/object/public/stream-logos/u/1.png', base)).toBe(false)
+  })
+})

@@ -344,10 +344,7 @@ export async function fetchAllStandings(roundId) {
     throw new Error(error.detail || error.error || 'Failed to fetch standings')
   }
   const { standings } = await response.json()
-  return standings.map((entry) => ({
-    ...entry,
-    match_points: entry.user_event_status?.total_match_points ?? entry.match_points,
-  }))
+  return standings
 }
 
 const TIEBREAKER_LABELS = {
@@ -370,90 +367,118 @@ export function formatTiebreakers(entry, tiebreakerOrder = []) {
 
   return {
     rank: entry.rank,
-    record: entry.record,
+    record: entry.match_record,
     matchPoints: entry.match_points,
     ordered: order.map((key) => ({ key, label: TIEBREAKER_LABELS[key] ?? key, value: values[key] })),
   }
 }
 
 export function analyzeAdvancement(playerEntry, structure) {
-  if (!playerEntry || !structure?.advancementRequirement) return null
+  if (!playerEntry || structure?.advancementRequirement?.type !== 'points') return null
 
   const { advancementRequirement, swissRoundsRemaining } = structure
-  const { type, value, nextPhaseName } = advancementRequirement
-
-  if (type === 'points') {
-    const myPoints = playerEntry.match_points
-    const maxPossible = myPoints + swissRoundsRemaining * 3
-    if (myPoints >= value) {
-      return { status: 'secured', nextPhaseName, value, type }
-    }
-    if (maxPossible < value) {
-      return { status: 'eliminated', nextPhaseName, value, type }
-    }
-    const winsNeeded = Math.ceil((value - myPoints) / 3)
-    return { status: 'possible', nextPhaseName, value, type, winsNeeded, pointsNeeded: value - myPoints }
+  const { value, nextPhaseName } = advancementRequirement
+  const type = 'points'
+  const myPoints = playerEntry.match_points
+  const maxPossible = myPoints + swissRoundsRemaining * 3
+  if (myPoints >= value) {
+    return { status: 'secured', nextPhaseName, value, type }
   }
-
-  if (type === 'rank') {
-    const myRank = playerEntry.rank
-    return {
-      status: myRank <= value ? 'in_cut' : 'outside_cut',
-      nextPhaseName,
-      value,
-      type,
-    }
+  if (maxPossible < value) {
+    return { status: 'eliminated', nextPhaseName, value, type }
   }
-
-  return null
+  const winsNeeded = Math.ceil((value - myPoints) / 3)
+  return { status: 'possible', nextPhaseName, value, type, winsNeeded, pointsNeeded: value - myPoints }
 }
 
+const isActive = (e) => e.user_event_status?.registration_status !== 'DROPPED'
+
+// Where the top cut will land after the remaining Swiss rounds, from the
+// current match-point distribution: each remaining round splits every point
+// group in half (Swiss pairs within groups). `lockPoints` is the lowest total
+// that fits entirely inside the cut; `bubblePoints` is the total the cut line
+// falls in, with how many of its `bubblePlayers` get the remaining `bubbleSpots`.
+// ponytail: ignores draws and the odd-player bye; a Monte Carlo of the same
+// Swiss agrees within a fraction of a seat.
+export function projectCut(allStandings, topCutSize, swissRoundsRemaining) {
+  let dist = new Map()
+  for (const e of allStandings.filter(isActive)) {
+    dist.set(e.match_points, (dist.get(e.match_points) ?? 0) + 1)
+  }
+  for (let r = 0; r < swissRoundsRemaining; r++) {
+    const next = new Map()
+    for (const [p, n] of dist) {
+      next.set(p, (next.get(p) ?? 0) + n / 2)
+      next.set(p + 3, (next.get(p + 3) ?? 0) + n / 2)
+    }
+    dist = next
+  }
+  let above = 0
+  let lockPoints = null
+  let bubble = null
+  for (const p of [...dist.keys()].sort((a, b) => b - a)) {
+    const n = dist.get(p)
+    if (above + n <= topCutSize) lockPoints = p
+    else if (!bubble) bubble = { points: p, spots: topCutSize - above, players: n }
+    above += n
+  }
+  return {
+    lockPoints,
+    bubblePoints: bubble?.points ?? null,
+    bubbleSpots: bubble ? Math.round(bubble.spots) : null,
+    bubblePlayers: bubble ? Math.round(bubble.players) : null,
+  }
+}
+
+// Top-cut outlook for one player given the standings after the last complete
+// Swiss round and the rounds still to play (`swissRoundsRemaining` counts the
+// round in progress). Exact where it can be: `locked` means fewer than
+// `topCutSize` others can still reach my points; `eliminated` means that many
+// are already beyond my best finish. In the final round the ID question is
+// answered by counting who could end above my points + 1: `safe` if even all
+// of them winning leaves me in, `borderline` if that needs about half of
+// those still tied with me to lose, `danger` otherwise. Earlier rounds are
+// `contending`, with the projected cut and the wins it takes to reach it.
 export function analyzeId(playerEntry, allStandings, structure) {
-  if (!playerEntry || !allStandings || !structure?.topCutSize) return null
+  if (!playerEntry || !allStandings || !structure?.topCutSize || structure.isElimination) return null
 
   const { topCutSize, swissRoundsRemaining } = structure
   const myPoints = playerEntry.match_points
-  const myRank = playerEntry.rank
+  const others = allStandings.filter((e) => e.id !== playerEntry.id && isActive(e))
+  const maxGain = swissRoundsRemaining * 3
 
-  // Player currently at the cut line
-  const cutLinePlayer = allStandings.find((e) => e.rank === topCutSize) || null
-  const cutLinePoints = cutLinePlayer?.match_points ?? null
+  const canCatchMe = others.filter((e) => e.match_points + maxGain >= myPoints).length
+  const beyondReach = others.filter((e) => e.match_points > myPoints + maxGain).length
 
-  // Points buffer above cut line
-  const pointsAboveCut = cutLinePoints !== null ? myPoints - cutLinePoints : null
-
-  // After ID: I gain 1 point. Worst case, cut-line player wins (+3 pts).
-  // Still safe if my new points (myPoints+1) > cutLinePoints+3, i.e. buffer > 2
-  const afterIdPoints = myPoints + 1
-  const afterWinPoints = myPoints + 3
-
-  // Count players who would be strictly above me after I ID (assuming they all win = worst case)
-  const playersWhoCouldPassMeOnWin = allStandings.filter(
-    (e) => e.id !== playerEntry.id && e.match_points + 3 > afterIdPoints
-  ).length
-
-  let recommendation
-  if (myRank > topCutSize) {
-    recommendation = 'danger'
-  } else if (pointsAboveCut >= 3) {
-    recommendation = 'safe'
-  } else if (pointsAboveCut >= 1) {
-    recommendation = 'borderline'
+  let status
+  if (canCatchMe < topCutSize) {
+    status = 'locked'
+  } else if (beyondReach >= topCutSize) {
+    status = 'eliminated'
+  } else if (swissRoundsRemaining === 1) {
+    const afterId = myPoints + 1
+    const aboveAfterId = others.filter((e) => e.match_points > afterId).length
+    const passOnWin = others.filter((e) => e.match_points <= afterId && e.match_points + 3 > afterId).length
+    if (aboveAfterId + passOnWin < topCutSize) status = 'safe'
+    else if (aboveAfterId + Math.ceil(passOnWin / 2) < topCutSize) status = 'borderline'
+    else status = 'danger'
   } else {
-    recommendation = 'danger'
+    status = 'contending'
   }
 
+  const projection = projectCut(allStandings, topCutSize, swissRoundsRemaining)
+  const winsTo = (pts) => (pts === null ? null : Math.max(0, Math.ceil((pts - myPoints) / 3)))
+
   return {
-    myRank,
+    status,
+    myRank: playerEntry.rank,
     topCutSize,
-    inCut: myRank <= topCutSize,
-    cutLinePlayer,
-    cutLinePoints,
-    pointsAboveCut,
-    afterIdPoints,
-    afterWinPoints,
+    inCut: playerEntry.rank <= topCutSize,
     swissRoundsRemaining,
-    playersWhoCouldPassMeOnWin,
-    recommendation,
+    maxPoints: myPoints + maxGain,
+    afterIdPoints: myPoints + 1,
+    ...projection,
+    winsToLock: winsTo(projection.lockPoints),
+    winsToBubble: winsTo(projection.bubblePoints),
   }
 }

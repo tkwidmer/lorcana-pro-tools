@@ -80,7 +80,7 @@ async function processEvent(eventId: string, rows: FavoriteRow[]): Promise<Event
 
         const changed =
           entry.rank !== row.last_rank ||
-          entry.record !== row.last_record ||
+          entry.match_record !== row.last_record ||
           entry.match_points !== row.last_match_points
 
         if (changed) {
@@ -91,7 +91,7 @@ async function processEvent(eventId: string, rows: FavoriteRow[]): Promise<Event
           result.posted++
         }
 
-        await updateFavoriteSnapshot(row.id, entry.rank, entry.record, entry.match_points)
+        await updateFavoriteSnapshot(row.id, entry.rank, entry.match_record, entry.match_points)
       } catch (error) {
         result.errors++
         console.error(`Failed to process favorite ${row.id}:`, error)

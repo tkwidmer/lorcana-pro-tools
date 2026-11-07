@@ -9,14 +9,16 @@ Read before touching Tournament Lookup, Store Lookup, Field Breakdown, the `/res
 - `getTournamentStructure` → resolved current round, top-cut size, rounds remaining, advancement requirements
 - `fetchAllStandings` → a round's full standings in one upstream call (`…/standings/`, not the paginated variant)
 - `fetchAllRegistrations` → all registered players (paginated loop)
-- `analyzeId` → ID safety analysis: compares player's points buffer vs cut line, counts players who could pass them if everyone wins
+- `analyzeId` → top-cut outlook: exact lock/elimination bounds, the projected cut from `projectCut`, and the ID call in the final round
 - `analyzeAdvancement` → status (secured/possible/eliminated) toward the next phase cutoff
 
 Until a round has generated standings (`currentRoundId` is null) the page shows the registered roster instead of standings. That covers all of round 1: RPH posts a round's pairings and results before it generates any standings, so once a round has started (`activeRoundId`) the page also loads its matches and shows the Matches tab beside the Roster, landing on Matches. Gating matches on standings once hid every round-1 pairing of a 778-player DLC.
 
-## ID analysis
+## Top-cut outlook
 
-`analyzeId()` in `tournamentApi.js`: after an ID, a player gains 1 point. It counts how many players below the cut could leapfrog them if those players all win (+3 pts), and classifies safe (≥3 point buffer), borderline (1–2) or danger (0 or outside the cut).
+`analyzeId()` in `tournamentApi.js` (ported in `api/_lib/discordTournamentApi.ts`) works from the standings after the last complete Swiss round; `swissRoundsRemaining` counts the round in progress. Exact first: `locked` when fewer than `topCutSize` other active players can still reach the player's points, `eliminated` when that many are already beyond their best finish. With one round left it answers the ID question by counting who could end above the player's points + 1: `safe` if all of them winning still leaves room, `borderline` if about half of the level players must lose, `danger` otherwise. Earlier rounds are `contending`. Every result carries `projectCut()`: the current point distribution halved once per remaining round (Swiss pairs within point groups; draws and the bye are ignored), giving `lockPoints` (the lowest total that fits inside the cut), `bubblePoints` and about how many of the players there make it, plus the wins needed to reach each. Comparing against the current 8th place with rounds still to play was the old behaviour and marked every player of a round-2 event "do not ID".
+
+A standings row mixes two snapshots: `record` and `user_event_status.total_match_points` are live (they move as matches in the round in progress are reported) while `rank`, `match_points`, `match_record` and the tiebreakers are frozen to the round. The page, the analysis and the Discord embeds use the frozen fields so rank, points, record and rounds remaining describe the same moment; `fetchAllStandings` once overwrote `match_points` with the live total, which showed a rank-1 player on 3 points under a rank-2 player on 6.
 
 ## Store Lookup
 

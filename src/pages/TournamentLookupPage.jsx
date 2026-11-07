@@ -78,7 +78,7 @@ function registrationsToRosterEntries(regs) {
       player: { id: r.user.id, best_identifier: r.user.best_identifier },
       user_event_status: { best_identifier: r.best_identifier },
       rank: null,
-      record: `${r.matches_won ?? 0}-${r.matches_lost ?? 0}-${r.matches_drawn ?? 0}`,
+      match_record: `${r.matches_won ?? 0}-${r.matches_lost ?? 0}-${r.matches_drawn ?? 0}`,
       match_points: r.total_match_points ?? 0,
     }))
     .sort((a, b) => a.user_event_status.best_identifier.localeCompare(b.user_event_status.best_identifier))
@@ -116,28 +116,19 @@ function LastLiveUpdate({ at }) {
   return <span className="text-gray-400 text-xs">Updated {label}</span>
 }
 
-const RECOMMENDATION_STYLES = {
-  safe: {
-    bg: 'bg-green-50',
-    border: 'border-green-200',
-    text: 'text-green-800',
-    label: 'Safe to ID',
-    detail: 'You have a comfortable points cushion above the cut line.',
-  },
-  borderline: {
-    bg: 'bg-yellow-50',
-    border: 'border-yellow-200',
-    text: 'text-yellow-800',
-    label: 'Borderline — check tiebreakers',
-    detail: 'You are in the cut but your cushion is thin. An ID is risky if the cut line player wins.',
-  },
-  danger: {
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    text: 'text-red-800',
-    label: 'Do not ID — you need the win',
-    detail: 'You are outside or right at the cut line. An ID likely drops you out.',
-  },
+const CUT_STATUS_STYLES = {
+  locked:      { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-800',  label: (cut) => `Locked into the top ${cut}`,         detail: (cut) => `Fewer than ${cut} players can still reach your points, even if you lose out.` },
+  safe:        { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-800',  label: () => 'Safe to ID',                            detail: (cut) => `Even if everyone who could pass you wins, you stay in the top ${cut}.` },
+  borderline:  { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800', label: () => 'Borderline — check tiebreakers',        detail: () => 'An ID holds only if enough of the players level with you lose their last round.' },
+  danger:      { bg: 'bg-red-50',    border: 'border-red-200',    text: 'text-red-800',    label: () => 'Do not ID — you need the win',          detail: () => 'Too many players can pass you if you draw.' },
+  contending:  { bg: 'bg-gray-50',   border: 'border-gray-200',   text: 'text-gray-800',   label: (cut) => `In contention for the top ${cut}`,   detail: () => 'Projected from the current standings, assuming each remaining round splits every points group in half.' },
+  eliminated:  { bg: 'bg-red-50',    border: 'border-red-200',    text: 'text-red-800',    label: (cut) => `Out of top ${cut} contention`,        detail: (cut) => `${cut} players are already beyond your best possible finish.` },
+}
+
+// "12 pts" as a W-L record over the whole Swiss, when it is one (no draws).
+function pointsAsRecord(points, totalRounds) {
+  if (points === null || points % 3 !== 0 || points / 3 > totalRounds) return `${points} pts`
+  return `${points / 3}-${totalRounds - points / 3} (${points} pts)`
 }
 
 // Shared by the Favorites and Team tabs — a flat roster of standings entries
@@ -191,7 +182,7 @@ function RosterTable({ entries, favorites, team, toggleFavorite, registrationMap
                   </div>
                   <div className="text-xs text-gray-400">{entry.player.best_identifier}</div>
                 </td>
-                <td className="px-4 py-2.5 text-right font-mono text-gray-900">{entry.record}</td>
+                <td className="px-4 py-2.5 text-right font-mono text-gray-900">{entry.match_record}</td>
                 <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-900">{entry.match_points}</td>
               </tr>
             )
@@ -1201,7 +1192,7 @@ export function TournamentLookupPage() {
                             </div>
                             <div className="text-xs text-gray-400">{entry.player.best_identifier}</div>
                           </td>
-                          <td className="px-4 py-2.5 text-right font-mono text-gray-900">{entry.record}</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-gray-900">{entry.match_record}</td>
                           <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-900">{entry.match_points}</td>
                         </tr>
                       </Fragment>
@@ -1421,23 +1412,17 @@ export function TournamentLookupPage() {
 
           {/* Advancement status */}
           {advancementAnalysis && (() => {
-            const { status, nextPhaseName, value, type, winsNeeded, pointsNeeded } = advancementAnalysis
+            const { status, nextPhaseName, winsNeeded, pointsNeeded } = advancementAnalysis
             const styles = {
               secured:      { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800' },
               possible:     { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800' },
               eliminated:   { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800' },
-              in_cut:       { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800' },
-              outside_cut:  { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800' },
             }
             const s = styles[status]
             const label = {
               secured:     `Secured advancement to ${nextPhaseName}`,
-              possible:    type === 'points'
-                ? `Need ${winsNeeded} more win${winsNeeded !== 1 ? 's' : ''} (${pointsNeeded} pts) for ${nextPhaseName}`
-                : `Currently outside top ${value} for ${nextPhaseName}`,
+              possible:    `Need ${winsNeeded} more win${winsNeeded !== 1 ? 's' : ''} (${pointsNeeded} pts) for ${nextPhaseName}`,
               eliminated:  `Eliminated from ${nextPhaseName} contention`,
-              in_cut:      `Currently in top ${value} → ${nextPhaseName}`,
-              outside_cut: `Currently outside top ${value} → ${nextPhaseName}`,
             }[status]
             return (
               <div className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${s.bg} ${s.border} ${s.text}`}>
@@ -1446,52 +1431,65 @@ export function TournamentLookupPage() {
             )
           })()}
 
-          {/* ID Analysis */}
-          {idAnalysis && (
-            <div className={`rounded-lg border p-5 ${RECOMMENDATION_STYLES[idAnalysis.recommendation].bg} ${RECOMMENDATION_STYLES[idAnalysis.recommendation].border}`}>
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <p className={`font-bold text-base ${RECOMMENDATION_STYLES[idAnalysis.recommendation].text}`}>
-                    {RECOMMENDATION_STYLES[idAnalysis.recommendation].label}
-                  </p>
-                  <p className={`text-sm mt-0.5 ${RECOMMENDATION_STYLES[idAnalysis.recommendation].text} opacity-80`}>
-                    {RECOMMENDATION_STYLES[idAnalysis.recommendation].detail}
-                  </p>
-                </div>
-                <span className={`text-xs font-semibold px-2 py-1 rounded ${idAnalysis.inCut ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  {idAnalysis.inCut ? `In cut (rank #${idAnalysis.myRank})` : `Outside cut (rank #${idAnalysis.myRank})`}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
-                <div className="bg-white bg-opacity-60 rounded p-2 text-center">
-                  <div className="font-bold text-gray-900">{player.match_points}</div>
-                  <div className="text-xs text-gray-500">Your pts</div>
-                </div>
-                <div className="bg-white bg-opacity-60 rounded p-2 text-center">
-                  <div className="font-bold text-gray-900">
-                    {idAnalysis.cutLinePoints ?? '—'}
+          {/* Top-cut outlook */}
+          {idAnalysis && (() => {
+            const st = CUT_STATUS_STYLES[idAnalysis.status]
+            const cut = idAnalysis.topCutSize
+            const rem = idAnalysis.swissRoundsRemaining
+            const rec = (pts) => pointsAsRecord(pts, structure.totalSwissRounds)
+            const finalRound = rem === 1
+            const projected = idAnalysis.status === 'contending' || finalRound
+            return (
+              <div className={`rounded-lg border p-5 ${st.bg} ${st.border}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className={`font-bold text-base ${st.text}`}>
+                      {rem === 0 && idAnalysis.status === 'contending' ? 'Tied at the cut line — tiebreakers decide' : st.label(cut)}
+                    </p>
+                    <p className={`text-sm mt-0.5 ${st.text} opacity-80`}>{st.detail(cut)}</p>
                   </div>
-                  <div className="text-xs text-gray-500">Cut line pts</div>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded ${idAnalysis.inCut ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {idAnalysis.inCut ? `In cut (rank #${idAnalysis.myRank})` : `Outside cut (rank #${idAnalysis.myRank})`}
+                  </span>
                 </div>
-                <div className="bg-white bg-opacity-60 rounded p-2 text-center">
-                  <div className="font-bold text-gray-900">+{idAnalysis.afterIdPoints - player.match_points} → {idAnalysis.afterIdPoints}</div>
-                  <div className="text-xs text-gray-500">After ID</div>
-                </div>
-                <div className="bg-white bg-opacity-60 rounded p-2 text-center">
-                  <div className="font-bold text-gray-900">+3 → {idAnalysis.afterWinPoints}</div>
-                  <div className="text-xs text-gray-500">After win</div>
-                </div>
-              </div>
 
-              {idAnalysis.pointsAboveCut !== null && (
-                <p className="text-xs text-gray-600 mt-3">
-                  {idAnalysis.swissRoundsRemaining > 0 && `${idAnalysis.swissRoundsRemaining} swiss round${idAnalysis.swissRoundsRemaining !== 1 ? 's' : ''} remaining · `}
-                  {idAnalysis.pointsAboveCut > 0 ? `${idAnalysis.pointsAboveCut} pts above cut line` : `${Math.abs(idAnalysis.pointsAboveCut)} pts below cut line`}
-                </p>
-              )}
-            </div>
-          )}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
+                  <div className="bg-white bg-opacity-60 rounded p-2 text-center">
+                    <div className="font-bold text-gray-900">{player.match_points}</div>
+                    <div className="text-xs text-gray-500">Your pts</div>
+                  </div>
+                  <div className="bg-white bg-opacity-60 rounded p-2 text-center">
+                    <div className="font-bold text-gray-900">{idAnalysis.maxPoints}</div>
+                    <div className="text-xs text-gray-500">Max possible</div>
+                  </div>
+                  <div className="bg-white bg-opacity-60 rounded p-2 text-center">
+                    <div className="font-bold text-gray-900">{idAnalysis.bubblePoints ?? '—'}</div>
+                    <div className="text-xs text-gray-500">Projected bubble</div>
+                  </div>
+                  <div className="bg-white bg-opacity-60 rounded p-2 text-center">
+                    <div className="font-bold text-gray-900">{idAnalysis.lockPoints ?? '—'}</div>
+                    <div className="text-xs text-gray-500">Locks a seat</div>
+                  </div>
+                </div>
+
+                {projected && (
+                  <p className="text-xs text-gray-600 mt-3">
+                    {rem} swiss round{rem !== 1 ? 's' : ''} remaining ·{' '}
+                    {idAnalysis.bubblePoints !== null && (
+                      <>
+                        {rec(idAnalysis.bubblePoints)} is the bubble, about {idAnalysis.bubbleSpots} of {idAnalysis.bubblePlayers} players there make it
+                        {idAnalysis.winsToBubble > 0 && ` · ${idAnalysis.winsToBubble} more win${idAnalysis.winsToBubble !== 1 ? 's' : ''} to get there`}
+                      </>
+                    )}
+                    {idAnalysis.lockPoints !== null && (
+                      <> · {rec(idAnalysis.lockPoints)} locks{idAnalysis.winsToLock > 0 && ` (${idAnalysis.winsToLock} more win${idAnalysis.winsToLock !== 1 ? 's' : ''})`}</>
+                    )}
+                    {finalRound && <> · an ID takes you to {idAnalysis.afterIdPoints} pts</>}
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Standing details */}
           <div className="border border-gray-200 rounded-lg p-6 bg-white">

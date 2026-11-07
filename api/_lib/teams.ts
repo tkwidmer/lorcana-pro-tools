@@ -131,6 +131,68 @@ export function lastEventOf(events: TeamEvent[]) {
   }
 }
 
+export interface ArchivedEventTeam {
+  slug: string
+  name: string
+  logoUrl: string | null
+  bestRank: number | null
+  bestPlayer: { playerId: string; playerName: string } | null
+  wins: number
+  losses: number
+  draws: number
+  members: Array<{ playerId: string; playerName: string; rank: number | null; record: string | null; madeTopCut: boolean }>
+}
+
+function parseRecord(record: string | null): { w: number; l: number; d: number } {
+  const [w, l, d] = String(record ?? '').split('-').map((n) => parseInt(n, 10))
+  return { w: w || 0, l: l || 0, d: d || 0 }
+}
+
+// Every team with a member in an archived event's standings who was on the
+// team on the event date, ordered by its best placing member: the results
+// page's Teams tab. Disbanded teams still count for events before the
+// dissolution, since their memberships closed on that date.
+export function teamsAtArchivedEvent(
+  teams: Array<{ id: string; slug: string; name: string; logo_url: string | null }>,
+  members: MemberRow[],
+  standings: Array<{ rph_player_id: string; player_name: string; rank: number | null; record: string | null; made_top_cut: boolean | null }>,
+  eventDate: string | null
+): ArchivedEventTeam[] {
+  const standingByPlayer = new Map(standings.map((s) => [s.rph_player_id, s]))
+  const rows: ArchivedEventTeam[] = []
+  for (const t of teams) {
+    const seen = new Set<string>()
+    const teamMembers: ArchivedEventTeam['members'] = []
+    for (const m of members) {
+      if (m.team_id !== t.id || seen.has(m.rph_player_id) || !isMemberOn(m, eventDate)) continue
+      const s = standingByPlayer.get(m.rph_player_id)
+      if (!s) continue
+      seen.add(m.rph_player_id)
+      teamMembers.push({ playerId: s.rph_player_id, playerName: s.player_name, rank: s.rank, record: s.record, madeTopCut: Boolean(s.made_top_cut) })
+    }
+    if (teamMembers.length === 0) continue
+    teamMembers.sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
+    const best = teamMembers.find((m) => m.rank != null) ?? null
+    const totals = teamMembers.reduce(
+      (acc, m) => {
+        const { w, l, d } = parseRecord(m.record)
+        return { wins: acc.wins + w, losses: acc.losses + l, draws: acc.draws + d }
+      },
+      { wins: 0, losses: 0, draws: 0 }
+    )
+    rows.push({
+      slug: t.slug,
+      name: t.name,
+      logoUrl: t.logo_url,
+      bestRank: best?.rank ?? null,
+      bestPlayer: best ? { playerId: best.playerId, playerName: best.playerName } : null,
+      ...totals,
+      members: teamMembers,
+    })
+  }
+  return rows.sort((a, b) => (a.bestRank ?? Infinity) - (b.bestRank ?? Infinity) || b.wins - a.wins || a.name.localeCompare(b.name))
+}
+
 export type EditVerdict = 'ok' | 'forbidden' | 'disbanded'
 
 // Who may change a team: an admin or its manager, and only while it is not

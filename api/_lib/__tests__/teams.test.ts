@@ -7,6 +7,7 @@ import {
   adminOnlyFieldsSent,
   isValidLogoUrl,
   isValidSlug,
+  teamsAtArchivedEvent,
 } from '../teams'
 
 const open = { joined_on: '2025-01-10', left_on: null }
@@ -136,5 +137,38 @@ describe('isValidLogoUrl hardening', () => {
   })
   it('rejects a different origin with the same path', () => {
     expect(isValidLogoUrl('https://evil.example/storage/v1/object/public/stream-logos/u/1.png', base)).toBe(false)
+  })
+})
+
+describe('teamsAtArchivedEvent', () => {
+  const teams = [
+    { id: 'tA', slug: 'alpha', name: 'Alpha', logo_url: null, disbanded_on: null },
+    { id: 'tB', slug: 'beta', name: 'Beta', logo_url: null, disbanded_on: null },
+    { id: 'tC', slug: 'gamma', name: 'Gamma', logo_url: null, disbanded_on: null },
+  ]
+  const allMembers = [
+    { id: 'm1', team_id: 'tA', rph_player_id: '1', player_name: 'One', joined_on: null, left_on: null },
+    { id: 'm2', team_id: 'tA', rph_player_id: '2', player_name: 'Two', joined_on: '2025-01-01', left_on: '2026-06-30' }, // left before the event
+    { id: 'm3', team_id: 'tB', rph_player_id: '3', player_name: 'Three', joined_on: '2026-01-01', left_on: null },
+    { id: 'm4', team_id: 'tB', rph_player_id: '4', player_name: 'Four', joined_on: null, left_on: null },
+    { id: 'm5', team_id: 'tC', rph_player_id: '9', player_name: 'Absent', joined_on: null, left_on: null },
+  ]
+  const standings = [
+    { rph_player_id: '1', player_name: 'One', rank: 12, record: '7-2-0', made_top_cut: true },
+    { rph_player_id: '2', player_name: 'Two', rank: 2, record: '9-0-0', made_top_cut: true },
+    { rph_player_id: '3', player_name: 'Three', rank: 5, record: '8-1-0', made_top_cut: true },
+    { rph_player_id: '4', player_name: 'Four', rank: 90, record: '4-5-0', made_top_cut: false },
+  ]
+  it('ranks teams by their best placing member on that date and sums the record', () => {
+    const rows = teamsAtArchivedEvent(teams, allMembers, standings, '2026-10-24')
+    expect(rows.map((r) => r.slug)).toEqual(['beta', 'alpha'])
+    expect(rows[0]).toMatchObject({ bestRank: 5, bestPlayer: { playerId: '3', playerName: 'Three' }, wins: 12, losses: 6, draws: 0 })
+    expect(rows[0].members.map((m) => m.playerId)).toEqual(['3', '4'])
+    // Two had left Alpha before the event, so Alpha's best is One, not Two's 2nd place
+    expect(rows[1]).toMatchObject({ bestRank: 12, wins: 7, losses: 2 })
+    expect(rows[1].members).toHaveLength(1)
+  })
+  it('omits teams with nobody in the event', () => {
+    expect(teamsAtArchivedEvent(teams, allMembers, standings, '2026-10-24').some((r) => r.slug === 'gamma')).toBe(false)
   })
 })

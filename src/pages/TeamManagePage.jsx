@@ -139,13 +139,14 @@ function MemberRow({ member, teamId, readOnly, onSaved, onError }) {
 
   const former = Boolean(member.leftOn)
   return (
-    <tr className={`border-b border-gray-100 ${former ? 'text-gray-500' : ''}`}>
-      <td className="py-2 pr-4">
+    <tr className={`block sm:table-row py-1.5 sm:py-0 border-b border-gray-100 ${former ? 'text-gray-500' : ''}`}>
+      <td className="block sm:table-cell py-0.5 sm:py-2 pr-4">
         <Link to={`/results/players/${member.playerId}`} className="hover:underline">{member.playerName}</Link>
         <span className="text-xs text-gray-400 ml-2">{member.playerId}</span>
         {former && <Badge tone="neutral" className="ml-2">Former</Badge>}
       </td>
-      <td className="py-2 pr-4">
+      <td className="block sm:table-cell py-0.5 sm:py-2 pr-4">
+        <span className="sm:hidden inline-block w-16 text-xs uppercase tracking-wide text-gray-500">Joined</span>
         <Input
           type="date"
           value={joinedOn}
@@ -155,7 +156,8 @@ function MemberRow({ member, teamId, readOnly, onSaved, onError }) {
           className="py-1"
         />
       </td>
-      <td className="py-2 pr-4">
+      <td className="block sm:table-cell py-0.5 sm:py-2 pr-4">
+        <span className="sm:hidden inline-block w-16 text-xs uppercase tracking-wide text-gray-500">Left</span>
         <Input
           type="date"
           value={leftOn}
@@ -166,7 +168,7 @@ function MemberRow({ member, teamId, readOnly, onSaved, onError }) {
           className="py-1"
         />
       </td>
-      <td className="py-2 text-right">
+      <td className="block sm:table-cell py-0.5 sm:py-2 sm:text-right">
         <Button variant="danger" size="sm" onClick={remove} disabled={readOnly}>Delete</Button>
       </td>
     </tr>
@@ -385,8 +387,8 @@ export function TeamManagePage() {
         {members.length === 0 ? (
           <p className="text-sm text-gray-500">No members yet.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
+          <table className="w-full text-sm block sm:table">
+            <thead className="hidden sm:table-header-group">
               <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
                 <th className="py-1.5 pr-4">Player</th>
                 <th className="py-1.5 pr-4">Joined <span className="normal-case tracking-normal font-normal">(blank = unknown)</span></th>
@@ -394,7 +396,7 @@ export function TeamManagePage() {
                 <th className="py-1.5"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="block sm:table-row-group">
               {[...current, ...former].map((m) => (
                 <MemberRow key={`${m.id}:${m.joinedOn}:${m.leftOn ?? ''}`} member={m} teamId={team.id} readOnly={readOnly} onSaved={() => { ok('Saved'); reload() }} onError={fail} />
               ))}

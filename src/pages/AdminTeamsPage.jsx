@@ -44,11 +44,11 @@ function ManagerPicker({ onPick, onCancel }) {
   return (
     <div className="relative">
       <div className="flex gap-2">
-        <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by email…" aria-label="Search users by email" className="py-1 w-64" />
+        <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by email…" aria-label="Search users by email" className="py-1 min-w-0 flex-1 sm:flex-none sm:w-64" />
         <Button variant="quiet" size="sm" onClick={onCancel}>Cancel</Button>
       </div>
       {q.length >= 3 && (
-        <div className="absolute z-10 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-sm max-h-64 overflow-y-auto">
+        <div className="absolute z-10 mt-1 w-full sm:w-80 bg-white border border-gray-200 rounded-lg shadow-sm max-h-64 overflow-y-auto">
           {q !== found.q ? (
             <p className="px-3 py-2 text-sm text-gray-500">Searching…</p>
           ) : found.profiles.length === 0 ? (
@@ -168,8 +168,8 @@ export function AdminTeamsPage() {
           ) : teams.length === 0 ? (
             <p className="text-sm text-gray-500">No teams yet.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
+            <table className="w-full text-sm block sm:table">
+              <thead className="hidden sm:table-header-group">
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
                   <th className="py-1.5 pr-4">Team</th>
                   <th className="py-1.5 pr-4 text-right">Members</th>
@@ -177,12 +177,12 @@ export function AdminTeamsPage() {
                   <th className="py-1.5"></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="block sm:table-row-group">
                 {teams.map((t) => {
                   const disbanded = Boolean(t.disbandedOn)
                   return (
-                    <tr key={t.id} className={`border-b border-gray-100 align-top ${disbanded ? 'text-gray-500' : ''}`}>
-                      <td className="py-2 pr-4">
+                    <tr key={t.id} className={`block sm:table-row py-1.5 sm:py-0 border-b border-gray-100 align-top ${disbanded ? 'text-gray-500' : ''}`}>
+                      <td className="block sm:table-cell py-0.5 sm:py-2 pr-4">
                         <Link to={`/teams/${t.slug}`} className="inline-flex items-center gap-2 hover:underline">
                           <TeamLogo name={t.name} logoUrl={t.logoUrl} size="h-6 w-6" muted={disbanded} className="text-[10px]" />
                           <span className={disbanded ? '' : 'text-gray-900 font-medium'}>{t.name}</span>
@@ -190,11 +190,11 @@ export function AdminTeamsPage() {
                         <span className="text-xs text-gray-400 ml-2 font-mono">{t.slug}</span>
                         {disbanded && <Badge tone="neutral" className="ml-2">Disbanded {formatEventDate(t.disbandedOn)}</Badge>}
                       </td>
-                      <td className="py-2 pr-4 text-right tabular-nums">
-                        {t.current}
+                      <td className="block sm:table-cell py-0.5 sm:py-2 pr-4 sm:text-right tabular-nums">
+                        {t.current}<span className="sm:hidden"> members</span>
                         {t.former > 0 && <span className="text-xs text-gray-400"> · {t.former} former</span>}
                       </td>
-                      <td className="py-2 pr-4">
+                      <td className="block sm:table-cell py-0.5 sm:py-2 pr-4">
                         {disbanded ? (
                           <span className="text-gray-400">{t.managerEmail ?? 'No manager'}</span>
                         ) : picking === t.id ? (
@@ -213,7 +213,7 @@ export function AdminTeamsPage() {
                           </>
                         )}
                       </td>
-                      <td className="py-2 text-right whitespace-nowrap">
+                      <td className="block sm:table-cell py-0.5 sm:py-2 sm:text-right whitespace-nowrap">
                         {disbanded ? (
                           <Button size="sm" variant="quiet" onClick={() => act('Team reinstated', () => reinstateTeam(t.id))}>Reinstate</Button>
                         ) : (

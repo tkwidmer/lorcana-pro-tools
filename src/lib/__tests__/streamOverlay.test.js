@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, latestResult, resultLine, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, deckCardWidth,
+  timerFromRph, rphClockPatch, rphRoundPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, latestResult, resultLine, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, deckCardWidth,
   featuredPhase, FEATURED_SECONDS, FEATURED_FADE_MS, CLEAR_FEATURED_PATCH,
 } from '../streamOverlay'
 
@@ -335,6 +335,12 @@ describe('streamOverlay RPH', () => {
       timerEndDatetime: '2026-05-24T23:38:39+00:00', timerIsRunning: false, timerPausedAtDatetime: '2026-05-24T22:28:39+00:00',
     })).toEqual({ timer_ends_at: null, timer_remaining_ms: 70 * 60 * 1000 })
     expect(rphClockPatch({ timerEndDatetime: null, timerIsRunning: false, timerPausedAtDatetime: null })).toBeNull()
+  })
+
+  it('follows the linked event\'s active round on each poll, and leaves the round alone before the event starts', () => {
+    expect(rphRoundPatch({ activeRoundId: 'r2', activePhaseType: 'SWISS', activePhaseName: 'Phase 1', activeRoundNumber: 2 })).toEqual({ round: 'Round 2' })
+    expect(rphRoundPatch({ activeRoundId: 'r9', activePhaseType: 'RANKED_SINGLE_ELIMINATION', activePhaseName: 'Top 8', activeRoundNumber: 1 })).toEqual({ round: 'Top 8' })
+    expect(rphRoundPatch({ activeRoundId: null, activePhaseType: null, activePhaseName: null, activeRoundNumber: null })).toBeNull()
   })
 
   it('builds the feature-match patch: names, records, event, round, clock, link; scores reset; inks untouched', () => {

@@ -10,7 +10,7 @@ import {
   readSelectedTableId, storeSelectedTableId,
 } from '../lib/streamTables'
 import {
-  MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch,
+  MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch, rphRoundPatch,
   startTimer, pauseTimer, resetTimer, timerRemainingMs, formatClock, hotkeyAction, deckInks, clearTablePatch,
   activeRoundLabel, timerFromRph, featureMatchPatch, buildPlayerCard, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, metaSlices,
   featuredPhase, CLEAR_FEATURED_PATCH, FEATURED_SECONDS,
@@ -109,7 +109,7 @@ export function StreamOverlayPage() {
         if (cancelled) return
         const structure = getTournamentStructure(details)
         setRphStructure(structure)
-        const patch = rphClockPatch(structure) ?? {}
+        const patch = { ...rphClockPatch(structure), ...rphRoundPatch(structure) }
         // A failed matches fetch leaves the results as they were; the clock still lands.
         const matches = structure.activeRoundId ? await fetchRoundMatches(rphEventId, structure.activeRoundId).catch(() => null) : null
         if (cancelled) return
@@ -359,8 +359,8 @@ export function StreamOverlayPage() {
           <LogoField label="Event logo" value={row.event_logo_url} onChange={v => setField('event_logo_url', v)} onError={setError} />
           <LogoField label="Sponsor logo" value={row.sponsor_logo_url} onChange={v => setField('sponsor_logo_url', v)} onError={setError} />
           <LogoField label="Second sponsor logo" value={row.sponsor2_logo_url} onChange={v => setField('sponsor2_logo_url', v)} onError={setError} />
-          <Labeled label="Round">
-            <Input value={row.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" />
+          <Labeled label={rphEventId ? 'Round (following the RPH event)' : 'Round'}>
+            <Input value={row.round} onChange={e => setField('round', e.target.value)} className="w-full" placeholder="Round 3, Top 16, Finals…" disabled={Boolean(rphEventId)} />
           </Labeled>
           <Labeled label="Banner note (one line under the round, blank to hide)">
             <Input value={row.note} onChange={e => setField('note', e.target.value)} className="w-full" placeholder="Top 8 starts at 5pm · 128 players · #MandosBounty" />

@@ -230,6 +230,14 @@ export function rphClockPatch(structure) {
   return timer ? timerPatch(timer) : null
 }
 
+// One poll of a linked event's round → the round column, or null before the
+// event has started a round. Written every poll, as the clock is, so a table
+// whose players were typed by hand (never sent from the picker) still
+// captions the round.
+export function rphRoundPatch(structure) {
+  return structure.activeRoundId ? { round: activeRoundLabel(structure) } : null
+}
+
 // The round as the overlay captions it: the elimination phase's name in top
 // cut, else "Round N".
 export function roundLabel(structure) {

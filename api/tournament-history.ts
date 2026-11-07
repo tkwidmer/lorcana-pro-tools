@@ -54,7 +54,7 @@ import {
   memberCounts,
   findProfileByEmail,
 } from './_lib/teamsSupabase.js'
-import { groupTeamEvents, lastEventOf, canEditTeam, adminOnlyFieldsSent, isValidLogoUrl, isValidSlug } from './_lib/teams.js'
+import { groupTeamEvents, lastEventOf, teamsAtArchivedEvent, canEditTeam, adminOnlyFieldsSent, isValidLogoUrl, isValidSlug } from './_lib/teams.js'
 import { isMajor, isSideEvent } from './_lib/sideEvents.js'
 
 // Single consolidated route for the caster-history archive of imported RPH
@@ -373,14 +373,18 @@ async function handleEvent(req: VercelRequest, res: VercelResponse) {
     const row = await getEventByRphId(eventId)
     if (!row) return res.status(404).json({ error: 'Event not found' })
     const phase = eliminationPhaseName(row.raw_event_details)
-    const [standings, bracketRows] = await Promise.all([
+    const [standings, bracketRows, teams, members] = await Promise.all([
       getEventStandings(row.id),
       phase ? getEventMatches(row.id, phase) : Promise.resolve([]),
+      listTeams(),
+      listAllMembers(),
     ])
     res.setHeader('Cache-Control', PUBLIC_CACHE)
-    res.setHeader('Vercel-Cache-Tag', eventCacheTag(eventId))
+    // Purged by an ink-pair upload for this event and by any team write.
+    res.setHeader('Vercel-Cache-Tag', `${eventCacheTag(eventId)},${TEAMS_CACHE_TAG}`)
     return res.status(200).json({
       event: eventShape(row),
+      teams: teamsAtArchivedEvent(teams, members, standings, row.event_date),
       standings: standings.map((s: any) => ({
         playerId: s.rph_player_id,
         playerName: s.player_name,

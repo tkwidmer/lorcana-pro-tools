@@ -19,7 +19,7 @@ import { BUCKET_ORDER, buildBuckets, matchDeckList } from '../lib/decklistShared
 import { InkIcon } from '../components/InkIcons'
 import { StreamPairingPicker } from '../components/StreamPairingPicker'
 import cardeFieldExport from '../../scripts/carde-field-export.js?raw'
-import { readDecklistsPdf } from '../lib/cardePdf'
+import { decklistsFromExport } from '../lib/cardeExport'
 import { splitDeckLists, inkPairLines } from '../lib/fieldBreakdown'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -188,15 +188,13 @@ export function StreamOverlayPage() {
     updateTable(id, patch).catch(e => setError(e.message))
   }
   const setField = (key, value) => write(row.id, { [key]: value })
-  const [pdfBusy, setPdfBusy] = useState(false)
-  async function importDecklistsPdf(e) {
+  async function importDecklists(e) {
     const file = e.target.files[0]
     e.target.value = ''
     if (!file) return
-    setPdfBusy(true)
     try {
-      setField('meta_text', inkPairLines(splitDeckLists(await readDecklistsPdf(file)), cardIndex).join('\n'))
-    } catch (err) { setError(err.message) } finally { setPdfBusy(false) }
+      setField('meta_text', inkPairLines(splitDeckLists(decklistsFromExport(await file.text(), cards)), cardIndex).join('\n'))
+    } catch (err) { setError(err.message) }
   }
   const setPlayer = (side, key, value) => write(row.id, { [`p${side}_${key}`]: value })
   const adjust = (side, field, delta) => adjustTable(row.id, row.controller_key, side, field, delta).catch(e => setError(e.message))
@@ -453,11 +451,10 @@ export function StreamOverlayPage() {
           <div className="mb-4 rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
             <div className="font-display uppercase tracking-wider text-xs text-gray-500">Fetch the room from carde.io</div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <span>In the carde.io admin, download the event's decklists PDF and drop it here:</span>
-              <input type="file" accept="application/pdf" onChange={importDecklistsPdf} disabled={pdfBusy} aria-label="Decklists PDF" className={FILE_INPUT} />
-              {pdfBusy && <span className="text-xs text-gray-500">Reading…</span>}
+              <span>In the carde.io admin, download the event's decklists (JSON or CSV) and drop the file here:</span>
+              <input type="file" accept=".json,.csv,application/json,text/csv" onChange={importDecklists} disabled={!cards?.length} aria-label="Decklists file" className={FILE_INPUT} />
             </div>
-            <p className="mt-1 text-xs text-gray-500">Each deck's two most-played inks make the lines below; the PDF is read in your browser and the player names in it are never kept. Or use the bookmarklet:</p>
+            <p className="mt-1 text-xs text-gray-500">Each deck's two most-played inks make the lines below; the file is read in your browser and the player names in it are never kept. Or use the bookmarklet:</p>
             <ol className="mt-1 list-decimal pl-5 space-y-1">
               <li>
                 Drag this to your bookmarks bar once:{' '}

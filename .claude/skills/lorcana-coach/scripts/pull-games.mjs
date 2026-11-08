@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Pull a player's duels.ink games and write coach-readable files: one turn-by-turn narrative per game,
 // a per-game metrics table, deck-version diffs, and the rules text of every card that showed up.
-// Usage: node pull-games.mjs --account ibai --from 2026-09-26 --deck Amethyst/Emerald [--opp Amber/Sapphire]
+// Usage: node pull-games.mjs --account ibai --from 2026-09-26 --deck Amethyst/Emerald [--opp Amber/Sapphire]  (color order does not matter)
 //        [--opp-card "Judy Hopps"] [--to ISO] [--out dir]
 // Tokens: DUELS_TOKEN (account "me") and DUELS_TOKENS ("name=token,..."), same as mcp-server/index.js.
 import { gunzipSync } from 'node:zlib'
@@ -106,16 +106,17 @@ fs.writeFileSync(path.join(out, 'versions.txt'), vt)
 // 5. Narratives + metrics, from the raw events (no parser in between).
 const short = n => (n ?? '?').split(' - ')[0]
 const KILL_SRC = { CHAL: 'C' }
-let narr = '', met = `# Per game. ink@6/8/10 = inkwell size at start of your T6/T8/T10 (then opp's). noInk = your turns after T1 with no ink; stall = longest run of them.\n# lore@8 = lore at end of T8. minHand = smallest hand T5-T10; dead = max uninkables held T5-T10. sweeps = turns you killed 2+ (turn:kills). killedBy = your banished characters by source.\n`
-met += `date       res  pos  T | ink@6/8/10 opp@6/8/10 | noInk stall | lore@8 opp@8 | minHand dead | sweeps | killedBy | mulligan sent\n`
+let narr = '', met = `# Per game. ink@6/8/10 = inkwell size at start of your T6/T8/T10 (then opp's). noInk = your turns after T1 with no ink; stall = longest run of them.\n# lore@8 = lore at end of T8. minHand = smallest hand T5-T10; dead = max uninkables held T5-T10. sweeps = turns you killed 2+ (turn:kills). killedBy = your banished characters by source. gift = a win the opponent handed over: conceded while ahead on lore, or sat 3+ turns without inking.\n`
+met += `date       res  pos  T | gift               | ink@6/8/10 opp@6/8/10 | noInk stall | lore@8 opp@8 | minHand dead | sweeps | killedBy | mulligan sent\n`
 const agg = { win: {}, loss: {} }
 const add = (res, k, v) => ((agg[res][k] ??= []).push(v))
 for (const r of kept) {
   const me = r.your_player, opp = 3 - me, L = logs[r.game_id]
   narr += `\n######## ${r.started_at.slice(0, 16)} V${vid.get(r.game_id)} ${r.result.toUpperCase()} ${r.went_first ? 'FIRST' : 'SECOND'} lore ${r.your_lore}-${r.opp_lore} ${r.end_reason} opp=${r.opp_display_name} (${r.opp_deck_colors}) oppMMR=${r.opp_mmr_before} myMMR=${r.mmr_before} replay=${r.replay_url}\n`
   let hand = [], ink = { 1: 0, 2: 0 }, lore = { 1: {}, 2: {} }, inkAt = { 1: {}, 2: {} }, turn = 0, owner = null, inkedThisTurn = false
-  const noInk = [], handSz = {}, dead = {}, sweeps = [], killed = {}, sent = []
-  let kills = 0, lastSrc = null, cur = null, lines = []
+  const noInk = [], oppNoInk = [], handSz = {}, dead = {}, sweeps = [], killed = {}, sent = []
+  let ended = false
+  let kills = 0, lastSrc = null, cur = null, lines = [], lastInked = null
   const flush = () => { if (cur) narr += cur + lines.join(' | ') + '\n'; cur = null; lines = [] }
   for (const e of L) {
     const t = e.type, d = e.data, p = e.player
@@ -129,6 +130,7 @@ for (const r of kept) {
     } else if (t === 'TURN_START') {
       flush()
       if (owner === me && turn >= 2 && !inkedThisTurn) noInk.push(turn)
+      if (owner === opp && turn >= 2 && !inkedThisTurn) oppNoInk.push(turn)
       if (owner === me && kills >= 2) sweeps.push(`T${turn}:${kills}`)
       if (owner === me && turn) { handSz[turn] = hand.length; dead[turn] = hand.filter(n => byName[n]?.inkwell === false).length }
       owner = p; turn = e.turnNumber; inkedThisTurn = false; kills = 0
@@ -136,11 +138,17 @@ for (const r of kept) {
       cur = `T${String(turn).padEnd(2)} ${p === me ? 'ME ' : 'OPP'} ink=${ink[p]} ` + (p === me ? `hand[${hand.length}]=[${hand.map(short)}] ` : '')
     } else if (t === 'CARD_DRAWN' && p === me && d.cardName) hand.push(d.cardName)
     else if (t === 'CARD_INKED' || t === 'CARD_PUT_INTO_INKWELL') {
-      ink[p]++; if (p === me) { inkedThisTurn = true; const i = hand.indexOf(d.cardName); if (i >= 0) hand.splice(i, 1) }
+      ink[p]++; inkedThisTurn = true; lastInked = d.cardName; if (p === me) { const i = hand.indexOf(d.cardName); if (i >= 0) hand.splice(i, 1) }
       lines.push(t === 'CARD_INKED' ? `ink ${short(d.cardName)}` : '+ink(deck)')
+    } else if (t === 'FREE_UNDO' || t === 'CHOICE_UNDO') {
+      // Reverts the action just before it. Only an undone ink changes state we track.
+      const last = lines.at(-1) ?? ''
+      if (last.startsWith('ink ') && p === owner) { ink[p]--; if (p === me && lastInked) hand.push(lastInked); lines[lines.length - 1] = `${last} (undone)` }
+      else lines.push('undo')
     } else if (t === 'CARD_PLAYED') {
       if (p === me) { const i = hand.indexOf(d.cardName); if (i >= 0) hand.splice(i, 1) }
-      lastSrc = d.cardName; lines.push(`play ${short(d.cardName)}(${d.cardCost ?? '?'})`)
+      lastSrc = d.cardName
+      lines.push(d.usedShift ? `shift ${short(d.cardName)}(${d.shiftCost}) onto ${short(d.shiftTargetCardName)}` : d.singerCardName ? `sing ${short(d.cardName)} off ${short(d.singerCardName)}` : `play ${short(d.cardName)}(${d.cardCost ?? '?'})`)
     } else if (t === 'CARD_DISCARDED') {
       if (p === me) { const i = hand.indexOf(d.cardName); if (i >= 0) hand.splice(i, 1) }
       lines.push(`disc ${short(d.cardName)}`)
@@ -150,13 +158,14 @@ for (const r of kept) {
       lines.push(`X${p === me ? 'me' : 'opp'}:${short(d.cardName)}`)
       if (p === opp && owner === me) kills++
       if (p === me && owner === opp) { const k = `${KILL_SRC[lastSrc] ?? short(lastSrc)}:${short(d.cardName)}`; killed[k] = (killed[k] ?? 0) + 1 }
-    } else if (t === 'ABILITY_ACTIVATED') lines.push(`act ${short(d.cardName)}:${d.abilityName}`)
+    } else if (t === 'SUPPORT_GIVEN') lines.push(`support ${short(d.cardName)}->${short(d.targetCardName)} +${d.supportBonus}`)
+    else if (t === 'ABILITY_ACTIVATED') lines.push(`act ${short(d.cardName)}:${d.abilityName}`)
     else if (t === 'CARD_RETURNED_TO_DECK') lines.push(`bounce ${short(d.cardName)}`)
     else if (t === 'CARD_RETURNED') lines.push(`return ${short(d.cardName)}`)
     else if (t === 'CARD_REVEALED') lines.push(`reveal ${short(d.cardName)}`)
     else if (t === 'DAMAGE_DEALT') lines.push(`dmg ${d.damage ?? '?'}->${short(d.targetCardName ?? d.cardName)}`)
     else if (t === 'ABILITY_TRIGGERED' && d.effectDescription && /draw|lore|damage|banish|discard|return|ready|gain|ink/.test(d.effectDescription)) lines.push(`[${short(d.abilitySourceCardName)}: ${d.effectDescription.slice(0, 50)}]`)
-    else if (t === 'GAME_END') { flush(); narr += `  END winner=${d.winner === me ? 'me' : 'opp'} ${d.victoryReason ?? ''} lore me=${Object.values(lore[me]).at(-1) ?? 0} opp=${Object.values(lore[opp]).at(-1) ?? 0}\n` }
+    else if (t === 'GAME_END' && !ended) { ended = true; flush(); narr += `  END winner=${d.winner === me ? 'me' : 'opp'} ${d.victoryReason ?? ''} lore me=${Object.values(lore[me]).at(-1) ?? 0} opp=${Object.values(lore[opp]).at(-1) ?? 0}\n` }
   }
   flush()
   const at = (m, T) => { let v = 0; for (const [k, x] of Object.entries(m)) if (+k <= T) v = x; return v }
@@ -164,7 +173,9 @@ for (const r of kept) {
   const mid = Object.entries(handSz).filter(([k]) => k >= 5 && k <= 10).map(([, v]) => v)
   const minHand = mid.length ? Math.min(...mid) : '-'
   const deadMax = Math.max(0, ...Object.entries(dead).filter(([k]) => k >= 5 && k <= 10).map(([, v]) => v))
-  met += `${r.started_at.slice(0, 10)} ${r.result.padEnd(4)} ${r.went_first ? '1st' : '2nd'} ${String(turn).padStart(2)} | ${at(inkAt[me], 6)}/${at(inkAt[me], 8)}/${at(inkAt[me], 10)} ${at(inkAt[opp], 6)}/${at(inkAt[opp], 8)}/${at(inkAt[opp], 10)} | ${noInk.length} ${best} | ${at(lore[me], 8)} ${at(lore[opp], 8)} | ${minHand} ${deadMax} | ${sweeps.join(' ') || '-'} | ${Object.entries(killed).map(([k, v]) => v > 1 ? `${k}x${v}` : k).join(', ') || '-'} | ${sent.join(', ') || '-'}\n`
+  let os = 0, ob = 0, op = -9; for (const tn of oppNoInk) { os = tn === op + 1 ? os + 1 : 1; ob = Math.max(ob, os); op = tn }
+  const gift = r.result !== 'win' ? '-' : r.end_reason === 'concede' && r.opp_lore > r.your_lore ? 'opp-conceded-ahead' : ob >= 3 ? `opp-ink-stall(${ob})` : '-'
+  met += `${r.started_at.slice(0, 10)} ${r.result.padEnd(4)} ${r.went_first ? '1st' : '2nd'} ${String(turn).padStart(2)} | ${gift.padEnd(18)} | ${at(inkAt[me], 6)}/${at(inkAt[me], 8)}/${at(inkAt[me], 10)} ${at(inkAt[opp], 6)}/${at(inkAt[opp], 8)}/${at(inkAt[opp], 10)} | ${noInk.length} ${best} | ${at(lore[me], 8)} ${at(lore[opp], 8)} | ${minHand} ${deadMax} | ${sweeps.join(' ') || '-'} | ${Object.entries(killed).map(([k, v]) => v > 1 ? `${k}x${v}` : k).join(', ') || '-'} | ${sent.join(', ') || '-'}\n`
   const res = r.result; if (!agg[res]) continue
   add(res, 'noInk', noInk.length); add(res, 'stall', best); add(res, 'ink@8', at(inkAt[me], 8)); add(res, 'oppInk@8', at(inkAt[opp], 8)); add(res, 'lore@8', at(lore[me], 8)); add(res, 'oppLore@8', at(lore[opp], 8)); add(res, 'minHand', minHand === '-' ? 0 : minHand); add(res, 'dead', deadMax); add(res, 'sweepKills', sweeps.reduce((s, x) => s + +x.split(':')[1], 0)); add(res, 'wentFirst', +r.went_first)
 }
@@ -177,6 +188,7 @@ fs.writeFileSync(path.join(out, 'metrics.txt'), met)
 const seen = new Set()
 for (const r of kept) for (const e of logs[r.game_id]) for (const n of [e.data?.cardName, e.data?.targetCardName, e.data?.abilitySourceCardName]) if (n) seen.add(n)
 for (const r of kept) for (const x of r.your_decklist) seen.add(nameOf(x.cardId))
+for (const n of Object.keys(versions.at(-1).cards)) seen.add(n)
 fs.writeFileSync(path.join(out, 'cards.txt'), [...seen].sort().map(n => { const c = byName[n]; return c ? `${n} [${c.color} ${c.cost} ${c.type}${c.inkwell === false ? ' UNINKABLE' : ''}${c.strength != null ? ` ${c.strength}/${c.willpower}/${c.lore}` : ''}]: ${c.text.replace(/\s+/g, ' ')}` : `${n}: (not in LorcanaJSON)` }).join('\n\n'))
 fs.writeFileSync(path.join(out, 'games.json'), JSON.stringify(kept.map(r => ({ ...r, version: vid.get(r.game_id) })), null, 1))
 console.error(`wrote ${out}/{narratives,metrics,versions,cards}.txt and games.json`)

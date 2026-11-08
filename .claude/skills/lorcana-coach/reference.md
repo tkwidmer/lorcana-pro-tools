@@ -14,13 +14,14 @@
 
 ## Mistake taxonomy, with how each looks in `narratives.txt`
 
-Line format: `T<n> ME|OPP ink=<pool> hand[k]=[...] action | action`. `ink X` inked X, `play X(cost)`, `Q X+n=total` quest, `CHAL A->B (str+bonus vs str)` challenge, `Xme:`/`Xopp:` a character banished, `act` an activated ability, `bounce` returned to deck, `dmg`, `[Card: effect]` a triggered ability, `+ink(deck)` a card put into the inkwell by an effect. The hand shown is the hand at the start of that turn.
+Line format: `T<n> ME|OPP ink=<pool> hand[k]=[...] action | action`. `ink X` inked X (`(undone)` = taken back with the free undo, not counted), `play X(cost)`, `shift X(cost) onto Y`, `sing X off Y` (a song sung by exerting Y, no ink spent), `Q X+n=total` quest, `support X->Y +n` (X's Support added to Y's strength this turn; Y can be an opposing character, which is how a 3-strength body ends up in range of a "banish 5 strength or more" effect), `CHAL A->B (str+bonus vs str)` challenge, `Xme:`/`Xopp:` a character banished, `act` an activated ability, `bounce` returned to deck, `dmg`, `[Card: effect]` a triggered ability, `+ink(deck)` a card put into the inkwell by an effect. The hand shown is the hand at the start of that turn.
 
 **Deckbuilding** (from `versions.txt` and `metrics.txt`)
 - Uninkable count of the current list against the stall figures. Stalls of 3+ turns with `dead` of 2+ point at the uninkables, not at luck.
 - A flex card whose record trails the deck's by 10+ points over 20+ games.
 - Versions with fewer than 5 games: churn. Say which change the data supports and which it does not.
-- The `killedBy` column: which opposing card keeps answering the player's bodies, and whether the list has anything for it.
+- The `killedBy` column: which opposing card keeps answering the player's bodies, and whether the list has anything for it. When a conditional banish (5+ strength) keeps hitting a smaller body, look for a `support ->` line on the opponent's turn just before it.
+- The `gift` column in `metrics.txt`: wins the opponent handed over. Subtract them for the earned record.
 - Blank early turns across many games: a curve hole, visible as `T2 ME ... ink X` with no `play`.
 
 **Mulligan** (the `mulligan:` line)

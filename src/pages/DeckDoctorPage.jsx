@@ -122,7 +122,7 @@ export function DeckDoctorPage() {
     [mode, pastedEntries, cards, knownIds, deck],
   )
   const myColors = useMemo(
-    () => (mode === 'paste' ? deckInks(pastedEntries).slice(0, 2) : deck?.colors ?? []),
+    () => (mode === 'paste' ? deckInks(pastedEntries) : deck?.colors ?? []),
     [mode, pastedEntries, deck],
   )
   const hasList = myCounts.size > 0

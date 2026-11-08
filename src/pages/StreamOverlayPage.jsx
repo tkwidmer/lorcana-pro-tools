@@ -515,7 +515,7 @@ export function StreamOverlayPage() {
                   return (
                     <button
                       key={ink} type="button" title={ink} aria-pressed={on}
-                      onClick={() => setPlayer(side, 'inks', on ? player.inks.filter(x => x !== ink) : [...player.inks, ink])}
+                      onClick={() => setPlayer(side, 'inks', on ? player.inks.filter(x => x !== ink) : [...player.inks, ink].slice(-2))}
                       className={`rounded border-2 p-1 transition-opacity ${on ? 'border-forge opacity-100' : 'border-transparent opacity-35 hover:opacity-70'}`}
                     >
                       <InkIcon color={ink} size={32} />

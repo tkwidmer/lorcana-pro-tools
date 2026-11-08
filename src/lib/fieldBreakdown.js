@@ -22,7 +22,7 @@ export function inkPairField(lists, cardIndex) {
   const decks = lists.map((text, i) => {
     const entries = matchDeckList(text, cardIndex)
     const unmatched = parseDeckList(text).map((p) => p.name).filter((n) => !entries.some((e) => e.name === n))
-    const colors = deckInks(entries).slice(0, 2).sort()
+    const colors = deckInks(entries).sort()
     return { index: i + 1, colors, cards: entries.reduce((s, e) => s + e.count, 0), unmatched }
   })
   const rows = new Map()

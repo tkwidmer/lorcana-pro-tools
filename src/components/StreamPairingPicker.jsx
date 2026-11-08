@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchAllStandings, fetchRoundMatches } from '../lib/tournamentApi'
 import { currentRoundPairings, activeRoundLabel } from '../lib/streamOverlay'
+import { logStreamEvent } from '../lib/streamTables'
 import { Button } from './ui/Button'
 import { Input } from './ui/Field'
 
@@ -10,7 +11,7 @@ import { Input } from './ui/Field'
 // records from the latest generated standings, a Send per row. Loads both
 // when opened, so the list is as fresh as RPH. `onStream` is the pair of
 // names already on the table.
-export function StreamPairingPicker({ eventId, structure, onStream, onSend, onClose }) {
+export function StreamPairingPicker({ tableId, eventId, structure, onStream, onSend, onClose }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState(null)
   const [query, setQuery] = useState('')
@@ -20,9 +21,9 @@ export function StreamPairingPicker({ eventId, structure, onStream, onSend, onCl
     let cancelled = false
     Promise.all([fetchRoundMatches(eventId, structure.activeRoundId), structure.currentRoundId ? fetchAllStandings(structure.currentRoundId) : []])
       .then(([matches, standings]) => { if (!cancelled) setRows(currentRoundPairings(matches, standings)) })
-      .catch(e => { if (!cancelled) setError(e.message) })
+      .catch(e => { if (!cancelled) setError(e.message); logStreamEvent(tableId, 'panel', 'pairings_failed', e.message) })
     return () => { cancelled = true }
-  }, [eventId, structure.activeRoundId, structure.currentRoundId])
+  }, [tableId, eventId, structure.activeRoundId, structure.currentRoundId])
 
   const q = query.trim().toLowerCase()
   const shown = rows?.filter(r => !q || String(r.table) === q || r.players.some(p => p.name.toLowerCase().includes(q)))

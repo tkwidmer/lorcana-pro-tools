@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { fetchPublicTable, subscribeToTable, adjustTable, resetLore } from '../lib/streamTables'
+import { fetchPublicTable, subscribeToTable, logStreamEvent, adjustTable, resetLore } from '../lib/streamTables'
 import { MAX_GAME_WINS, rowToState, timerRemainingMs, formatClock } from '../lib/streamOverlay'
 
 // The players' controller: a tablet at the table, one half per player, that
@@ -25,12 +25,13 @@ export function StreamOverlayControlPage() {
   }, [])
 
   useEffect(() => {
-    fetchPublicTable(tableId).then(setRow).catch(e => setError(e.message))
-    return subscribeToTable(tableId, setRow)
+    fetchPublicTable(tableId).then(setRow).catch(e => { setError(e.message); logStreamEvent(tableId, 'control', 'load_failed', e.message) })
+    return subscribeToTable(tableId, 'control', setRow)
   }, [tableId])
 
+  const fail = kind => e => { setError(e.message); logStreamEvent(tableId, 'control', kind, e.message) }
   function adjust(side, field, delta) {
-    adjustTable(tableId, key, side, field, delta).catch(e => setError(e.message))
+    adjustTable(tableId, key, side, field, delta).catch(fail('tap_failed'))
   }
 
   // "Next game" zeroes both lore counts, so it takes two taps within a few
@@ -44,7 +45,7 @@ export function StreamOverlayControlPage() {
   function nextGame() {
     if (!armed) { setArmed(true); return }
     setArmed(false)
-    resetLore(tableId, key).catch(e => setError(e.message))
+    resetLore(tableId, key).catch(fail('next_game_failed'))
   }
 
   if (!row) {

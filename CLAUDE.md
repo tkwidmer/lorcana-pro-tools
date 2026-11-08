@@ -123,7 +123,7 @@ Paper surfaces, an ink-black nav bar, condensed caps display type, one forge-gol
 
 ### API routes
 
-Vercel functions in `api/*.ts`, flat files only (a nested route once deployed green and silently served the SPA shell). **Vercel Hobby caps a deployment at 12 functions; the count is 9.** A new endpoint joins an existing `?endpoint=` dispatcher (`duels.ts`, `tournament-history.ts`, `metafy.ts`) or `tournament.ts`'s `?type=` switch rather than adding a file; the `vercel-proxy-pattern` skill has the shape. Routes: `duels` (every duels.ink call), `tournament` (Ravensburger), `tournament-history` (the archive, Supabase), `duels-tokens` (encrypted token store), `card-image` (allow-listed image proxy), `metafy`, `discord-interactions`, `discord-tournament-tick`, `subscribe-substack`. `/api/cards` is a rewrite to LorcanaJSON, not a function. Details, secrets and the integrations: `docs/agents/api-routes.md`.
+Vercel functions in `api/*.ts`, flat files only (a nested route once deployed green and silently served the SPA shell). The project is on Vercel Pro: no cap on functions per deployment (Hobby's was 12, which is why the dispatchers exist). An endpoint for an upstream that already has a dispatcher joins it (`duels.ts`, `tournament-history.ts`, `metafy.ts` on `?endpoint=`, `tournament.ts` on `?type=`); a new upstream or concern gets its own flat file. The `vercel-proxy-pattern` skill has the shape. Routes: `duels` (every duels.ink call), `tournament` (Ravensburger), `tournament-history` (the archive, Supabase), `duels-tokens` (encrypted token store), `card-image` (allow-listed image proxy), `metafy`, `discord-interactions`, `discord-tournament-tick`, `subscribe-substack`. `/api/cards` is a rewrite to LorcanaJSON, not a function. Details, secrets and the integrations: `docs/agents/api-routes.md`.
 
 `mcp-server/` is a separate local stdio MCP server (own `package.json`, `DUELS_TOKEN` env var) exposing a user's duels.ink games and LorcanaJSON card search (`src/lib/cardSearch.js`) to MCP clients; it imports `src/lib/parseGamelog.js`, so a change to the parser's output shape changes its `get_game` tool. See `mcp-server/README.md`.
 
@@ -137,7 +137,7 @@ Scheduled GitHub Actions: `tournament-tracker-tick.yml` and `metafy-reconcile-ti
 | IndexedDB `lorcana_gamelogs` | `gamelogs` (parsed imports) |
 | localStorage | `lorcana_theme`, `lorcana_deck_names`, `lorcana_stream_table`, `lorcana_field_breakdown`, `lorcana_lore_tracker`, per-page form state |
 | `chrome.storage.local` | `lorcana_active_games` (extension, 2-hour TTL) |
-| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `tournament_history_events`/`_standings`/`_matches`/`_ratings` (service-role only; `_ratings` rebuilt nightly from the matches), `teams`/`team_members` (service-role only; the Team Tracker) |
+| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `stream_events` (Stream Overlay event log, written only through `log_stream_event()`), `tournament_history_events`/`_standings`/`_matches`/`_ratings` (service-role only; `_ratings` rebuilt nightly from the matches), `teams`/`team_members` (service-role only; the Team Tracker) |
 
 ### Ink icons
 

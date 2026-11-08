@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useCards } from '../hooks/useCards'
 import { buildCardIndex } from '../lib/cardAnalysis'
 import { splitDeckLists, inkPairField } from '../lib/fieldBreakdown'
-import { readDecklistsPdf } from '../lib/cardePdf'
+import { decklistsFromExport } from '../lib/cardeExport'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -28,12 +28,12 @@ export function FieldBreakdownPage() {
   const result = useMemo(() => (cards?.length && lists.length ? inkPairField(lists, cardIndex) : null), [cards, cardIndex, lists])
 
   const [copied, setCopied] = useState(false)
-  const [pdfError, setPdfError] = useState(null)
-  async function importPdf(e) {
+  const [fileError, setFileError] = useState(null)
+  async function importFile(e) {
     const file = e.target.files[0]
     e.target.value = ''
     if (!file) return
-    try { setText(await readDecklistsPdf(file)); setPdfError(null) } catch (err) { setPdfError(err.message) }
+    try { setText(decklistsFromExport(await file.text(), cards)); setFileError(null) } catch (err) { setFileError(err.message) }
   }
   async function copyForOverlay() {
     try {
@@ -47,7 +47,7 @@ export function FieldBreakdownPage() {
     <div className="w-full px-6 py-8">
       <PageHeader
         title="Field Breakdown"
-        description="Paste every decklist in the room, one blank line between lists, or upload carde.io's decklists PDF, and see the field by ink pair."
+        description="Paste every decklist in the room, one blank line between lists, or upload carde.io's decklists export (JSON or CSV), and see the field by ink pair."
       />
 
       <Card className="p-4 mb-6">
@@ -65,10 +65,10 @@ export function FieldBreakdownPage() {
             <span className="text-xs">One line per ink pair with its deck count, the Stream Overlay Metagame card's input.</span>
           </span>
           <label className="flex items-center gap-2">
-            <span>Or the carde.io decklists PDF (replaces the text):</span>
-            <input type="file" accept="application/pdf" onChange={importPdf} className="text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-900 file:bg-transparent file:px-3 file:py-1.5 file:font-display file:uppercase file:tracking-wider file:text-xs file:text-gray-900" />
+            <span>Or the carde.io decklists export, JSON or CSV (replaces the text):</span>
+            <input type="file" accept=".json,.csv,application/json,text/csv" onChange={importFile} disabled={!cards?.length} className="text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-900 file:bg-transparent file:px-3 file:py-1.5 file:font-display file:uppercase file:tracking-wider file:text-xs file:text-gray-900" />
           </label>
-          {pdfError && <span className="text-red-700">{pdfError}</span>}
+          {fileError && <span className="text-red-700">{fileError}</span>}
         </div>
       </Card>
 

@@ -156,7 +156,7 @@ export const SECTIONS = [
         path: '/field-breakdown',
         name: 'Field Breakdown',
         icon: 'pie',
-        description: "Paste every decklist in the room, or upload carde.io's decklists PDF, and see the field by ink pair, ready for the Stream Overlay's metagame chart.",
+        description: "Paste every decklist in the room, or upload carde.io's decklists export (JSON or CSV), and see the field by ink pair, ready for the Stream Overlay's metagame chart.",
       },
       {
         path: '/tournament-lookup',

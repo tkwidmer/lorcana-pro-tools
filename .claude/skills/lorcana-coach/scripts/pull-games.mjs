@@ -106,15 +106,15 @@ fs.writeFileSync(path.join(out, 'versions.txt'), vt)
 // 5. Narratives + metrics, from the raw events (no parser in between).
 const short = n => (n ?? '?').split(' - ')[0]
 const KILL_SRC = { CHAL: 'C' }
-let narr = '', met = `# Per game. ink@6/8/10 = inkwell size at start of your T6/T8/T10 (then opp's). noInk = your turns after T1 with no ink; stall = longest run of them.\n# lore@8 = lore at end of T8. minHand = smallest hand T5-T10; dead = max uninkables held T5-T10. sweeps = turns you killed 2+ (turn:kills). killedBy = your banished characters by source. gift = a win the opponent handed over: conceded while ahead on lore, or sat 3+ turns without inking.\n`
-met += `date       res  pos  T | gift               | ink@6/8/10 opp@6/8/10 | noInk stall | lore@8 opp@8 | minHand dead | sweeps | killedBy | mulligan sent\n`
+let narr = '', met = `# Per game. ink@6/8/10 = inkwell size at start of your T6/T8/T10 (then opp's). noInk = your turns after T1 with no ink; stall = longest run of them.\n# lore@8 = lore at end of T8. minHand = smallest hand T5-T10; dead = max uninkables held T5-T10. sweeps = turns you killed 2+ (turn:kills). killedBy = your banished characters by source. gift = how a win came: conceded-to-sweep(n) = opponent conceded while ahead or level after your last two turns killed n of their characters (earned); opp-conceded-ahead = same with no sweep behind it (judge the replay); opp-ink-stall(n) = opponent sat n turns without inking (a gift only if lore was level or behind).\n`
+met += `date       res  pos  T | gift                           | ink@6/8/10 opp@6/8/10 | noInk stall | lore@8 opp@8 | minHand dead | sweeps | killedBy | mulligan sent\n`
 const agg = { win: {}, loss: {} }
 const add = (res, k, v) => ((agg[res][k] ??= []).push(v))
 for (const r of kept) {
   const me = r.your_player, opp = 3 - me, L = logs[r.game_id]
   narr += `\n######## ${r.started_at.slice(0, 16)} V${vid.get(r.game_id)} ${r.result.toUpperCase()} ${r.went_first ? 'FIRST' : 'SECOND'} lore ${r.your_lore}-${r.opp_lore} ${r.end_reason} opp=${r.opp_display_name} (${r.opp_deck_colors}) oppMMR=${r.opp_mmr_before} myMMR=${r.mmr_before} replay=${r.replay_url}\n`
   let hand = [], ink = { 1: 0, 2: 0 }, lore = { 1: {}, 2: {} }, inkAt = { 1: {}, 2: {} }, turn = 0, owner = null, inkedThisTurn = false
-  const noInk = [], oppNoInk = [], handSz = {}, dead = {}, sweeps = [], killed = {}, sent = []
+  const noInk = [], oppNoInk = [], handSz = {}, dead = {}, sweeps = [], killed = {}, sent = [], killsByTurn = []
   let ended = false
   let kills = 0, lastSrc = null, cur = null, lines = [], lastInked = null
   const flush = () => { if (cur) narr += cur + lines.join(' | ') + '\n'; cur = null; lines = [] }
@@ -132,6 +132,7 @@ for (const r of kept) {
       if (owner === me && turn >= 2 && !inkedThisTurn) noInk.push(turn)
       if (owner === opp && turn >= 2 && !inkedThisTurn) oppNoInk.push(turn)
       if (owner === me && kills >= 2) sweeps.push(`T${turn}:${kills}`)
+      if (owner === me && turn) killsByTurn.push(kills)
       if (owner === me && turn) { handSz[turn] = hand.length; dead[turn] = hand.filter(n => byName[n]?.inkwell === false).length }
       owner = p; turn = e.turnNumber; inkedThisTurn = false; kills = 0
       inkAt[1][turn] ??= ink[1]; inkAt[2][turn] ??= ink[2]
@@ -174,8 +175,12 @@ for (const r of kept) {
   const minHand = mid.length ? Math.min(...mid) : '-'
   const deadMax = Math.max(0, ...Object.entries(dead).filter(([k]) => k >= 5 && k <= 10).map(([, v]) => v))
   let os = 0, ob = 0, op = -9; for (const tn of oppNoInk) { os = tn === op + 1 ? os + 1 : 1; ob = Math.max(ob, os); op = tn }
-  const gift = r.result !== 'win' ? '-' : r.end_reason === 'concede' && r.opp_lore > r.your_lore ? 'opp-conceded-ahead' : ob >= 3 ? `opp-ink-stall(${ob})` : '-'
-  met += `${r.started_at.slice(0, 10)} ${r.result.padEnd(4)} ${r.went_first ? '1st' : '2nd'} ${String(turn).padStart(2)} | ${gift.padEnd(18)} | ${at(inkAt[me], 6)}/${at(inkAt[me], 8)}/${at(inkAt[me], 10)} ${at(inkAt[opp], 6)}/${at(inkAt[opp], 8)}/${at(inkAt[opp], 10)} | ${noInk.length} ${best} | ${at(lore[me], 8)} ${at(lore[opp], 8)} | ${minHand} ${deadMax} | ${sweeps.join(' ') || '-'} | ${Object.entries(killed).map(([k, v]) => v > 1 ? `${k}x${v}` : k).join(', ') || '-'} | ${sent.join(', ') || '-'}\n`
+  if (owner === me) killsByTurn.push(kills)
+  const recentKills = killsByTurn.slice(-2).reduce((a, b) => a + b, 0)
+  const gift = r.result !== 'win' ? '-'
+    : r.end_reason === 'concede' && r.opp_lore >= r.your_lore ? (recentKills >= 2 ? `conceded-to-sweep(${recentKills})` : ob >= 3 ? `opp-conceded-ahead+ink-stall(${ob})` : 'opp-conceded-ahead')
+    : ob >= 3 ? `opp-ink-stall(${ob})` : '-'
+  met += `${r.started_at.slice(0, 10)} ${r.result.padEnd(4)} ${r.went_first ? '1st' : '2nd'} ${String(turn).padStart(2)} | ${gift.padEnd(30)} | ${at(inkAt[me], 6)}/${at(inkAt[me], 8)}/${at(inkAt[me], 10)} ${at(inkAt[opp], 6)}/${at(inkAt[opp], 8)}/${at(inkAt[opp], 10)} | ${noInk.length} ${best} | ${at(lore[me], 8)} ${at(lore[opp], 8)} | ${minHand} ${deadMax} | ${sweeps.join(' ') || '-'} | ${Object.entries(killed).map(([k, v]) => v > 1 ? `${k}x${v}` : k).join(', ') || '-'} | ${sent.join(', ') || '-'}\n`
   const res = r.result; if (!agg[res]) continue
   add(res, 'noInk', noInk.length); add(res, 'stall', best); add(res, 'ink@8', at(inkAt[me], 8)); add(res, 'oppInk@8', at(inkAt[opp], 8)); add(res, 'lore@8', at(lore[me], 8)); add(res, 'oppLore@8', at(lore[opp], 8)); add(res, 'minHand', minHand === '-' ? 0 : minHand); add(res, 'dead', deadMax); add(res, 'sweepKills', sweeps.reduce((s, x) => s + +x.split(':')[1], 0)); add(res, 'wentFirst', +r.went_first)
 }

@@ -21,7 +21,7 @@ Line format: `T<n> ME|OPP ink=<pool> hand[k]=[...] action | action`. `ink X` ink
 - A flex card whose record trails the deck's by 10+ points over 20+ games.
 - Versions with fewer than 5 games: churn. Say which change the data supports and which it does not.
 - The `killedBy` column: which opposing card keeps answering the player's bodies, and whether the list has anything for it. When a conditional banish (5+ strength) keeps hitting a smaller body, look for a `support ->` line on the opponent's turn just before it.
-- The `gift` column in `metrics.txt`: wins the opponent handed over. Subtract them for the earned record.
+- The `gift` column in `metrics.txt`: how each win came. Subtract only true gifts for the earned record (see the report contract); a concession after your sweep is a win you took.
 - Blank early turns across many games: a curve hole, visible as `T2 ME ... ink X` with no `play`.
 
 **Mulligan** (the `mulligan:` line)
@@ -54,7 +54,7 @@ Line format: `T<n> ME|OPP ink=<pool> hand[k]=[...] action | action`. `ink X` ink
 
 Write these sections in this order. Each finding carries date, turn, and the replay link from the narrative header. Patterns need 3+ games and state the count; anything with fewer is listed as a one-off.
 
-1. **Record.** Raw W-L; earned W-L after removing non-games (concession before turn 5, disconnect) and wins the opponent gave away (conceded while ahead, stalled on ink); the split going first and second. One line on sample size.
+1. **Record.** Raw W-L; earned W-L after removing non-games (a disconnect, or a concession before turn 5 with no board interaction) and gifts; the split going first and second. One line on sample size. A concession is a gift only when nothing on the player's side forced it: a concession the turn after a sweep or a board wipe is an earned win even if the opponent led on lore, because they read a lost position. An opponent ink stall is a gift only when the lore was level or behind at the end; ahead on lore, the win is earned and the stall is a note. `metrics.txt` labels these: `conceded-to-sweep` counts as earned, `opp-conceded-ahead` needs the replay read, `opp-ink-stall` is judged by the lore.
 2. **How the matchup is decided.** One paragraph: how they win, how you win, from the metrics and the narratives.
 3. **Patterns to change.** 3 to 6. For each: the behavior, the count over N games, two or three citations, and the replacement habit stated as a rule the player can apply at the table.
 4. **One-off mistakes.** A list, one line each, date and turn.

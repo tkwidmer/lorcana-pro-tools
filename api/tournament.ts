@@ -86,6 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (response.status === 404 && type === 'matches') {
         return res.status(200).json({ matches: [], results: [], next_page_number: null })
       }
+      console.error('tournament upstream error', type, response.status, url)
       return res.status(response.status).json({ error: 'Tournament API error', status: response.status })
     }
 
@@ -106,6 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .setHeader('Cache-Control', 'max-age=30, s-maxage=30')
       .json(data)
   } catch (e) {
+    console.error('tournament upstream unreachable', type, url, e)
     res.status(502).json({ error: 'Failed to reach tournament API', detail: String(e) })
   }
 }

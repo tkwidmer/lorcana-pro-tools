@@ -137,7 +137,7 @@ Scheduled GitHub Actions: `tournament-tracker-tick.yml` and `metafy-reconcile-ti
 | IndexedDB `lorcana_gamelogs` | `gamelogs` (parsed imports) |
 | localStorage | `lorcana_theme`, `lorcana_deck_names`, `lorcana_stream_table`, `lorcana_field_breakdown`, `lorcana_lore_tracker`, per-page form state |
 | `chrome.storage.local` | `lorcana_active_games` (extension, 2-hour TTL) |
-| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `tournament_history_events`/`_standings`/`_matches`/`_ratings` (service-role only; `_ratings` rebuilt nightly from the matches), `teams`/`team_members` (service-role only; the Team Tracker) |
+| Supabase | `auth`, `profiles`, `duels_api_tokens` (encrypted), `metafy_links`, `discord_favorite_players`, `stream_tables` (owner RLS + public read function), `stream_events` (Stream Overlay event log, written only through `log_stream_event()`), `tournament_history_events`/`_standings`/`_matches`/`_ratings` (service-role only; `_ratings` rebuilt nightly from the matches), `teams`/`team_members` (service-role only; the Team Tracker) |
 
 ### Ink icons
 

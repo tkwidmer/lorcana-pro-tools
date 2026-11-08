@@ -7,7 +7,7 @@ import { fetchEventDetails, getTournamentStructure, extractEventId, fetchAllStan
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import {
   listMyTables, createTable, updateTable, updateWhileLinked, deleteTable, adjustTable, subscribeToTable, uploadLogo, resetLore,
-  readSelectedTableId, storeSelectedTableId,
+  readSelectedTableId, storeSelectedTableId, logStreamEvent, failureTracker,
 } from '../lib/streamTables'
 import {
   MAX_GAME_WINS, DEFAULT_THEME, rowToState, swapSidesPatch, rphClockPatch, rphRoundPatch,
@@ -45,6 +45,12 @@ const SCORE_COLUMNS = ['p1_lore', 'p1_game_wins', 'p2_lore', 'p2_game_wins']
 // owner's own typing, and adopting the echo of a keystroke would clobber it.
 const ADOPTED_COLUMNS = [...SCORE_COLUMNS, 'rph_event_id']
 
+// A failed call on a table shows in the panel's error box and lands in the
+// table's event log (`stream_events`).
+function failure(setError, tableId, kind) {
+  return e => { setError(e.message); logStreamEvent(tableId, 'panel', kind, e.message) }
+}
+
 // Control panel for the gameplay stream overlay. Each of the owner's tables
 // is a `stream_tables` row: edits here are column writes under RLS, the
 // row's trigger broadcasts every change to the OBS view and the players'
@@ -62,6 +68,7 @@ export function StreamOverlayPage() {
   const [eventUrl, setEventUrl] = useState('')
   const [picker, setPicker] = useState(false)
   const [sending, setSending] = useState(null)
+  const [present, setPresent] = useState([])
   const { cards } = useCards()
   const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
 
@@ -85,9 +92,10 @@ export function StreamOverlayPage() {
   const rowId = row?.id
   useEffect(() => {
     if (!rowId) return
-    return subscribeToTable(rowId, payload => {
+    const unsubscribe = subscribeToTable(rowId, 'panel', payload => {
       patchLocal(rowId, Object.fromEntries(ADOPTED_COLUMNS.map(c => [c, payload[c]])))
-    })
+    }, setPresent)
+    return () => { unsubscribe(); setPresent([]) }
   }, [rowId])
 
   useEffect(() => {
@@ -104,6 +112,9 @@ export function StreamOverlayPage() {
   useEffect(() => {
     if (!rowId || !rphEventId) return
     let cancelled = false
+    const pollLog = failureTracker(rowId, 'panel', 'rph_poll')
+    const matchesLog = failureTracker(rowId, 'panel', 'rph_matches')
+    const writeLog = failureTracker(rowId, 'panel', 'rph_write')
     const poll = () => fetchEventDetails(rphEventId)
       .then(async details => {
         if (cancelled) return
@@ -111,7 +122,9 @@ export function StreamOverlayPage() {
         setRphStructure(structure)
         const patch = { ...rphClockPatch(structure), ...rphRoundPatch(structure) }
         // A failed matches fetch leaves the results as they were; the clock still lands.
-        const matches = structure.activeRoundId ? await fetchRoundMatches(rphEventId, structure.activeRoundId).catch(() => null) : null
+        const matches = structure.activeRoundId
+          ? await fetchRoundMatches(rphEventId, structure.activeRoundId).then(m => { matchesLog.ok(); return m }, e => { matchesLog.fail(e); return null })
+          : null
         if (cancelled) return
         if (matches) {
           const results = buildResultsSnapshot(matches, structure)
@@ -120,11 +133,12 @@ export function StreamOverlayPage() {
         }
         if (Object.keys(patch).length > 0) {
           setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
-          updateWhileLinked(rowId, rphEventId, patch).catch(e => setError(e.message))
+          updateWhileLinked(rowId, rphEventId, patch).then(writeLog.ok, e => { setError(e.message); writeLog.fail(e) })
         }
+        pollLog.ok()
         setRphError(false)
       })
-      .catch(() => { if (!cancelled) setRphError(true) })
+      .catch(e => { if (!cancelled) { pollLog.fail(e); setRphError(true) } })
     poll()
     // The tick comes from a worker, not setInterval: a background tab's
     // timers are throttled to about once a minute, which left the overlay
@@ -152,12 +166,12 @@ export function StreamOverlayPage() {
       if (!action) return
       e.preventDefault()
       if (action.nextGame) {
-        resetLore(rowId, controllerKey).catch(e => setError(e.message))
+        resetLore(rowId, controllerKey).catch(failure(setError, rowId, 'next_game_failed'))
         return
       }
       if (action.clearFeatured) {
         setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...CLEAR_FEATURED_PATCH } : t)))
-        updateTable(rowId, CLEAR_FEATURED_PATCH).catch(e => setError(e.message))
+        updateTable(rowId, CLEAR_FEATURED_PATCH).catch(failure(setError, rowId, 'write_failed'))
         return
       }
       if (action.toggleMode || action.toggleDeck || action.toggleCard || action.toggleMeta) {
@@ -173,9 +187,9 @@ export function StreamOverlayPage() {
               ? { meta_shown: !metaShown, card_shown: false, deck_shown: 0 }
               : { deck_shown: deckShown === action.toggleDeck ? 0 : action.toggleDeck, card_shown: false, meta_shown: false }
         setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
-        updateTable(rowId, patch).catch(e => setError(e.message))
+        updateTable(rowId, patch).catch(failure(setError, rowId, 'write_failed'))
       } else {
-        adjustTable(rowId, controllerKey, action.side, action.field, action.delta).catch(e => setError(e.message))
+        adjustTable(rowId, controllerKey, action.side, action.field, action.delta).catch(failure(setError, rowId, 'tap_failed'))
       }
     }
     window.addEventListener('keydown', onKey)
@@ -185,7 +199,7 @@ export function StreamOverlayPage() {
   // Optimistic local update, then the column write; a failed write surfaces.
   function write(id, patch) {
     patchLocal(id, patch)
-    updateTable(id, patch).catch(e => setError(e.message))
+    updateTable(id, patch).catch(failure(setError, id, 'write_failed'))
   }
   const setField = (key, value) => write(row.id, { [key]: value })
   async function importDecklists(e) {
@@ -197,7 +211,7 @@ export function StreamOverlayPage() {
     } catch (err) { setError(err.message) }
   }
   const setPlayer = (side, key, value) => write(row.id, { [`p${side}_${key}`]: value })
-  const adjust = (side, field, delta) => adjustTable(row.id, row.controller_key, side, field, delta).catch(e => setError(e.message))
+  const adjust = (side, field, delta) => adjustTable(row.id, row.controller_key, side, field, delta).catch(failure(setError, row.id, 'tap_failed'))
 
   function linkEvent() {
     const id = extractEventId(eventUrl)
@@ -214,7 +228,7 @@ export function StreamOverlayPage() {
     const [a, b] = pairing.players
     const playerCard = await Promise.all([fetchPlayerTournamentHistory(a.id), fetchPlayerTournamentHistory(b.id), fetchHeadToHead(a.id, b.id)])
       .then(([historyA, historyB, headToHead]) => buildPlayerCard({ histories: [historyA, historyB], headToHead, playerIds: [String(a.id), String(b.id)] }))
-      .catch(() => null)
+      .catch(e => { logStreamEvent(row.id, 'panel', 'player_card_failed', e.message); return null })
     write(row.id, featureMatchPatch({
       // The operator's own event name wins; RPH's only fills a blank one.
       eventName: row.event_name || (rphStructure.eventName ?? ''),
@@ -231,7 +245,7 @@ export function StreamOverlayPage() {
     setSending('standings')
     try {
       write(row.id, { standings: buildStandingsSnapshot(await fetchAllStandings(rphStructure.currentRoundId), rphStructure), break_panel: 'standings' })
-    } catch (e) { setError(e.message) } finally { setSending(null) }
+    } catch (e) { failure(setError, row.id, 'send_standings_failed')(e) } finally { setSending(null) }
   }
 
   async function sendBracket() {
@@ -240,7 +254,7 @@ export function StreamOverlayPage() {
       const bracket = buildBracketSnapshot(await fetchAllRoundMatches(rphEventId, await fetchEventDetails(rphEventId)), rphStructure.eliminationPhaseName)
       if (bracket.rounds.length === 0) throw new Error('No top-cut matches posted yet.')
       write(row.id, { bracket, break_panel: 'bracket' })
-    } catch (e) { setError(e.message) } finally { setSending(null) }
+    } catch (e) { failure(setError, row.id, 'send_bracket_failed')(e) } finally { setSending(null) }
   }
 
   async function addTable() {
@@ -292,6 +306,8 @@ export function StreamOverlayPage() {
       />
 
       {error && <div className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
+
+      {row && <ConnectedSurfaces present={present} />}
 
       {tables && tables.length === 0 && (
         <Card className="p-5 mb-6">
@@ -489,7 +505,7 @@ export function StreamOverlayPage() {
             Hotkeys: left player <Kbd>Q</Kbd>/<Kbd>A</Kbd> lore, <Kbd>W</Kbd>/<Kbd>S</Kbd> game wins · right player <Kbd>I</Kbd>/<Kbd>K</Kbd> lore, <Kbd>O</Kbd>/<Kbd>L</Kbd> game wins · <Kbd>B</Kbd> Live / Break · <Kbd>1</Kbd>/<Kbd>2</Kbd> show that player's deck · <Kbd>3</Kbd> player card · <Kbd>4</Kbd> metagame · <Kbd>N</Kbd> next game (lore to 0) · <Kbd>X</Kbd> takes the featured cards off. Click outside any field first.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="primary" onClick={() => resetLore(row.id, row.controller_key).catch(e => setError(e.message))}>Next game: lore to 0</Button>
+            <Button size="sm" variant="primary" onClick={() => resetLore(row.id, row.controller_key).catch(failure(setError, row.id, 'next_game_failed'))}>Next game: lore to 0</Button>
             <Button size="sm" onClick={() => write(row.id, swapSidesPatch(row))}>Swap sides</Button>
             <Button size="sm" variant="danger" onClick={() => { if (window.confirm('Clear both players, their decklists and the player card? The event, logos, theme, timer, linked event, round and note stay.')) write(row.id, clearTablePatch()) }}>Clear table</Button>
           </div>
@@ -553,7 +569,7 @@ export function StreamOverlayPage() {
       )}
 
       {picker && row && rphStructure && (
-        <StreamPairingPicker eventId={rphEventId} structure={rphStructure} onStream={[row.p1_name, row.p2_name]} onSend={sendPairing} onClose={() => setPicker(false)} />
+        <StreamPairingPicker tableId={row.id} eventId={rphEventId} structure={rphStructure} onStream={[row.p1_name, row.p2_name]} onSend={sendPairing} onClose={() => setPicker(false)} />
       )}
 
       {links && (
@@ -670,5 +686,21 @@ function Counter({ label, value, onChange }) {
         <button type="button" onClick={() => onChange(1)} className="w-14 py-3 text-2xl font-display hover:bg-gray-100" aria-label={`${label} plus one`}>+</button>
       </div>
     </div>
+  )
+}
+
+// Who is on this table's channel right now, from realtime presence: the OBS
+// view in red when none is connected, so a dropped Browser Source shows here
+// before it shows on stream.
+const SURFACE_LABELS = [['view', 'OBS overlay'], ['control', 'Player controller'], ['notes', 'Caster notes']]
+function ConnectedSurfaces({ present }) {
+  return (
+    <p className="mb-6 flex flex-wrap gap-x-6 gap-y-1 text-xs font-semibold uppercase tracking-widest">
+      {SURFACE_LABELS.map(([surface, label]) => {
+        const n = present.filter(p => p === surface).length
+        const color = n > 0 ? 'text-emerald-600' : surface === 'view' ? 'text-red-600' : 'text-gray-500'
+        return <span key={surface} className={color}>{label}: {n > 0 ? `connected${n > 1 ? ` ×${n}` : ''}` : 'not connected'}</span>
+      })}
+    </p>
   )
 }

@@ -1,5 +1,6 @@
 import { Component } from 'react'
 import { Button } from './ui/Button'
+import { logStreamEvent, readSelectedTableId } from '../lib/streamTables'
 
 function Fallback({ error, onReset }) {
   return (
@@ -44,6 +45,14 @@ export class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('ErrorBoundary caught an error:', error, info)
+    // A crash on a Stream Overlay surface goes in that table's event log:
+    // on the OBS view it is on stream. The view, controller and notes carry
+    // the table in ?table=; the panel's is the selected one.
+    const surface = { '/stream-overlay': 'panel', '/stream-overlay/view': 'view', '/stream-overlay/control': 'control', '/stream-overlay/notes': 'notes' }[window.location.pathname]
+    if (surface) {
+      const tableId = new URLSearchParams(window.location.search).get('table') ?? readSelectedTableId()
+      if (tableId) logStreamEvent(tableId, surface, 'crash', `${error?.stack ?? error}\n${info?.componentStack ?? ''}`)
+    }
   }
 
   render() {

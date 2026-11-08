@@ -37,7 +37,7 @@ A tournament gameplay overlay for OBS. One `stream_tables` row is a **table** (a
 - **Public readers** (view, controller, notes) have no session. They read `get_stream_table(id)`, a SECURITY DEFINER function returning the public columns only (never `controller_key` or `owner_id`), and a BEFORE INSERT OR UPDATE trigger broadcasts the same shape via `realtime.send()` on topic `stream-table:<id>`. A late joiner reads the row; there is no heartbeat.
 - **Controller** taps call `adjust_stream_table(id, key, side, field, ±1)`, a clamped atomic increment gated by `controller_key`, which rides only in the controller link. The view link cannot change scores.
 
-Verified once against the real project with an anonymous client: direct table reads return nothing, the public read hides the key, a wrong key is refused, five taps land as five broadcasts. No serverless function is involved, so the Vercel function budget is untouched.
+Verified once against the real project with an anonymous client: direct table reads return nothing, the public read hides the key, a wrong key is refused, five taps land as five broadcasts. No serverless function is involved.
 
 ## Four surfaces
 
@@ -80,7 +80,7 @@ select created_at, surface, kind, detail from stream_events
 where table_id = '<id>' and created_at > now() - interval '1 day' order by created_at;
 ```
 
-`api/tournament.ts` also `console.error`s each upstream failure (type, status, URL) to Vercel's runtime logs, which Hobby keeps for about an hour.
+`api/tournament.ts` also `console.error`s each upstream failure (type, status, URL) to Vercel's runtime logs, which Pro keeps for 1 day (30 with Observability Plus).
 
 ## Featured cards
 

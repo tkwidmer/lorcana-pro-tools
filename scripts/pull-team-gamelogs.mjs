@@ -4,7 +4,8 @@
 // Per account: logs/<account>/matches.jsonl (one match-history row per ranked game, plus `excluded`) and one
 // <game_id>.logs.gz per kept game, stored exactly as the CDN serves it. Re-runs only fetch new games.
 // Path: GET /api/me/match-history (250 rows/page) → POST /api/me/bulk-gamelogs (1000 ids/call, CDN URLs)
-// → download at ≤3 in flight (https://duels.ink/api-docs.md, "Data export").
+// → download at ≤3 in flight (https://duels.ink/api-docs.md, "Data export"). The manifest answers with /g/ URLs, which are
+// limited to 30 a minute per account, so run accounts as separate processes to pull them in parallel.
 // Excluded, matching the app (AnalyticsPage's AFK filter and parseGamelog's `disconnected`): result
 // 'abandoned', victoryReason 'afk' or 'timeout', or a PLAYER_DISCONNECTED event in the log.
 import fs from 'node:fs'
@@ -55,6 +56,8 @@ for (const account of accounts) {
     const page = await res.json(); rows.push(...page.games); cursor = page.next_cursor
   } while (cursor)
   const ranked = rows.filter(r => r.ranked)
+  // A log already on disk (from an interrupted run) is kept without refetching.
+  for (const r of ranked) if (!index.has(r.game_id) && fs.existsSync(path.join(dir, `${r.game_id}.logs.gz`))) index.set(r.game_id, { ...r, excluded: exclusion(r, fs.readFileSync(path.join(dir, `${r.game_id}.logs.gz`))) })
   const todo = ranked.filter(r => !index.has(r.game_id))
   console.error(`${account}: ${rows.length} games, ${ranked.length} ranked, ${todo.length} new`)
 

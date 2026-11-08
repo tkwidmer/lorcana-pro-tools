@@ -38,7 +38,7 @@ React 19 + React Router 7 + Tailwind CSS 4 + Vite 8 on Vercel; serverless routes
 | [Format Coconut] | `docs/agents/coconut.md` |
 | Any UI change that needs a screenshot or a browser check | `docs/agents/ui-screenshots.md` |
 
-Skills (`.claude/skills/`) hold procedures and upstream API notes: `add-coconut-card`, `new-blog-post`, `tournament-history-sync`, `vercel-preview-url`, `vercel-proxy-pattern`, `ravensburger-tournament-api`, `duels-api-docs`, `lorcanajson-docs`, `discord-interactions-docs`, `gamelog-pipeline`, `chrome-extension-mv3`, `indexeddb-schema-map`.
+Skills (`.claude/skills/`) hold procedures and upstream API notes: `add-coconut-card`, `new-blog-post`, `tournament-history-sync`, `vercel-preview-url`, `vercel-proxy-pattern`, `ravensburger-tournament-api`, `duels-api-docs`, `lorcanajson-docs`, `discord-interactions-docs`, `gamelog-pipeline`, `chrome-extension-mv3`, `indexeddb-schema-map`, `lorcana-coach` (coach a player from their duels.ink games).
 
 ## Architecture
 

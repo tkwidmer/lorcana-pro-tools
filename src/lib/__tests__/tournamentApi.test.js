@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getTournamentStructure, formatTiebreakers, analyzeAdvancement, analyzeId, extractEventId } from '../tournamentApi'
+import { getTournamentStructure, formatTiebreakers, analyzeAdvancement, analyzeId, projectCut, extractEventId } from '../tournamentApi'
 
 const roundComplete = (id, n) => ({ id, round_number: n, status: 'COMPLETE', standings_status: 'GENERATED' })
 const roundInProgress = (id, n) => ({ id, round_number: n, status: 'IN_PROGRESS', standings_status: 'GENERATED' })
@@ -130,7 +130,7 @@ describe('getTournamentStructure', () => {
 describe('formatTiebreakers', () => {
   const entry = {
     rank: 5,
-    record: '4-2',
+    match_record: '4-2',
     match_points: 12,
     opponent_match_win_percentage: 0.6,
     game_win_percentage: 0.55,
@@ -185,19 +185,9 @@ describe('analyzeAdvancement - points-based', () => {
 })
 
 describe('analyzeAdvancement - rank-based', () => {
-  const structure = {
-    advancementRequirement: { type: 'rank', value: 8, nextPhaseName: 'Top 8' },
-    swissRoundsRemaining: 0,
-  }
-
-  it('returns in_cut when rank ≤ topCut', () => {
-    const result = analyzeAdvancement({ rank: 5 }, structure)
-    expect(result.status).toBe('in_cut')
-  })
-
-  it('returns outside_cut when rank > topCut', () => {
-    const result = analyzeAdvancement({ rank: 12 }, structure)
-    expect(result.status).toBe('outside_cut')
+  it('leaves top-cut phases to analyzeId', () => {
+    const structure = { advancementRequirement: { type: 'rank', value: 8, nextPhaseName: 'Top 8' }, swissRoundsRemaining: 0 }
+    expect(analyzeAdvancement({ rank: 5 }, structure)).toBeNull()
   })
 })
 
@@ -211,28 +201,85 @@ describe('analyzeAdvancement - edge cases', () => {
   })
 })
 
+// n players at p points each; ids are unique across calls
+let nextId = 0
+const group = (n, points) => Array.from({ length: n }, () => ({ id: `p${nextId++}`, rank: 0, match_points: points }))
+const ranked = (entries) =>
+  [...entries].sort((a, b) => b.match_points - a.match_points).map((e, i) => ({ ...e, rank: i + 1 }))
+
+describe('projectCut', () => {
+  it('finds the lock and bubble totals of a 48-player, 6-round, top-8 Swiss', () => {
+    // 48 players after round 0: halve six times → 0.75 at 18, 4.5 at 15, 11.25 at 12 …
+    const { lockPoints, bubblePoints, bubbleSpots, bubblePlayers } = projectCut(group(48, 0), 8, 6)
+    expect(lockPoints).toBe(15)
+    expect(bubblePoints).toBe(12)
+    expect(bubbleSpots).toBe(3) // 8 − 5.25 = 2.75
+    expect(bubblePlayers).toBe(11)
+  })
+
+  it('with no rounds left reads the standings as they are', () => {
+    const standings = [...group(6, 15), ...group(4, 12), ...group(10, 9)]
+    expect(projectCut(standings, 8, 0)).toEqual({ lockPoints: 15, bubblePoints: 12, bubbleSpots: 2, bubblePlayers: 4 })
+  })
+
+  it('ignores dropped players', () => {
+    const dropped = group(5, 18).map((e) => ({ ...e, user_event_status: { registration_status: 'DROPPED' } }))
+    expect(projectCut([...dropped, ...group(8, 9)], 8, 0).bubblePoints).toBeNull()
+  })
+})
+
 describe('analyzeId', () => {
-  const structure = { topCutSize: 8, swissRoundsRemaining: 1 }
-  const standings = [
-    { id: 'a', rank: 1, match_points: 18 },
-    { id: 'b', rank: 8, match_points: 12 },
-    { id: 'c', rank: 9, match_points: 12 },
-  ]
-
-  it('marks safe when 3+ points above cut line', () => {
-    // rank 1, 18 pts, cut at 12 → buffer = 6 ≥ 3 → safe
-    const result = analyzeId({ id: 'a', rank: 1, match_points: 18 }, standings, structure)
-    expect(result?.recommendation).toBe('safe')
-    expect(result?.inCut).toBe(true)
+  it('returns null without a top cut or during the bracket', () => {
+    expect(analyzeId({ id: 'a', rank: 1, match_points: 18 }, group(8, 0), {})).toBeNull()
+    expect(analyzeId({ id: 'a', rank: 1, match_points: 18 }, group(8, 0), { topCutSize: 8, swissRoundsRemaining: 0, isElimination: true })).toBeNull()
   })
 
-  it('marks danger when outside cut', () => {
-    const result = analyzeId({ id: 'c', rank: 9, match_points: 12 }, standings, structure)
-    expect(result?.recommendation).toBe('danger')
-    expect(result?.inCut).toBe(false)
+  it('is contending early, with wins needed for the projected bubble and lock', () => {
+    const standings = ranked([...group(12, 6), ...group(24, 3), ...group(12, 0)])
+    const me = standings.find((e) => e.match_points === 3)
+    const r = analyzeId(me, standings, { topCutSize: 8, swissRoundsRemaining: 4 })
+    expect(r.status).toBe('contending')
+    expect(r.inCut).toBe(false)
+    expect(r.maxPoints).toBe(15)
+    expect(r.bubblePoints).toBe(12)
+    expect(r.winsToBubble).toBe(3)
+    expect(r.winsToLock).toBe(Math.ceil((r.lockPoints - 3) / 3))
   })
 
-  it('returns null when topCutSize is absent', () => {
-    expect(analyzeId({ rank: 1, match_points: 18 }, standings, {})).toBeNull()
+  it('locks a player nobody can catch', () => {
+    const standings = ranked([...group(1, 15), ...group(6, 9), ...group(20, 6)])
+    const r = analyzeId(standings[0], standings, { topCutSize: 8, swissRoundsRemaining: 1 })
+    expect(r.status).toBe('locked')
+  })
+
+  it('eliminates a player who cannot reach the cut even winning out', () => {
+    const standings = ranked([...group(8, 12), ...group(20, 3)])
+    const r = analyzeId(standings[10], standings, { topCutSize: 8, swissRoundsRemaining: 2 })
+    expect(r.status).toBe('eliminated')
+  })
+
+  describe('final round', () => {
+    const structure = { topCutSize: 8, swissRoundsRemaining: 1 }
+
+    it('is safe when everyone who could pass on a draw still leaves room', () => {
+      // 12 others could still reach my 12 (not locked); after an ID only 4 above me
+      // plus 3 who could pass me on a win → 7 < 8
+      const standings = ranked([...group(4, 15), ...group(1, 12), ...group(3, 11), ...group(5, 9), ...group(20, 6)])
+      const me = standings.find((e) => e.match_points === 12)
+      expect(analyzeId(me, standings, structure).status).toBe('safe')
+    })
+
+    it('is borderline when it takes about half of the level players to lose', () => {
+      // 4 above, 6 level with me at 12: all winning passes me (10 ≥ 8), half (3) does not (7 < 8)
+      const standings = ranked([...group(4, 15), ...group(7, 12), ...group(20, 6)])
+      const me = standings.find((e) => e.match_points === 12)
+      expect(analyzeId(me, standings, structure).status).toBe('borderline')
+    })
+
+    it('is danger when too many players are level', () => {
+      const standings = ranked([...group(4, 15), ...group(12, 12), ...group(20, 6)])
+      const me = standings.find((e) => e.match_points === 12)
+      expect(analyzeId(me, standings, structure).status).toBe('danger')
+    })
   })
 })

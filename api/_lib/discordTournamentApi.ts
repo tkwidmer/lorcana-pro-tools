@@ -37,10 +37,7 @@ export async function fetchEventDetails(eventId: string) {
 export async function fetchAllStandings(roundId: string) {
   assertValidId(roundId, 'roundId')
   const { standings } = await ravenFetch(`/tournament-rounds/${encodeURIComponent(roundId)}/standings/`)
-  return standings.map((entry: any) => ({
-    ...entry,
-    match_points: entry.user_event_status?.total_match_points ?? entry.match_points,
-  }))
+  return standings
 }
 
 export function getTournamentStructure(eventDetails: any) {
@@ -143,78 +140,93 @@ export function getTournamentStructure(eventDetails: any) {
 }
 
 export function analyzeAdvancement(playerEntry: any, structure: any) {
-  if (!playerEntry || !structure?.advancementRequirement) return null
+  if (!playerEntry || structure?.advancementRequirement?.type !== 'points') return null
 
   const { advancementRequirement, swissRoundsRemaining } = structure
-  const { type, value, nextPhaseName } = advancementRequirement
-
-  if (type === 'points') {
-    const myPoints = playerEntry.match_points
-    const maxPossible = myPoints + swissRoundsRemaining * 3
-    if (myPoints >= value) {
-      return { status: 'secured', nextPhaseName, value, type }
-    }
-    if (maxPossible < value) {
-      return { status: 'eliminated', nextPhaseName, value, type }
-    }
-    const winsNeeded = Math.ceil((value - myPoints) / 3)
-    return { status: 'possible', nextPhaseName, value, type, winsNeeded, pointsNeeded: value - myPoints }
-  }
-
-  if (type === 'rank') {
-    const myRank = playerEntry.rank
-    return {
-      status: myRank <= value ? 'in_cut' : 'outside_cut',
-      nextPhaseName,
-      value,
-      type,
-    }
-  }
-
-  return null
+  const { value, nextPhaseName } = advancementRequirement
+  const type = 'points'
+  const myPoints = playerEntry.match_points
+  const maxPossible = myPoints + swissRoundsRemaining * 3
+  if (myPoints >= value) return { status: 'secured', nextPhaseName, value, type }
+  if (maxPossible < value) return { status: 'eliminated', nextPhaseName, value, type }
+  const winsNeeded = Math.ceil((value - myPoints) / 3)
+  return { status: 'possible', nextPhaseName, value, type, winsNeeded, pointsNeeded: value - myPoints }
 }
 
+const isActive = (e: any) => e.user_event_status?.registration_status !== 'DROPPED'
+
+// Port of projectCut in src/lib/tournamentApi.js; see the comment there.
+export function projectCut(allStandings: any[], topCutSize: number, swissRoundsRemaining: number) {
+  let dist = new Map<number, number>()
+  for (const e of allStandings.filter(isActive)) {
+    dist.set(e.match_points, (dist.get(e.match_points) ?? 0) + 1)
+  }
+  for (let r = 0; r < swissRoundsRemaining; r++) {
+    const next = new Map<number, number>()
+    for (const [p, n] of dist) {
+      next.set(p, (next.get(p) ?? 0) + n / 2)
+      next.set(p + 3, (next.get(p + 3) ?? 0) + n / 2)
+    }
+    dist = next
+  }
+  let above = 0
+  let lockPoints: number | null = null
+  let bubble: { points: number; spots: number; players: number } | null = null
+  for (const p of [...dist.keys()].sort((x, y) => y - x)) {
+    const n = dist.get(p)!
+    if (above + n <= topCutSize) lockPoints = p
+    else if (!bubble) bubble = { points: p, spots: topCutSize - above, players: n }
+    above += n
+  }
+  return {
+    lockPoints,
+    bubblePoints: bubble?.points ?? null,
+    bubbleSpots: bubble ? Math.round(bubble.spots) : null,
+    bubblePlayers: bubble ? Math.round(bubble.players) : null,
+  }
+}
+
+// Port of analyzeId in src/lib/tournamentApi.js; see the comment there.
 export function analyzeId(playerEntry: any, allStandings: any[], structure: any) {
-  if (!playerEntry || !allStandings || !structure?.topCutSize) return null
+  if (!playerEntry || !allStandings || !structure?.topCutSize || structure.isElimination) return null
 
   const { topCutSize, swissRoundsRemaining } = structure
   const myPoints = playerEntry.match_points
-  const myRank = playerEntry.rank
+  const others = allStandings.filter((e) => e.id !== playerEntry.id && isActive(e))
+  const maxGain = swissRoundsRemaining * 3
 
-  const cutLinePlayer = allStandings.find((e) => e.rank === topCutSize) || null
-  const cutLinePoints = cutLinePlayer?.match_points ?? null
+  const canCatchMe = others.filter((e) => e.match_points + maxGain >= myPoints).length
+  const beyondReach = others.filter((e) => e.match_points > myPoints + maxGain).length
 
-  const pointsAboveCut = cutLinePoints !== null ? myPoints - cutLinePoints : null
-
-  const afterIdPoints = myPoints + 1
-  const afterWinPoints = myPoints + 3
-
-  const playersWhoCouldPassMeOnWin = allStandings.filter(
-    (e) => e.id !== playerEntry.id && e.match_points + 3 > afterIdPoints
-  ).length
-
-  let recommendation
-  if (myRank > topCutSize) {
-    recommendation = 'danger'
-  } else if (pointsAboveCut !== null && pointsAboveCut >= 3) {
-    recommendation = 'safe'
-  } else if (pointsAboveCut !== null && pointsAboveCut >= 1) {
-    recommendation = 'borderline'
+  let status
+  if (canCatchMe < topCutSize) {
+    status = 'locked'
+  } else if (beyondReach >= topCutSize) {
+    status = 'eliminated'
+  } else if (swissRoundsRemaining === 1) {
+    const afterId = myPoints + 1
+    const aboveAfterId = others.filter((e) => e.match_points > afterId).length
+    const passOnWin = others.filter((e) => e.match_points <= afterId && e.match_points + 3 > afterId).length
+    if (aboveAfterId + passOnWin < topCutSize) status = 'safe'
+    else if (aboveAfterId + Math.ceil(passOnWin / 2) < topCutSize) status = 'borderline'
+    else status = 'danger'
   } else {
-    recommendation = 'danger'
+    status = 'contending'
   }
 
+  const projection = projectCut(allStandings, topCutSize, swissRoundsRemaining)
+  const winsTo = (pts: number | null) => (pts === null ? null : Math.max(0, Math.ceil((pts - myPoints) / 3)))
+
   return {
-    myRank,
+    status,
+    myRank: playerEntry.rank,
     topCutSize,
-    inCut: myRank <= topCutSize,
-    cutLinePlayer,
-    cutLinePoints,
-    pointsAboveCut,
-    afterIdPoints,
-    afterWinPoints,
+    inCut: playerEntry.rank <= topCutSize,
     swissRoundsRemaining,
-    playersWhoCouldPassMeOnWin,
-    recommendation,
+    maxPoints: myPoints + maxGain,
+    afterIdPoints: myPoints + 1,
+    ...projection,
+    winsToLock: winsTo(projection.lockPoints),
+    winsToBubble: winsTo(projection.bubblePoints),
   }
 }

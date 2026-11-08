@@ -228,14 +228,16 @@ describe('streamOverlay row mapping', () => {
     expect(swapSidesPatch(row()).player_card).toBeNull()
   })
 
-  it('lists a deck\'s inks from its matched cards, most copies first', () => {
+  it('lists a deck\'s two inks from its matched cards, most copies first', () => {
     const entries = [
       { count: 4, card: { color: 'Steel' } },
       { count: 4, card: { colors: ['Amethyst', 'Steel'] } },
       { count: 2, card: { color: 'Amethyst' } },
       { count: 1, card: { color: 'Ruby' } },
     ]
-    expect(deckInks(entries)).toEqual(['steel', 'amethyst', 'ruby'])
+    // A Lorcana deck has at most two inks; a third can only be a stray
+    // line in the paste and must never reach the overlay.
+    expect(deckInks(entries)).toEqual(['steel', 'amethyst'])
     expect(deckInks([])).toEqual([])
   })
 

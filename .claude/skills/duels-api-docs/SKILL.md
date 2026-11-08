@@ -15,10 +15,7 @@ Before implementing or debugging anything involving:
 - `src/lib/duelsApi.js`, `src/lib/parseGamelog.js`
 - `api/duels.ts` — the single consolidated serverless proxy for every
   duels.ink endpoint, dispatched by `?endpoint=` (`match-history`, `gamelog`,
-  `deck`, `stats`). Folded into one
-  function because Vercel's Hobby plan caps a deployment at 12 serverless
-  functions — don't split it back into per-endpoint files without checking
-  the total function count in `api/*.ts` first.
+  `deck`, `stats`). A new duels.ink endpoint joins its `HANDLERS` map.
 - Anything referencing duels.ink request/response shapes, auth, or new
   endpoints not already documented in this repo
 

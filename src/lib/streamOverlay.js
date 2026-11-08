@@ -65,9 +65,10 @@ export const DEFAULT_THEME = { fill: '#17171a', accent: '#b5832a' }
 
 // Text on the fill: the site's paper white on a dark fill, ink on a light
 // one, by WCAG relative luminance so an organizer's pale theme still reads.
-// A deck's inks from its matched entries (matchDeckList): every ink that
-// appears, most copies first, so a splash still shows and the main ink
-// leads. Dual-ink cards count for both.
+// A deck's inks from its matched entries (matchDeckList), most copies first
+// so the main ink leads. Dual-ink cards count for both. A Lorcana deck has at
+// most two inks, so a third (a stray line in the paste) is dropped rather
+// than shown on stream.
 export function deckInks(entries) {
   const copies = new Map()
   for (const { card, count } of entries) {
@@ -75,7 +76,7 @@ export function deckInks(entries) {
       copies.set(ink, (copies.get(ink) ?? 0) + count)
     }
   }
-  return [...copies].sort((a, b) => b[1] - a[1]).map(([ink]) => ink)
+  return [...copies].sort((a, b) => b[1] - a[1]).map(([ink]) => ink).slice(0, 2)
 }
 
 export function themeTextColor(fillHex) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
+import { fetchPublicTable, subscribeToTable, logStreamEvent } from '../lib/streamTables'
 import { rowToState, timerRemainingMs, formatClock, casterPoints } from '../lib/streamOverlay'
 import { parseDeckList } from '../lib/parseDeckList'
 import { ordinal } from '../lib/resultsArchive'
@@ -22,8 +22,8 @@ export function StreamOverlayNotesPage() {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
-    fetchPublicTable(tableId).then(setRow).catch(e => setError(e.message))
-    return subscribeToTable(tableId, setRow)
+    fetchPublicTable(tableId).then(setRow).catch(e => { setError(e.message); logStreamEvent(tableId, 'notes', 'load_failed', e.message) })
+    return subscribeToTable(tableId, 'notes', setRow)
   }, [tableId])
 
   useEffect(() => {

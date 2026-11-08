@@ -9,8 +9,8 @@ export async function fetchEventDetails(eventId) {
     const response = await fetch(`/api/tournament?type=event&eventId=${eventId}`)
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || error.error || 'Failed to fetch event details')
+      const error = await response.json().catch(() => ({}))
+      throw new Error(`${error.detail || error.error || 'Failed to fetch event details'} (HTTP ${response.status})`)
     }
 
     return await response.json()
@@ -241,8 +241,8 @@ export async function fetchEventMatches(eventId, roundId, page = 1, pageSize = 1
     })
     const response = await fetch(`/api/tournament?type=matches&${params}`)
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || error.error || 'Failed to fetch matches')
+      const error = await response.json().catch(() => ({}))
+      throw new Error(`${error.detail || error.error || 'Failed to fetch matches'} (HTTP ${response.status})`)
     }
     return await response.json()
   } catch (err) {
@@ -340,8 +340,8 @@ export async function fetchAllRegistrations(eventId) {
 export async function fetchAllStandings(roundId) {
   const response = await fetch(`/api/tournament?type=standings&roundId=${roundId}`)
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || error.error || 'Failed to fetch standings')
+    const error = await response.json().catch(() => ({}))
+    throw new Error(`${error.detail || error.error || 'Failed to fetch standings'} (HTTP ${response.status})`)
   }
   const { standings } = await response.json()
   return standings

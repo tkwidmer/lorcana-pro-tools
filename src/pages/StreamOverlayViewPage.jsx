@@ -5,7 +5,7 @@ import { BUCKET_ORDER, buildBuckets, matchDeckList, inkFill } from '../lib/deckl
 import { useSearchParams } from 'react-router-dom'
 import { useTransparentBackground } from '../hooks/useTransparentBackground'
 import { InkIcon } from '../components/InkIcons'
-import { fetchPublicTable, subscribeToTable } from '../lib/streamTables'
+import { fetchPublicTable, subscribeToTable, logStreamEvent } from '../lib/streamTables'
 import {
   OVERLAY_WIDTH, OVERLAY_HEIGHT, MAX_GAME_WINS, WINNING_LORE, rowToState, timerRemainingMs, formatClock, winnerIndex, breakHeadline, DEFAULT_THEME, themeTextColor, nameSizeClass, STANDINGS_ROWS, metaSlices, deckCardWidth, CARD_ASPECT, featuredPhase, FEATURED_FADE_MS, latestResult, resultLine } from '../lib/streamOverlay'
 
@@ -49,8 +49,8 @@ export function StreamOverlayViewPage() {
   const cardIndex = useMemo(() => buildCardIndex(cards), [cards])
 
   useEffect(() => {
-    fetchPublicTable(tableId).then(setRow).catch(e => setError(e.message))
-    return subscribeToTable(tableId, setRow)
+    fetchPublicTable(tableId).then(setRow).catch(e => { setError(e.message); logStreamEvent(tableId, 'view', 'load_failed', e.message) })
+    return subscribeToTable(tableId, 'view', setRow)
   }, [tableId])
 
   useEffect(() => {

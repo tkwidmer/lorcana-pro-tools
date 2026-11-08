@@ -54,12 +54,57 @@ export async function resetLore(id, key) {
   unwrap(await supabase.rpc('reset_stream_table_lore', { p_id: id, p_key: key }))
 }
 
+// One row in `stream_events` (migration 033), fire-and-forget: a failed log
+// must never break the overlay, so it only reaches the console.
+export function logStreamEvent(tableId, surface, kind, detail = '') {
+  console.warn(`[stream-overlay ${surface}] ${kind}`, detail)
+  supabase.rpc('log_stream_event', { p_table_id: tableId, p_surface: surface, p_kind: kind, p_detail: String(detail) })
+    .then(({ error }) => { if (error) console.error('log_stream_event failed', error) })
+}
+
+// Logs the first failure of a run (`<kind>_failed`) and the recovery
+// (`<kind>_recovered`, with how long it was down), never each repeat: a 15 s
+// poll failing for an hour is two rows, not 240. A log written while the
+// network is down is lost; the recovery row carries the outage's length.
+export function failureTracker(tableId, surface, kind) {
+  let since = null
+  return {
+    fail(e) {
+      if (since !== null) return
+      since = Date.now()
+      logStreamEvent(tableId, surface, `${kind}_failed`, e?.message ?? String(e))
+    },
+    ok() {
+      if (since === null) return
+      logStreamEvent(tableId, surface, `${kind}_recovered`, `after ${Math.round((Date.now() - since) / 1000)}s`)
+      since = null
+    },
+  }
+}
+
 // Live updates: the row's trigger broadcasts its public shape on every
-// change. Returns an unsubscribe function.
-export function subscribeToTable(id, onRow) {
-  const channel = supabase.channel(`stream-table:${id}`)
-  channel.on('broadcast', { event: 'state' }, ({ payload }) => onRow(payload)).subscribe()
-  return () => { supabase.removeChannel(channel) }
+// change. Each surface also announces itself by presence, so the panel can
+// show whether an OBS view is actually connected (`onPresence` gets the
+// surfaces present, e.g. ['panel', 'view']). Channel status changes are
+// logged through failureTracker. Returns an unsubscribe function.
+export function subscribeToTable(id, surface, onRow, onPresence) {
+  const channel = supabase.channel(`stream-table:${id}`, { config: { presence: { enabled: true } } })
+  const realtime = failureTracker(id, surface, 'realtime')
+  let closed = false
+  channel.on('broadcast', { event: 'state' }, ({ payload }) => onRow(payload))
+  if (onPresence) {
+    channel.on('presence', { event: 'sync' }, () => onPresence(Object.values(channel.presenceState()).flat().map(p => p.surface)))
+  }
+  channel.subscribe((status, err) => {
+    if (closed) return
+    if (status === 'SUBSCRIBED') {
+      realtime.ok()
+      channel.track({ surface })
+    } else {
+      realtime.fail(err ? `${status}: ${err.message}` : status)
+    }
+  })
+  return () => { closed = true; supabase.removeChannel(channel) }
 }
 
 // Which of the owner's tables the panel shows; also set by the Tournament

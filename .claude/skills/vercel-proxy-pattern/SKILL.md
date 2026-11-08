@@ -1,6 +1,6 @@
 ---
 name: vercel-proxy-pattern
-description: Read before adding or changing an api/*.ts route: the 12-function budget (join an ?endpoint= dispatcher, never a new file by default), the flat-file rule, and the shared proxy shape and error contract.
+description: Read before adding or changing an api/*.ts route: where a new endpoint goes (its upstream's dispatcher, else a new flat file), the flat-file rule, and the shared proxy shape and error contract.
 ---
 
 # Vercel Proxy Route Pattern
@@ -22,16 +22,16 @@ Before adding an endpoint to, or modifying, any file in `api/`: `duels.ts`
 `discord-interactions.ts`, `discord-tournament-tick.ts`,
 `subscribe-substack.ts`. The last six are not proxies (they read and write
 project-owned Supabase data or implement a webhook) but share the error
-contract and the budget rules below.
+contract and the rules below.
 
 ## Two rules before the pattern
 
-1. **Function budget.** Vercel's Hobby plan caps a deployment at 12
-   serverless functions, counted as files in `api/` (`api/_lib/` excluded).
-   CLAUDE.md's API Routes section keeps the current count. A new endpoint
-   joins the closest existing dispatcher (`duels.ts` keys a `HANDLERS` map by
-   `?endpoint=`; `tournament.ts` switches on `?type=`; `tournament-history.ts`
-   and `metafy.ts` dispatch on `?endpoint=`) rather than adding a file, and
+1. **Where it goes.** The project is on Vercel Pro: no cap on functions
+   per deployment (Hobby's 12-function cap is why the dispatchers exist). An
+   endpoint for an upstream that already has a dispatcher joins it
+   (`duels.ts` keys a `HANDLERS` map by `?endpoint=`; `tournament.ts`
+   switches on `?type=`; `tournament-history.ts` and `metafy.ts` dispatch on
+   `?endpoint=`); a new upstream or concern gets its own file. Either way
    `src/lib/*Api.js` gains a matching client function.
 2. **Flat files only.** `api/<name>.ts`. A nested dynamic route
    (`api/patreon/[action].ts`) built green and silently served the SPA shell

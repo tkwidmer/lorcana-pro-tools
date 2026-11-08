@@ -27,6 +27,7 @@ A tournament gameplay overlay for OBS. One `stream_tables` row is a **table** (a
 | `featured_cards` (`off` / `fade` / `stay`), `p1_featured`/`p2_featured`, `p1_featured_at`/`p2_featured_at` | 027 | panel Event card (Featured cards) and each Player card's picker |
 | `hide_cams` | 029 | panel Event card (Player cams: Show / Hide) |
 | `theme_banner` | 030 | panel Event card (Banner fill; `''` matches `theme_fill`) |
+| `stream_events` table, `log_stream_event()` | 033 | every surface: the event log (see "Logging and monitoring") |
 
 `rowToState(row)` in `streamOverlay.js` is the one mapping from row to render shape; add a column there and in the fixture row in the test file, and extend `stream_table_public()` in the migration so the public read and broadcast carry it.
 
@@ -36,7 +37,7 @@ A tournament gameplay overlay for OBS. One `stream_tables` row is a **table** (a
 - **Public readers** (view, controller, notes) have no session. They read `get_stream_table(id)`, a SECURITY DEFINER function returning the public columns only (never `controller_key` or `owner_id`), and a BEFORE INSERT OR UPDATE trigger broadcasts the same shape via `realtime.send()` on topic `stream-table:<id>`. A late joiner reads the row; there is no heartbeat.
 - **Controller** taps call `adjust_stream_table(id, key, side, field, ±1)`, a clamped atomic increment gated by `controller_key`, which rides only in the controller link. The view link cannot change scores.
 
-Verified once against the real project with an anonymous client: direct table reads return nothing, the public read hides the key, a wrong key is refused, five taps land as five broadcasts. No serverless function is involved, so the Vercel function budget is untouched.
+Verified once against the real project with an anonymous client: direct table reads return nothing, the public read hides the key, a wrong key is refused, five taps land as five broadcasts. No serverless function is involved.
 
 ## Four surfaces
 
@@ -52,6 +53,34 @@ The panel's Event card writes a Play Hub event id to `rph_event_id` (`extractEve
 **Pick pairing…** (`StreamPairingPicker.jsx`) lists the **active** round (`activeRoundId`: the latest round that has started, since RPH posts pairings before that round's standings exist) with records from the current standings (`currentRoundPairings()`). Send writes `featureMatchPatch()`: names, records, event name (RPH's only when the table's is blank), round, clock (`timerFromRph()`), link; lore and game wins reset; inks untouched (RPH knows no decks); both decklists cleared. It fetches both players' archive histories and the head-to-head first and writes `player_card` (`buildPlayerCard()`, which also carries each player's archive rating and rank; see "Player ratings" in `docs/agents/tournaments.md`), sending without a card if any fetch fails. Send standings / Send bracket write `buildStandingsSnapshot()` / `buildBracketSnapshot()` snapshots (the view has no session, so the operator re-sends each round); Send bracket errors rather than sending an empty bracket.
 
 Polling, not push: RPH's Pusher channel was never observed to broadcast (see the `ravensburger-tournament-api` skill).
+
+## Logging and monitoring
+
+Two parts: a live connection line in the panel for the operator, and an event log to check afterwards.
+
+**Connection line.** Every surface joins its table's channel with realtime presence (`channel.track({ surface })` on each `SUBSCRIBED`, so a rejoin re-announces it). The panel's `ConnectedSurfaces` line, under the header, reads `OBS overlay` / `Player controller` / `Caster notes`: connected (×n), or not connected. The overlay shows red when no view is connected, so a dropped Browser Source shows up in the panel before anyone notices it on stream. Verified against the live project with two anon clients: the panel saw the view join and leave.
+
+**Event log.** `stream_events` (migration 033): `table_id`, `surface` (`panel`/`view`/`control`/`notes`), `kind`, `detail`, `created_at`. Clients write only through `log_stream_event()`, a SECURITY DEFINER function granted to anon (the view has no session). It drops unknown table ids and cuts `detail` to 2000 characters. There are no RLS policies, so only SQL as an admin or the service role reads it. `logStreamEvent()` in `streamTables.js` is fire-and-forget and also prints to the console. `failureTracker(tableId, surface, kind)` writes `<kind>_failed` once at the start of a run and `<kind>_recovered` with the run's length, never each repeat. A log written while the network is down is lost, so the recovery row carries the outage's length.
+
+| `kind` | Surface | When |
+|---|---|---|
+| `realtime_failed` / `_recovered` | all | the table's channel left `SUBSCRIBED` (`CHANNEL_ERROR: …`, `TIMED_OUT`, `CLOSED`) / rejoined. Broadcasts sent in between are lost and not replayed; the row's next change catches the surface up |
+| `load_failed` | view, control, notes | the first `get_stream_table` read failed (the view shows the error on stream) |
+| `crash` | all | `ErrorBoundary` caught a render crash on a `/stream-overlay*` route (stack and component stack) |
+| `rph_poll_failed` / `_recovered` | panel | the 15 s `fetchEventDetails` poll (clock, round); the message carries the proxy's HTTP status |
+| `rph_matches_failed` / `_recovered` | panel | the active round's matches (the result ticker and caster-notes results) |
+| `rph_write_failed` / `_recovered` | panel | `updateWhileLinked()` |
+| `pairings_failed`, `player_card_failed`, `send_standings_failed`, `send_bracket_failed` | panel | Pick pairing… load; the archive card (the pairing still sends); Send standings / bracket |
+| `write_failed`, `tap_failed`, `next_game_failed` | panel, control | a column write, a score tap, Next game |
+
+Reading it:
+
+```sql
+select created_at, surface, kind, detail from stream_events
+where table_id = '<id>' and created_at > now() - interval '1 day' order by created_at;
+```
+
+`api/tournament.ts` also `console.error`s each upstream failure (type, status, URL) to Vercel's runtime logs, which Pro keeps for 1 day (30 with Observability Plus).
 
 ## Featured cards
 

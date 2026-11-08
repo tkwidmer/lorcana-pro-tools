@@ -112,7 +112,7 @@ const agg = { win: {}, loss: {} }
 const add = (res, k, v) => ((agg[res][k] ??= []).push(v))
 for (const r of kept) {
   const me = r.your_player, opp = 3 - me, L = logs[r.game_id]
-  narr += `\n######## ${r.started_at.slice(0, 16)} V${vid.get(r.game_id)} ${r.result.toUpperCase()} ${r.went_first ? 'FIRST' : 'SECOND'} lore ${r.your_lore}-${r.opp_lore} ${r.end_reason} opp=${r.opp_display_name} (${r.opp_deck_colors}) oppMMR=${r.opp_mmr_before} myMMR=${r.mmr_before} game=${r.game_id}\n`
+  narr += `\n######## ${r.started_at.slice(0, 16)} V${vid.get(r.game_id)} ${r.result.toUpperCase()} ${r.went_first ? 'FIRST' : 'SECOND'} lore ${r.your_lore}-${r.opp_lore} ${r.end_reason} opp=${r.opp_display_name} (${r.opp_deck_colors}) oppMMR=${r.opp_mmr_before} myMMR=${r.mmr_before} replay=${r.replay_url}\n`
   let hand = [], ink = { 1: 0, 2: 0 }, lore = { 1: {}, 2: {} }, inkAt = { 1: {}, 2: {} }, turn = 0, owner = null, inkedThisTurn = false
   const noInk = [], handSz = {}, dead = {}, sweeps = [], killed = {}, sent = []
   let kills = 0, lastSrc = null, cur = null, lines = []

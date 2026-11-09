@@ -32,11 +32,25 @@ function playedFromElsewhere(logs, i, me, cardId) {
     && !FULL_HAND_PROMPT.test(x.data?.choice?.message ?? '') && x.data?.choice?.offered?.some(c => c.cardId === cardId))
 }
 
+// The shape of the player's 60: separates an aggro list from a control one in the same colors.
+// decklist: [{ cardId, count }] from the match row.
+export function deckShape(decklist, cardById) {
+  const deck = decklist.flatMap(c => Array(c.count).fill(cardById[c.cardId])).filter(Boolean)
+  return {
+    deck_inkable: deck.filter(c => c.inkwell).length,
+    deck_avg_cost: deck.reduce((s, c) => s + c.cost, 0) / deck.length,
+    deck_cost_ge5: deck.filter(c => c.cost >= 5).length,
+    deck_items: deck.filter(c => c.type === 'Item').length,
+    deck_actions: deck.filter(c => c.type === 'Action').length,
+  }
+}
+
 const count = (ids) => { const m = new Map(); for (const id of ids) m.set(id, (m.get(id) ?? 0) + 1); return m }
 const total = (m) => { let n = 0; for (const v of m.values()) n += v; return n }
 
 // logs: raw gamelog events. me: the player's seat (1 or 2). cardById: duels.ink card id → LorcanaJSON card.
-export function decisionRows(logs, me, cardById) {
+// decklist: the player's [{ cardId, count }], to tell how much of the opponent's shown cards it shares.
+export function decisionRows(logs, me, cardById, decklist) {
   const card = (id) => cardById[id]
   let hand = new Map(), certain = false
   const add = (id) => hand.set(id, (hand.get(id) ?? 0) + 1)
@@ -52,6 +66,16 @@ export function decisionRows(logs, me, cardById) {
   const lost = () => { certain = false }
   const miss = () => { if (certain) checks.misses++; lost() }
   let ink = 0, myLore = 0, oppLore = 0, turn = 0, myTurn = 0, inMyTurn = false, inkedThisTurn = false
+  // What the opponent has shown so far: every card they played or inked (their draws are hidden).
+  const deckIds = new Set(decklist.map(c => c.cardId))
+  const opp = { opp_items: 0, opp_actions: 0, opp_characters: 0, opp_shared: 0 }
+  const reveal = (id) => {
+    const type = card(id)?.type
+    if (type === 'Item') opp.opp_items++
+    if (type === 'Action') opp.opp_actions++
+    if (type === 'Character') opp.opp_characters++
+    if (deckIds.has(id)) opp.opp_shared++
+  }
 
   logs.forEach((e, i) => {
     const d = e.data ?? {}, mine = e.player === me
@@ -71,7 +95,10 @@ export function decisionRows(logs, me, cardById) {
         if (mine) myLore = d.newLoreTotal ?? myLore; else oppLore = d.newLoreTotal ?? oppLore
         break
     }
-    if (!mine) return
+    if (!mine) {
+      if ((e.type === 'CARD_PLAYED' || e.type === 'CARD_INKED') && d.cardId) reveal(d.cardId)
+      return
+    }
 
     switch (e.type) {
       case 'INITIAL_HAND':
@@ -184,7 +211,7 @@ export function decisionRows(logs, me, cardById) {
     checks.inkDecisions++
     if (!certain) return
     checks.certainInkDecisions++
-    decisions.push({ turn, myTurn, ink: chosen === null ? ink : ink - 1, myLore, oppLore, hand: new Map(hand), chosen })
+    decisions.push({ turn, myTurn, ink: chosen === null ? ink : ink - 1, myLore, oppLore, hand: new Map(hand), chosen, opp: { ...opp } })
   }
 
   const inkRows = []
@@ -194,7 +221,7 @@ export function decisionRows(logs, me, cardById) {
     for (const [id, copies] of candidates) {
       const f = cardFeatures(card(id))
       inkRows.push({
-        decision, turn: x.turn, my_turn: x.myTurn, ink: x.ink, my_lore: x.myLore, opp_lore: x.oppLore,
+        decision, turn: x.turn, my_turn: x.myTurn, ink: x.ink, my_lore: x.myLore, opp_lore: x.oppLore, ...x.opp,
         hand_size: total(x.hand), hand_inkable: inkableCards, no_ink: x.chosen === null ? 1 : 0,
         card_id: id, copies, ...f, cost_gap: f.cost === null ? null : f.cost - (x.ink + 1),
         inked: id === x.chosen ? 1 : 0,

@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { gunzipSync } from 'node:zlib'
-import { decisionRows } from '../src/lib/decisionRows.js'
+import { decisionRows, deckShape } from '../src/lib/decisionRows.js'
 import { buildCardIdToCard } from '../src/lib/cardIdResolver.js'
 
 const OUT = 'decisions'
@@ -38,11 +38,12 @@ for (const account of accounts) {
     const m = JSON.parse(line)
     if (m.excluded) continue
     const logs = JSON.parse(gunzipSync(fs.readFileSync(path.join('logs', account, `${m.game_id}.logs.gz`))))
-    const out = decisionRows(logs, m.your_player, cardById)
+    const out = decisionRows(logs, m.your_player, cardById, m.your_decklist)
     const game = {
       account, game_id: m.game_id, started_at: m.started_at, queue_id: m.queue_id,
       my_colors: m.your_deck_colors, opp_colors: m.opp_deck_colors, went_first: m.went_first ? 1 : 0,
       mmr: m.mmr_before, opp_mmr: m.opp_mmr_before, won: m.result === 'win' ? 1 : 0,
+      ...deckShape(m.your_decklist, cardById),
     }
     const name = (r) => ({ card_name: cardById[r.card_id]?.fullName })
     for (const r of out.mulligan) mulliganOut.write({ ...game, ...r, ...name(r) })

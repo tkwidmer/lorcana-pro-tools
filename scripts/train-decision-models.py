@@ -5,8 +5,7 @@
 #   python3 scripts/train-decision-models.py [--since 2026-10-08] [--flag 0.1]
 # Every decision is scored by a model that never saw its game (5 folds split by game), so the scores
 # say how the team's other games would have played that spot. Prints each model next to simple
-# baselines, writes decisions/flags.csv (each choice the model gave under --flag chance) and saves
-# models trained on every game to decisions/{mulligan,ink}.lgb.txt.
+# baselines and writes decisions/flags.csv (each choice the model gave under --flag chance).
 # A flag is a departure from how the team usually plays, not a proven mistake: check it in the replay.
 import argparse
 import lightgbm as lgb
@@ -25,6 +24,7 @@ NO_INK = 'no ink'
 CATEGORICAL = ['card_id', 'type', 'my_colors', 'opp_colors']
 CONTEXT = ['account', 'game_id', 'started_at', 'my_colors', 'opp_colors', 'went_first']
 CARD = ['card_id', 'copies', 'cost', 'inkable', 'type', 'strength', 'willpower', 'card_lore', 'shift', 'went_first', 'my_colors', 'opp_colors']
+DECK = ['deck_inkable', 'deck_avg_cost', 'deck_cost_ge5', 'deck_items', 'deck_actions']
 PARAMS = dict(n_estimators=300, learning_rate=0.03, num_leaves=15, min_child_samples=20, verbose=-1)
 
 
@@ -39,10 +39,30 @@ def categorize(d):
     return d.reset_index(drop=True)
 
 
-def out_of_fold(d, fit, predict):
+def matchup_rate(train, test, label):
+    # How often the team keeps or inks this card against these opponent colors, pulled toward the
+    # card's overall rate while the pair is rare (10 rows of weight).
+    key = lambda d: d.card_id.astype(str) + '|' + d.opp_colors.astype(str)
+    card = train.groupby(train.card_id.astype(str))[label].mean()
+    pair = train.groupby(key(train))[label].agg(['sum', 'count'])
+    prior = test.card_id.astype(str).map(card).fillna(train[label].mean()).to_numpy()
+    k = key(test)
+    return (k.map(pair['sum']).fillna(0).to_numpy() + 10 * prior) / (k.map(pair['count']).fillna(0).to_numpy() + 10)
+
+
+def with_matchup_rate(d, label):
+    # Each row's rate comes from the other games only, so a choice never explains itself.
     out = np.zeros(len(d))
-    for train, test in GroupKFold(5).split(d, groups=d.game_id):
-        out[test] = predict(fit(d.iloc[train]), d.iloc[test])
+    for a, b in GroupKFold(5).split(d, groups=d.game_id):
+        out[b] = matchup_rate(d.iloc[a], d.iloc[b], label)
+    return d.assign(matchup_rate=out)
+
+
+def out_of_fold(d, label, fit, predict):
+    out = np.zeros(len(d))
+    for a, b in GroupKFold(5).split(d, groups=d.game_id):
+        train, test = d.iloc[a], d.iloc[b]
+        out[b] = predict(fit(with_matchup_rate(train, label)), test.assign(matchup_rate=matchup_rate(train, test, label)))
     return out
 
 
@@ -64,16 +84,14 @@ def pct(p):
 
 # Mulligan: is each opening-hand card kept?
 m = categorize(load('mulligan'))
-features = CARD + ['copy', 'hand_inkable', 'hand_cost_le2', 'hand_cost_ge5']
+features = CARD + DECK + ['copy', 'matchup_rate', 'hand_inkable', 'hand_cost_le2', 'hand_cost_ge5']
 fit = lambda train: lgb.LGBMClassifier(**PARAMS).fit(train[features], train.kept)
-m['p_keep'] = out_of_fold(m, fit, lambda model, test: model.predict_proba(test[features])[:, 1])
-prior = out_of_fold(m, card_rate('kept'), lambda rates, test: rate_of(rates, test, 'kept'))
+m['p_keep'] = out_of_fold(m, 'kept', fit, lambda model, test: model.predict_proba(test[features])[:, 1])
+prior = out_of_fold(m, 'kept', card_rate('kept'), lambda rates, test: rate_of(rates, test, 'kept'))
 print(f'mulligan: {m.game_id.nunique()} games, {len(m)} cards')
 print(f'  accuracy  model {((m.p_keep > 0.5) == m.kept).mean():.3f}   card keep-rate {((prior > 0.5) == m.kept).mean():.3f}   always keep {m.kept.mean():.3f}')
 print(f'  AUC       model {roc_auc_score(m.kept, m.p_keep):.3f}   card keep-rate {roc_auc_score(m.kept, prior):.3f}')
-model = fit(m).booster_
-print(f'  top features: {top_features(model, features)}')
-model.save_model('decisions/mulligan.lgb.txt')
+print(f'  top features: {top_features(fit(with_matchup_rate(m, "kept")).booster_, features)}')
 
 # Ink: one option per inkable card in hand plus "no ink", ranked within the decision. A softmax over
 # the scores gives each option's chance once one temperature, fitted to the choices, stretches them:
@@ -83,10 +101,10 @@ first = ink.groupby('decision_id', as_index=False).first()
 passes = first.assign(card_id=NO_INK, card_name=NO_INK, inked=first.no_ink, copies=np.nan, cost=np.nan, inkable=np.nan,
                       type=np.nan, strength=np.nan, willpower=np.nan, card_lore=np.nan, shift=np.nan, cost_gap=np.nan)
 ink = categorize(pd.concat([ink.assign(pass_option=0), passes.assign(pass_option=1)]).sort_values('decision_id', kind='stable'))
-features = CARD + ['pass_option', 'turn', 'my_turn', 'ink', 'my_lore', 'opp_lore', 'hand_size', 'hand_inkable', 'cost_gap']
+features = CARD + DECK + ['pass_option', 'matchup_rate', 'opp_items', 'opp_actions', 'opp_characters', 'opp_shared', 'turn', 'my_turn', 'ink', 'my_lore', 'opp_lore', 'hand_size', 'hand_inkable', 'cost_gap']
 sizes = lambda d: d.groupby('decision_id', sort=True).size().to_numpy()
 fit = lambda train: lgb.LGBMRanker(objective='rank_xendcg', **PARAMS).fit(train[features], train.inked, group=sizes(train))
-score = out_of_fold(ink, fit, lambda model, test: model.predict(test[features]))
+score = out_of_fold(ink, 'inked', fit, lambda model, test: model.predict(test[features]))
 
 
 def softmax(t):
@@ -97,7 +115,7 @@ def softmax(t):
 
 temperature = minimize_scalar(lambda t: -np.log(softmax(t)[ink.inked == 1]).sum(), bounds=(0.1, 100), method='bounded').x
 ink['p'] = softmax(temperature)
-ink['prior'] = out_of_fold(ink, card_rate('inked'), lambda rates, test: rate_of(rates, test, 'inked'))
+ink['prior'] = out_of_fold(ink, 'inked', card_rate('inked'), lambda rates, test: rate_of(rates, test, 'inked'))
 ink['tie'] = np.random.default_rng(0).random(len(ink))
 
 
@@ -111,9 +129,7 @@ passed = chosen.no_ink.reindex(model_pick.index) == 1
 print(f'ink: {len(model_pick)} decisions, {passed.mean():.0%} with no ink, {ink.groupby("decision_id").size().mean():.1f} options each')
 print(f'  picked the choice  model {hit.mean():.3f} (inked {hit[~passed].mean():.3f}, no ink {hit[passed].mean():.3f})   '
       f'card ink-rate {picks("prior").inked.mean():.3f}   random {(1 / ink.groupby("decision_id").size()).mean():.3f}')
-model = fit(ink).booster_
-print(f'  top features: {top_features(model, features)}')
-model.save_model('decisions/ink.lgb.txt')
+print(f'  top features: {top_features(fit(with_matchup_rate(ink, "inked")).booster_, features)}')
 
 # Flags: choices the model gave under --flag chance, with every option it weighed.
 hand = m.assign(opt=m.card_name + ' ' + np.where(m.kept == 1, 'kept', 'sent') + ' (keep ' + m.p_keep.map(pct) + ')').groupby('game_id').opt.agg(', '.join)

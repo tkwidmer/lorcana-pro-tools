@@ -20,9 +20,9 @@ const discardPrompt = (offered, selected, player = ME) => [
 ]
 
 describe('decisionRows', () => {
-  it('labels each opening-hand card kept or sent', () => {
+  it('labels each opening-hand card kept or sent, kept copies first', () => {
     const { mulligan } = decisionRows(opening, ME, cards)
-    expect(mulligan.map(r => [r.card_id, r.kept])).toEqual([['A', 0], ['A', 1], ['B', 1]])
+    expect(mulligan.map(r => [r.card_id, r.copy, r.kept])).toEqual([['A', 1, 1], ['A', 2, 0], ['B', 1, 1]])
     expect(mulligan[0]).toMatchObject({ copies: 2, hand_inkable: 2, hand_cost_le2: 2, hand_cost_ge5: 1 })
   })
 

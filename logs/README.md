@@ -25,11 +25,13 @@ Read a log with `src/lib/parseGamelog.js` (`your_player` from the row) or `.clau
 Both carry the game's account, colors, play/draw, MMR and result. The hand is rebuilt from the log by `src/lib/decisionRows.js`, and ink rows are only written while it is known. Logs before mid-June 2026 do not name the player's turn draws, so those games give mulligan rows and, on the play, a turn-1 ink row. From then on about 84% of ink decisions are kept, and the rebuilt hand matches about 95% of the prompts that show the whole hand. The script prints both numbers on every run.
 
 
-## Baseline models
+## Baseline models and coaching flags
 
-`python3 scripts/train-decision-models.py` (needs `pip install lightgbm pandas scikit-learn`) trains a LightGBM mulligan classifier and ink ranker on the games since set 14's release (`--since` to change). It trains on the earlier 80% of those games, tests on the latest 20%, prints each model next to simple baselines, and saves the models to `decisions/`. The ink ranker learns which card is inked, not whether to ink at all, so turns with no ink are left out. First run (Nov 2026, 1,162 games):
+`python3 scripts/train-decision-models.py` (needs `pip install lightgbm pandas scikit-learn`) trains a LightGBM mulligan classifier and ink ranker on the games since set 14's release (`--since` to change). Every decision is scored by a model that never saw its game (5 folds split by game). The ink ranker weighs each inkable card in hand and "no ink", so it learns whether to ink as well as what. The script prints each model next to simple baselines and saves models trained on every game to `decisions/`. Nov 2026, 1,162 games:
 
 | | Model | Best simple baseline |
 |---|---|---|
-| Mulligan, card kept or sent | 72% (AUC 0.79) | 68%, the card's keep rate |
-| Ink, picked the card inked | 56% | 44%, the card's ink rate (random is 30%) |
+| Mulligan, card kept or sent | 79% (AUC 0.86) | 72%, the card's keep rate |
+| Ink, picked the choice (incl. no ink) | 58% (55% on inks, 73% on no-ink turns) | 43%, the card's ink rate (random is 27%) |
+
+It also writes `decisions/flags.csv`: every mulligan or ink choice the model gave under 10% chance (`--flag` to change), with the game, turn, the model's pick and the chance of every option. About 1 mulligan and 5 ink flags per 10 games. The model learned from the team's own games, so a flag marks a departure from how the team usually plays that spot, not a proven mistake. Read it in the replay before calling it one.

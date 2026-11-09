@@ -80,17 +80,16 @@ export function decisionRows(logs, me, cardById) {
       case 'MULLIGAN': {
         if (!certain) break
         const sent = count((d.mulliganedCards ?? []).map(c => c.id))
-        const left = new Map(sent)
         const initial = [...hand].flatMap(([id, n]) => Array(n).fill(id))
         const handCtx = {
           hand_inkable: initial.filter(id => card(id)?.inkwell).length,
           hand_cost_le2: initial.filter(id => (card(id)?.cost ?? 99) <= 2).length,
           hand_cost_ge5: initial.filter(id => (card(id)?.cost ?? 0) >= 5).length,
         }
-        for (const id of initial) {
-          const isSent = (left.get(id) ?? 0) > 0
-          if (isSent) left.set(id, left.get(id) - 1)
-          mulligan.push({ card_id: id, copies: hand.get(id), ...cardFeatures(card(id)), ...handCtx, kept: isSent ? 0 : 1 })
+        // Copies are interchangeable, so the kept ones are numbered first: copy 2 of a pair is the
+        // question "keep a second one?".
+        for (const [id, n] of hand) for (let copy = 1; copy <= n; copy++) {
+          mulligan.push({ card_id: id, copy, copies: n, ...cardFeatures(card(id)), ...handCtx, kept: copy <= n - (sent.get(id) ?? 0) ? 1 : 0 })
         }
         for (const [id, n] of sent) for (let k = 0; k < n; k++) remove(id)
         for (const c of d.drawnCards ?? []) add(c.id)

@@ -29,3 +29,6 @@ public/lorcana-extension/
 
 # Agent worktrees
 .claude/worktrees/
+
+# Training rows built from logs/ by scripts/decision-rows.mjs
+decisions/

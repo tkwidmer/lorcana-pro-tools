@@ -24,6 +24,11 @@ describe('buildCardIdToName', () => {
     expect(buildCardIdToName(cards)).toEqual({ '1-C1-2': 'Let It Go', '1-2': 'Regular Card' })
   })
 
+  it('keys a variant printing by its letter after the number', () => {
+    const cards = ['a', 'c'].map(variant => ({ setCode: '3', number: 4, variant, fullName: `Dalmatian Puppy ${variant}` }))
+    expect(buildCardIdToName(cards)).toEqual({ '3-4a': 'Dalmatian Puppy a', '3-4c': 'Dalmatian Puppy c' })
+  })
+
   it('returns {} for empty/missing input', () => {
     expect(buildCardIdToName([])).toEqual({})
     expect(buildCardIdToName(undefined)).toEqual({})

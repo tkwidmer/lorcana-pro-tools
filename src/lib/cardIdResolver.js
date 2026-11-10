@@ -2,11 +2,13 @@
 // from useCards(). duels.ink ids a regular printing as `${setCode}-${number}`
 // and a promo as `${setCode}-${promoGrouping}-${number}` (e.g. `1-C1-2` is the
 // C1 promo of Let It Go) — the id shape used by match history, gamelogs, and
-// /api/stats/meta's cardLift.
+// /api/stats/meta's cardLift. A card printed in variants carries the letter after its number
+// (`3-4c` is Dalmatian Puppy - Tail Wagger, variant c).
 function cardKey(card) {
+  const number = `${card.number}${card.variant ?? ''}`
   return card.promoGrouping
-    ? `${card.setCode}-${card.promoGrouping}-${card.number}`
-    : `${card.setCode}-${card.number}`
+    ? `${card.setCode}-${card.promoGrouping}-${number}`
+    : `${card.setCode}-${number}`
 }
 
 export function buildCardIdToCard(cards) {

@@ -47,7 +47,7 @@ for (const account of accounts) {
     }
     const name = (r) => ({ card_name: cardById[r.card_id]?.fullName })
     for (const r of out.mulligan) mulliganOut.write({ ...game, ...r, ...name(r) })
-    for (const { decision, ...r } of out.ink) inkOut.write({ ...game, decision_id: `${m.game_id}:${decision}`, ...r, ...name(r) })
+    for (const { decision, ...r } of out.ink) inkOut.write({ ...game, decision_id: `${account}:${m.game_id}:${decision}`, ...r, ...name(r) })
     rows.mulligan += out.mulligan.length; rows.ink += out.ink.length; games++
     for (const [k, v] of Object.entries(out.checks)) totals[k] = (totals[k] ?? 0) + v
   }

@@ -2,7 +2,7 @@
 # Baseline mulligan and ink models on the rows from scripts/decision-rows.mjs, and the choices they
 # flag for coaching.
 #   pip install lightgbm pandas scikit-learn
-#   python3 scripts/train-decision-models.py [--since 2026-10-08] [--flag 0.1]
+#   python3 scripts/train-decision-models.py [--since 2026-10-08] [--flag 0.1]   (default: every game)
 # Every decision is scored by a model that never saw its game (5 folds split by game), so the scores
 # say how the team's other games would have played that spot. Prints each model next to simple
 # baselines and writes decisions/flags.csv (each choice the model gave under --flag chance).
@@ -16,7 +16,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GroupKFold
 
 ap = argparse.ArgumentParser()
-ap.add_argument('--since', default='2026-10-08')
+ap.add_argument('--since', default='')
 ap.add_argument('--flag', type=float, default=0.1)
 args = ap.parse_args()
 
@@ -132,10 +132,10 @@ print(f'  picked the choice  model {hit.mean():.3f} (inked {hit[~passed].mean():
 print(f'  top features: {top_features(fit(with_matchup_rate(ink, "inked")).booster_, features)}')
 
 # Flags: choices the model gave under --flag chance, with every option it weighed.
-hand = m.assign(opt=m.card_name + ' ' + np.where(m.kept == 1, 'kept', 'sent') + ' (keep ' + m.p_keep.map(pct) + ')').groupby('game_id').opt.agg(', '.join)
+hand = m.assign(opt=m.card_name + ' ' + np.where(m.kept == 1, 'kept', 'sent') + ' (keep ' + m.p_keep.map(pct) + ')').groupby(m.account + ':' + m.game_id).opt.agg(', '.join)
 mull = m.assign(kind='mulligan', turn=0, choice=np.where(m.kept == 1, 'kept ', 'sent ') + m.card_name,
                 model_pick=np.where(m.p_keep > 0.5, 'keep ', 'send ') + m.card_name,
-                choice_p=np.where(m.kept == 1, m.p_keep, 1 - m.p_keep), options=m.game_id.map(hand))
+                choice_p=np.where(m.kept == 1, m.p_keep, 1 - m.p_keep), options=(m.account + ':' + m.game_id).map(hand))
 opts = ink.sort_values('p', ascending=False).assign(opt=lambda d: d.card_name + ' ' + d.p.map(pct)).groupby('decision_id').opt.agg(', '.join)
 inks = chosen.reset_index().assign(kind='ink', choice=lambda d: d.card_name, model_pick=lambda d: d.decision_id.map(model_pick.card_name),
                                    choice_p=lambda d: d.p, options=lambda d: d.decision_id.map(opts))

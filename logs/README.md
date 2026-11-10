@@ -27,13 +27,13 @@ Both carry the game's account, colors, play/draw, MMR and result. The hand is re
 
 ## Baseline models and coaching flags
 
-`python3 scripts/train-decision-models.py` (needs `pip install lightgbm pandas scikit-learn`) trains a LightGBM mulligan classifier and ink ranker on the games since set 14's release (`--since` to change). Every decision is scored by a model that never saw its game (5 folds split by game). The ink ranker weighs each inkable card in hand and "no ink", so it learns whether to ink as well as what. Both models see the player's deck shape (inkable count, average cost, 5+ cost cards, items, actions, from the decklist) and how often the team keeps or inks that card against those opponent colors in the other games. The ink model also sees what the opponent has shown so far (items, actions and characters played or inked, and how many of them the player's own list runs). The script prints each model next to simple baselines. Nov 2026, 1,162 games:
+`python3 scripts/train-decision-models.py` (needs `pip install lightgbm pandas scikit-learn`) trains a LightGBM mulligan classifier and ink ranker on every game (`--since 2026-10-08` to narrow it to a set). Every decision is scored by a model that never saw its game (5 folds split by game). The ink ranker weighs each inkable card in hand and "no ink", so it learns whether to ink as well as what. Both models see the player's deck shape (inkable count, average cost, 5+ cost cards, items, actions, from the decklist) and how often the team keeps or inks that card against those opponent colors in the other games. The ink model also sees what the opponent has shown so far (items, actions and characters played or inked, and how many of them the player's own list runs). The script prints each model next to simple baselines. Nov 2026, every game since February (8,667 with a mulligan, 39,214 ink decisions):
 
 | | Model | Best simple baseline |
 |---|---|---|
-| Mulligan, card kept or sent | 79% (AUC 0.87) | 72%, the card's keep rate |
-| Ink, picked the choice (incl. no ink) | 58% (55% on inks, 73% on no-ink turns) | 43%, the card's ink rate (random is 27%) |
+| Mulligan, card kept or sent | 81% (AUC 0.89) | 75%, the card's keep rate |
+| Ink, picked the choice (incl. no ink) | 58% (56% on inks, 72% on no-ink turns) | 42%, the card's ink rate (random is 27%) |
 
-A matchup habit backed by a handful of games is only partly learned. The team inks Aladdin - Doing His Part (item removal) 41% of the time, but 7% against Emerald/Ruby, over 9 games. The model gives it 33% there, so holding it still draws flags in that matchup.
+A matchup habit backed by a handful of games is only partly learned. The team inks Aladdin - Doing His Part (item removal) 41% of the time, but 7% against Emerald/Ruby, over 9 games. The model only partly learns that, so holding it still draws flags in that matchup.
 
 It also writes `decisions/flags.csv`: every mulligan or ink choice the model gave under 10% chance (`--flag` to change), with the game, turn, the model's pick and the chance of every option. About 1 mulligan and 5 ink flags per 10 games. The model learned from the team's own games, so a flag marks a departure from how the team usually plays that spot, not a proven mistake. Read it in the replay before calling it one.

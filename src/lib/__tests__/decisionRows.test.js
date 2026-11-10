@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { decisionRows, deckShape } from '../decisionRows'
+import { decisionRows, deckShape, cardFeatures } from '../decisionRows'
 
 const entry = (type, player, turnNumber, data = {}) => ({ type, player, turnNumber, data })
 const cards = {
@@ -66,6 +66,17 @@ describe('decisionRows', () => {
       entry('CARD_PLAYED', 2, 2, { cardId: 'A' }),
     ], ME, cards, DECK)
     expect(ink[0]).toMatchObject({ opp_items: 1, opp_actions: 1, opp_characters: 0, opp_shared: 1 })
+  })
+
+  it('tags what a card does to the opponent from its rules text, not what it costs you', () => {
+    expect(cardFeatures({ fullText: 'CLEAR IT OUT When you play this character, you\nmay pay 1 ⬡ to banish chosen item.', keywordAbilities: ['Evasive'] }))
+      .toMatchObject({ removes_item: 1, removes_character: 0, kw_evasive: 1, kw_ward: 0 })
+    expect(cardFeatures({ fullText: 'Banish chosen character of yours — Play a character for free.' })).toMatchObject({ removes_character: 0 })
+    expect(cardFeatures(undefined)).toMatchObject({ removes_item: null, kw_evasive: null })
+  })
+
+  it('counts the items the opponent showed over the whole game', () => {
+    expect(decisionRows([...opening, entry('CARD_PLAYED', 2, 1, { cardId: 'C' }), entry('CARD_INKED', 2, 2, { cardId: 'C' })], ME, cards, DECK).oppItems).toBe(2)
   })
 
   it('describes the deck\'s shape from its list', () => {

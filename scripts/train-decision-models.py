@@ -27,8 +27,15 @@ args = ap.parse_args()
 NO_INK = 'no ink'
 CATEGORICAL = ['card_id', 'type', 'my_colors', 'opp_colors']
 CONTEXT = ['account', 'game_id', 'started_at', 'my_colors', 'opp_colors', 'went_first']
-GENERIC_CARD = ['copies', 'cost', 'inkable', 'type', 'strength', 'willpower', 'card_lore', 'shift', 'went_first', 'my_colors', 'opp_colors']
-CARD = ['card_id', 'copies', 'cost', 'inkable', 'type', 'strength', 'willpower', 'card_lore', 'shift', 'went_first', 'my_colors', 'opp_colors']
+# What the card does (src/lib/decisionRows.js reads it off the rules text), and how many items the
+# opponent's colors are showing in the current meta, alone and against the card's item removal.
+TAGS = ['song', 'removes_item', 'removes_location', 'removes_character', 'board_wipe', 'bounce', 'draws', 'ramp', 'makes_discard',
+        'kw_alert', 'kw_bodyguard', 'kw_boost', 'kw_challenger', 'kw_evasive', 'kw_reckless', 'kw_resist', 'kw_rush', 'kw_singer',
+        'kw_sing_together', 'kw_support', 'kw_vanish', 'kw_ward', 'opp_items_recent', 'item_answer']
+GENERIC_CARD = ['copies', 'cost', 'inkable', 'type', 'strength', 'willpower', 'card_lore', 'shift', 'went_first', 'my_colors', 'opp_colors'] + TAGS
+CARD = ['card_id'] + GENERIC_CARD
+# Card columns the "no ink" option has none of.
+NOT_A_CARD = ['copies', 'cost', 'inkable', 'type', 'strength', 'willpower', 'card_lore', 'shift', 'cost_gap'] + [t for t in TAGS if t != 'opp_items_recent']
 DECK = ['deck_inkable', 'deck_avg_cost', 'deck_cost_ge5', 'deck_items', 'deck_actions']
 PARAMS = dict(n_estimators=300, learning_rate=0.03, num_leaves=15, min_child_samples=20, verbose=-1)
 
@@ -40,7 +47,31 @@ def load(name):
     # player's median MMR.
     mmr = d.mmr.fillna(d.groupby('account').mmr.transform('median'))
     assert mmr.notna().all(), 'an account has no MMR in any game'
-    return d.assign(weight=2 ** ((mmr - mmr.median()) / 100), strong=mmr >= 1400)
+    d = d.assign(weight=2 ** ((mmr - mmr.median()) / 100), strong=mmr >= 1400)
+    return d.merge(opp_items_recent(d), on=['account', 'game_id']).assign(item_answer=lambda d: d.removes_item * d.opp_items_recent)
+
+
+def opp_items_recent(d, days=45, k=10):
+    # Items an opponent on these colors showed per game in the other games within `days` either side,
+    # pulled toward all opponents in that window while the colors are rare (k games of weight). Decks
+    # change with each set: Emerald/Ruby showed 0.5 items a game before set 14 and 3.9 in it.
+    g = d.drop_duplicates(['account', 'game_id'])[['account', 'game_id', 'started_at', 'opp_colors', 'opp_items_game']].copy()
+    t = pd.to_datetime(g.started_at)
+    g['day'] = (t - t.min()) / pd.Timedelta(days=1)
+
+    def window(t, v):  # sum and count of v over each game's window, the game itself left out
+        order = np.argsort(t); t, v = t[order], v[order]
+        c = np.concatenate([[0], np.cumsum(v)])
+        lo, hi = np.searchsorted(t, t - days, 'left'), np.searchsorted(t, t + days, 'right')
+        out = np.empty((len(t), 2)); out[order] = np.c_[c[hi] - c[lo] - v, hi - lo - 1]
+        return out
+
+    everyone = window(g.day.to_numpy(), g.opp_items_game.to_numpy(float))
+    mean = everyone[:, 0] / np.maximum(everyone[:, 1], 1)
+    same = np.empty((len(g), 2))
+    for _, idx in g.groupby('opp_colors').indices.items():
+        same[idx] = window(g.day.to_numpy()[idx], g.opp_items_game.to_numpy(float)[idx])
+    return g[['account', 'game_id']].assign(opp_items_recent=(same[:, 0] + k * mean) / (same[:, 1] + k))
 
 
 def categorize(d):
@@ -60,19 +91,21 @@ def matchup_rate(train, test, label):
     return (k.map(pair['sum']).fillna(0).to_numpy() + 10 * prior) / (k.map(pair['count']).fillna(0).to_numpy() + 10)
 
 
-def with_matchup_rate(d, label):
-    # Each row's rate comes from the other games only, so a choice never explains itself.
-    out = np.zeros(len(d))
-    for a, b in GroupKFold(5).split(d, groups=d.game_id):
-        out[b] = matchup_rate(d.iloc[a], d.iloc[b], label)
-    return d.assign(matchup_rate=out)
+def encode(train, test, label):
+    return test.assign(matchup_rate=matchup_rate(train, test, label))
+
+
+def encoded(d, label):
+    # Each row's encodings come from the other games only, so a choice never explains itself.
+    parts = [encode(d.iloc[a], d.iloc[b], label) for a, b in GroupKFold(5).split(d, groups=d.game_id)]
+    return pd.concat(parts).loc[d.index]
 
 
 def out_of_fold(d, label, fit, predict):
     out = np.zeros(len(d))
     for a, b in GroupKFold(5).split(d, groups=d.game_id):
         train, test = d.iloc[a], d.iloc[b]
-        out[b] = predict(fit(with_matchup_rate(train, label)), test.assign(matchup_rate=matchup_rate(train, test, label)))
+        out[b] = predict(fit(encoded(train, label)), encode(train, test, label))
     return out
 
 
@@ -104,7 +137,7 @@ for name, (features, weighted) in variants(CARD + DECK + hand + ['matchup_rate']
     fit = lambda train: lgb.LGBMClassifier(**PARAMS).fit(train[features], train.kept, sample_weight=train.weight if weighted else None)
     p = m[f'p_{name}'] = out_of_fold(m, 'kept', fit, lambda model, test: model.predict_proba(test[features])[:, 1])
     hit = (p > 0.5) == m.kept
-    print(f'  {name:8} {hit.mean():.3f}  strong {hit[m.strong].mean():.3f}  AUC {roc_auc_score(m.kept, p):.3f}   top: {top_features(fit(with_matchup_rate(m, "kept")).booster_, features)}')
+    print(f'  {name:8} {hit.mean():.3f}  strong {hit[m.strong].mean():.3f}  AUC {roc_auc_score(m.kept, p):.3f}   top: {top_features(fit(encoded(m, "kept")).booster_, features)}')
 prior = out_of_fold(m, 'kept', card_rate('kept'), lambda rates, test: rate_of(rates, test, 'kept'))
 print(f'  baseline card keep-rate {((prior > 0.5) == m.kept).mean():.3f}   always keep {m.kept.mean():.3f}')
 
@@ -113,8 +146,7 @@ print(f'  baseline card keep-rate {((prior > 0.5) == m.kept).mean():.3f}   alway
 # raw, a top pick shown at 25% was the choice 45% of the time.
 ink = load('ink')
 first = ink.groupby('decision_id', as_index=False).first()
-passes = first.assign(card_id=NO_INK, card_name=NO_INK, inked=first.no_ink, copies=np.nan, cost=np.nan, inkable=np.nan,
-                      type=np.nan, strength=np.nan, willpower=np.nan, card_lore=np.nan, shift=np.nan, cost_gap=np.nan)
+passes = first.assign(card_id=NO_INK, card_name=NO_INK, inked=first.no_ink, **{c: np.nan for c in NOT_A_CARD})
 ink = categorize(pd.concat([ink.assign(pass_option=0), passes.assign(pass_option=1)]).sort_values('decision_id', kind='stable'))
 state = ['pass_option', 'opp_items', 'opp_actions', 'opp_characters', 'opp_shared', 'turn', 'my_turn', 'ink', 'my_lore', 'opp_lore', 'hand_size', 'hand_inkable', 'cost_gap']
 sizes = lambda d: d.groupby('decision_id', sort=True).size().to_numpy()
@@ -142,7 +174,7 @@ for name, (features, weighted) in variants(CARD + DECK + state + ['matchup_rate'
     temperature = minimize_scalar(lambda t: -np.log(softmax(score, t)[ink.inked == 1]).sum(), bounds=(0.1, 100), method='bounded').x
     ink[f'p_{name}'] = softmax(score, temperature)
     hit = picks(f'p_{name}').card_id.reindex(chosen.index) == chosen.card_id
-    print(f'  {name:8} {hit.mean():.3f}  strong {hit[strong].mean():.3f}   top: {top_features(fit(with_matchup_rate(ink, "inked")).booster_, features)}')
+    print(f'  {name:8} {hit.mean():.3f}  strong {hit[strong].mean():.3f}   top: {top_features(fit(encoded(ink, "inked")).booster_, features)}')
 ink['prior'] = out_of_fold(ink, 'inked', card_rate('inked'), lambda rates, test: rate_of(rates, test, 'inked'))
 print(f'  baseline card ink-rate {picks("prior").inked.mean():.3f}   random {(1 / ink.groupby("decision_id").size()).mean():.3f}')
 

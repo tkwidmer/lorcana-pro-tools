@@ -27,13 +27,28 @@ Both carry the game's account, colors, play/draw, MMR and result. The hand is re
 
 ## Baseline models and coaching flags
 
-`python3 scripts/train-decision-models.py` (needs `pip install lightgbm pandas scikit-learn`) trains a LightGBM mulligan classifier and ink ranker on every game (`--since 2026-10-08` to narrow it to a set). Every decision is scored by a model that never saw its game (5 folds split by game). The ink ranker weighs each inkable card in hand and "no ink", so it learns whether to ink as well as what. Both models see the player's deck shape (inkable count, average cost, 5+ cost cards, items, actions, from the decklist) and how often the team keeps or inks that card against those opponent colors in the other games. The ink model also sees what the opponent has shown so far (items, actions and characters played or inked, and how many of them the player's own list runs). The script prints each model next to simple baselines. Nov 2026, every game since February (8,667 with a mulligan, 39,214 ink decisions):
+`python3 scripts/train-decision-models.py` (needs `pip install lightgbm pandas scikit-learn`, about a minute) trains LightGBM mulligan classifiers and ink rankers on every game (`--since 2026-10-08` to narrow it to a set). Every decision is scored by models that never saw its game (5 folds split by game). The ink ranker weighs each inkable card in hand and "no ink", so it learns whether to ink as well as what. All models see the player's deck shape (inkable count, average cost, 5+ cost cards, items, actions, from the decklist), and the ink models see what the opponent has shown so far (items, actions and characters played or inked, and how many of them the player's own list runs).
 
-| | Model | Best simple baseline |
-|---|---|---|
-| Mulligan, card kept or sent | 81% (AUC 0.89) | 75%, the card's keep rate |
-| Ink, picked the choice (incl. no ink) | 58% (56% on inks, 72% on no-ink turns) | 42%, the card's ink rate (random is 27%) |
+Three models score each decision:
 
-A matchup habit backed by a handful of games is only partly learned. The team inks Aladdin - Doing His Part (item removal) 41% of the time, but 7% against Emerald/Ruby, over 9 games. The model only partly learns that, so holding it still draws flags in that matchup.
+- `card` also knows which card it is and how often the team keeps or inks it against those opponent colors in the other games. It is the best in the current meta, but it forgets everything when the cards change.
+- `mmr` is the same model with each game weighted by its MMR: the weight doubles every 100 MMR above the median, and a game with no MMR (most Bo3) takes the player's median.
+- `generic` sees only what a card is (cost, type, inkable, stats) and the game state, so it carries to a new meta. Trained on the games before set 14 and tested on set 14, where 26% of the cards were new, it beat the card model (mulligan 73% vs 71%, ink 54.2% vs 53.7%).
 
-It also writes `decisions/flags.csv`: every mulligan or ink choice the model gave under 10% chance (`--flag` to change), with the game, turn, the model's pick and the chance of every option. About 1 mulligan and 5 ink flags per 10 games. The model learned from the team's own games, so a flag marks a departure from how the team usually plays that spot, not a proven mistake. Read it in the replay before calling it one.
+Nov 2026, every game since February (8,667 with a mulligan, 39,214 ink decisions):
+
+| | `card` | `mmr` | `generic` | Best simple baseline |
+|---|---|---|---|---|
+| Mulligan, card kept or sent | 81% (AUC 0.89) | 80% | 78% | 75%, the card's keep rate |
+| Ink, picked the choice (incl. no ink) | 58% | 57% | 56% | 42%, the card's ink rate (random is 27%) |
+
+Weighting by MMR does not predict the 1400+ MMR games any better (mulligan 80.0% vs 79.9%, ink 58.9% vs 59.2%): the team's stronger and weaker pilots mostly make the same choices. Wally's games are the largest high-MMR share, so the `mmr` model leans toward how he plays.
+
+It also writes `decisions/flags.csv`: every mulligan or ink choice any model gave under 10% chance (`--flag` to change), with the game, turn, each model's chance and pick, `flagged_by`, and every option's chance as card/mmr/generic. The models learned from the team's own games, so a flag marks a departure from how the team usually plays that spot, not a proven mistake. Read it in the replay before calling it one. Which models agree says what kind of departure it is:
+
+| `flagged_by` | Meaning |
+|---|---|
+| `card+mmr+generic` | Unusual for the team and against general principles: the strongest flag |
+| `card+mmr`, `card` | Unusual for how the team plays this card, but defensible on principle: habit drift |
+| `generic` | The team does it on purpose and the principles don't say why: card or matchup knowledge (holding Aladdin - Doing His Part, item removal, against Emerald/Ruby), or a team-wide habit worth questioning |
+| `mmr` | Not how the stronger games, mostly Wally's, play it |

@@ -35,14 +35,14 @@ Three models score each decision:
 - `mmr` is the same model with each game weighted by its MMR: the weight doubles every 100 MMR above the median, and a game with no MMR (most Bo3) takes the player's median.
 - `generic` sees only what a card is (cost, type, inkable, stats) and the game state, so it carries to a new meta. Trained on the games before set 14 and tested on set 14, where 26% of the cards were new, it beat the card model (mulligan 73% vs 71%, ink 54.2% vs 53.7%).
 
-Nov 2026, every game since February (8,667 with a mulligan, 39,214 ink decisions):
+Nov 2026, every game since February (12,400 with a mulligan, 55,043 ink decisions):
 
 | | `card` | `mmr` | `generic` | Best simple baseline |
 |---|---|---|---|---|
-| Mulligan, card kept or sent | 81% (AUC 0.89) | 80% | 78% | 75%, the card's keep rate |
-| Ink, picked the choice (incl. no ink) | 58% | 57% | 56% | 42%, the card's ink rate (random is 27%) |
+| Mulligan, card kept or sent | 80.0% (AUC 0.88) | 78.0% | 76.6% | 74.6%, the card's keep rate |
+| Ink, picked the choice (incl. no ink) | 57.5% | 55.1% | 54.9% | 41.0%, the card's ink rate (random is 26%) |
 
-Weighting by MMR does not predict the 1400+ MMR games any better (mulligan 80.0% vs 79.9%, ink 58.9% vs 59.2%): the team's stronger and weaker pilots mostly make the same choices. Wally's games are the largest high-MMR share, so the `mmr` model leans toward how he plays.
+Weighting by MMR does not predict the 1400+ MMR games any better (`card` vs `mmr`: mulligan 79.7% vs 78.9%, ink 58.2% vs 56.6%). Josh's games (median MMR 1670, more 1400+ games than every other account together) carry 89% of the `mmr` model's weight, so it is close to a model of how Josh plays: on the other accounts it trails the `card` model by 2 to 4 points.
 
 It also writes `decisions/flags.csv`: every mulligan or ink choice any model gave under 10% chance (`--flag` to change), with the game, turn, each model's chance and pick, `flagged_by`, and every option's chance as card/mmr/generic. The models learned from the team's own games, so a flag marks a departure from how the team usually plays that spot, not a proven mistake. Read it in the replay before calling it one. Which models agree says what kind of departure it is:
 
@@ -51,4 +51,4 @@ It also writes `decisions/flags.csv`: every mulligan or ink choice any model gav
 | `card+mmr+generic` | Unusual for the team and against general principles: the strongest flag |
 | `card+mmr`, `card` | Unusual for how the team plays this card, but defensible on principle: habit drift |
 | `generic` | The team does it on purpose and the principles don't say why: card or matchup knowledge (holding Aladdin - Doing His Part, item removal, against Emerald/Ruby), or a team-wide habit worth questioning |
-| `mmr` | Not how the stronger games, mostly Wally's, play it |
+| `mmr` | Not how the stronger games, mostly Josh's, play it |

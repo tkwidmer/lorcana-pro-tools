@@ -17,12 +17,16 @@ Read a log with `src/lib/parseGamelog.js` (`your_player` from the row) or `.clau
 
 ## Decision rows
 
-`node scripts/decision-rows.mjs` turns the kept games into training rows (about 6 seconds for the whole corpus) in `decisions/`, which is gitignored:
+`node scripts/decision-rows.mjs` turns the kept games into training rows (about 30 seconds for the whole corpus) in `decisions/`, which is gitignored:
 
 - `mulligan.csv`: one row per opening-hand card, labelled `kept`, with card features and opening-hand context.
 - `ink.csv`: one row per inkable card in hand at each ink decision, labelled `inked`, grouped by `decision_id`. A turn with no ink is a decision where every row is 0 (`no_ink` = 1).
 
+- `choices.csv`: one row per legal option at each quest, challenge and end of turn, for both players, labelled `chosen`, grouped by `decision_id`. Options are quest with a ready character, challenge a legal target with it, or end the turn, with each side's printed stats, damage, and whether the challenge would banish the target (`kills`) and survive (`survives`).
+
 Both carry the game's account, colors, play/draw, MMR and result. The hand is rebuilt from the log by `src/lib/decisionRows.js`, and ink rows are only written while it is known. Logs before mid-June 2026 do not name the player's turn draws, so those games give mulligan rows and, on the play, a turn-1 ink row. From then on about 84% of ink decisions are kept, and the rebuilt hand matches about 95% of the prompts that show the whole hand. The script prints both numbers on every run.
+
+The choice rows come from `src/lib/boardState.js`, which rebuilds both boards (characters and locations, exerted, drying, damage, undo) and checks them against every quest and challenge the log records. The log often says an effect exerted or returned a character without naming it, so a turn becomes rows only when every check passes and nothing had to be inferred. Nov 2026: the board agrees with 99.8% of quests, 96.8% of challengers and 95.8% of challenge targets; 99.1% of logged challenges are in the legal option set; 88% of turns are trusted. Kill and survive use printed stats; temporary buffs are not logged, so they are right about 87% and 94% of the time.
 
 
 ## Baseline models and coaching flags

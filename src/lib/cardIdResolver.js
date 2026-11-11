@@ -4,7 +4,7 @@
 // C1 promo of Let It Go) — the id shape used by match history, gamelogs, and
 // /api/stats/meta's cardLift. A card printed in variants carries the letter after its number
 // (`3-4c` is Dalmatian Puppy - Tail Wagger, variant c).
-function cardKey(card) {
+export function cardKey(card) {
   const number = `${card.number}${card.variant ?? ''}`
   return card.promoGrouping
     ? `${card.setCode}-${card.promoGrouping}-${number}`

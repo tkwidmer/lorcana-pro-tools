@@ -3,6 +3,7 @@
 // applies it. Unknown keys or values throw QuerySyntaxError, which the
 // search page shows verbatim.
 import { legality } from './cardLegality'
+import { primaryPrinting, setOrder } from './cardPrintings'
 
 export class QuerySyntaxError extends Error {}
 
@@ -295,4 +296,43 @@ export function parseQuery(q, sets) {
   const tokens = tokenize(q)
   const predicate = tokens.length ? parse(tokens, sets, opts) : () => true
   return { predicate, ...opts }
+}
+
+// --- running a query ---------------------------------------------------------
+
+const ORDER_KEY = {
+  name: () => c => norm(c.fullName),
+  cost: () => c => c.cost ?? -1,
+  set: () => c => setOrder(c) * 1000 + c.number,
+  rarity: () => c => RARITY_RANK[norm(c.rarity)] ?? -1,
+  strength: () => c => c.strength ?? -1,
+  willpower: () => c => c.willpower ?? -1,
+  lore: () => c => c.lore ?? -1,
+  released: sets => c => sets[c.setCode]?.releaseDate ?? '',
+  number: () => c => c.number,
+}
+
+const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
+
+export function runQuery(cards, sets, q) {
+  if (!q.trim()) return []
+  const { predicate, order, direction, unique } = parseQuery(q, sets)
+  let hits = cards.filter(predicate)
+  if (unique === 'cards') {
+    const groups = new Map()
+    for (const c of hits) {
+      const g = groups.get(c.fullName)
+      if (g) g.push(c)
+      else groups.set(c.fullName, [c])
+    }
+    hits = [...groups.values()].map(primaryPrinting)
+  }
+  const key = ORDER_KEY[order](sets)
+  const sign = direction === 'desc' ? -1 : 1
+  return hits.sort((a, b) =>
+    sign * compare(key(a), key(b)) ||
+    compare(norm(a.fullName), norm(b.fullName)) ||
+    setOrder(a) - setOrder(b) ||
+    (a.promoGrouping ? 1 : 0) - (b.promoGrouping ? 1 : 0) ||
+    a.number - b.number)
 }

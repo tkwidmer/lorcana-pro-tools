@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseQuery, QuerySyntaxError, norm } from '../cardQuery'
+import { parseQuery, QuerySyntaxError, norm, runQuery } from '../cardQuery'
 
 const sets = {
   '1': { name: 'The First Chapter', releaseDate: '2023-09-01' },
@@ -200,5 +200,38 @@ describe('directives', () => {
 
   it('an empty query matches everything', () => {
     expect(names('')).toHaveLength(cards.length)
+  })
+})
+
+describe('runQuery', () => {
+  const elsa9 = { ...elsa, setCode: '9', number: 40, reprintOfId: 42 }
+  const all = [...cards, elsa9]
+
+  it('dedupes by name and shows the latest base printing', () => {
+    const r = runQuery(all, sets, 'elsa')
+    expect(r).toHaveLength(1)
+    expect(r[0]).toBe(elsa9)
+  })
+
+  it('picks the matching printing when the query narrows the set', () => {
+    expect(runQuery(all, sets, 'elsa s:1')[0]).toBe(elsa)
+    expect(runQuery(all, sets, 'elsa is:promo')[0]).toBe(promo)
+  })
+
+  it('unique:prints returns every printing in printing order', () => {
+    expect(runQuery(all, sets, 'elsa unique:prints').map(c => `${c.setCode}-${c.promoGrouping ?? ''}${c.number}`)).toEqual(['1-42', '1-P142', '9-40'])
+  })
+
+  it('sorts by name by default, and by the requested order', () => {
+    expect(runQuery(all, sets, '-c:colorless').map(c => c.fullName)).toEqual([
+      'Be Our Guest', 'Elsa - Spirit of Winter', 'Hiram Flaversham - Toymaker', 'Mickey Mouse & Minnie Mouse - Adventuring Duo', 'Te Kā - The Burning One',
+    ])
+    expect(runQuery(all, sets, 't=character order:cost dir:desc').map(c => c.cost)).toEqual([8, 7, 6, 4, 3])
+    expect(runQuery(all, sets, 'order:rarity').map(c => c.rarity)).toEqual(['Common', 'Rare', 'Rare', 'Super Rare', 'Legendary', 'Special'])
+    expect(runQuery(all, sets, 'order:released dir:desc')[0].setCode).toBe('9')
+  })
+
+  it('returns nothing for an empty query', () => {
+    expect(runQuery(all, sets, '  ')).toEqual([])
   })
 })

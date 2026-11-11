@@ -1594,9 +1594,169 @@ Create the PR (ready for review) titled "Card Search and card pages: Scryfall fo
 
 ---
 
+### Task 9: Syntax gaps found against the live Scryfall page
+
+The Scryfall syntax page was unreachable when the plan was written; the user pasted it afterwards. These are the differences that matter for Lorcana. Each is one `case`/alias in `compileTerm`, one row in `CardSearchSyntax.jsx`, one test. The spec's syntax table already carries the new rows.
+
+**Files:**
+- Modify: `src/lib/cardQuery.js`
+- Modify: `src/components/CardSearchSyntax.jsx`
+- Modify: `docs/agents/cards.md` (one line: `o:` strips reminder text, `fo:` keeps it)
+- Test: `src/lib/__tests__/cardQuery.test.js`
+
+**Interfaces:**
+- Consumes: everything Task 4/5 defined; `setOrder` from `cardPrintings.js`.
+- Produces: the same `parseQuery`/`runQuery` with the keys below.
+
+- [ ] **Step 1: Append failing tests**
+
+```js
+describe('Scryfall parity (live syntax page)', () => {
+  it('o: ignores reminder text, fo: searches it', () => {
+    expect(uniq('o:"sing this song"')).toEqual([])
+    expect(uniq('fo:"sing this song"')).toEqual(['Be Our Guest'])
+    expect(uniq('o:"you may pay"')).toEqual([])
+    expect(uniq('fulloracle:"you may pay"')).toEqual(['Elsa - Spirit of Winter'])
+    expect(uniq('o:"deep freeze"')).toEqual(['Elsa - Spirit of Winter'])
+  })
+
+  it('kw:, edition:, manavalue: aliases', () => {
+    expect(uniq('kw:rush')).toEqual(['Te Kā - The Burning One'])
+    expect(uniq('edition:fabled')).toEqual(uniq('s:9'))
+    expect(uniq('manavalue=7')).toEqual(['Mickey Mouse & Minnie Mouse - Adventuring Duo'])
+  })
+
+  it('a number in c: compares the ink count', () => {
+    expect(uniq('c=2')).toEqual(['Mickey Mouse & Minnie Mouse - Adventuring Duo'])
+    expect(uniq('c=0')).toEqual(['Anna - Ensnared Sister'])
+    expect(uniq('c>1')).toEqual(uniq('c=2'))
+    expect(uniq('c<2 -c=0').length).toBe(5)
+  })
+
+  it('t: accepts a regex', () => {
+    expect(uniq('t:/^action/')).toEqual(['Be Our Guest'])
+    expect(uniq('t:/\\bqueen\\b/ -is:quest')).toEqual(['Elsa - Spirit of Winter'])
+  })
+
+  it('date: takes yyyy-mm-dd or a set code', () => {
+    expect(uniq('date>=2025-09-05')).toEqual(['Te Kā - The Burning One', 'Mickey Mouse & Minnie Mouse - Adventuring Duo'])
+    expect(uniq('date<9 -is:quest')).toEqual(['Elsa - Spirit of Winter', 'Be Our Guest'])
+    expect(uniq('date=q1')).toEqual(['Anna - Ensnared Sister'])
+    expect(() => parseQuery('date>soon', sets)).toThrow(QuerySyntaxError)
+  })
+
+  it('order aliases from Scryfall', () => {
+    expect(parseQuery('order:cmc', sets).order).toBe('cost')
+    expect(parseQuery('order:power', sets).order).toBe('strength')
+    expect(parseQuery('order:toughness', sets).order).toBe('willpower')
+    const all = [...cards]
+    expect(runQuery(all, sets, 'order:color -c:colorless').map(c => c.color)).toEqual(['Amber', 'Amethyst', 'Emerald-Sapphire', 'Ruby', 'Sapphire'])
+    expect(runQuery(all, sets, 'order:artist').map(c => c.artistsText)[0]).toBe('A')
+  })
+})
+```
+
+Note the `date<9` case: set 2 (Hiram) has no entry in the test `sets`, so it has no date and is excluded; that is the intended behavior (no date, no match), the same rule `year:` follows.
+
+- [ ] **Step 2: Run to see it fail**
+
+Run: `npx vitest run src/lib/__tests__/cardQuery.test.js`
+Expected: FAIL on each new `it`.
+
+- [ ] **Step 3: Implement**
+
+In `src/lib/cardQuery.js`:
+
+```js
+// o: searches the rules text without reminder text (Lorcana puts every
+// reminder in parentheses); fo: searches all of it, like Scryfall.
+const rulesText = c => (c.fullText ?? '').replace(/\([^)]*\)/g, '')
+
+const TEXT = {
+  n: c => c.fullName, name: c => c.fullName,
+  o: rulesText, text: rulesText, oracle: rulesText,
+  fo: c => c.fullText, fulloracle: c => c.fullText,
+  ft: c => c.flavorText, flavor: c => c.flavorText,
+  a: c => c.artistsText, artist: c => c.artistsText,
+  story: c => c.story,
+  v: c => c.version, version: c => c.version,
+}
+```
+
+Add `manavalue: 'cost'` to `STAT`.
+
+In `colorPredicate`, before `const q = parseInks(value)`:
+```js
+  if (!identity && /^\d+$/.test(value)) {
+    const n = Number(value)
+    const cmp = cmpOp(op)
+    return c => cmp(inks(c).length, n)
+  }
+```
+
+`t:` with regex, replacing the `case 't': case 'type':` block:
+```js
+    case 't': case 'type': {
+      const typeLine = c => `${c.type} ${c.subtypesText ?? ''}`
+      if (raw.length >= 2 && raw.startsWith('/') && raw.endsWith('/')) return textPredicate(typeLine, ':', raw)
+      const v = norm(value)
+      if (op === '=') return c => norm(c.type) === v
+      if (op === ':') return c => norm(typeLine(c)).includes(v)
+      throw new QuerySyntaxError(`"${op}" can't be used with type`)
+    }
+```
+
+Aliases: change `case 'k': case 'keyword':` to `case 'k': case 'kw': case 'keyword':` and `case 's': case 'set': case 'e':` to `case 's': case 'set': case 'e': case 'edition':`.
+
+`date:`, new case next to `year`:
+```js
+    case 'date': {
+      const v = norm(value)
+      const bySet = Object.entries(sets).find(([code]) => norm(code) === v)?.[1]?.releaseDate
+      const target = bySet ?? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null)
+      if (!target) throw new QuerySyntaxError(`"${value}" isn't a yyyy-mm-dd date or a set code`)
+      const cmp = cmpOp(op)
+      return c => {
+        const date = sets[c.setCode]?.releaseDate
+        return !!date && cmp(date, target)
+      }
+    }
+```
+(ISO dates compare correctly as strings.)
+
+Orders: add the aliases and two keys.
+```js
+const ORDER_ALIAS = { cmc: 'cost', mv: 'cost', power: 'strength', pow: 'strength', toughness: 'willpower', tou: 'willpower' }
+export const ORDERS = ['name', 'cost', 'set', 'rarity', 'strength', 'willpower', 'lore', 'color', 'artist', 'released', 'number']
+```
+In the `order` directive: `const v = ORDER_ALIAS[norm(value)] ?? norm(value)` before the `ORDERS.includes(v)` check. In `ORDER_KEY` add:
+```js
+  color: () => c => c.color ?? '',
+  artist: () => c => norm(c.artistsText),
+```
+
+In `src/components/CardSearchSyntax.jsx` update the rows: `o:` → "Rules text without reminder text; ~ is the card's own name; /regex/ allowed", add a row `['fo:', 'Rules text including reminder text', 'fo:"sing this song"']`, `t:` → add "; /regex/ allowed", `k:` → `k:, kw:`, `c:` → add "; a number compares the ink count (c=2)", `s:` → `s:, set:, e:`, add a row `['date:', 'Set release date (yyyy-mm-dd) or a set code standing for its date', 'date>=2025-09-05 · date>9']`, `order:` row → add `color artist`.
+
+In `docs/agents/cards.md` under "Query language" add: "`o:` searches rules text with parenthesized reminder text stripped; `fo:` searches all of `fullText`."
+
+- [ ] **Step 4: Run to see it pass**
+
+Run: `npx vitest run src/lib/__tests__/cardQuery.test.js && npm run lint && npm test`
+Expected: PASS, green.
+
+- [ ] **Step 5: Commit and push**
+
+```bash
+git add src/lib/cardQuery.js src/components/CardSearchSyntax.jsx src/lib/__tests__/cardQuery.test.js docs/agents/cards.md
+git commit -m "cardQuery: fo:, ink counts, t: regex, date:, Scryfall aliases"
+git push -u origin claude/upbeat-curie-wncgen
+```
+
+---
+
 ## Self-review
 
-- **Spec coverage:** routes (T6, T7), data (T1), legality rules (T2), every syntax key in the spec table (T4: text, type, keyword, colors, identity, stats, rarity, set, cn, year, format, banned, is/not, order/dir/unique; exact-name and regex in the tokenizer), card page content list (T7: image, name, inks, cost, type line, abilities, stats, flavor, artist/story, set/number/rarity/promo source, legality + max copies, printings, rulings, links, quick searches), catalog/prerender/title (T6), docs (T8).
+- **Spec coverage:** routes (T6, T7), Scryfall-page parity rows (T9), data (T1), legality rules (T2), every syntax key in the spec table (T4: text, type, keyword, colors, identity, stats, rarity, set, cn, year, format, banned, is/not, order/dir/unique; exact-name and regex in the tokenizer), card page content list (T7: image, name, inks, cost, type line, abilities, stats, flavor, artist/story, set/number/rarity/promo source, legality + max copies, printings, rulings, links, quick searches), catalog/prerender/title (T6), docs (T8).
 - **Placeholders:** none; every step carries its code.
 - **Type consistency:** `formatStatus`/`legality`/`FORMATS` (T2 → T4, T7); `cardPath`/`findPrinting`/`groupPrintings`/`primaryPrinting`/`setOrder` (T3 → T4, T5, T6, T7); `runQuery`/`QuerySyntaxError` (T4/T5 → T6); `useCards` returns `sets` (T1 → T6, T7).
 - **Review Focus:** 1 → T4 boolean-structure tests; 2 → T4 `a missing stat never compares true`; 3 → T2 `banned beats rotated`; 4 → T3 `findPrinting`; 5 → T3 `primaryPrinting` + T5 `picks the matching printing`.

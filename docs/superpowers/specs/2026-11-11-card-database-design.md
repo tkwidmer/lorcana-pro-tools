@@ -31,32 +31,34 @@ Implicit AND, `or`/`OR`, `-` negation, parentheses, `"quoted values"`, `!"Exact 
 | Key(s) | Matches | Examples |
 |---|---|---|
 | bare word, `n:`, `name:` | `fullName`, substring, accent/case-insensitive | `elsa`, `n:"spirit of winter"`, `!"Elsa - Spirit of Winter"` |
-| `o:`, `text:`, `oracle:` | `fullText`; `~` stands for the card's own name | `o:"draw a card"`, `o:/banish.*item/` |
+| `o:`, `text:`, `oracle:` | rules text without reminder text (parentheses stripped from `fullText`); `~` stands for the card's own name | `o:"draw a card"`, `o:/banish.*item/` |
+| `fo:`, `fulloracle:` | `fullText` including reminder text | `fo:"sing this song"` |
 | `ft:`, `flavor:` | `flavorText` | `ft:ice` |
 | `a:`, `artist:` | `artistsText` | `a:"matthew robert davies"` |
 | `story:` | `story` | `story:frozen` |
 | `v:`, `version:` | `version` (the subtitle) | `v:"spirit of winter"` |
-| `t:`, `type:` | `type` + `subtypesText` substring; `=` is exact type | `t:song`, `t:floodborn`, `t=location` |
-| `k:`, `keyword:` | one of `keywordAbilities`, exact | `k:shift`, `k:evasive` |
-| `c:`, `color:`, `ink:` | inks the card has; `:`/`>=` at least these, `=` exactly, `<=` within, `<`/`>` strict, `!=`; `c:m`/`c:multi` dual-ink; `c:colorless` | `c:amethyst`, `c=amber,steel`, `c:m` |
+| `t:`, `type:` | `type` + `subtypesText` substring; `=` is exact type; `/regex/` allowed | `t:song`, `t:floodborn`, `t=location`, `t:/^(prince|princess)$/` |
+| `k:`, `kw:`, `keyword:` | one of `keywordAbilities`, exact | `k:shift`, `kw:evasive` |
+| `c:`, `color:`, `ink:` | inks the card has; `:`/`>=` at least these, `=` exactly, `<=` within, `<`/`>` strict, `!=`; a number compares the ink count; `c:m`/`c:multi` dual-ink; `c:colorless` | `c:amethyst`, `c=amber,steel`, `c=2`, `c:m` |
 | `ci:`, `id:`, `identity:` | deck identity: card inks ⊆ query inks (`:` means `<=`) | `ci:amber,steel` |
-| `cost:`, `mv:`, `cmc:` | `cost` | `cost<=3`, `cost=7` |
+| `cost:`, `mv:`, `manavalue:`, `cmc:` | `cost` | `cost<=3`, `cost=7` |
 | `str:`, `strength:`, `pow:`, `power:` | `strength` | `str>=4` |
 | `will:`, `willpower:`, `tou:`, `toughness:` | `willpower` | `will>str` (stat vs stat) |
 | `lore:`, `l:` | `lore` | `lore>=3` |
 | `move:`, `movecost:` | `moveCost` (locations) | `move:1` |
 | `r:`, `rarity:` | rarity, ordered Common<Uncommon<Rare<Super Rare<Legendary<Enchanted<Special<Epic<Iconic; aliases `c u r sr l e s` | `r:legendary`, `r>=rare` |
-| `s:`, `set:`, `e:` | set code exactly, or set name substring | `s:9`, `s:q1`, `set:fabled` |
+| `s:`, `set:`, `e:`, `edition:` | set code exactly, or set name substring | `s:9`, `s:q1`, `set:fabled` |
 | `cn:`, `number:` | collector number with variant letter; comparisons numeric | `cn:4c`, `cn<10` |
 | `year:` | set release year | `year>=2026` |
+| `date:` | set release date, `yyyy-mm-dd` or a set code standing for its release date | `date>=2025-09-05`, `date>9` |
 | `f:`, `format:`, `legal:` | status `legal` in `core`, `infinity`, `coconut` | `f:core` |
 | `banned:` | status `banned` in a format | `banned:infinity` |
 | `is:`, `not:` | `inkable`, `uninkable`, `dual`, `promo`, `enchanted`, `reprint`, `variant`, `quest`, `banned` (any format), `errata` | `is:inkable`, `-is:promo` |
-| `order:` | `name` (default), `cost`, `set`, `rarity`, `strength`, `willpower`, `lore`, `released`, `number` | `order:cost` |
+| `order:` | `name` (default), `cost` (`cmc`), `set`, `rarity`, `strength` (`power`), `willpower` (`toughness`), `lore`, `color`, `artist`, `released`, `number` | `order:cost` |
 | `dir:`, `direction:` | `asc` (default), `desc` | `dir:desc` |
 | `unique:` | `cards` (default: one row per name, showing the best matching printing) or `prints` (every printing) | `unique:prints s:1` |
 
-Not built, on purpose: prices (no data), `lang:` (English only), `in:`, `prefer:`, `has:`, `cube:`, `art:` tags.
+Checked against the live Scryfall syntax page on 2026-11-11. Not built, on purpose: prices (no data), `lang:` (English only), `in:`, `prefer:`, `has:`, `cube:`, `art:`/`function:` tags, `new:`, `is:unique`/`prints=`/`sets=` (need a per-name count; add when asked), `display:`, `include:extras` (quest cards are shown; `-is:quest` hides them).
 
 ## Card page content (Scryfall card page order, Lorcana fields)
 

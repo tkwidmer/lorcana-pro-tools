@@ -17,11 +17,12 @@ const ROWS = [
   ['cn:, number:', 'Collector number', 'cn:4c · cn<10'],
   ['year:', 'Set release year', 'year>=2026'],
   ['date:', 'Set release date (yyyy-mm-dd) or a set code standing for its date', 'date>=2025-09-05 · date>9'],
+  ['usd:', 'TCGplayer market price (non-foil, or foil when only foil exists)', 'usd<1 · usd>=20 order:usd'],
   ['f:, legal:, banned:', 'Format legality: core, infinity, coconut', 'f:core · banned:infinity'],
   ['is:, not:', 'inkable, uninkable, dual, promo, enchanted, reprint, variant, quest, banned, errata', 'is:inkable · -is:promo'],
   ['ft:, a:, story:, v:', 'Flavor text, artist, story, version (the subtitle)', 'a:"matthew robert davies" · story:frozen'],
   ['or, -, ( )', 'Any term, negation, grouping', '(t:song or k:rush) -c:ruby'],
-  ['order:, dir:, unique:', 'set (default: set, then collector number) name cost rarity strength willpower lore color artist released number · asc desc · cards prints', 'order:cost dir:desc unique:prints'],
+  ['order:, dir:, unique:, display:', 'set (default: set, then collector number) name cost rarity strength willpower lore color artist released number usd · asc desc · cards prints · grid list', 'order:cost dir:desc unique:prints · display:list'],
 ]
 
 const EXAMPLES = [

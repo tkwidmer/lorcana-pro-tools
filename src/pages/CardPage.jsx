@@ -8,6 +8,7 @@ import { FORMATS, legality } from '../lib/cardLegality'
 import { resolveColors } from '../lib/inkColors'
 import { InkIcons } from '../components/InkIcons'
 import { CostBadge } from '../components/DecklistCardBar'
+import { CardMetaSection } from '../components/CardMetaSection'
 import { Button } from '../components/ui/Button'
 
 const STATUS = {
@@ -130,6 +131,8 @@ export function CardPage() {
             </ul>
             {card.maxCopiesInDeck != null && <p className="text-sm text-gray-700 mt-2">Up to {card.maxCopiesInDeck} copies in a deck.</p>}
           </Section>
+
+          <CardMetaSection printings={printings} />
 
           <Section title={`Printings (${printings.length})`}>
             <div className="overflow-x-auto">

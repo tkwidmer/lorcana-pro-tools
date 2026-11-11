@@ -21,6 +21,12 @@ export const SECTIONS = [
         description: 'Search for any Lorcana card and generate a printable B&W proxy sheet. 9 cards per page, grayscale printer friendly.',
       },
       {
+        path: '/cards',
+        name: 'Card Search',
+        icon: 'search',
+        description: 'Search every Lorcana card with Scryfall-style syntax — inks, cost, text, keywords, format legality — and open any printing for its abilities, rulings, legality and every other printing.',
+      },
+      {
         path: '/limited-guide',
         name: 'Limited Guide',
         icon: 'book',

@@ -29,10 +29,23 @@ describe('findPrinting', () => {
 })
 
 describe('groupPrintings', () => {
-  it('groups by fullName, regular printings before promos, sets in order', () => {
+  it('maps each printing to all printings of its card, regular before promos, sets in order', () => {
     const groups = groupPrintings(cards)
-    expect(groups.get('Elsa - Spirit of Winter').map(c => c.id)).toEqual([42, 207, 900, 1979])
-    expect(groups.get('Dalmatian Puppy - Tail Wagger').map(c => c.id)).toEqual([438, 1702])
+    expect(groups.get(elsa1).map(c => c.id)).toEqual([42, 207, 900, 1979])
+    expect(groups.get(elsaPromo)).toBe(groups.get(elsa9))
+    expect(groups.get(puppyC).map(c => c.id)).toEqual([438, 1702])
+    expect(groups.get(quest).map(c => c.id)).toEqual([5000])
+  })
+
+  it('joins printings linked by baseId or reprintOfId even when the printed name differs', () => {
+    // LorcanaJSON: the set-1 C210 Let it Go and the Vaiana promo of Moana.
+    const letItGo = { id: 163, setCode: '1', number: 163, fullName: 'Let It Go', rarity: 'Rare' }
+    const letItGoC = { id: 2460, setCode: '1', number: 210, promoGrouping: 'C', baseId: 163, fullName: 'Let it Go', rarity: 'Special' }
+    const moana = { id: 1589, setCode: '7', number: 156, fullName: 'Moana - Adventurer of Land and Sea', rarity: 'Common' }
+    const vaiana = { id: 1663, setCode: '7', number: 226, promoGrouping: 'P2', baseId: 1589, fullName: 'Vaiana - Adventurer of Land and Sea', rarity: 'Special' }
+    const groups = groupPrintings([vaiana, letItGoC, letItGo, moana])
+    expect(groups.get(letItGo).map(c => c.id)).toEqual([163, 2460])
+    expect(groups.get(vaiana).map(c => c.id)).toEqual([1589, 1663])
   })
 
   it('sorts quest sets after the numbered sets', () => {

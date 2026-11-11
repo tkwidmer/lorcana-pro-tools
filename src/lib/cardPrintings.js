@@ -22,15 +22,33 @@ const byPrinting = (a, b) =>
   a.number - b.number ||
   (a.variant ?? '').localeCompare(b.variant ?? '')
 
+// Every printing → the printings of its card, in printing order. Printings
+// belong together when they share a fullName or LorcanaJSON links them with
+// baseId / reprintOfId: a promo or enchanted can print the name differently
+// (the C210 "Let it Go" of "Let It Go", the Vaiana promo of Moana).
 export function groupPrintings(cards) {
-  const groups = new Map()
-  for (const c of cards) {
-    const group = groups.get(c.fullName)
-    if (group) group.push(c)
-    else groups.set(c.fullName, [c])
+  const parent = new Map(cards.map(c => [c, c]))
+  const root = c => {
+    while (parent.get(c) !== c) c = parent.get(c)
+    return c
   }
-  for (const group of groups.values()) group.sort(byPrinting)
-  return groups
+  const join = (a, b) => parent.set(root(b), root(a))
+  const byId = new Map(cards.filter(c => c.id != null).map(c => [c.id, c]))
+  const byName = new Map()
+  for (const c of cards) {
+    const same = byName.get(c.fullName)
+    if (same) join(same, c)
+    else byName.set(c.fullName, c)
+    for (const linked of [byId.get(c.baseId), byId.get(c.reprintOfId)]) if (linked) join(linked, c)
+  }
+  const lists = new Map()
+  for (const c of cards) {
+    const r = root(c)
+    if (!lists.has(r)) lists.set(r, [])
+    lists.get(r).push(c)
+  }
+  for (const list of lists.values()) list.sort(byPrinting)
+  return new Map(cards.map(c => [c, lists.get(root(c))]))
 }
 
 const isBase = c => !c.baseId && !c.promoGrouping && !c.variant

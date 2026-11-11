@@ -218,6 +218,12 @@ describe('runQuery', () => {
     expect(runQuery(all, sets, 'elsa is:promo')[0]).toBe(promo)
   })
 
+  it('unique:cards treats printings linked by baseId as one card, whatever their printed name', () => {
+    const base = { ...song, id: 163, fullName: 'Let It Go', name: 'Let It Go' }
+    const promoC = { ...song, id: 2460, number: 210, promoGrouping: 'C', baseId: 163, fullName: 'Let it Go', name: 'Let it Go' }
+    expect(runQuery([base, promoC], sets, 'n:"let it go"')).toEqual([base])
+  })
+
   it('unique:prints returns every printing in printing order', () => {
     expect(runQuery(all, sets, 'elsa unique:prints').map(c => `${c.setCode}-${c.promoGrouping ?? ''}${c.number}`)).toEqual(['1-42', '1-P142', '9-40'])
   })

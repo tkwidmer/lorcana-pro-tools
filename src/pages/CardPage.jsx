@@ -53,7 +53,7 @@ export function CardPage() {
   const { setCode, number } = useParams()
   const { cards, sets, loading, error } = useCards()
   const card = useMemo(() => findPrinting(cards, setCode, number), [cards, setCode, number])
-  const printings = useMemo(() => (card ? groupPrintings(cards).get(card.fullName) : []), [cards, card])
+  const printings = useMemo(() => (card ? groupPrintings(cards).get(card) : []), [cards, card])
 
   if (loading) return <div className="w-full px-6 py-8 text-sm text-gray-500">Loading card data…</div>
   if (error) return <div className="w-full px-6 py-8 text-sm text-red-700">{error}</div>

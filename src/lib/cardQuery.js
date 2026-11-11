@@ -3,7 +3,7 @@
 // applies it. Unknown keys or values throw QuerySyntaxError, which the
 // search page shows verbatim.
 import { legality } from './cardLegality'
-import { primaryPrinting, setOrder } from './cardPrintings'
+import { groupPrintings, primaryPrinting, setOrder } from './cardPrintings'
 
 export class QuerySyntaxError extends Error {}
 
@@ -355,13 +355,15 @@ export function runQuery(cards, sets, q) {
   const { predicate, order, direction, unique } = parseQuery(q, sets)
   let hits = cards.filter(predicate)
   if (unique === 'cards') {
-    const groups = new Map()
+    // One row per card: the best matching printing among that card's printings.
+    const groups = groupPrintings(cards)
+    const matching = new Map()
     for (const c of hits) {
-      const g = groups.get(c.fullName)
-      if (g) g.push(c)
-      else groups.set(c.fullName, [c])
+      const g = groups.get(c)
+      if (!matching.has(g)) matching.set(g, [])
+      matching.get(g).push(c)
     }
-    hits = [...groups.values()].map(primaryPrinting)
+    hits = [...matching.values()].map(primaryPrinting)
   }
   const key = ORDER_KEY[order](sets)
   const sign = direction === 'desc' ? -1 : 1

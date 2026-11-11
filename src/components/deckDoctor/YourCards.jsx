@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
+import { CardLink } from '../CardLink'
 import { fmtPp } from '../../lib/deckDoctor'
 import { signColor } from '../../lib/statColors'
 
 const pct = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`)
 
-function ImpactTable({ title, rows, liftByName }) {
+function ImpactTable({ title, rows, liftByName, cardHref }) {
   if (rows.length === 0) return null
   return (
     <div>
@@ -26,7 +27,7 @@ function ImpactTable({ title, rows, liftByName }) {
               const lift = liftByName.get(c.name)
               return (
                 <tr key={c.name} className={`border-b border-gray-100 ${c.lowSample ? 'text-gray-400' : 'text-gray-900'}`}>
-                  <td className="py-1 pr-3">{c.name}</td>
+                  <td className="py-1 pr-3"><CardLink name={c.name} href={cardHref(c.name)} /></td>
                   <td className="py-1 pr-3 text-right tabular-nums">{c.war.toFixed(1)}</td>
                   <td className="py-1 pr-3 text-right tabular-nums">{pct(c.winRateWith)}</td>
                   <td className="py-1 pr-3 text-right tabular-nums">{pct(c.winRateWithout)}</td>
@@ -45,7 +46,7 @@ function ImpactTable({ title, rows, liftByName }) {
 // Section 4: your own wins above replacement (computeCardImpact, sorted by
 // WAR desc) for this deck's imported gamelogs, with the field's lift beside
 // any card duels.ink lists.
-export function YourCards({ impact, lifts, hasGamelogs, nameOf }) {
+export function YourCards({ impact, lifts, hasGamelogs, nameOf, cardHref }) {
   if (!hasGamelogs) {
     return (
       <p className="text-sm text-gray-600">
@@ -63,8 +64,8 @@ export function YourCards({ impact, lifts, hasGamelogs, nameOf }) {
   return (
     <div className="space-y-6">
       <p className="text-xs text-gray-500">Greyed rows have fewer than 5 games with or without the card.</p>
-      <ImpactTable title="Underperforming" rows={bottom} liftByName={liftByName} />
-      <ImpactTable title="Pulling their weight" rows={top} liftByName={liftByName} />
+      <ImpactTable title="Underperforming" rows={bottom} liftByName={liftByName} cardHref={cardHref} />
+      <ImpactTable title="Pulling their weight" rows={top} liftByName={liftByName} cardHref={cardHref} />
     </div>
   )
 }

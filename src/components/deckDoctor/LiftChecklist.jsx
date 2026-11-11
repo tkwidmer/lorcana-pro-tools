@@ -1,4 +1,5 @@
 import { fmtPp } from '../../lib/deckDoctor'
+import { CardLink } from '../CardLink'
 import { signColor } from '../../lib/statColors'
 
 const ROW_TONE = { 'missing-positive': 'bg-forge-soft', 'present-negative': 'bg-red-50' }
@@ -6,7 +7,7 @@ const ROW_TONE = { 'missing-positive': 'bg-forge-soft', 'present-negative': 'bg-
 // One lift list (an archetype's cardLift or a colour pair's pairCardLift)
 // against your list: the cards that lift you're missing and the cards that
 // sink you're running are tinted.
-export function LiftChecklist({ title, rows, nameOf }) {
+export function LiftChecklist({ title, rows, nameOf, hrefOf }) {
   if (rows.length === 0) return null
   return (
     <div>
@@ -24,7 +25,7 @@ export function LiftChecklist({ title, rows, nameOf }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.cardId} className={`border-b border-gray-100 ${ROW_TONE[r.flag] ?? ''}`}>
-                <td className="py-1 pr-3 text-gray-900">{nameOf(r.cardId)}</td>
+                <td className="py-1 pr-3 text-gray-900"><CardLink name={nameOf(r.cardId)} href={hrefOf(r.cardId)} /></td>
                 <td className={`py-1 pr-3 text-right tabular-nums ${signColor(r.lift)}`}>{fmtPp(r.lift)}</td>
                 <td className="py-1 pr-3 text-right tabular-nums text-gray-600">{r.presence != null ? `${Math.round(r.presence * 100)}%` : '—'}</td>
                 <td className="py-1 text-right tabular-nums text-gray-900">{r.mine > 0 ? `✓ ×${r.mine}` : '✗'}</td>

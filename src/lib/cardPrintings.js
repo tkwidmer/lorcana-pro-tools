@@ -5,6 +5,9 @@ import { cardKey } from './cardIdResolver'
 
 export const cardPath = card => '/cards/' + cardKey(card).replace('-', '/')
 
+// The collector number as the route shows it: 42, P1-42 (promo), 4c (variant).
+export const printingNumber = card => cardKey(card).slice(card.setCode.length + 1)
+
 export function findPrinting(cards, setCode, number) {
   const key = `${setCode}-${number}`
   return cards.find(c => cardKey(c) === key) ?? null
@@ -22,15 +25,33 @@ const byPrinting = (a, b) =>
   a.number - b.number ||
   (a.variant ?? '').localeCompare(b.variant ?? '')
 
+// Every printing → the printings of its card, in printing order. Printings
+// belong together when they share a fullName or LorcanaJSON links them with
+// baseId / reprintOfId: a promo or enchanted can print the name differently
+// (the C210 "Let it Go" of "Let It Go", the Vaiana promo of Moana).
 export function groupPrintings(cards) {
-  const groups = new Map()
-  for (const c of cards) {
-    const group = groups.get(c.fullName)
-    if (group) group.push(c)
-    else groups.set(c.fullName, [c])
+  const parent = new Map(cards.map(c => [c, c]))
+  const root = c => {
+    while (parent.get(c) !== c) c = parent.get(c)
+    return c
   }
-  for (const group of groups.values()) group.sort(byPrinting)
-  return groups
+  const join = (a, b) => parent.set(root(b), root(a))
+  const byId = new Map(cards.filter(c => c.id != null).map(c => [c.id, c]))
+  const byName = new Map()
+  for (const c of cards) {
+    const same = byName.get(c.fullName)
+    if (same) join(same, c)
+    else byName.set(c.fullName, c)
+    for (const linked of [byId.get(c.baseId), byId.get(c.reprintOfId)]) if (linked) join(linked, c)
+  }
+  const lists = new Map()
+  for (const c of cards) {
+    const r = root(c)
+    if (!lists.has(r)) lists.set(r, [])
+    lists.get(r).push(c)
+  }
+  for (const list of lists.values()) list.sort(byPrinting)
+  return new Map(cards.map(c => [c, lists.get(root(c))]))
 }
 
 const isBase = c => !c.baseId && !c.promoGrouping && !c.variant
@@ -42,4 +63,13 @@ export function primaryPrinting(printings) {
   const pool = base.length ? base : [...printings].sort(byPrinting)
   if (!base.length) return pool[0]
   return base.reduce((best, c) => (setOrder(c) > setOrder(best) ? c : best))
+}
+
+// Every printed name → its card's page (the primary printing), for places
+// that know only a name. Alternate printed names map to the same page.
+export function cardLinkIndex(cards) {
+  const groups = groupPrintings(cards)
+  const index = new Map()
+  for (const c of cards) if (!index.has(c.fullName)) index.set(c.fullName, cardPath(primaryPrinting(groups.get(c))))
+  return index
 }

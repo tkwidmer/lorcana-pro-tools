@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { cardLinkIndex, cardPath } from '../lib/cardPrintings'
 import { Link } from 'react-router-dom'
 import { getToken, subscribeTokens, fetchAllMatchHistory, fetchStats, fetchPersonalStats } from '../lib/duelsApi'
 import { getAllGamelogs } from '../lib/gamelogHistory'
@@ -82,6 +83,11 @@ export function DeckDoctorPage() {
 
   const cardById = useMemo(() => buildCardIdToCard(cards), [cards])
   const nameOf = useMemo(() => (id) => cardById[id]?.fullName ?? cardById[id]?.name ?? id, [cardById])
+  const hrefOf = useMemo(() => (id) => (cardById[id] ? cardPath(cardById[id]) : null), [cardById])
+  const cardHref = useMemo(() => {
+    const index = cardLinkIndex(cards)
+    return (name) => index.get(name) ?? null
+  }, [cards])
   const cardIndex = useMemo(() => buildCardIndex(cards ?? []), [cards])
 
   const decks = useMemo(() => constructedDecks(games ?? [], readJson(DECK_NAMES_KEY, {})), [games])
@@ -272,7 +278,7 @@ export function DeckDoctorPage() {
                   />
                 )}
               </div>
-              {diff && <BuildDiff diff={diff} lifts={archetypeLifts} nameOf={nameOf} />}
+              {diff && <BuildDiff diff={diff} lifts={archetypeLifts} nameOf={nameOf} hrefOf={hrefOf} />}
               {mode === 'deck' && versions.length > 1 && (
                 <div className="mt-6">
                   <h3 className="font-display uppercase tracking-wide text-sm text-gray-900 mb-2">Versions</h3>
@@ -296,15 +302,15 @@ export function DeckDoctorPage() {
                 Cards that lift you're missing are tinted gold; cards that sink you're running are tinted red.
               </p>
               <div className="grid lg:grid-cols-2 gap-6">
-                <LiftChecklist title={`In ${archetype?.name ?? 'your archetype'}`} rows={archetypeLifts} nameOf={nameOf} />
-                <LiftChecklist title={`In ${colorLabel}`} rows={pairLifts} nameOf={nameOf} />
+                <LiftChecklist title={`In ${archetype?.name ?? 'your archetype'}`} rows={archetypeLifts} nameOf={nameOf} hrefOf={hrefOf} />
+                <LiftChecklist title={`In ${colorLabel}`} rows={pairLifts} nameOf={nameOf} hrefOf={hrefOf} />
               </div>
             </Card>
           )}
 
           {mode === 'deck' && (
             <Card className="p-4" title="Your cards">
-              <YourCards impact={impact} lifts={allLifts} hasGamelogs={deckGamelogs.length > 0} nameOf={nameOf} />
+              <YourCards impact={impact} lifts={allLifts} hasGamelogs={deckGamelogs.length > 0} nameOf={nameOf} cardHref={cardHref} />
             </Card>
           )}
 

@@ -1,10 +1,11 @@
 import { fmtPp } from '../../lib/deckDoctor'
+import { CardLink } from '../CardLink'
 import { signColor } from '../../lib/statColors'
 
 // Section 2's three-column diff of your list against the field's average
 // build. `lifts` (liftChecklist rows) add a lift pill and the field's
 // presence where duels.ink publishes them.
-export function BuildDiff({ diff, lifts, nameOf }) {
+export function BuildDiff({ diff, lifts, nameOf, hrefOf }) {
   const liftById = new Map(lifts.map((l) => [l.cardId, l]))
   const columns = [
     { title: 'Only in your list', rows: diff.onlyMine, detail: (r) => `×${r.mine}` },
@@ -29,7 +30,7 @@ export function BuildDiff({ diff, lifts, nameOf }) {
               const lift = liftById.get(r.cardId)
               return (
                 <li key={r.cardId} className="text-sm flex flex-wrap items-baseline gap-x-2">
-                  <span className="text-gray-900">{nameOf(r.cardId)}</span>
+                  <CardLink name={nameOf(r.cardId)} href={hrefOf(r.cardId)} className="text-gray-900" />
                   <span className="text-gray-500">{col.detail(r)}</span>
                   {lift && <span className={`text-xs ${signColor(lift.lift)}`}>{fmtPp(lift.lift)}</span>}
                 </li>

@@ -7,6 +7,7 @@ import { decompressGzip, parseGamelog } from '../lib/parseGamelog'
 import { fetchDecks, fetchPersonalStats, getToken, getTokens } from '../lib/duelsApi'
 import { useCards } from '../hooks/useCards'
 import { buildCardIdToName } from '../lib/cardIdResolver'
+import { cardLinkIndex } from '../lib/cardPrintings'
 import { InkIcon as InkImg } from '../components/InkIcons'
 import { getMyPlayerNum, enrichGame } from '../lib/analyticsAggregation'
 import { deckFingerprint } from '../lib/deckFingerprint'
@@ -76,6 +77,10 @@ export function AnalyticsPage() {
 
   const navigate = useNavigate()
   const { cards } = useCards()
+  const cardHref = useMemo(() => {
+    const index = cardLinkIndex(cards)
+    return name => index.get(name) ?? null
+  }, [cards])
   const cardIdToName = useMemo(() => buildCardIdToName(cards), [cards])
 
   useEffect(() => {
@@ -887,8 +892,8 @@ export function AnalyticsPage() {
           <LeakReport enrichedGames={enrichedGames} />
           {enrichedGames.length > 1 && (
             <>
-              <DeckStats filteredGames={enrichedGames} subtitle={`Aggregated across ${enrichedGames.length} games`} />
-              <ChallengeStats filteredGames={enrichedGames} subtitle={`Aggregated across ${enrichedGames.length} games`} />
+              <DeckStats cardHref={cardHref} filteredGames={enrichedGames} subtitle={`Aggregated across ${enrichedGames.length} games`} />
+              <ChallengeStats cardHref={cardHref} filteredGames={enrichedGames} subtitle={`Aggregated across ${enrichedGames.length} games`} />
             </>
           )}
         </div>

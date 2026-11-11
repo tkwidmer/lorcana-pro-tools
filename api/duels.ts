@@ -140,11 +140,18 @@ async function handleStats(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+// duels.ink's nightly price snapshot (TCGplayer, Cardmarket, CardNexus by
+// product id). Public and undocumented; ~760 KB, so the CDN keeps it 6 hours.
+async function handlePrices(_req: VercelRequest, res: VercelResponse) {
+  await proxyJson(res, 'https://duels.ink/api/prices', {}, 'public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400')
+}
+
 const HANDLERS: Record<string, (req: VercelRequest, res: VercelResponse) => Promise<void>> = {
   'match-history': handleMatchHistory,
   'gamelog': handleGamelog,
   'deck': handleDeck,
   'stats': handleStats,
+  'prices': handlePrices,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

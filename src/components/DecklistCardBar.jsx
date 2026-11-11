@@ -1,4 +1,6 @@
+import { Link } from 'react-router-dom'
 import { resolveColors } from '../lib/inkColors'
+import { cardPath } from '../lib/cardPrintings'
 import { inkFill, textColorFor } from '../lib/decklistShared'
 
 // The game's own inkwell cost emblem: the hexagon wrapped in the
@@ -23,7 +25,7 @@ export function CostBadge({ cost, inkable }) {
   )
 }
 
-export function CardBar({ entry, selected, onToggle }) {
+export function CardBar({ entry, selected, onToggle, link }) {
   const { card, name, count } = entry
   const colors = resolveColors(card.colors?.length ? card.colors : [card.color])
   const textColor = textColorFor(colors)
@@ -52,6 +54,16 @@ export function CardBar({ entry, selected, onToggle }) {
   const className = `w-full text-left rounded-md px-2 py-1 flex items-center gap-2 transition-shadow ${
     selected ? 'ring-2 ring-offset-1 ring-gray-900' : onToggle ? 'hover:opacity-90' : ''
   }`
+
+  // Deck lists link each bar to its card page; the inspector (whose bars are
+  // toggle buttons) and the OBS overlay do not pass `link`.
+  if (link && !onToggle) {
+    return (
+      <Link to={cardPath(card)} style={{ ...inkFill(colors), color: textColor }} className={`${className} hover:opacity-90`}>
+        {content}
+      </Link>
+    )
+  }
 
   // The overlay view has no selection interaction — render a plain div so it
   // isn't a focusable/clickable button in an OBS Browser Source.

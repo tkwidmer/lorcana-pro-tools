@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { CardLink } from '../components/CardLink'
+import { cardPath } from '../lib/cardPrintings'
 import { useCards } from '../hooks/useCards'
 import { oddsColor, brickGrade, brickGradeColor, brickRiskColor, brickBarColor } from '../lib/statColors'
 import { parseDeckList } from '../lib/parseDeckList'
@@ -130,7 +132,7 @@ export function DeckInsightsPage() {
   const [mulliganOpen, setMulliganOpen] = useState(true)
   const [targetedOddsOpen, setTargetedOddsOpen] = useState(true)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
-  const [legalityOpen, setLegalityOpen] = useState(false)
+  const [legalityOpen, setLegalityOpen] = useState(true)
   const [deckSize, setDeckSize] = useState(() => lsGet('drawOdds.deckSize', 60))
   const [goingFirst, setGoingFirst] = useState(() => lsGet('drawOdds.goingFirst', true))
   const [maxMulligan, setMaxMulligan] = useState(() => lsGet('drawOdds.maxMulligan', 7))
@@ -734,7 +736,7 @@ export function DeckInsightsPage() {
                               {entry.count}×
                             </td>
                             <td className="py-2.5 pr-4 text-sm text-gray-900">
-                              {entry.name}
+                              <CardLink name={entry.name} href={cardData ? cardPath(cardData) : null} />
                               {!cardData && (
                                 <span className="ml-2 text-xs text-gray-400 italic">not found</span>
                               )}

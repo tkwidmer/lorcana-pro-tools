@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { tcgplayerSnapshot } from './cardPrices'
 
 // duels.ink API tokens are stored server-side in Supabase (api/duels-tokens.ts
 // + supabase/migrations/004_duels_api_tokens.sql, 005_duels_api_tokens_crypto_functions.sql),
@@ -439,4 +440,11 @@ export async function fetchStats({ queue, period, ranks }) {
 // current era).
 export function fetchEraStats({ queue, era }) {
   return getStats({ queue, period: 'all_time', era })
+}
+
+// TCGplayer market prices per printing, from duels.ink's nightly snapshot.
+export async function fetchCardPrices() {
+  const res = await fetch('/api/duels?endpoint=prices')
+  if (!res.ok) throw new Error(`Failed to load card prices (HTTP ${res.status})`)
+  return tcgplayerSnapshot(await res.json())
 }

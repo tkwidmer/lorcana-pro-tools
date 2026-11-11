@@ -54,7 +54,7 @@ Implicit AND, `or`/`OR`, `-` negation, parentheses, `"quoted values"`, `!"Exact 
 | `f:`, `format:`, `legal:` | status `legal` in `core`, `infinity`, `coconut` | `f:core` |
 | `banned:` | status `banned` in a format | `banned:infinity` |
 | `is:`, `not:` | `inkable`, `uninkable`, `dual`, `promo`, `enchanted`, `reprint`, `variant`, `quest`, `banned` (any format), `errata` | `is:inkable`, `-is:promo` |
-| `order:` | `name` (default), `cost` (`cmc`), `set`, `rarity`, `strength` (`power`), `willpower` (`toughness`), `lore`, `color`, `artist`, `released`, `number` | `order:cost` |
+| `order:` | `set` (default: set, then collector number, a set's promos after its regular cards), `name`, `cost` (`cmc`), `rarity`, `strength` (`power`), `willpower` (`toughness`), `lore`, `color`, `artist`, `released`, `number` | `order:cost` |
 | `dir:`, `direction:` | `asc` (default), `desc` | `dir:desc` |
 | `unique:` | `cards` (default: one row per name, showing the best matching printing) or `prints` (every printing) | `unique:prints s:1` |
 

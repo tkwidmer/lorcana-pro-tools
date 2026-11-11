@@ -4,6 +4,8 @@ Builds on `2026-11-11-card-database-design.md` (the search and card pages, shipp
 
 ## 1. Prices (TCGplayer)
 
+> **Superseded (2026-11-11, at the user's request):** prices come from duels.ink's public `/api/prices` snapshot through `api/duels.ts?endpoint=prices`, not a TCGplayer scrape committed to `main` daily. No script, workflow or `public/card-prices.json`. See `docs/agents/cards.md`, Prices.
+
 **Source.** LorcanaJSON gives every printing an `externalLinks.tcgPlayerId` (3551 of 3556 printings; the five without are brand-new cards). TCGplayer's marketplace endpoint `https://mpapi.tcgplayer.com/v2/product/{id}/pricepoints` answers unauthenticated with one entry per finish:
 
 ```json

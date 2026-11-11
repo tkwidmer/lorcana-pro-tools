@@ -10,4 +10,5 @@ Deep reference for one area at a time, kept out of `CLAUDE.md` so a task loads o
 | `duels-data.md` | Match History, Analytics, Library and player profiles, Winrate Matrix, Meta Synthesis, Deck Doctor, Stock Decks, Deck Insights, Game Scraper |
 | `content.md` | Blog, rules browser |
 | `coconut.md` | [Format Coconut] cards, deck builder, decklist text |
+| `cards.md` | Card Search, card pages, `cardQuery.js`, `cardLegality.js`, `cardPrintings.js` |
 | `ui-screenshots.md` | Any UI change that needs a screenshot or a browser check |

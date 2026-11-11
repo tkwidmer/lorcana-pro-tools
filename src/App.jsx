@@ -10,6 +10,7 @@ import { BlogIndexPage } from './pages/BlogIndexPage'
 import { BlogPostPage } from './pages/BlogPostPage'
 import { ProxyGeneratorPage } from './pages/ProxyGeneratorPage'
 import { CardSearchPage } from './pages/CardSearchPage'
+import { CardPage } from './pages/CardPage'
 import { CoconutDeckBuilderPage } from './pages/CoconutDeckBuilderPage'
 import { LimitedGuidePage } from './pages/LimitedGuidePage'
 import { RulesPage } from './pages/RulesPage'
@@ -84,6 +85,7 @@ function RoutedContent() {
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/proxy" element={<ProxyGeneratorPage />} />
         <Route path="/cards" element={<CardSearchPage />} />
+        <Route path="/cards/:setCode/:number" element={<CardPage />} />
         <Route path="/extension" element={<ExtensionPage />} />
         <Route path="/coconut-deck-builder" element={<CoconutDeckBuilderPage />} />
         <Route path="/limited-guide" element={<LimitedGuidePage />} />

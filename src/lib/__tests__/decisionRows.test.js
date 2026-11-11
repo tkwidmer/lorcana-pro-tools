@@ -35,6 +35,8 @@ describe('decisionRows', () => {
     ], ME, cards, DECK)
     expect(ink.filter(r => r.decision === 0).map(r => [r.card_id, r.inked, r.ink, r.cost_gap])).toEqual([['A', 0, 0, 0], ['C', 1, 0, 1]])
     expect(ink.filter(r => r.decision === 1).map(r => [r.card_id, r.inked, r.no_ink, r.ink, r.shift])).toEqual([['A', 0, 1, 1, 0], ['D', 0, 1, 1, 1]])
+    // Turn 2's hand is A B D: B is uninkable but still counts toward the hand's costs.
+    expect(ink.find(r => r.decision === 1)).toMatchObject({ hand_cost_mean: 3, hand_cost_le2: 1, hand_cost_ge5: 1 })
   })
 
   it('stops emitting after an undo and resumes once a full-hand prompt shows the hand', () => {

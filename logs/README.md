@@ -63,3 +63,21 @@ It also writes `decisions/flags.csv`: every mulligan, ink or board choice any mo
 | `card+mmr`, `card` | Unusual for how the team plays this card, but defensible on principle: habit drift |
 | `generic` | The team does it on purpose and the principles don't say why: card or matchup knowledge (holding Aladdin - Doing His Part, item removal, against Emerald/Ruby), or a team-wide habit worth questioning |
 | `mmr` | Not how the stronger games, mostly Josh's, play it |
+
+## Does the choice change who wins?
+
+The models above learn what the team does. `python3 scripts/outcome-test.py` (about a minute) asks whether it changes who wins. A win model that sees the spot (turn, ink, lore, the whole hand's costs, deck shape, colors, what the opponent has shown, both MMRs) is compared out of fold with the same model plus the chosen option, and with the same model plus a random option from the same decision. The random option is the placebo: it measures what adding the columns does by itself, averaged over five draws. Only a gain of choice over random whose 95% interval, resampled by game, stays above zero says the choice matters. Even then it would be a correlation, since the state leaves out the board.
+
+Nov 2026, every game since February (log-loss gain per decision, × 10⁻⁴):
+
+| | Choice over random | 95% interval |
+|---|---|---|
+| Ink (55,043 decisions) | +1.3 | −4.4 to +6.6 |
+| Mulligan (12,405 opening hands) | +4.7 | −4.4 to +13.4 |
+
+Neither choice predicts winning beyond the spot it was made in, so the results can't yet tell a good ink or mulligan from a bad one, and nothing here is flagged from them. Two traps on the way to that answer:
+
+- An ink model without the hand's costs found a significant signal and advised inking the cheaper card. That was the hand: inking an expensive card goes with a hand full of them, which loses anyway. The whole hand's costs, uninkable cards included, took the signal away.
+- A single placebo draw made the mulligan look significant in 2 of 6 seeds. Averaging five draws settled it.
+
+The mulligan interval is about ±9 × 10⁻⁴ on 12,400 games. It narrows with the square root of the number of games, so about 45,000 hands would show a gain the size of today's estimate. The bought Nationals and Worlds logs, plus the rebuilt board (`src/lib/boardState.js`) as state, are what would let this test say more.

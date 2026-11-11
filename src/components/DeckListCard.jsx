@@ -41,7 +41,7 @@ export function DeckListCard({ title, subtitle, entries, children }) {
               {BUCKET_LABEL[type]} ({buckets[type].reduce((sum, e) => sum + e.count, 0)})
             </p>
             <div className="space-y-1">
-              {buckets[type].map(entry => <CardBar key={entry.key} entry={entry} />)}
+              {buckets[type].map(entry => <CardBar key={entry.key} entry={entry} link />)}
             </div>
           </div>
         ))}

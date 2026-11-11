@@ -64,3 +64,12 @@ export function primaryPrinting(printings) {
   if (!base.length) return pool[0]
   return base.reduce((best, c) => (setOrder(c) > setOrder(best) ? c : best))
 }
+
+// Every printed name → its card's page (the primary printing), for places
+// that know only a name. Alternate printed names map to the same page.
+export function cardLinkIndex(cards) {
+  const groups = groupPrintings(cards)
+  const index = new Map()
+  for (const c of cards) if (!index.has(c.fullName)) index.set(c.fullName, cardPath(primaryPrinting(groups.get(c))))
+  return index
+}

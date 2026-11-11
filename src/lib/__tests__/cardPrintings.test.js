@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cardPath, findPrinting, groupPrintings, primaryPrinting, printingNumber, setOrder } from '../cardPrintings'
+import { cardLinkIndex, cardPath, findPrinting, groupPrintings, primaryPrinting, printingNumber, setOrder } from '../cardPrintings'
 
 const elsa1 = { id: 42, setCode: '1', number: 42, fullName: 'Elsa - Spirit of Winter', rarity: 'Legendary' }
 const elsa1Ench = { id: 207, setCode: '1', number: 207, baseId: 42, fullName: 'Elsa - Spirit of Winter', rarity: 'Enchanted' }
@@ -71,5 +71,22 @@ describe('primaryPrinting', () => {
 
   it('falls back to the first printing when none is a base printing', () => {
     expect(primaryPrinting([elsa1Ench, elsaPromo])).toBe(elsa1Ench)
+  })
+})
+
+describe('cardLinkIndex', () => {
+  it('maps every printed name to its card\'s primary printing route', () => {
+    const index = cardLinkIndex(cards)
+    expect(index.get('Elsa - Spirit of Winter')).toBe('/cards/9/40')
+    expect(index.get('Dalmatian Puppy - Tail Wagger')).toBe('/cards/8/38')
+    expect(index.get('Nobody')).toBeUndefined()
+  })
+
+  it('an alternate printed name links to the same card page', () => {
+    const letItGo = { id: 163, setCode: '1', number: 163, fullName: 'Let It Go', rarity: 'Rare' }
+    const letItGoC = { id: 2460, setCode: '1', number: 10, promoGrouping: 'C2', baseId: 163, fullName: 'Let it Go', rarity: 'Special' }
+    const index = cardLinkIndex([letItGoC, letItGo])
+    expect(index.get('Let it Go')).toBe('/cards/1/163')
+    expect(index.get('Let It Go')).toBe('/cards/1/163')
   })
 })

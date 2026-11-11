@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CardLink } from '../CardLink'
 import { aggregateMyCards, aggregateMulliganSentBack, aggregateMultiCopyMulligan } from '../../lib/analyticsAggregation'
 
 // --- Personal analysis components (win rate breakdowns, card/mulligan stats, leaks, single-game drilldown) ---
@@ -35,21 +36,21 @@ export function Section({ title, subtitle, children, collapsible, defaultOpen = 
   )
 }
 
-export function StatTable({ rows, valueKey, emptyText }) {
+export function StatTable({ rows, valueKey, emptyText, cardHref }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
   return (
     <div className="font-mono text-sm space-y-0.5">
       {rows.map(c => (
         <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
           <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c[valueKey]}</span>
-          <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+          <CardLink name={c.fullName} href={cardHref?.(c.fullName)} className="flex-1 text-gray-700 truncate" />
         </div>
       ))}
     </div>
   )
 }
 
-export function MulliganTable({ rows, emptyText, metric = 'sentBack' }) {
+export function MulliganTable({ rows, emptyText, metric = 'sentBack', cardHref }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
   const valueKey = metric === 'kept' ? 'keptCount' : 'sentBackCount'
   return (
@@ -60,7 +61,7 @@ export function MulliganTable({ rows, emptyText, metric = 'sentBack' }) {
         return (
           <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
             <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{value}</span>
-            <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+            <CardLink name={c.fullName} href={cardHref?.(c.fullName)} className="flex-1 text-gray-700 truncate" />
             <span className="text-xs text-gray-400 flex-shrink-0">{pct}%</span>
           </div>
         )
@@ -80,7 +81,7 @@ function MultiCopyBucketCell({ count, wins, colorClass }) {
   )
 }
 
-export function MultiCopyMulliganTable({ rows, emptyText }) {
+export function MultiCopyMulliganTable({ rows, emptyText, cardHref }) {
   if (!rows.length) return <p className="text-sm text-gray-400">{emptyText}</p>
   return (
     <div className="text-sm">
@@ -93,7 +94,7 @@ export function MultiCopyMulliganTable({ rows, emptyText }) {
       </div>
       {rows.map(c => (
         <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 5rem 6rem 6rem 6rem' }}>
-          <span className="text-gray-700 truncate">{c.fullName}</span>
+          <CardLink name={c.fullName} href={cardHref?.(c.fullName)} className="text-gray-700 truncate" />
           <span className="text-center font-bold text-gray-900">{c.games}</span>
           <MultiCopyBucketCell count={c.keptAll} wins={c.keptAllWins} colorClass="text-emerald-600" />
           <MultiCopyBucketCell count={c.split} wins={c.splitWins} colorClass="text-amber-600" />
@@ -104,7 +105,7 @@ export function MultiCopyMulliganTable({ rows, emptyText }) {
   )
 }
 
-export function DrawEffectsTable({ games }) {
+export function DrawEffectsTable({ games, cardHref }) {
   const cards = aggregateMyCards(games)
   const rows = cards
     .filter(c => (c.effectDraws + c.oppForcedDiscards + c.extraInks + c.effectRemovals + c.exerts + c.cardsRecovered + c.statModifiers) > 0)
@@ -130,7 +131,7 @@ export function DrawEffectsTable({ games }) {
       </div>
       {rows.map(c => (
         <div key={c.fullName} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 3rem 3rem 3rem' }}>
-          <span className="text-gray-700 truncate">{c.fullName}</span>
+          <CardLink name={c.fullName} href={cardHref?.(c.fullName)} className="text-gray-700 truncate" />
           <span className="text-center font-semibold text-blue-500">{c.effectDraws || '—'}</span>
           <span className="text-center font-semibold text-purple-500">{c.oppForcedDiscards || '—'}</span>
           <span className="text-center font-semibold text-amber-500">{c.extraInks || '—'}</span>
@@ -145,7 +146,7 @@ export function DrawEffectsTable({ games }) {
   )
 }
 
-export function ImpactTable({ games, order }) {
+export function ImpactTable({ games, order, cardHref }) {
   const cards = aggregateMyCards(games)
 
   const challengeMap = {}
@@ -206,7 +207,7 @@ export function ImpactTable({ games, order }) {
         return (
           <div key={c.fullName} className="flex items-center gap-2 py-1 border-b border-gray-100 last:border-0">
             <span className="font-bold text-gray-900 w-8 text-right flex-shrink-0">{c.playedCount}</span>
-            <span className="flex-1 text-gray-700 truncate">{c.fullName}</span>
+            <CardLink name={c.fullName} href={cardHref?.(c.fullName)} className="flex-1 text-gray-700 truncate" />
             <span className="text-[10px] text-gray-400 flex-shrink-0 text-right whitespace-nowrap">
               {tags.length ? tags.join(' · ') : 'no impact tracked'}
             </span>
@@ -217,7 +218,7 @@ export function ImpactTable({ games, order }) {
   )
 }
 
-export function DeckStats({ filteredGames, subtitle }) {
+export function DeckStats({ filteredGames, subtitle, cardHref }) {
   const cards = aggregateMyCards(filteredGames)
   const mulliganCards = aggregateMulliganSentBack(filteredGames)
 
@@ -233,38 +234,38 @@ export function DeckStats({ filteredGames, subtitle }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-1">
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Played</h3>
-          <StatTable rows={topPlayed} valueKey="playedCount" emptyText="No plays recorded." />
+          <StatTable cardHref={cardHref} rows={topPlayed} valueKey="playedCount" emptyText="No plays recorded." />
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Inked</h3>
-          <StatTable rows={topInked} valueKey="inkedCount" emptyText="No inks recorded." />
+          <StatTable cardHref={cardHref} rows={topInked} valueKey="inkedCount" emptyText="No inks recorded." />
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Mulliganed</h3>
           <p className="text-[10px] text-gray-400 mb-1.5">Games fully mulliganed · % of games card was in opening hand</p>
-          <MulliganTable rows={topSentBack} emptyText="No mulligan data." metric="sentBack" />
+          <MulliganTable cardHref={cardHref} rows={topSentBack} emptyText="No mulligan data." metric="sentBack" />
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Kept</h3>
           <p className="text-[10px] text-gray-400 mb-1.5">Games at least one copy kept · % of games card was in opening hand</p>
-          <MulliganTable rows={topKept} emptyText="No mulligan data." metric="kept" />
+          <MulliganTable cardHref={cardHref} rows={topKept} emptyText="No mulligan data." metric="kept" />
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Most Lore Gained</h3>
-          <StatTable rows={topLore} valueKey="loreGained" emptyText="No quest data in these gamelogs." />
+          <StatTable cardHref={cardHref} rows={topLore} valueKey="loreGained" emptyText="No quest data in these gamelogs." />
         </div>
       </div>
       {multiCopyMulligan.length > 0 && (
         <div className="mt-6 pt-5 border-t border-gray-100">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Multi-Copy Mulligan</h3>
           <p className="text-[10px] text-gray-400 mb-2">Games where 2+ copies were in your opening hand — kept both, split (one kept/one sent), or sent both back, with win rate for each</p>
-          <MultiCopyMulliganTable rows={multiCopyMulligan} emptyText="No multi-copy mulligan data." />
+          <MultiCopyMulliganTable cardHref={cardHref} rows={multiCopyMulligan} emptyText="No multi-copy mulligan data." />
         </div>
       )}
       {filteredGames.length > 1 && (
         <div className="mt-6 pt-5 border-t border-gray-100">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Card Effects</h3>
-          <DrawEffectsTable games={filteredGames} />
+          <DrawEffectsTable cardHref={cardHref} games={filteredGames} />
         </div>
       )}
       {filteredGames.length > 1 && (
@@ -273,12 +274,12 @@ export function DeckStats({ filteredGames, subtitle }) {
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Most Impactful Cards</h3>
               <p className="text-[10px] text-gray-400 mb-2">Plays · score: lore + draws + kills + removal + sings</p>
-              <ImpactTable games={filteredGames} order="desc" />
+              <ImpactTable cardHref={cardHref} games={filteredGames} order="desc" />
             </div>
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Least Impactful Cards</h3>
               <p className="text-[10px] text-gray-400 mb-2">Plays · score: lore + draws + kills + removal + sings</p>
-              <ImpactTable games={filteredGames} order="asc" />
+              <ImpactTable cardHref={cardHref} games={filteredGames} order="asc" />
             </div>
           </div>
         </div>
@@ -287,7 +288,7 @@ export function DeckStats({ filteredGames, subtitle }) {
   )
 }
 
-export function CrossGameChallengers({ games }) {
+export function CrossGameChallengers({ games, cardHref }) {
   const mine = games.flatMap(g => (g.challenges ?? []).filter(c => c.isMe))
   if (!mine.length) return null
 
@@ -321,7 +322,7 @@ export function CrossGameChallengers({ games }) {
           const pct = Math.round((r.survived / r.challenged) * 100)
           return (
             <div key={r.name} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem 4rem' }}>
-              <span className="text-gray-800 truncate">{r.name}</span>
+              <CardLink name={r.name} href={cardHref?.(r.name)} className="text-gray-800 truncate" />
               <span className="text-center font-bold text-gray-700">{r.challenged}</span>
               <span className="text-center font-semibold text-emerald-600">{r.survived || '—'}</span>
               <span className="text-center font-semibold text-yellow-600">{r.traded || '—'}</span>
@@ -336,7 +337,7 @@ export function CrossGameChallengers({ games }) {
   )
 }
 
-export function CrossGameDefenders({ games }) {
+export function CrossGameDefenders({ games, cardHref }) {
   const opp = games.flatMap(g => (g.challenges ?? []).filter(c => !c.isMe))
   if (!opp.length) return null
 
@@ -378,7 +379,7 @@ export function CrossGameDefenders({ games }) {
         </div>
         {rows.map(r => (
           <div key={r.name} className="grid items-center gap-2 py-1.5 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 3rem 3rem 3rem 3rem' }}>
-            <span className="text-gray-800 truncate">{r.name}</span>
+            <CardLink name={r.name} href={cardHref?.(r.name)} className="text-gray-800 truncate" />
             <span className="text-center font-bold text-gray-700">{r.timesTargeted}</span>
             <span className="text-center font-semibold text-emerald-600">{r.tanked || '—'}</span>
             <span className="text-center font-semibold text-yellow-600">{r.killedInOne || '—'}</span>
@@ -391,14 +392,14 @@ export function CrossGameDefenders({ games }) {
   )
 }
 
-export function ChallengeStats({ filteredGames, subtitle }) {
+export function ChallengeStats({ filteredGames, subtitle, cardHref }) {
   const hasChallenges = filteredGames.some(g => (g.challenges ?? []).length > 0)
   if (!hasChallenges) return null
   return (
     <Section collapsible defaultOpen title="Challenge Stats" subtitle={subtitle}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-1">
-        <CrossGameChallengers games={filteredGames} />
-        <CrossGameDefenders games={filteredGames} />
+        <CrossGameChallengers cardHref={cardHref} games={filteredGames} />
+        <CrossGameDefenders cardHref={cardHref} games={filteredGames} />
       </div>
     </Section>
   )

@@ -13,15 +13,35 @@
 const FULL_HAND_PROMPT = /^(chooseCardToDiscard|chooseCardsToDiscard|chooseCardsFromHand|howsPickingsDiscard)$|^Choose \d+ card\(s\) to discard/
 const LOOKAHEAD = 12
 
+// What a card does, read off its rules text, so a model can learn "hold item removal against an item
+// deck" for cards it has never seen. Only effects on the opponent's side count: "banish chosen
+// character of yours" (Retro Evolution Device) is a cost, not removal.
+const TAGS = {
+  removes_item: /banish (chosen|all|each|up to \w+|another chosen) (opposing )?(character, |character or |location or )?items?\b(?! of yours)/,
+  removes_location: /banish (chosen|all|each|up to \w+|another chosen) (opposing )?(character, item or |character or |item or )?locations?\b(?! of yours)|deal \d+ damage to chosen (damaged )?(character or )?location/,
+  removes_character: /(banish|deal \d+ damage to) (chosen|another chosen) (opposing )?(damaged |exerted |ready )?characters?\b(?! of yours)/,
+  board_wipe: /banish all (opposing )?characters|deal \d+ damage to each (opposing )?character/,
+  bounce: /return (chosen|another chosen|up to \w+ chosen|all opposing) (opposing )?(character|item|location)s?\b(?! of yours)[^.]{0,40} to (their|its owner's|that player's) (player's )?hands?/,
+  draws: /draw (a|\d+|two|three|four|that many) cards?/,
+  ramp: /into (your|their) inkwell/,
+  makes_discard: /(each opponent|chosen opponent|each player|opponents?) (chooses and )?discards?/,
+}
+const KEYWORDS = ['Alert', 'Bodyguard', 'Boost', 'Challenger', 'Evasive', 'Reckless', 'Resist', 'Rush', 'Singer', 'Sing Together', 'Support', 'Vanish', 'Ward']
+
 export function cardFeatures(card) {
+  const text = (card?.fullText ?? '').toLowerCase().replaceAll('\n', ' ')
+  const flag = (yes) => card ? (yes ? 1 : 0) : null
   return {
     cost: card?.cost ?? null,
-    inkable: card ? (card.inkwell ? 1 : 0) : null,
+    inkable: flag(card?.inkwell),
     type: card?.type ?? null,
     strength: card?.strength ?? null,
     willpower: card?.willpower ?? null,
     card_lore: card?.lore ?? null,
     shift: card?.keywordAbilities?.includes('Shift') ? 1 : 0,
+    song: flag(card?.subtypes?.includes('Song')),
+    ...Object.fromEntries(Object.entries(TAGS).map(([tag, re]) => [tag, flag(re.test(text))])),
+    ...Object.fromEntries(KEYWORDS.map(k => [`kw_${k.toLowerCase().replace(' ', '_')}`, flag(card?.keywordAbilities?.includes(k))])),
   }
 }
 
@@ -228,5 +248,7 @@ export function decisionRows(logs, me, cardById, decklist) {
       })
     }
   })
-  return { mulligan, ink: inkRows, checks }
+  // oppItems: items the opponent showed over the whole game. It describes the opponent's deck for
+  // the other games' rows only; as a feature of its own game it would leak the future.
+  return { mulligan, ink: inkRows, checks, oppItems: opp.opp_items }
 }

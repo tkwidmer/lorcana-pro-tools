@@ -46,6 +46,7 @@ for (const account of accounts) {
       my_colors: m.your_deck_colors, opp_colors: m.opp_deck_colors, went_first: m.went_first ? 1 : 0,
       mmr: m.mmr_before, opp_mmr: m.opp_mmr_before, won: m.result === 'win' ? 1 : 0,
       ...deckShape(m.your_decklist, cardById),
+      opp_items_game: out.oppItems,
     }
     const name = (r) => ({ card_name: cardById[r.card_id]?.fullName })
     for (const r of out.mulligan) mulliganOut.write({ ...game, ...r, ...name(r) })

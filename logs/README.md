@@ -21,30 +21,33 @@ Read a log with `src/lib/parseGamelog.js` (`your_player` from the row) or `.clau
 
 - `mulligan.csv`: one row per opening-hand card, labelled `kept`, with card features and opening-hand context.
 - `ink.csv`: one row per inkable card in hand at each ink decision, labelled `inked`, grouped by `decision_id`. A turn with no ink is a decision where every row is 0 (`no_ink` = 1).
-
 - `choices.csv`: one row per legal option at each quest, challenge and end of turn, for both players, labelled `chosen`, grouped by `decision_id`. Options are quest with a ready character, challenge a legal target with it, or end the turn, with each side's printed stats, damage, and whether the challenge would banish the target (`kills`) and survive (`survives`).
 
-Both carry the game's account, colors, play/draw, MMR and result. The hand is rebuilt from the log by `src/lib/decisionRows.js`, and ink rows are only written while it is known. Logs before mid-June 2026 do not name the player's turn draws, so those games give mulligan rows and, on the play, a turn-1 ink row. From then on about 84% of ink decisions are kept, and the rebuilt hand matches about 95% of the prompts that show the whole hand. The script prints both numbers on every run.
+The mulligan and ink rows carry the game's account, colors, play/draw, MMR and result. The hand is rebuilt from the log by `src/lib/decisionRows.js`, and ink rows are only written while it is known. Logs before mid-June 2026 do not name the player's turn draws, so those games give mulligan rows and, on the play, a turn-1 ink row. From then on about 84% of ink decisions are kept, and the rebuilt hand matches about 95% of the prompts that show the whole hand. The script prints both numbers on every run.
 
 The choice rows come from `src/lib/boardState.js`, which rebuilds both boards (characters and locations, exerted, drying, damage, undo) and checks them against every quest and challenge the log records. The log often says an effect exerted or returned a character without naming it, so a turn becomes rows only when every check passes and nothing had to be inferred. Nov 2026: the board agrees with 99.8% of quests, 96.8% of challengers and 95.8% of challenge targets; 99.1% of logged challenges are in the legal option set; 88% of turns are trusted. Kill and survive use printed stats; temporary buffs are not logged, so they are right about 87% and 94% of the time.
 
 
 ## Baseline models and coaching flags
 
-`python3 scripts/train-decision-models.py` (needs `pip install lightgbm pandas scikit-learn`, about a minute) trains LightGBM mulligan classifiers and ink rankers on every game (`--since 2026-10-08` to narrow it to a set). Every decision is scored by models that never saw its game (5 folds split by game). The ink ranker weighs each inkable card in hand and "no ink", so it learns whether to ink as well as what. All models see the player's deck shape (inkable count, average cost, 5+ cost cards, items, actions, from the decklist), and the ink models see what the opponent has shown so far (items, actions and characters played or inked, and how many of them the player's own list runs).
+`python3 scripts/train-decision-models.py` (needs `pip install lightgbm pandas scikit-learn`, about two minutes) trains LightGBM mulligan classifiers and ink rankers on every game (`--since 2026-10-08` to narrow it to a set). Every decision is scored by models that never saw its game (5 folds split by game). The ink ranker weighs each inkable card in hand and "no ink", so it learns whether to ink as well as what. All models see the player's deck shape (inkable count, average cost, 5+ cost cards, items, actions, from the decklist), and the ink models see what the opponent has shown so far (items, actions and characters played or inked, and how many of them the player's own list runs).
+
+All models also see what a card does, read off its rules text by `src/lib/decisionRows.js`: removes items, locations or characters, board wipe, bounce, draws, ramp, makes the opponent discard, Song, and its keywords. Only effects on the opponent's side count: "banish chosen character of yours" (Retro Evolution Device) is a cost, not removal. Alongside sits `opp_items_recent`, the items opponents on these colors showed per game in the other games within 45 days, and `item_answer`, a card's item removal times that. Decks change with each set: Emerald/Ruby opponents showed 0.5 items a game before set 14 and 3.9 in it.
 
 Three models score each decision:
 
 - `card` also knows which card it is and how often the team keeps or inks it against those opponent colors in the other games. It is the best in the current meta, but it forgets everything when the cards change.
 - `mmr` is the same model with each game weighted by its MMR: the weight doubles every 100 MMR above the median, and a game with no MMR (most Bo3) takes the player's median.
-- `generic` sees only what a card is (cost, type, inkable, stats) and the game state, so it carries to a new meta. Trained on the games before set 14 and tested on set 14, where 26% of the cards were new, it beat the card model (mulligan 73% vs 71%, ink 54.2% vs 53.7%).
+- `generic` sees only what a card is (cost, type, inkable, stats, rules-text tags) and the game state, so it carries to a new meta. Trained on the games before set 14 and tested on set 14, where 26% of the cards were new, it beats the card model (mulligan 73.2% vs 71.4%, ink 54.9% vs 53.3%), and the tags are part of why (without them: 72.8%, 54.2%).
 
 Nov 2026, every game since February (12,400 with a mulligan, 55,043 ink decisions):
 
 | | `card` | `mmr` | `generic` | Best simple baseline |
 |---|---|---|---|---|
-| Mulligan, card kept or sent | 80.0% (AUC 0.88) | 78.0% | 76.6% | 74.6%, the card's keep rate |
-| Ink, picked the choice (incl. no ink) | 57.5% | 55.1% | 54.9% | 41.0%, the card's ink rate (random is 26%) |
+| Mulligan, card kept or sent | 80.0% (AUC 0.88) | 78.0% | 77.7% | 74.6%, the card's keep rate |
+| Ink, picked the choice (incl. no ink) | 57.5% | 55.2% | 55.5% | 41.0%, the card's ink rate (random is 26%) |
+
+The rules-text tags and recent opponent items took `generic` from 76.6% and 54.9% to these numbers and left the other two where they were. They also taught it the Aladdin - Doing His Part case: against Emerald/Ruby in set 14 the team inked it 7% of the time, and `generic` now makes it its top ink pick 18% of the time (`card` 8%, `mmr` 5%). Trained only on games before set 14, it still does so 43% of the time, against 73% without the tags.
 
 Weighting by MMR does not predict the 1400+ MMR games any better (`card` vs `mmr`: mulligan 79.7% vs 78.9%, ink 58.2% vs 56.6%). Josh's games (median MMR 1670, more 1400+ games than every other account together) carry 89% of the `mmr` model's weight, so it is close to a model of how Josh plays: on the other accounts it trails the `card` model by 2 to 4 points.
 

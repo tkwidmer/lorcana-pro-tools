@@ -4,6 +4,7 @@
 // search page shows verbatim.
 import { legality } from './cardLegality'
 import { groupPrintings, primaryPrinting, setOrder } from './cardPrintings'
+import { printingPrice, usdOf } from './cardPrices'
 
 export class QuerySyntaxError extends Error {}
 
@@ -61,7 +62,7 @@ const IS = {
   errata: c => (c.errata?.length ?? 0) > 0,
 }
 const ORDER_ALIAS = { cmc: 'cost', mv: 'cost', power: 'strength', pow: 'strength', toughness: 'willpower', tou: 'willpower' }
-export const ORDERS = ['name', 'cost', 'set', 'rarity', 'strength', 'willpower', 'lore', 'color', 'artist', 'released', 'number']
+export const ORDERS = ['name', 'cost', 'set', 'rarity', 'strength', 'willpower', 'lore', 'color', 'artist', 'released', 'number', 'usd']
 
 // --- tokenizer ---------------------------------------------------------------
 
@@ -83,14 +84,15 @@ function tokenize(q) {
     const m = TOKEN.exec(src)
     if (!m) throw new QuerySyntaxError(`Can't read the query at "${src.slice(pos, pos + 12)}"`)
     pos = TOKEN.lastIndex
-    if (m[1]) tokens.push({ type: '(' })
-    else if (m[2]) tokens.push({ type: ')' })
-    else if (m[3]) tokens.push({ type: '-' })
-    else if (m[4]) tokens.push({ type: 'exact', value: unquote(m[5]) })
-    else if (m[6]) tokens.push({ type: 'or' })
-    else if (m[7]) tokens.push({ type: 'term', key: m[7].toLowerCase(), op: m[8], raw: m[9] })
-    else if (m[10]) tokens.push({ type: 'term', key: 'name', op: ':', raw: m[10] })
-    else tokens.push({ type: 'term', key: 'name', op: ':', raw: m[11] })
+    const text = m[0].trim()
+    if (m[1]) tokens.push({ type: '(', text })
+    else if (m[2]) tokens.push({ type: ')', text })
+    else if (m[3]) tokens.push({ type: '-', text })
+    else if (m[4]) tokens.push({ type: 'exact', value: unquote(m[5]), text })
+    else if (m[6]) tokens.push({ type: 'or', text })
+    else if (m[7]) tokens.push({ type: 'term', key: m[7].toLowerCase(), op: m[8], raw: m[9], text })
+    else if (m[10]) tokens.push({ type: 'term', key: 'name', op: ':', raw: m[10], text })
+    else tokens.push({ type: 'term', key: 'name', op: ':', raw: m[11], text })
   }
   return tokens
 }
@@ -182,9 +184,9 @@ function formatOf(value) {
 }
 
 // Keys that only test membership: ":" and "=" mean the same, anything else is an error.
-const EQUALITY_ONLY = new Set(['k', 'kw', 'keyword', 's', 'set', 'e', 'edition', 'f', 'format', 'legal', 'banned', 'is', 'not', 'order', 'dir', 'direction', 'unique'])
+const EQUALITY_ONLY = new Set(['k', 'kw', 'keyword', 's', 'set', 'e', 'edition', 'f', 'format', 'legal', 'banned', 'is', 'not', 'order', 'dir', 'direction', 'unique', 'display'])
 
-function compileTerm({ key, op, raw }, sets, opts) {
+function compileTerm({ key, op, raw }, sets, opts, prices) {
   const value = unquote(raw)
   if (key in TEXT) return textPredicate(TEXT[key], op, raw)
   if (key in STAT) return statPredicate(STAT[key], op, value)
@@ -269,6 +271,23 @@ function compileTerm({ key, op, raw }, sets, opts) {
       opts.direction = v
       return () => true
     }
+    case 'usd': {
+      if (!prices) throw new QuerySyntaxError('Prices are not loaded')
+      const n = Number(value)
+      if (value === '' || Number.isNaN(n)) throw new QuerySyntaxError(`"${value}" isn't a price`)
+      const cmp = cmpOp(op)
+      return c => {
+        const p = usdOf(printingPrice(prices, c))
+        return p != null && cmp(p, n)
+      }
+    }
+    case 'display': {
+      const v = norm(value)
+      const display = v === 'checklist' ? 'list' : v
+      if (display !== 'grid' && display !== 'list') throw new QuerySyntaxError('display must be grid or list')
+      opts.display = display
+      return () => true
+    }
     case 'unique': {
       const v = norm(value)
       if (v !== 'cards' && v !== 'prints') throw new QuerySyntaxError(`unique must be cards or prints`)
@@ -283,7 +302,7 @@ function compileTerm({ key, op, raw }, sets, opts) {
 // --- parser ------------------------------------------------------------------
 // expr := and ("or" and)* ; and := unary+ ; unary := "-" unary | "(" expr ")" | term | exact
 
-function parse(tokens, sets, opts) {
+function parse(tokens, sets, opts, prices) {
   let i = 0
   const peek = () => tokens[i]
   const next = () => tokens[i++]
@@ -316,7 +335,7 @@ function parse(tokens, sets, opts) {
       return p
     }
     if (t.type === 'exact') { const v = norm(t.value); return c => norm(c.fullName) === v || norm(c.name) === v }
-    if (t.type === 'term') return compileTerm(t, sets, opts)
+    if (t.type === 'term') return compileTerm(t, sets, opts, prices)
     throw new QuerySyntaxError(`Unexpected "${t.type}"`)
   }
 
@@ -325,10 +344,11 @@ function parse(tokens, sets, opts) {
   return predicate
 }
 
-export function parseQuery(q, sets) {
-  const opts = { order: 'name', direction: 'asc', unique: 'cards' }
+export function parseQuery(q, sets, prices = null) {
+  const opts = { order: 'name', direction: 'asc', unique: 'cards', display: 'grid' }
   const tokens = tokenize(q)
-  const predicate = tokens.length ? parse(tokens, sets, opts) : () => true
+  const predicate = tokens.length ? parse(tokens, sets, opts, prices) : () => true
+  if (opts.order === 'usd' && !prices) throw new QuerySyntaxError('Prices are not loaded')
   return { predicate, ...opts }
 }
 
@@ -346,13 +366,14 @@ const ORDER_KEY = {
   artist: () => c => norm(c.artistsText),
   released: sets => c => sets[c.setCode]?.releaseDate ?? '',
   number: () => c => c.number,
+  usd: (sets, prices) => c => usdOf(printingPrice(prices, c)),
 }
 
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 
-export function runQuery(cards, sets, q) {
-  if (!q.trim()) return []
-  const { predicate, order, direction, unique } = parseQuery(q, sets)
+export function runQuery(cards, sets, q, prices = null) {
+  if (!q.trim()) return { cards: [], display: 'grid', order: 'name', direction: 'asc' }
+  const { predicate, order, direction, unique, display } = parseQuery(q, sets, prices)
   let hits = cards.filter(predicate)
   if (unique === 'cards') {
     // One row per card: the best matching printing among that card's printings.
@@ -365,12 +386,30 @@ export function runQuery(cards, sets, q) {
     }
     hits = [...matching.values()].map(primaryPrinting)
   }
-  const key = ORDER_KEY[order](sets)
+  const key = ORDER_KEY[order](sets, prices)
   const sign = direction === 'desc' ? -1 : 1
-  return hits.sort((a, b) =>
-    sign * compare(key(a), key(b)) ||
-    compare(norm(a.fullName), norm(b.fullName)) ||
-    setOrder(a) - setOrder(b) ||
-    (a.promoGrouping ? 1 : 0) - (b.promoGrouping ? 1 : 0) ||
-    a.number - b.number)
+  // Only usd yields null (an unpriced printing): it sorts last either way.
+  const missingLast = (a, b) => (a == null) - (b == null)
+  hits.sort((a, b) => {
+    const ka = key(a), kb = key(b)
+    return missingLast(ka, kb) ||
+      sign * compare(ka, kb) ||
+      compare(norm(a.fullName), norm(b.fullName)) ||
+      setOrder(a) - setOrder(b) ||
+      (a.promoGrouping ? 1 : 0) - (b.promoGrouping ? 1 : 0) ||
+      a.number - b.number
+  })
+  return { cards: hits, display, order, direction }
+}
+
+// Rewrites one directive inside a query string, leaving every other token,
+// quoted values included, untouched; value null removes it. Every alias of
+// the key goes (dir: and direction:).
+const DIRECTIVE_ALIASES = { dir: ['dir', 'direction'] }
+
+export function withDirective(q, key, value) {
+  const keys = DIRECTIVE_ALIASES[key] ?? [key]
+  const kept = tokenize(q).filter(t => !(t.type === 'term' && keys.includes(t.key)))
+  const text = kept.map(t => t.text).join(' ')
+  return value == null ? text : `${text} ${key}:${value}`.trim()
 }

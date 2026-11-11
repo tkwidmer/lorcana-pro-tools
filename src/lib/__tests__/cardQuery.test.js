@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseQuery, QuerySyntaxError, norm, runQuery } from '../cardQuery'
+import { parseQuery, QuerySyntaxError, norm, runQuery, withDirective } from '../cardQuery'
 
 const sets = {
   '1': { name: 'The First Chapter', releaseDate: '2023-09-01' },
@@ -186,7 +186,7 @@ describe('boolean structure', () => {
   })
 
   it('throws on an unknown key', () => {
-    expect(() => parseQuery('usd>5', sets)).toThrow('Unknown search key "usd"')
+    expect(() => parseQuery('eur>5', sets)).toThrow('Unknown search key "eur"')
   })
 })
 
@@ -208,37 +208,37 @@ describe('runQuery', () => {
   const all = [...cards, elsa9]
 
   it('dedupes by name and shows the latest base printing', () => {
-    const r = runQuery(all, sets, 'elsa')
+    const r = runQuery(all, sets, 'elsa').cards
     expect(r).toHaveLength(1)
     expect(r[0]).toBe(elsa9)
   })
 
   it('picks the matching printing when the query narrows the set', () => {
-    expect(runQuery(all, sets, 'elsa s:1')[0]).toBe(elsa)
-    expect(runQuery(all, sets, 'elsa is:promo')[0]).toBe(promo)
+    expect(runQuery(all, sets, 'elsa s:1').cards[0]).toBe(elsa)
+    expect(runQuery(all, sets, 'elsa is:promo').cards[0]).toBe(promo)
   })
 
   it('unique:cards treats printings linked by baseId as one card, whatever their printed name', () => {
     const base = { ...song, id: 163, fullName: 'Let It Go', name: 'Let It Go' }
     const promoC = { ...song, id: 2460, number: 210, promoGrouping: 'C', baseId: 163, fullName: 'Let it Go', name: 'Let it Go' }
-    expect(runQuery([base, promoC], sets, 'n:"let it go"')).toEqual([base])
+    expect(runQuery([base, promoC], sets, 'n:"let it go"').cards).toEqual([base])
   })
 
   it('unique:prints returns every printing in printing order', () => {
-    expect(runQuery(all, sets, 'elsa unique:prints').map(c => `${c.setCode}-${c.promoGrouping ?? ''}${c.number}`)).toEqual(['1-42', '1-P142', '9-40'])
+    expect(runQuery(all, sets, 'elsa unique:prints').cards.map(c => `${c.setCode}-${c.promoGrouping ?? ''}${c.number}`)).toEqual(['1-42', '1-P142', '9-40'])
   })
 
   it('sorts by name by default, and by the requested order', () => {
-    expect(runQuery(all, sets, '-c:colorless').map(c => c.fullName)).toEqual([
+    expect(runQuery(all, sets, '-c:colorless').cards.map(c => c.fullName)).toEqual([
       'Be Our Guest', 'Elsa - Spirit of Winter', 'Hiram Flaversham - Toymaker', 'Mickey Mouse & Minnie Mouse - Adventuring Duo', 'Te Kā - The Burning One',
     ])
-    expect(runQuery(all, sets, 't=character order:cost dir:desc').map(c => c.cost)).toEqual([8, 7, 6, 4, 3])
-    expect(runQuery(all, sets, 'order:rarity').map(c => c.rarity)).toEqual(['Common', 'Rare', 'Rare', 'Super Rare', 'Legendary', 'Special'])
-    expect(runQuery(all, sets, 'order:released dir:desc')[0].setCode).toBe('9')
+    expect(runQuery(all, sets, 't=character order:cost dir:desc').cards.map(c => c.cost)).toEqual([8, 7, 6, 4, 3])
+    expect(runQuery(all, sets, 'order:rarity').cards.map(c => c.rarity)).toEqual(['Common', 'Rare', 'Rare', 'Super Rare', 'Legendary', 'Special'])
+    expect(runQuery(all, sets, 'order:released dir:desc').cards[0].setCode).toBe('9')
   })
 
   it('returns nothing for an empty query', () => {
-    expect(runQuery(all, sets, '  ')).toEqual([])
+    expect(runQuery(all, sets, '  ')).toEqual({ cards: [], display: 'grid', order: 'name', direction: 'asc' })
   })
 })
 
@@ -284,7 +284,60 @@ describe('Scryfall parity (live syntax page)', () => {
     expect(parseQuery('order:power', sets).order).toBe('strength')
     expect(parseQuery('order:toughness', sets).order).toBe('willpower')
     const all = [...cards]
-    expect(runQuery(all, sets, 'order:color -c:colorless').map(c => c.color)).toEqual(['Amber', 'Amethyst', 'Emerald-Sapphire', 'Ruby', 'Sapphire'])
-    expect(runQuery(all, sets, 'order:artist').map(c => c.artistsText)[0]).toBe('A')
+    expect(runQuery(all, sets, 'order:color -c:colorless').cards.map(c => c.color)).toEqual(['Amber', 'Amethyst', 'Emerald-Sapphire', 'Ruby', 'Sapphire'])
+    expect(runQuery(all, sets, 'order:artist').cards.map(c => c.artistsText)[0]).toBe('A')
+  })
+})
+
+describe('display and withDirective', () => {
+  it('display: directive, grid by default, checklist as an alias of list', () => {
+    expect(parseQuery('elsa', sets).display).toBe('grid')
+    expect(parseQuery('elsa display:list', sets).display).toBe('list')
+    expect(parseQuery('elsa display:checklist', sets).display).toBe('list')
+    expect(() => parseQuery('display:text', sets)).toThrow(QuerySyntaxError)
+    expect(() => parseQuery('display>list', sets)).toThrow(QuerySyntaxError)
+    expect(runQuery(cards, sets, 't:song display:list').display).toBe('list')
+  })
+
+  it('runQuery reports the order and direction it sorted by, aliases resolved', () => {
+    expect(runQuery(cards, sets, 't:song order:cmc dir:desc')).toMatchObject({ order: 'cost', direction: 'desc' })
+    expect(runQuery(cards, sets, 't:song')).toMatchObject({ order: 'name', direction: 'asc' })
+  })
+
+  it('withDirective replaces, appends or removes a directive and leaves quoted text alone', () => {
+    expect(withDirective('t:song', 'display', 'list')).toBe('t:song display:list')
+    expect(withDirective('t:song display:list', 'display', 'grid')).toBe('t:song display:grid')
+    expect(withDirective('display:list t:song', 'display', null)).toBe('t:song')
+    expect(withDirective('o:"display:list" t:song', 'display', 'list')).toBe('o:"display:list" t:song display:list')
+    expect(withDirective('t:song order:cost dir:desc', 'order', 'name')).toBe('t:song dir:desc order:name')
+    expect(withDirective('t:song direction:desc', 'dir', null)).toBe('t:song')
+    expect(parseQuery(withDirective('-(t:song or k:rush) c:ruby', 'display', 'list'), sets).display).toBe('list')
+  })
+})
+
+describe('usd', () => {
+  const prices = { 507512: { normal: 4.71, foil: 69.94 }, 510153: { normal: null, foil: 947.01 } }
+  const priced = [
+    { ...elsa, externalLinks: { tcgPlayerId: 507512 } },
+    { ...teKa, externalLinks: { tcgPlayerId: 510153 } },
+    song, // no id: never priced
+  ]
+  const run = q => runQuery(priced, sets, q, prices).cards.map(c => c.fullName)
+
+  it('compares the non-foil price, or the foil price when only foil exists; unpriced cards never match', () => {
+    expect(run('usd>=4')).toEqual(['Elsa - Spirit of Winter', 'Te Kā - The Burning One'])
+    expect(run('usd<5')).toEqual(['Elsa - Spirit of Winter'])
+    expect(run('usd>=0')).not.toContain('Be Our Guest')
+  })
+
+  it('order:usd sorts priced cards, unpriced last', () => {
+    expect(run('order:usd dir:desc')).toEqual(['Te Kā - The Burning One', 'Elsa - Spirit of Winter', 'Be Our Guest'])
+    expect(run('order:usd')).toEqual(['Elsa - Spirit of Winter', 'Te Kā - The Burning One', 'Be Our Guest'])
+  })
+
+  it('throws without a snapshot', () => {
+    expect(() => parseQuery('usd>1', sets)).toThrow('Prices are not loaded')
+    expect(() => runQuery(priced, sets, 'order:usd')).toThrow('Prices are not loaded')
+    expect(() => parseQuery('usd:cheap', sets, prices)).toThrow(QuerySyntaxError)
   })
 })

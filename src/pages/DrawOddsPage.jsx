@@ -132,7 +132,7 @@ export function DeckInsightsPage() {
   const [mulliganOpen, setMulliganOpen] = useState(true)
   const [targetedOddsOpen, setTargetedOddsOpen] = useState(true)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
-  const [legalityOpen, setLegalityOpen] = useState(false)
+  const [legalityOpen, setLegalityOpen] = useState(true)
   const [deckSize, setDeckSize] = useState(() => lsGet('drawOdds.deckSize', 60))
   const [goingFirst, setGoingFirst] = useState(() => lsGet('drawOdds.goingFirst', true))
   const [maxMulligan, setMaxMulligan] = useState(() => lsGet('drawOdds.maxMulligan', 7))

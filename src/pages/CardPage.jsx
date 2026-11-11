@@ -7,7 +7,6 @@ import { printingPrice, priceLabel } from '../lib/cardPrices'
 import { FORMATS, legality } from '../lib/cardLegality'
 import { resolveColors } from '../lib/inkColors'
 import { InkIcons } from '../components/InkIcons'
-import { CostBadge } from '../components/DecklistCardBar'
 import { CardMetaSection } from '../components/CardMetaSection'
 import { Button } from '../components/ui/Button'
 
@@ -78,6 +77,24 @@ export function CardPage() {
   // An Action's effect is in `effects`, not `abilities` (a song's abilities
   // hold only its sing reminder), so the rules text is both, in that order.
   const abilities = [...(card.abilities ?? []), ...(card.effects ?? []).map(fullText => ({ fullText }))]
+  // The card's basics in plain words, one per row; stats a card type does not
+  // have (an Action's strength) are left out rather than shown as blanks.
+  const stats = [
+    ['Ink', (
+      <span className="inline-flex items-center gap-2">
+        <InkIcons colors={colors} size={18} />
+        {card.color ? card.color.split('-').join(', ') : 'None'}
+      </span>
+    )],
+    ['Cost', card.cost],
+    ['Inkable', card.inkwell ? 'Yes' : 'No'],
+    ...(card.strength != null ? [['Strength', card.strength]] : []),
+    ...(card.willpower != null ? [['Willpower', card.willpower]] : []),
+    ...(card.lore != null ? [['Lore', card.lore]] : []),
+    ...(card.moveCost != null ? [['Move cost', card.moveCost]] : []),
+    ['Type', card.type],
+    ...(card.subtypes?.length ? [['Classifications', card.subtypes.join(', ')]] : []),
+  ]
   const quickSearches = [
     ...(card.subtypes ?? []).map(s => ['t', s]),
     ...(card.keywordAbilities ?? []).map(k => ['k', k]),
@@ -97,15 +114,14 @@ export function CardPage() {
         <img src={card.images.full} alt={card.fullName} className="w-full rounded-xl" />
 
         <div className="space-y-8 min-w-0">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700">
-            <InkIcons colors={colors} size={24} />
-            <CostBadge cost={card.cost} inkable={card.inkwell} />
-            <span>{card.inkwell ? 'Inkable' : 'Uninkable'}</span>
-            <span>·</span>
-            <span>{card.type}{card.subtypesText ? ` • ${card.subtypesText}` : ''}</span>
-            {card.type === 'Character' && <span>· {card.strength} ¤ / {card.willpower} ⛉ / {card.lore} ◆</span>}
-            {card.type === 'Location' && <span>· {card.willpower} ⛉ / {card.lore} ◆ · move {card.moveCost}</span>}
-          </div>
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1.5 text-sm">
+            {stats.map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="text-gray-500">{label}</dt>
+                <dd className="text-gray-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
 
           {abilities.length > 0 && (
             <div className="space-y-2 text-gray-900 leading-relaxed">

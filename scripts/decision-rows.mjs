@@ -56,9 +56,15 @@ for (const account of accounts) {
     const b = boardRows(logs, cardById)
     const side = (p) => {
       const me = p === m.your_player
-      return { is_me: me ? 1 : 0, mmr: me ? m.mmr_before : m.opp_mmr_before, went_first: me === Boolean(m.went_first) ? 1 : 0, won: me === (m.result === 'win') ? 1 : 0 }
+      return {
+        is_me: me ? 1 : 0, my_colors: me ? m.your_deck_colors : m.opp_deck_colors, opp_colors: me ? m.opp_deck_colors : m.your_deck_colors,
+        mmr: me ? m.mmr_before : m.opp_mmr_before, went_first: me === Boolean(m.went_first) ? 1 : 0, won: me === (m.result === 'win') ? 1 : 0,
+      }
     }
-    for (const { decision, player, ...r } of b.rows) choicesOut.write({ account, game_id: m.game_id, started_at: m.started_at, decision_id: `${account}:${m.game_id}:${decision}`, ...side(player), ...r })
+    const fullName = (id) => (id == null ? null : cardById[id]?.fullName)
+    for (const { decision, player, ...r } of b.rows) {
+      choicesOut.write({ account, game_id: m.game_id, started_at: m.started_at, decision_id: `${account}:${m.game_id}:${decision}`, ...side(player), ...r, a_name: fullName(r.a_card_id), t_name: fullName(r.t_card_id) })
+    }
     rows.choices += b.rows.length
     for (const [k, v] of Object.entries(b.checks)) board[k] = (board[k] ?? 0) + v
     for (const [k, v] of Object.entries(out.checks)) totals[k] = (totals[k] ?? 0) + v

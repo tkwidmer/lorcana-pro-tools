@@ -39,16 +39,20 @@ Three models score each decision:
 - `mmr` is the same model with each game weighted by its MMR: the weight doubles every 100 MMR above the median, and a game with no MMR (most Bo3) takes the player's median.
 - `generic` sees only what a card is (cost, type, inkable, stats) and the game state, so it carries to a new meta. Trained on the games before set 14 and tested on set 14, where 26% of the cards were new, it beat the card model (mulligan 73% vs 71%, ink 54.2% vs 53.7%).
 
-Nov 2026, every game since February (12,400 with a mulligan, 55,043 ink decisions):
+Nov 2026, every game since February (12,400 with a mulligan, 55,043 ink decisions, 221,375 board decisions):
 
 | | `card` | `mmr` | `generic` | Best simple baseline |
 |---|---|---|---|---|
 | Mulligan, card kept or sent | 80.0% (AUC 0.88) | 78.0% | 76.6% | 74.6%, the card's keep rate |
 | Ink, picked the choice (incl. no ink) | 57.5% | 55.1% | 54.9% | 41.0%, the card's ink rate (random is 26%) |
+| Board, picked the exact quest / challenge / end turn | 55.8% | | 53.2% | random 31.3% |
+| Board, picked the right kind (quest, challenge or end) | 72.4% | | 70.9% | 56.4%, quest the most lore, else end |
 
 Weighting by MMR does not predict the 1400+ MMR games any better (`card` vs `mmr`: mulligan 79.7% vs 78.9%, ink 58.2% vs 56.6%). Josh's games (median MMR 1670, more 1400+ games than every other account together) carry 89% of the `mmr` model's weight, so it is close to a model of how Josh plays: on the other accounts it trails the `card` model by 2 to 4 points.
 
-It also writes `decisions/flags.csv`: every mulligan or ink choice any model gave under 10% chance (`--flag` to change), with the game, turn, each model's chance and pick, `flagged_by`, and every option's chance as card/mmr/generic. The models learned from the team's own games, so a flag marks a departure from how the team usually plays that spot, not a proven mistake. Read it in the replay before calling it one. Which models agree says what kind of departure it is:
+The board models rank every legal quest, challenge and end-turn option (`decisions/choices.csv`). Both players' trusted turns train them, since the opponents are an MMR-matched population, and only the team's choices are flagged. There is no `mmr` board model. 82% of games end by concession, mostly from round 4 on, often with the winner far from 20 lore, so the board decides more games than the lore race; the board models are the ones to grow from here.
+
+It also writes `decisions/flags.csv`: every mulligan, ink or board choice any model gave under 10% chance (`--flag` to change), with the game, turn (the log's round), each model's chance and pick, `flagged_by`, and every option's chance as card/mmr/generic (card/generic for board). A board choice is not flagged when the models' pick was also taken that turn, since the order of actions within a turn is often arbitrary. `flagged_by` is `clean kill left` when the turn ended while a challenge that banishes its target and survives (by printed stats) was legal: 10% of the team's turn ends. Ending with the character ready keeps it from being challenged, so it can be deliberate; it is the first board spot to review. The models learned from the team's own games, so a flag marks a departure from how the team usually plays that spot, not a proven mistake. Read it in the replay before calling it one. Which models agree says what kind of departure it is:
 
 | `flagged_by` | Meaning |
 |---|---|

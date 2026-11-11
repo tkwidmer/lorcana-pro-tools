@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cardPath, findPrinting, groupPrintings, primaryPrinting, setOrder } from '../cardPrintings'
+import { cardPath, findPrinting, groupPrintings, primaryPrinting, printingNumber, setOrder } from '../cardPrintings'
 
 const elsa1 = { id: 42, setCode: '1', number: 42, fullName: 'Elsa - Spirit of Winter', rarity: 'Legendary' }
 const elsa1Ench = { id: 207, setCode: '1', number: 207, baseId: 42, fullName: 'Elsa - Spirit of Winter', rarity: 'Enchanted' }
@@ -16,6 +16,15 @@ describe('cardPath', () => {
     expect(cardPath(elsaPromo)).toBe('/cards/1/P1-42')
     expect(cardPath(puppyC)).toBe('/cards/3/4c')
     expect(cardPath(quest)).toBe('/cards/Q1/1')
+  })
+})
+
+describe('printingNumber', () => {
+  it('is the collector number as the route shows it: promo grouping and variant included', () => {
+    expect(printingNumber(elsa1)).toBe('42')
+    expect(printingNumber(elsaPromo)).toBe('P1-42')
+    expect(printingNumber(puppyC)).toBe('4c')
+    expect(printingNumber(quest)).toBe('1')
   })
 })
 

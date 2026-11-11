@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useCards } from '../hooks/useCards'
-import { findPrinting, groupPrintings, cardPath } from '../lib/cardPrintings'
+import { useCardPrices } from '../hooks/useCardPrices'
+import { findPrinting, groupPrintings, cardPath, printingNumber } from '../lib/cardPrintings'
+import { printingPrice, priceLabel } from '../lib/cardPrices'
 import { FORMATS, legality } from '../lib/cardLegality'
 import { resolveColors } from '../lib/inkColors'
 import { InkIcons } from '../components/InkIcons'
@@ -15,7 +17,9 @@ const STATUS = {
   not_legal: { label: 'Not legal', cls: 'bg-gray-100 text-gray-600 border-gray-200' },
 }
 
-const search = q => `/cards?q=${encodeURIComponent(q)}`
+const usd = n => (n == null ? '—' : `$${n.toFixed(2)}`)
+
+const search = q =>`/cards?q=${encodeURIComponent(q)}`
 
 function Chip({ q, children }) {
   return <Link to={search(q)} className="font-mono text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5 hover:bg-gray-200">{children}</Link>
@@ -52,6 +56,7 @@ function Section({ title, children }) {
 export function CardPage() {
   const { setCode, number } = useParams()
   const { cards, sets, loading, error } = useCards()
+  const { prices, updatedAt, error: pricesError } = useCardPrices()
   const card = useMemo(() => findPrinting(cards, setCode, number), [cards, setCode, number])
   const printings = useMemo(() => (card ? groupPrintings(cards).get(card) : []), [cards, card])
 
@@ -84,7 +89,7 @@ export function CardPage() {
       <div className="mb-6">
         <Link to="/cards" className="text-xs font-semibold uppercase tracking-widest text-forge-ink">Card Search</Link>
         <h1 className="text-3xl sm:text-4xl font-medium leading-tight text-gray-900 mt-1">{card.fullName}</h1>
-        <p className="text-gray-500">{set?.name ?? `Set ${card.setCode}`} · #{card.number}{card.variant ?? ''} · {card.rarity}{card.promoSource ? ` · ${card.promoSource}` : ''}</p>
+        <p className="text-gray-500">{set?.name ?? `Set ${card.setCode}`} · #{printingNumber(card)} · {card.rarity}{card.promoSource ? ` · ${card.promoSource}` : ''}</p>
       </div>
 
       <div className="grid gap-8 md:grid-cols-[minmax(0,380px)_1fr]">
@@ -127,21 +132,39 @@ export function CardPage() {
           </Section>
 
           <Section title={`Printings (${printings.length})`}>
-            <ul className="divide-y divide-gray-200">
-              {printings.map(p => {
-                const current = p === card
-                return (
-                  <li key={cardPath(p)}>
-                    <Link to={cardPath(p)} className={`flex flex-wrap gap-x-3 py-2 text-sm hover:bg-gray-50 ${current ? 'font-semibold text-forge-ink' : 'text-gray-700'}`}>
-                      <span className="w-56">{sets[p.setCode]?.name ?? `Set ${p.setCode}`}</span>
-                      <span className="w-16">#{p.number}{p.variant ?? ''}</span>
-                      <span className="w-28">{p.rarity}</span>
-                      <span className="text-gray-500">{p.promoSource ?? (p.foilTypes ?? []).filter(f => f !== 'None').join(', ')}</span>
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wider text-gray-500 border-b border-gray-200">
+                    <th className="py-1.5 pr-3 font-semibold">Set</th>
+                    <th className="py-1.5 pr-3 font-semibold">#</th>
+                    <th className="py-1.5 pr-3 font-semibold">Rarity</th>
+                    <th className="py-1.5 pr-3 font-semibold">Source / finish</th>
+                    <th className="py-1.5 pr-3 font-semibold text-right">Normal</th>
+                    <th className="py-1.5 font-semibold text-right">Foil</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {printings.map(p => {
+                    const current = p === card
+                    const price = printingPrice(prices, p)
+                    return (
+                      <tr key={cardPath(p)} className={`border-b border-gray-100 ${current ? 'font-semibold text-forge-ink' : 'text-gray-700'}`}>
+                        <td className="py-1.5 pr-3"><Link to={cardPath(p)} className="hover:underline">{sets[p.setCode]?.name ?? `Set ${p.setCode}`}</Link></td>
+                        <td className="py-1.5 pr-3 whitespace-nowrap">#{printingNumber(p)}</td>
+                        <td className="py-1.5 pr-3">{p.rarity}</td>
+                        <td className="py-1.5 pr-3 text-gray-500">{p.promoSource ?? (p.foilTypes ?? []).filter(f => f !== 'None').join(', ')}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums">{usd(price?.normal)}</td>
+                        <td className="py-1.5 text-right tabular-nums">{usd(price?.foil)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              {pricesError ?? (updatedAt ? `TCGplayer market price (USD) via duels.ink, ${updatedAt.slice(0, 10)}` : 'Loading prices…')}
+            </p>
           </Section>
 
           {(card.clarifications?.length || card.errata?.length || card.historicData?.length) ? (
@@ -166,6 +189,7 @@ export function CardPage() {
 
           {card.externalLinks && (
             <Section title="Buy">
+              <p className="text-lg text-gray-900 tabular-nums mb-3">{priceLabel(printingPrice(prices, card))}</p>
               <div className="flex flex-wrap gap-2">
                 {card.externalLinks.tcgPlayerUrl && <Button size="sm" href={card.externalLinks.tcgPlayerUrl} target="_blank" rel="noreferrer">TCGplayer</Button>}
                 {card.externalLinks.cardmarketUrl && <Button size="sm" href={card.externalLinks.cardmarketUrl} target="_blank" rel="noreferrer">Cardmarket</Button>}

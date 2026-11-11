@@ -5,6 +5,9 @@ import { cardKey } from './cardIdResolver'
 
 export const cardPath = card => '/cards/' + cardKey(card).replace('-', '/')
 
+// The collector number as the route shows it: 42, P1-42 (promo), 4c (variant).
+export const printingNumber = card => cardKey(card).slice(card.setCode.length + 1)
+
 export function findPrinting(cards, setCode, number) {
   const key = `${setCode}-${number}`
   return cards.find(c => cardKey(c) === key) ?? null

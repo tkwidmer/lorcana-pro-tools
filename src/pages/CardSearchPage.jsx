@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useCards } from '../hooks/useCards'
 import { useCardPrices } from '../hooks/useCardPrices'
 import { runQuery, withDirective, QuerySyntaxError } from '../lib/cardQuery'
-import { cardPath } from '../lib/cardPrintings'
+import { cardPath, printingNumber } from '../lib/cardPrintings'
 import { legality } from '../lib/cardLegality'
 import { printingPrice, usdOf, priceLabel } from '../lib/cardPrices'
 import { resolveColors } from '../lib/inkColors'
@@ -59,7 +59,7 @@ function ListView({ results, prices, order, direction, sortBy }) {
                   {card.type === 'Character' ? `${card.strength}/${card.willpower}/${card.lore}` : card.type === 'Location' ? `–/${card.willpower}/${card.lore}` : ''}
                 </td>
                 <td className="py-1.5 pr-3 text-gray-600">{card.rarity}</td>
-                <td className="py-1.5 pr-3 text-gray-600 whitespace-nowrap">{card.setCode} #{card.promoGrouping ? `${card.promoGrouping}-` : ''}{card.number}{card.variant ?? ''}</td>
+                <td className="py-1.5 pr-3 text-gray-600 whitespace-nowrap">{card.setCode} #{printingNumber(card)}</td>
                 <td className={`py-1.5 pr-3 ${LEGAL[l.Core.status]}`}>{LEGAL_LABEL[l.Core.status]}</td>
                 <td className={`py-1.5 pr-3 ${LEGAL[l.Infinity.status]}`}>{LEGAL_LABEL[l.Infinity.status]}</td>
                 <td className="py-1.5 tabular-nums text-gray-700" title={priceLabel(price)}>{usd(usdOf(price))}</td>

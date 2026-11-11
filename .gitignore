@@ -32,3 +32,4 @@ public/lorcana-extension/
 
 # Training rows built from logs/ by scripts/decision-rows.mjs
 decisions/
+__pycache__/

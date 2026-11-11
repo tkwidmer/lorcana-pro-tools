@@ -15,6 +15,8 @@ describe('routeTitle', () => {
   it('matches dynamic routes by prefix', () => {
     expect(routeTitle('/players/SomeName')).toBe('Player Profile · InkbornForge')
     expect(routeTitle('/scouting/game/abc-123')).toBe('Scouted Game · InkbornForge')
+    expect(routeTitle('/cards')).toBe('Card Search · InkbornForge')
+    expect(routeTitle('/cards/1/42')).toBe('Card Search · InkbornForge')
   })
 
   it('resolves blog routes, including a post by its slug', () => {

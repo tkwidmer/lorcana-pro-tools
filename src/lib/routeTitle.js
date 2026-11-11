@@ -14,6 +14,7 @@ const TITLES = {
   '/login': 'Sign in',
   '/sitemap': 'Sitemap',
   '/proxy': 'Proxy Generator',
+  '/cards': 'Card Search',
   '/extension': 'Chrome Extension',
   '/coconut-deck-builder': 'Coconut Deck Builder',
   '/limited-guide': 'Limited Guide',
@@ -46,6 +47,7 @@ const TITLES = {
 // Dynamic routes matched by prefix.
 const PREFIXES = [
   ['/players/', 'Player Profile'],
+  ['/cards/', 'Card Search'],
   ['/scouting/game/', 'Scouted Game'],
   ['/rules/', 'Rules'],
   ['/results/', 'Tournament Results'],
@@ -80,6 +82,7 @@ const DESCRIPTIONS = {
   '/sitemap': 'Every page on InkbornForge, in one place.',
   '/extension': 'The InkbornForge Chrome extension: capture live duels.ink games and export inkDecks pages to JSON.',
   '/proxy': 'Search Disney Lorcana cards and build printable black & white proxy sheets, 9 cards per page.',
+  '/cards': 'Search every Disney Lorcana card with Scryfall-style syntax, and browse each card\'s printings, rulings and format legality.',
   '/coconut-deck-builder': 'Build a singleton [Format Coconut] deck around one of the 18 beta Coconut cards, with ink and copy-count rules enforced automatically.',
   '/limited-guide': 'A Disney Lorcana limited format reference covering the BREAD framework, mana curves, and uninkable card counts.',
   '/blog': BLOG_DESCRIPTION,

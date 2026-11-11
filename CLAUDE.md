@@ -36,6 +36,7 @@ React 19 + React Router 7 + Tailwind CSS 4 + Vite 8 on Vercel; serverless routes
 | Match History, Analytics, Library, player profiles, Winrate Matrix, Meta Synthesis, Deck Doctor, Deck Iteration Lab, Stock Decks, Deck Insights, Game Scraper | `docs/agents/duels-data.md` |
 | Blog, rules browser | `docs/agents/content.md` |
 | [Format Coconut] | `docs/agents/coconut.md` |
+| Card Search, card pages, the query syntax | `docs/agents/cards.md` |
 | Any UI change that needs a screenshot or a browser check | `docs/agents/ui-screenshots.md` |
 
 Skills (`.claude/skills/`) hold procedures and upstream API notes: `add-coconut-card`, `new-blog-post`, `tournament-history-sync`, `vercel-preview-url`, `vercel-proxy-pattern`, `ravensburger-tournament-api`, `duels-api-docs`, `lorcanajson-docs`, `discord-interactions-docs`, `gamelog-pipeline`, `chrome-extension-mv3`, `indexeddb-schema-map`, `lorcana-coach` (coach a player from their duels.ink games).
@@ -53,6 +54,7 @@ Pages in `src/pages/` are self-contained; shared logic lives in `src/lib/` as pu
 | `/blog`, `/blog/:slug` | `BlogIndexPage`, `BlogPostPage` | Posts from `content/blog/` |
 | `/login`, `/auth/callback` | `LoginPage`, `AuthCallbackPage` | Google OAuth via Supabase |
 | `/proxy` | `ProxyGeneratorPage` | B&W proxy print sheets, plus Coconut card faces |
+| `/cards`, `/cards/:setCode/:number` | `CardSearchPage`, `CardPage` | Scryfall-style card search; one printing with legality, printings, rulings |
 | `/extension` | `ExtensionPage` | Download and install the InkbornForge Chrome extension (Game Scraper capture + inkDecks pull) |
 | `/coconut-deck-builder` | `CoconutDeckBuilderPage` | [Format Coconut] singleton deck builder |
 | `/limited-guide` | `LimitedGuidePage` | Static limited-format reference |
@@ -92,7 +94,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 
 ### Hooks (`src/hooks/`)
 
-`useAuth` (session, ensures a `profiles` row) · `useSupporter` (`isSupporter` is true for `supporter` and `admin`) · `useCards` (card data from `/api/cards`, IndexedDB-cached) · `useTournamentLiveUpdates` (RPH Pusher) · `usePairingBadges` · `useTransparentBackground` (OBS views) · `useTheme` · `useLiveMajors` (in-progress and upcoming majors).
+`useAuth` (session, ensures a `profiles` row) · `useSupporter` (`isSupporter` is true for `supporter` and `admin`) · `useCards` (card data and sets from `/api/cards`, IndexedDB-cached) · `useTournamentLiveUpdates` (RPH Pusher) · `usePairingBadges` · `useTransparentBackground` (OBS views) · `useTheme` · `useLiveMajors` (in-progress and upcoming majors).
 
 ### Shared libraries (`src/lib/`)
 
@@ -100,7 +102,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 |---|---|
 | Auth, access, theme | `supabaseClient.js`, `access.js` (`SUPPORTER_PATHS`; `METAFY_URL`/`METAFY_JOIN_URL`/`METAFY_PRICE`, the one home of the Metafy link and The Forge tier's price), `theme.js` |
 | Storage | `db.js` (IndexedDB `lorcana_pro_tools`), `cardsCache.js`, `scoutedGames.js`, `coconutDecks.js`, `gamelogHistory.js` (IndexedDB `lorcana_gamelogs`); see the `indexeddb-schema-map` skill before adding a store |
-| Cards and inks | `inkColors.js` (`resolveInkName`, `resolveColors`, `matchupKey`), `cardAnalysis.js` (`buildCardIndex`), `parseDeckList.js`, `decklistShared.js` (`matchDeckList`, `inkFill`, deck URL params), `decklistDelta.js` (`computeDelta`, card adds/removes between two lists), `cardIdResolver.js` (duels.ink card id → card/name; promos are `setCode-promoGrouping-number`), `cardSearch.js` (card-pool filters for the MCP server's `search_cards`/`get_cards`), `replayLogs.js` (rebuilds the gamelog shape from a duels.ink replay file before `parseGamelog`) |
+| Cards and inks | `inkColors.js` (`resolveInkName`, `resolveColors`, `matchupKey`), `cardAnalysis.js` (`buildCardIndex`), `parseDeckList.js`, `decklistShared.js` (`matchDeckList`, `inkFill`, deck URL params), `decklistDelta.js` (`computeDelta`, card adds/removes between two lists), `cardIdResolver.js` (duels.ink card id → card/name; promos are `setCode-promoGrouping-number`), `cardSearch.js` (card-pool filters for the MCP server's `search_cards`/`get_cards`), `replayLogs.js` (rebuilds the gamelog shape from a duels.ink replay file before `parseGamelog`), `cardQuery.js` (Scryfall-style query parser and `runQuery`), `cardLegality.js` (Core/Infinity/Coconut status), `cardPrintings.js` (`cardPath`, printing groups) |
 | duels.ink | `duelsApi.js` (tokens, match history, gamelogs, stats), `parseGamelog.js`, `gameStats.js`, `analyticsAggregation.js`, `cardImpact.js` (WAR), `turningPoints.js` (decisive round, comebacks), `buildWinrateMatrix.js`, `metagameAnalysis.js`, `sessionStats.js`, `opponentDirectory.js`, `playerProfiles.js`, `leakDetection.js`, `handInference.js`, `gameSnapshot.js`, `gameExport.js`/`gameImport.js`, `exportGameIds.js`, `decisionRows.js` (mulligan and ink training rows from a raw gamelog, with the reconstructed hand checked against full-hand prompts and each card tagged from its rules text; `scripts/decision-rows.mjs` runs it over `logs/`, `scripts/train-decision-models.py` trains baseline models on its rows and flags the choices they rank low, `scripts/outcome-test.py` tests whether those choices predict winning; both load through `scripts/decision_data.py`), `boardState.js` (both players' boards rebuilt from a raw gamelog and checked against every logged quest and challenge; legal quest/challenge/end-turn options and choice rows for the turns where it fully agrees) |
 | Meta stats | `metaSynthesis.js`, `metaDrift.js`, `rankTiers.js`, `archetypeStats.js`, `deckDoctor.js`, `stockDecks.js`, `forgeDecks.js`, `deckVersions.js` (Deck Iteration Lab versions, compared by card name; `docs/FEATURE_PROPOSALS.md` §3), `practiceSim.js`, `drawOddsMath.js`, `monteCarloSim.js` |
 | Tournaments | `tournamentApi.js`, `tournamentLive.js`, `tournamentHistoryApi.js`, `resultsArchive.js`, `teams.js` (Team Tracker roster helpers), `bracket.js`, `storeTiers.js`, `trackedStores.js`, `fieldBreakdown.js`, `cardeExport.js` (carde.io decklists JSON/CSV) |

@@ -5,7 +5,7 @@ const CARDS_URL = '/api/cards'
 const CACHE_READ_TIMEOUT_MS = 3000
 
 export function useCards() {
-  const [cards, setCards] = useState([])
+  const [data, setData] = useState({ cards: [], sets: {} })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -22,21 +22,20 @@ export function useCards() {
           new Promise(resolve => setTimeout(() => resolve(null), CACHE_READ_TIMEOUT_MS)),
         ])
         if (cached && mounted) {
-          setCards(cached)
+          setData(cached)
           setLoading(false)
           return
         }
 
-        // Fetch fresh
         const response = await fetch(CARDS_URL)
         if (!response.ok) throw new Error(`Failed to load card data (HTTP ${response.status})`)
-        const data = await response.json()
-        const cardList = Array.isArray(data) ? data : (data.cards ?? [])
+        const json = await response.json()
+        const fresh = { cards: json.cards, sets: json.sets }
 
         if (mounted) {
-          setCards(cardList)
+          setData(fresh)
           setLoading(false)
-          await setCachedCards(cardList)
+          await setCachedCards(fresh)
         }
       } catch (err) {
         if (mounted) {
@@ -50,5 +49,5 @@ export function useCards() {
     return () => { mounted = false }
   }, [])
 
-  return { cards, loading, error }
+  return { cards: data.cards, sets: data.sets, loading, error }
 }

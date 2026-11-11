@@ -192,7 +192,7 @@ describe('boolean structure', () => {
 
 describe('directives', () => {
   it('reads order, direction and unique, with defaults', () => {
-    expect(parseQuery('elsa', sets)).toMatchObject({ order: 'name', direction: 'asc', unique: 'cards' })
+    expect(parseQuery('elsa', sets)).toMatchObject({ order: 'set', direction: 'asc', unique: 'cards' })
     expect(parseQuery('elsa order:cost dir:desc unique:prints', sets)).toMatchObject({ order: 'cost', direction: 'desc', unique: 'prints' })
     expect(() => parseQuery('order:price', sets)).toThrow('Unknown order')
     expect(() => parseQuery('unique:art', sets)).toThrow(QuerySyntaxError)
@@ -228,8 +228,15 @@ describe('runQuery', () => {
     expect(runQuery(all, sets, 'elsa unique:prints').cards.map(c => `${c.setCode}-${c.promoGrouping ?? ''}${c.number}`)).toEqual(['1-42', '1-P142', '9-40'])
   })
 
-  it('sorts by name by default, and by the requested order', () => {
-    expect(runQuery(all, sets, '-c:colorless').cards.map(c => c.fullName)).toEqual([
+  it('sorts by set, then collector number, by default; a set\'s promos after its regular cards', () => {
+    expect(runQuery(all, sets, '-c:colorless').cards.map(c => `${c.setCode}-${c.number}`)).toEqual(['1-26', '2-149', '9-40', '9-99', '9-120'])
+    const promoOne = { ...song, number: 1, promoGrouping: 'P1', fullName: 'Aaa Promo', name: 'Aaa Promo' }
+    expect(runQuery([...all, promoOne], sets, 's:1 unique:prints').cards.map(c => `${c.setCode}-${c.promoGrouping ?? ''}${c.number}`))
+      .toEqual(['1-26', '1-42', '1-P11', '1-P142'])
+  })
+
+  it('sorts by the requested order', () => {
+    expect(runQuery(all, sets, '-c:colorless order:name').cards.map(c => c.fullName)).toEqual([
       'Be Our Guest', 'Elsa - Spirit of Winter', 'Hiram Flaversham - Toymaker', 'Mickey Mouse & Minnie Mouse - Adventuring Duo', 'Te Kā - The Burning One',
     ])
     expect(runQuery(all, sets, 't=character order:cost dir:desc').cards.map(c => c.cost)).toEqual([8, 7, 6, 4, 3])
@@ -238,7 +245,7 @@ describe('runQuery', () => {
   })
 
   it('returns nothing for an empty query', () => {
-    expect(runQuery(all, sets, '  ')).toEqual({ cards: [], display: 'grid', order: 'name', direction: 'asc' })
+    expect(runQuery(all, sets, '  ')).toEqual({ cards: [], display: 'grid', order: 'set', direction: 'asc' })
   })
 })
 
@@ -301,7 +308,7 @@ describe('display and withDirective', () => {
 
   it('runQuery reports the order and direction it sorted by, aliases resolved', () => {
     expect(runQuery(cards, sets, 't:song order:cmc dir:desc')).toMatchObject({ order: 'cost', direction: 'desc' })
-    expect(runQuery(cards, sets, 't:song')).toMatchObject({ order: 'name', direction: 'asc' })
+    expect(runQuery(cards, sets, 't:song')).toMatchObject({ order: 'set', direction: 'asc' })
   })
 
   it('withDirective replaces, appends or removes a directive and leaves quoted text alone', () => {

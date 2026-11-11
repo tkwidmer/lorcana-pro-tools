@@ -345,7 +345,7 @@ function parse(tokens, sets, opts, prices) {
 }
 
 export function parseQuery(q, sets, prices = null) {
-  const opts = { order: 'name', direction: 'asc', unique: 'cards', display: 'grid' }
+  const opts = { order: 'set', direction: 'asc', unique: 'cards', display: 'grid' }
   const tokens = tokenize(q)
   const predicate = tokens.length ? parse(tokens, sets, opts, prices) : () => true
   if (opts.order === 'usd' && !prices) throw new QuerySyntaxError('Prices are not loaded')
@@ -357,7 +357,8 @@ export function parseQuery(q, sets, prices = null) {
 const ORDER_KEY = {
   name: () => c => norm(c.fullName),
   cost: () => c => c.cost ?? -1,
-  set: () => c => setOrder(c) * 1000 + c.number,
+  // Set, then its regular cards by number, then its promos by number (the default).
+  set: () => c => setOrder(c) * 100000 + (c.promoGrouping ? 50000 : 0) + c.number,
   rarity: () => c => RARITY_RANK[norm(c.rarity)] ?? -1,
   strength: () => c => c.strength ?? -1,
   willpower: () => c => c.willpower ?? -1,
@@ -372,7 +373,7 @@ const ORDER_KEY = {
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 
 export function runQuery(cards, sets, q, prices = null) {
-  if (!q.trim()) return { cards: [], display: 'grid', order: 'name', direction: 'asc' }
+  if (!q.trim()) return { cards: [], display: 'grid', order: 'set', direction: 'asc' }
   const { predicate, order, direction, unique, display } = parseQuery(q, sets, prices)
   let hits = cards.filter(predicate)
   if (unique === 'cards') {
@@ -397,7 +398,8 @@ export function runQuery(cards, sets, q, prices = null) {
       compare(norm(a.fullName), norm(b.fullName)) ||
       setOrder(a) - setOrder(b) ||
       (a.promoGrouping ? 1 : 0) - (b.promoGrouping ? 1 : 0) ||
-      a.number - b.number
+      a.number - b.number ||
+      (a.variant ?? '').localeCompare(b.variant ?? '')
   })
   return { cards: hits, display, order, direction }
 }

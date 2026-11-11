@@ -21,7 +21,7 @@ const ROWS = [
   ['is:, not:', 'inkable, uninkable, dual, promo, enchanted, reprint, variant, quest, banned, errata', 'is:inkable · -is:promo'],
   ['ft:, a:, story:, v:', 'Flavor text, artist, story, version (the subtitle)', 'a:"matthew robert davies" · story:frozen'],
   ['or, -, ( )', 'Any term, negation, grouping', '(t:song or k:rush) -c:ruby'],
-  ['order:, dir:, unique:', 'name cost set rarity strength willpower lore color artist released number · asc desc · cards prints', 'order:cost dir:desc unique:prints'],
+  ['order:, dir:, unique:', 'set (default: set, then collector number) name cost rarity strength willpower lore color artist released number · asc desc · cards prints', 'order:cost dir:desc unique:prints'],
 ]
 
 const EXAMPLES = [

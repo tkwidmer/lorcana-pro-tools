@@ -238,11 +238,18 @@ export function decisionRows(logs, me, cardById, decklist) {
   decisions.forEach((x, decision) => {
     const candidates = [...x.hand].filter(([id]) => card(id)?.inkwell)
     const inkableCards = candidates.reduce((s, [, n]) => s + n, 0)
+    // The whole hand's costs, uninkable cards included: what the player could still play.
+    const costs = [...x.hand].flatMap(([id, n]) => Array(n).fill(card(id)?.cost)).filter(c => c != null)
+    const handCosts = {
+      hand_cost_mean: costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null,
+      hand_cost_le2: costs.filter(c => c <= 2).length,
+      hand_cost_ge5: costs.filter(c => c >= 5).length,
+    }
     for (const [id, copies] of candidates) {
       const f = cardFeatures(card(id))
       inkRows.push({
         decision, turn: x.turn, my_turn: x.myTurn, ink: x.ink, my_lore: x.myLore, opp_lore: x.oppLore, ...x.opp,
-        hand_size: total(x.hand), hand_inkable: inkableCards, no_ink: x.chosen === null ? 1 : 0,
+        hand_size: total(x.hand), hand_inkable: inkableCards, ...handCosts, no_ink: x.chosen === null ? 1 : 0,
         card_id: id, copies, ...f, cost_gap: f.cost === null ? null : f.cost - (x.ink + 1),
         inked: id === x.chosen ? 1 : 0,
       })

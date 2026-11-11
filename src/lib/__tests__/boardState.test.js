@@ -114,7 +114,7 @@ describe('boardRows', () => {
     expect(checks).toMatchObject({ target: 1, targetBad: 0, inLegalSet: 1, legalChecked: 1 })
 
     const untrusted = boardRows([...turn(1, play(1, 'A')), ...turn(2, play(2, 'B')), ...turn(1, attack(1, 'A', 'B'))], cards)
-    expect(untrusted.rows.filter((r) => r.turn === 2 && r.player === 1)).toEqual([])
+    expect(untrusted.rows.filter((r) => r.my_turn === 2 && r.player === 1)).toEqual([])
     expect(untrusted.checks.targetBad).toBe(1)
   })
 })

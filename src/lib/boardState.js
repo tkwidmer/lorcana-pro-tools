@@ -37,7 +37,7 @@ export function createBoard(cardById) {
   }
   const tracked = (id) => ['Character', 'Location'].includes(rules(id).type)
   const s = {
-    board: { 1: [], 2: [] }, lore: { 1: 0, 2: 0 }, turn: { 1: 0, 2: 0 }, active: null,
+    board: { 1: [], 2: [] }, lore: { 1: 0, 2: 0 }, turn: { 1: 0, 2: 0 }, round: null, active: null,
     undo: [], lastSelected: [], bouncePending: 0, lastAttack: null, phantom: false,
     // Per-turn effects that the log announces without naming the card they touch.
     unnamedExerts: { 1: 0, 2: 0 }, readies: { 1: 0, 2: 0 }, rushGrants: { 1: 0, 2: 0 },
@@ -160,7 +160,7 @@ export function createBoard(cardById) {
     if (t === 'TURN_START' || t === 'TURN_END') s.undo = []
     if (ACTIONS.has(t) || isDeclaration(ev)) s.undo.push({ board: structuredClone(s.board), lore: { ...s.lore }, unnamedExerts: { ...s.unnamedExerts } })
     if (t === 'TURN_START') {
-      s.active = p; s.turn[p]++; resetTurn()
+      s.active = p; s.turn[p]++; s.round = ev.turnNumber; resetTurn()
       for (const e of s.board[p]) { e.exerted = false; e.dry = false }
       return null
     }
@@ -292,7 +292,7 @@ function context(B, p) {
   const chars = (q) => s.board[q].filter((e) => B.rules(e.cardId).type === 'Character')
   const sum = (q, f) => chars(q).reduce((n, e) => n + f(B.rules(e.cardId)), 0)
   return {
-    turn: s.turn[p], my_lore: s.lore[p], opp_lore: s.lore[o],
+    turn: s.round, my_turn: s.turn[p], my_lore: s.lore[p], opp_lore: s.lore[o],
     my_chars: chars(p).length, opp_chars: chars(o).length,
     my_board_cost: sum(p, (r) => r.cost), opp_board_cost: sum(o, (r) => r.cost),
     my_board_lore: sum(p, (r) => r.lore), opp_board_lore: sum(o, (r) => r.lore),

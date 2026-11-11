@@ -16,7 +16,7 @@ Per format: `legal`, `banned` (since), `rotated` (until), `not_legal`; banned be
 
 ## Query language (`cardQuery.js`)
 
-Scryfall syntax on Lorcana fields; the table in `CardSearchSyntax.jsx` is the user-facing reference and must match `compileTerm`. Unknown keys or values, a comparison operator on a membership key (`k`, `s`, `f`, `banned`, `is`, `order`, `dir`, `unique`), an unclosed quote, a bad `/regex/` and a dangling `-`/`or`/`(` all throw `QuerySyntaxError`, which the page prints. `unique:cards` (default) shows one printing per name, chosen by `primaryPrinting` among the *matching* printings (so `s:1` shows the set-1 printing). Adding a key: one `case` in `compileTerm`, one row in `CardSearchSyntax.jsx`, one test.
+Scryfall syntax on Lorcana fields; the table in `CardSearchSyntax.jsx` is the user-facing reference and must match `compileTerm`. Unknown keys or values, a comparison operator on a membership key (`k`, `s`, `f`, `banned`, `is`, `order`, `dir`, `unique`), an unclosed quote, a bad `/regex/` and a dangling `-`/`or`/`(` all throw `QuerySyntaxError`, which the page prints. `o:` searches rules text with parenthesized reminder text stripped; `fo:` searches all of `fullText`. `unique:cards` (default) shows one printing per name, chosen by `primaryPrinting` among the *matching* printings (so `s:1` shows the set-1 printing). Adding a key: one `case` in `compileTerm`, one row in `CardSearchSyntax.jsx`, one test.
 
 ## Not built
 

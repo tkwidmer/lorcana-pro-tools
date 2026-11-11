@@ -42,7 +42,7 @@ describe('name terms', () => {
 describe('text terms', () => {
   it('o: searches the text across line wraps, ~ is the card name, regex works', () => {
     expect(uniq('o:"exert up to 2"')).toEqual(['Elsa - Spirit of Winter'])
-    expect(uniq('o:"characters named ~"')).toEqual(['Elsa - Spirit of Winter'])
+    expect(uniq('fo:"characters named ~"')).toEqual(['Elsa - Spirit of Winter'])
     expect(uniq('o:/banish .* items?/')).toEqual(['Hiram Flaversham - Toymaker'])
     expect(uniq('ft:ice')).toEqual(['Elsa - Spirit of Winter'])
     expect(uniq('a:"robert davies"')).toEqual(['Elsa - Spirit of Winter'])
@@ -233,5 +233,52 @@ describe('runQuery', () => {
 
   it('returns nothing for an empty query', () => {
     expect(runQuery(all, sets, '  ')).toEqual([])
+  })
+})
+
+describe('Scryfall parity (live syntax page)', () => {
+  it('o: ignores reminder text, fo: searches it', () => {
+    expect(uniq('o:"sing this song"')).toEqual([])
+    expect(uniq('fo:"sing this song"')).toEqual(['Be Our Guest'])
+    expect(uniq('o:"you may pay"')).toEqual([])
+    expect(uniq('fulloracle:"you may pay"')).toEqual(['Elsa - Spirit of Winter'])
+    expect(uniq('o:"deep freeze"')).toEqual(['Elsa - Spirit of Winter'])
+  })
+
+  it('kw:, edition:, manavalue: aliases', () => {
+    expect(uniq('kw:rush')).toEqual(['Te Kā - The Burning One'])
+    expect(uniq('edition:fabled')).toEqual(uniq('s:9'))
+    expect(uniq('manavalue=7')).toEqual(['Mickey Mouse & Minnie Mouse - Adventuring Duo'])
+  })
+
+  it('a number in c: compares the ink count', () => {
+    expect(uniq('c=2')).toEqual(['Mickey Mouse & Minnie Mouse - Adventuring Duo'])
+    expect(uniq('c=0')).toEqual(['Anna - Ensnared Sister'])
+    expect(uniq('c>1')).toEqual(uniq('c=2'))
+    expect(uniq('c<2 -c=0')).toEqual(['Elsa - Spirit of Winter', 'Te Kā - The Burning One', 'Be Our Guest', 'Hiram Flaversham - Toymaker'])
+  })
+
+  it('t: accepts a regex', () => {
+    expect(uniq('t:/^action/')).toEqual(['Be Our Guest'])
+    expect(uniq('t:/\\bqueen\\b/ -is:quest')).toEqual(['Elsa - Spirit of Winter'])
+    // Anchors apply to the type and to each subtype on its own (the spec's t:/^(prince|princess)$/ example).
+    expect(uniq('t:/^(villain|deity)$/')).toEqual(['Te Kā - The Burning One'])
+    expect(uniq('t:/^song$/')).toEqual(['Be Our Guest'])
+  })
+
+  it('date: takes yyyy-mm-dd or a set code', () => {
+    expect(uniq('date>=2025-09-05')).toEqual(['Te Kā - The Burning One', 'Mickey Mouse & Minnie Mouse - Adventuring Duo'])
+    expect(uniq('date<9 -is:quest')).toEqual(['Elsa - Spirit of Winter', 'Be Our Guest'])
+    expect(uniq('date=q1')).toEqual(['Anna - Ensnared Sister'])
+    expect(() => parseQuery('date>soon', sets)).toThrow(QuerySyntaxError)
+  })
+
+  it('order aliases from Scryfall', () => {
+    expect(parseQuery('order:cmc', sets).order).toBe('cost')
+    expect(parseQuery('order:power', sets).order).toBe('strength')
+    expect(parseQuery('order:toughness', sets).order).toBe('willpower')
+    const all = [...cards]
+    expect(runQuery(all, sets, 'order:color -c:colorless').map(c => c.color)).toEqual(['Amber', 'Amethyst', 'Emerald-Sapphire', 'Ruby', 'Sapphire'])
+    expect(runQuery(all, sets, 'order:artist').map(c => c.artistsText)[0]).toBe('A')
   })
 })

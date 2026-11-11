@@ -27,16 +27,21 @@ const COMPARE = {
 }
 const cmpOp = op => COMPARE[op === ':' ? '=' : op]
 
+// o: searches the rules text without reminder text (Lorcana puts every
+// reminder in parentheses); fo: searches all of it, like Scryfall.
+const rulesText = c => (c.fullText ?? '').replace(/\([^)]*\)/g, '')
+
 const TEXT = {
   n: c => c.fullName, name: c => c.fullName,
-  o: c => c.fullText, text: c => c.fullText, oracle: c => c.fullText,
+  o: rulesText, text: rulesText, oracle: rulesText,
+  fo: c => c.fullText, fulloracle: c => c.fullText,
   ft: c => c.flavorText, flavor: c => c.flavorText,
   a: c => c.artistsText, artist: c => c.artistsText,
   story: c => c.story,
   v: c => c.version, version: c => c.version,
 }
 const STAT = {
-  cost: 'cost', mv: 'cost', cmc: 'cost',
+  cost: 'cost', mv: 'cost', manavalue: 'cost', cmc: 'cost',
   str: 'strength', strength: 'strength', pow: 'strength', power: 'strength',
   will: 'willpower', willpower: 'willpower', tou: 'willpower', toughness: 'willpower',
   lore: 'lore', l: 'lore',
@@ -55,7 +60,8 @@ const IS = {
   banned: c => Object.values(legality(c)).some(s => s.status === 'banned'),
   errata: c => (c.errata?.length ?? 0) > 0,
 }
-export const ORDERS = ['name', 'cost', 'set', 'rarity', 'strength', 'willpower', 'lore', 'released', 'number']
+const ORDER_ALIAS = { cmc: 'cost', mv: 'cost', power: 'strength', pow: 'strength', toughness: 'willpower', tou: 'willpower' }
+export const ORDERS = ['name', 'cost', 'set', 'rarity', 'strength', 'willpower', 'lore', 'color', 'artist', 'released', 'number']
 
 // --- tokenizer ---------------------------------------------------------------
 
@@ -91,14 +97,19 @@ function tokenize(q) {
 
 // --- term compilers ----------------------------------------------------------
 
+const isRegex = raw => raw.length >= 2 && raw.startsWith('/') && raw.endsWith('/')
+
+function toRegex(raw) {
+  try {
+    return new RegExp(raw.slice(1, -1), 'i')
+  } catch (e) {
+    throw new QuerySyntaxError(`Invalid regex: ${e.message}`)
+  }
+}
+
 function textPredicate(get, op, raw) {
-  if (raw.length >= 2 && raw.startsWith('/') && raw.endsWith('/')) {
-    let re
-    try {
-      re = new RegExp(raw.slice(1, -1), 'i')
-    } catch (e) {
-      throw new QuerySyntaxError(`Invalid regex: ${e.message}`)
-    }
+  if (isRegex(raw)) {
+    const re = toRegex(raw)
     return c => re.test(norm(get(c)))
   }
   const value = norm(unquote(raw))
@@ -134,6 +145,11 @@ const subset = (a, b) => a.every(x => b.includes(x))
 
 function colorPredicate(op, value, identity) {
   if (!identity && op === ':' && /^(m|multi|multicolor)$/i.test(value)) return c => inks(c).length >= 2
+  if (!identity && /^\d+$/.test(value)) {
+    const n = Number(value)
+    const cmp = cmpOp(op)
+    return c => cmp(inks(c).length, n)
+  }
   const q = parseInks(value)
   if (q.length === 0) return c => inks(c).length === 0
   const effective = op === ':' ? (identity ? '<=' : '>=') : op
@@ -166,7 +182,7 @@ function formatOf(value) {
 }
 
 // Keys that only test membership: ":" and "=" mean the same, anything else is an error.
-const EQUALITY_ONLY = new Set(['k', 'keyword', 's', 'set', 'e', 'f', 'format', 'legal', 'banned', 'is', 'not', 'order', 'dir', 'direction', 'unique'])
+const EQUALITY_ONLY = new Set(['k', 'kw', 'keyword', 's', 'set', 'e', 'edition', 'f', 'format', 'legal', 'banned', 'is', 'not', 'order', 'dir', 'direction', 'unique'])
 
 function compileTerm({ key, op, raw }, sets, opts) {
   const value = unquote(raw)
@@ -179,18 +195,24 @@ function compileTerm({ key, op, raw }, sets, opts) {
     case 'ci': case 'id': case 'identity':
       return colorPredicate(op, value, true)
     case 't': case 'type': {
+      // A regex is tested against the type and each subtype on its own, so
+      // anchors work: t:/^(prince|princess)$/.
+      if (isRegex(raw)) {
+        const re = toRegex(raw)
+        return c => [c.type, ...(c.subtypes ?? [])].some(t => re.test(norm(t)))
+      }
       const v = norm(value)
       if (op === '=') return c => norm(c.type) === v
       if (op === ':') return c => norm(`${c.type} ${c.subtypesText ?? ''}`).includes(v)
       throw new QuerySyntaxError(`"${op}" can't be used with type`)
     }
-    case 'k': case 'keyword': {
+    case 'k': case 'kw': case 'keyword': {
       const v = norm(value)
       return c => (c.keywordAbilities ?? []).some(k => norm(k) === v)
     }
     case 'r': case 'rarity':
       return rarityPredicate(op, value)
-    case 's': case 'set': case 'e': {
+    case 's': case 'set': case 'e': case 'edition': {
       const v = norm(value)
       return c => norm(c.setCode) === v || norm(sets[c.setCode]?.name).includes(v)
     }
@@ -210,6 +232,18 @@ function compileTerm({ key, op, raw }, sets, opts) {
         return !!date && cmp(Number(date.slice(0, 4)), n)
       }
     }
+    case 'date': {
+      const v = norm(value)
+      const bySet = Object.entries(sets).find(([code]) => norm(code) === v)?.[1]?.releaseDate
+      const target = bySet ?? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null)
+      if (!target) throw new QuerySyntaxError(`"${value}" isn't a yyyy-mm-dd date or a set code`)
+      const cmp = cmpOp(op)
+      // ISO dates compare correctly as strings.
+      return c => {
+        const date = sets[c.setCode]?.releaseDate
+        return !!date && cmp(date, target)
+      }
+    }
     case 'f': case 'format': case 'legal': {
       const fmt = formatOf(value)
       return c => legality(c)[fmt].status === 'legal'
@@ -224,7 +258,7 @@ function compileTerm({ key, op, raw }, sets, opts) {
       return key === 'is' ? p : c => !p(c)
     }
     case 'order': {
-      const v = norm(value)
+      const v = ORDER_ALIAS[norm(value)] ?? norm(value)
       if (!ORDERS.includes(v)) throw new QuerySyntaxError(`Unknown order "${value}" (${ORDERS.join(', ')})`)
       opts.order = v
       return () => true
@@ -308,6 +342,8 @@ const ORDER_KEY = {
   strength: () => c => c.strength ?? -1,
   willpower: () => c => c.willpower ?? -1,
   lore: () => c => c.lore ?? -1,
+  color: () => c => c.color ?? '',
+  artist: () => c => norm(c.artistsText),
   released: sets => c => sets[c.setCode]?.releaseDate ?? '',
   number: () => c => c.number,
 }

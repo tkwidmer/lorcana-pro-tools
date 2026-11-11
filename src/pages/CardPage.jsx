@@ -158,6 +158,7 @@ export function CardPage() {
                     <th className="py-1.5 pr-3 font-semibold">Set</th>
                     <th className="py-1.5 pr-3 font-semibold">#</th>
                     <th className="py-1.5 pr-3 font-semibold">Rarity</th>
+                    <th className="py-1.5 pr-3 font-semibold">Source / finish</th>
                     <th className="py-1.5 pr-3 font-semibold text-right">Normal</th>
                     <th className="py-1.5 font-semibold text-right">Foil</th>
                   </tr>
@@ -171,6 +172,7 @@ export function CardPage() {
                         <td className="py-1.5 pr-3"><Link to={cardPath(p)} className="hover:underline">{sets[p.setCode]?.name ?? `Set ${p.setCode}`}</Link></td>
                         <td className="py-1.5 pr-3 whitespace-nowrap">#{printingNumber(p)}</td>
                         <td className="py-1.5 pr-3">{p.rarity}</td>
+                        <td className="py-1.5 pr-3 text-gray-500">{p.promoSource ?? (p.foilTypes ?? []).filter(f => f !== 'None').join(', ')}</td>
                         <td className="py-1.5 pr-3 text-right tabular-nums">{usd(price?.normal)}</td>
                         <td className="py-1.5 text-right tabular-nums">{usd(price?.foil)}</td>
                       </tr>

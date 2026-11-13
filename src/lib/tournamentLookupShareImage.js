@@ -3,7 +3,7 @@
 // Sans 3) with the InkbornForge mark and URL. Data comes from
 // tournamentInks.js and teams.js; the pure helpers are exported for tests,
 // the draw functions need a browser canvas.
-import { inkPairMeta, inkPairMatrix, winRate, playerInks, bestOfLeaders } from './tournamentInks'
+import { inkPairMeta, inkPairMatrix, winRate, playerInks, bestOfLeaders, bestRankByPair } from './tournamentInks'
 import { ordinal } from './resultsArchive'
 import { teamInitials } from './teams'
 
@@ -151,8 +151,10 @@ function roundRect(ctx, x, y, w, h, r) {
 const pct = (v, digits = 1) => (v == null ? '—' : `${v.toFixed(digits)}%`)
 
 // The field by ink pair: one row per pair with a bar painted half in each ink.
-export async function renderMetaShareImage({ matches, structure }) {
+export async function renderMetaShareImage({ matches, structure, standings }) {
   const rows = inkPairMeta(matches)
+  const bestRank = bestRankByPair(standings, playerInks(matches))
+  const rankCol = standings ? 100 : 0
   const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
   const W = 1200
   const PAD = 56
@@ -165,13 +167,14 @@ export async function renderMetaShareImage({ matches, structure }) {
   const players = rows.reduce((s, r) => s + r.players, 0)
   const NAME_X = PAD + 82
   const BAR_X = PAD + 400
-  const BAR_W = W - PAD - BAR_X - 300
-  const COLS = { players: W - PAD - 210, share: W - PAD - 110, win: W - PAD }
+  const BAR_W = W - PAD - BAR_X - 300 - rankCol
+  const COLS = { players: W - PAD - 210 - rankCol, share: W - PAD - 110 - rankCol, win: W - PAD - rankCol, best: W - PAD }
   const head = { font: `500 17px ${DISPLAY}`, color: MUTED, align: 'right' }
   text(ctx, 'INK PAIR', NAME_X, TOP - 20, { ...head, align: 'left' })
   text(ctx, 'PLAYERS', COLS.players, TOP - 20, head)
   text(ctx, 'SHARE', COLS.share, TOP - 20, head)
   text(ctx, 'WIN %', COLS.win, TOP - 20, head)
+  if (standings) text(ctx, 'BEST RANK', COLS.best, TOP - 20, head)
 
   const maxShare = Math.max(...rows.map((r) => r.share))
   rows.forEach((r, i) => {
@@ -190,25 +193,29 @@ export async function renderMetaShareImage({ matches, structure }) {
     const wr = r.winRate
     const color = wr == null ? MUTED : wr >= 52 ? '#6fd39a' : wr <= 48 ? '#f08a8a' : PAPER
     text(ctx, pct(wr), COLS.win, mid, { font: `600 24px ${DISPLAY}`, color, align: 'right', baseline: 'middle' })
+    if (standings) text(ctx, bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—', COLS.best, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
   })
 
   drawFooter(ctx, W, H, PAD, `${players.toLocaleString('en-US')} players with a submitted deck · win % vs other pairs, draws as half, mirrors left out`)
   return canvas
 }
 
-// Row pair's match win rate against each column pair, with an overall
-// "vs field" column, sized to the number of pairs.
-export async function renderMatchupShareImage({ matches, structure }) {
+// Row pair's match win rate against each column pair, beside its overall
+// win rate and record vs the field and (with standings) its best rank;
+// sized to the number of pairs.
+export async function renderMatchupShareImage({ matches, structure, standings }) {
   const pairs = inkPairMeta(matches)
   const cells = inkPairMatrix(matches)
+  const bestRank = bestRankByPair(standings, playerInks(matches))
   const { icons, mark } = await loadAssets(pairs.map((p) => p.inks))
   const PAD = 48
   const LABEL_W = 270
-  const FIELD_W = 112
+  const FIELD_W = 150
+  const BEST_W = standings ? 84 : 0
   const CELL = 96
   const GAP = 6
   const ROW = 74
-  const W = Math.max(1400, PAD * 2 + LABEL_W + FIELD_W + GAP + pairs.length * (CELL + GAP))
+  const W = Math.max(1400, PAD * 2 + LABEL_W + FIELD_W + GAP + (BEST_W && BEST_W + GAP) + pairs.length * (CELL + GAP))
   const HEAD_TOP = 196
   const TOP = HEAD_TOP + 96
   const H = TOP + pairs.length * (ROW + GAP) + 100
@@ -216,9 +223,14 @@ export async function renderMatchupShareImage({ matches, structure }) {
   drawHeader(ctx, W, PAD, { mark, title: 'MATCHUPS', structure })
 
   const fieldX = PAD + LABEL_W + GAP
-  const colX = (j) => fieldX + FIELD_W + GAP + j * (CELL + GAP)
+  const bestX = fieldX + FIELD_W + GAP
+  const colX = (j) => bestX + (BEST_W && BEST_W + GAP) + j * (CELL + GAP)
   text(ctx, 'VS FIELD', fieldX + FIELD_W / 2, HEAD_TOP + 62, { font: `600 18px ${DISPLAY}`, color: FORGE, align: 'center' })
-  text(ctx, 'overall', fieldX + FIELD_W / 2, HEAD_TOP + 84, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+  text(ctx, 'win % · record', fieldX + FIELD_W / 2, HEAD_TOP + 84, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+  if (BEST_W) {
+    text(ctx, 'BEST', bestX + BEST_W / 2, HEAD_TOP + 62, { font: `600 18px ${DISPLAY}`, color: FORGE, align: 'center' })
+    text(ctx, 'rank', bestX + BEST_W / 2, HEAD_TOP + 84, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+  }
   pairs.forEach((p, j) => {
     const cx = colX(j) + CELL / 2
     drawInks(ctx, icons, p.inks, cx - 29, HEAD_TOP + 28, 26)
@@ -239,9 +251,13 @@ export async function renderMatchupShareImage({ matches, structure }) {
     ctx.strokeStyle = FORGE
     ctx.lineWidth = 1.5
     roundRect(ctx, fieldX, y, FIELD_W, ROW, 4); ctx.stroke()
-    const fieldN = row.wins + row.losses + row.draws
     text(ctx, pct(row.winRate), fieldX + FIELD_W / 2, mid - 2, { font: `700 26px ${DISPLAY}`, color: FORGE, align: 'center' })
-    text(ctx, `${fieldN}m`, fieldX + FIELD_W / 2, mid + 22, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+    text(ctx, `${row.wins}-${row.losses}${row.draws ? `-${row.draws}` : ''}`, fieldX + FIELD_W / 2, mid + 22, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+    if (BEST_W) {
+      ctx.fillStyle = INK_2
+      roundRect(ctx, bestX, y, BEST_W, ROW, 4); ctx.fill()
+      text(ctx, bestRank.has(row.key) ? `#${bestRank.get(row.key)}` : '—', bestX + BEST_W / 2, mid, { font: `600 24px ${DISPLAY}`, align: 'center', baseline: 'middle' })
+    }
 
     pairs.forEach((col, j) => {
       const x = colX(j)

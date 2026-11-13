@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { renderMetaShareImage, renderMatchupShareImage, renderBestOfShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
 import { ShareDownloadLink } from './ShareDownloadLink'
 import { InkIcons } from './InkIcons'
-import { inkPairMeta, inkPairMatrix, winRate, bestOfLeaders } from '../lib/tournamentInks'
+import { inkPairMeta, inkPairMatrix, winRate, bestOfLeaders, bestRankByPair, playerInks } from '../lib/tournamentInks'
 import { ordinal } from '../lib/resultsArchive'
 import { winrateCellColor, winrateTextColor } from '../lib/statColors'
 
@@ -10,8 +10,9 @@ const pct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`)
 const record = ({ wins, losses, draws }) => `${wins}-${losses}${draws ? `-${draws}` : ''}`
 
 // The field by ink pair, from the players' submitted decks on Play Hub.
-export function InkMetaTab({ allMatches, structure }) {
+export function InkMetaTab({ allMatches, structure, standings }) {
   const rows = useMemo(() => inkPairMeta(allMatches), [allMatches])
+  const bestRank = useMemo(() => bestRankByPair(standings, playerInks(allMatches)), [standings, allMatches])
   const players = rows.reduce((sum, r) => sum + r.players, 0)
   return (
     <div className="space-y-2">
@@ -25,6 +26,7 @@ export function InkMetaTab({ allMatches, structure }) {
                 <th className="text-left px-4 py-2 w-1/3">Share</th>
                 <th className="text-right px-4 py-2" title="Matches against other pairs; mirrors excluded">Record</th>
                 <th className="text-right px-4 py-2">Win %</th>
+                {standings && <th className="text-right px-4 py-2">Best rank</th>}
               </tr>
             </thead>
             <tbody>
@@ -47,6 +49,7 @@ export function InkMetaTab({ allMatches, structure }) {
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-600">{record(r)}</td>
                   <td className={`px-4 py-2.5 text-right font-mono ${winrateTextColor(r.winRate)}`}>{pct(r.winRate)}</td>
+                  {standings && <td className="px-4 py-2.5 text-right font-mono text-gray-700">{bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—'}</td>}
                 </tr>
               ))}
             </tbody>
@@ -56,22 +59,26 @@ export function InkMetaTab({ allMatches, structure }) {
           {players} players with a submitted deck. Win % counts reported matches against other pairs (draws as half), mirrors excluded.
         </p>
       </div>
-      <ShareDownloadLink render={() => renderMetaShareImage({ matches: allMatches, structure })} filename={shareFilename(structure, 'metagame')} />
+      <ShareDownloadLink render={() => renderMetaShareImage({ matches: allMatches, structure, standings })} filename={shareFilename(structure, 'metagame')} />
     </div>
   )
 }
 
 // Row pair's win rate against each column pair.
-export function InkMatrixTab({ allMatches, structure }) {
+export function InkMatrixTab({ allMatches, structure, standings }) {
   const pairs = useMemo(() => inkPairMeta(allMatches), [allMatches])
   const cells = useMemo(() => inkPairMatrix(allMatches), [allMatches])
+  const bestRank = useMemo(() => bestRankByPair(standings, playerInks(allMatches)), [standings, allMatches])
   return (
     <div className="space-y-2">
       <div className="overflow-x-auto border border-gray-200 rounded-lg">
         <table className="text-xs border-separate border-spacing-0.5">
           <thead>
             <tr>
-              <th className="px-2 py-1 text-left text-gray-500 font-normal">vs →</th>
+              <th className="px-2 py-1 text-left text-gray-500 font-normal">Deck</th>
+              <th className="px-2 py-1 text-right text-gray-500 font-normal">Win %</th>
+              <th className="px-2 py-1 text-right text-gray-500 font-normal">Record</th>
+              {standings && <th className="px-2 py-1 pr-4 text-right text-gray-500 font-normal">Best</th>}
               {pairs.map((p) => (
                 <th key={p.key} className="px-1 py-1" title={p.inks.join(' / ')}>
                   <InkIcons colors={p.inks} size={16} className="justify-center" />
@@ -88,6 +95,9 @@ export function InkMatrixTab({ allMatches, structure }) {
                     <span className="font-mono text-gray-400 font-normal">{row.players}</span>
                   </span>
                 </th>
+                <td className={`px-2 py-1 text-right font-mono font-semibold ${winrateTextColor(row.winRate)}`}>{pct(row.winRate)}</td>
+                <td className="px-2 py-1 text-right font-mono text-gray-600 whitespace-nowrap">{record(row)}</td>
+                {standings && <td className="px-2 py-1 pr-4 text-right font-mono text-gray-700">{bestRank.has(row.key) ? `#${bestRank.get(row.key)}` : '—'}</td>}
                 {pairs.map((col) => {
                   const rec = cells.get(`${row.key}|${col.key}`)
                   const mirror = row.key === col.key
@@ -116,9 +126,9 @@ export function InkMatrixTab({ allMatches, structure }) {
         </table>
       </div>
       <p className="text-xs text-gray-500">
-        Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
+        Win % and Record are each pair's matches against other pairs (mirrors left out); Best is its best standings rank. Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
       </p>
-      <ShareDownloadLink render={() => renderMatchupShareImage({ matches: allMatches, structure })} filename={shareFilename(structure, 'matchups')} />
+      <ShareDownloadLink render={() => renderMatchupShareImage({ matches: allMatches, structure, standings })} filename={shareFilename(structure, 'matchups')} />
     </div>
   )
 }

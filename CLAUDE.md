@@ -109,7 +109,7 @@ Supporter-gated routes are the `SUPPORTER_PATHS` set in `src/lib/access.js` (`Su
 | Stream Overlay | `streamOverlay.js` (pure, tested), `streamTables.js` (Supabase) |
 | Content | `siteSections.js` (the catalog; new tools need an `icon` in `toolIcons.js`, a test enforces it), `blog.js`, `blogPost.js`, `blogMeta.js`, `frontmatter.js`, `metaDigest.js` (the weekly meta digest post), `rules/` |
 | Coconut | `coconutCards.js`, `coconutFormat.js`, `coconutDecklistText.js` |
-| Share images (canvas) | `tournamentShareImage.js`, `metaSynthesisShareImage.js`, `coconutShareImage.js`, `tournamentLookupShareImage.js` (Tournament Lookup's Metagame, Matchups, Best Of and Teams as PNGs) |
+| Share images (canvas) | `shareBrand.js` (the shared InkbornForge look and the 16:9 video layout with a webcam corner), `tournamentShareImage.js`, `metaSynthesisShareImage.js`, `coconutShareImage.js`, `tournamentLookupShareImage.js` (Tournament Lookup's Metagame, Matchups, Best Of and Teams as PNGs) |
 
 ### Design system
 

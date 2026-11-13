@@ -19,7 +19,7 @@ import { usePairingBadges } from '../hooks/usePairingBadges'
 import { pairKeyOf, fetchTeams } from '../lib/tournamentHistoryApi'
 import { teamLiveSummary, teamsAtEvent, topTeamsByBestPlacement } from '../lib/teams'
 import { TeamLogo } from '../components/TeamLogo'
-import { LiveMajorsList } from '../components/LiveMajorsList'
+import { LiveMajorsDetails, LiveMajorsList } from '../components/LiveMajorsList'
 import { useLiveMajors } from '../hooks/useLiveMajors'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
 import { Button } from '../components/ui/Button'
@@ -532,7 +532,8 @@ export function TournamentLookupPage() {
     () => Object.fromEntries((selectedTeam?.members ?? []).map((m) => [String(m.playerId), { name: m.playerName }])),
     [selectedTeam]
   )
-  const liveMajors = useLiveMajors()
+  const [liveOpen, setLiveOpen] = useState(false)
+  const liveMajors = useLiveMajors(liveOpen)
 
   useEffect(() => {
     fetchTeams()
@@ -903,22 +904,19 @@ export function TournamentLookupPage() {
         </Button>
       </form>
 
-      {liveMajors && liveMajors.length > 0 && (
-        <div className="mb-6">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Live and upcoming majors</p>
-          <LiveMajorsList
-            events={liveMajors}
-            renderAction={(e) => (
-              <Button size="sm" variant={e.eventId === currentEventId ? 'primary' : 'quiet'} onClick={() => { const url = `https://tcg.ravensburgerplay.com/events/${e.eventId}`; setEventUrl(url); loadStandings(url) }}>
-                {e.eventId === currentEventId ? 'Loaded' : 'Load →'}
-              </Button>
-            )}
-          />
-          <p className="text-xs text-gray-400 mt-2">
-            From the Play Hub: DLC, Championship, LCQ, CCQ, ACQ, prize-pool and large side events, in progress or within 14 days.
-          </p>
-        </div>
-      )}
+      <LiveMajorsDetails events={liveMajors} onOpen={() => setLiveOpen(true)} className="mb-6">
+        <LiveMajorsList
+          events={liveMajors}
+          renderAction={(e) => (
+            <Button size="sm" variant={e.eventId === currentEventId ? 'primary' : 'quiet'} onClick={() => { const url = `https://tcg.ravensburgerplay.com/events/${e.eventId}`; setEventUrl(url); loadStandings(url) }}>
+              {e.eventId === currentEventId ? 'Loaded' : 'Load →'}
+            </Button>
+          )}
+        />
+        <p className="text-xs text-gray-400 mt-2">
+          From the Play Hub: DLC, Championship, LCQ, CCQ, ACQ, prize-pool and large side events, in progress or within 14 days.
+        </p>
+      </LiveMajorsDetails>
 
       {recents.length > 0 && (
         <div className="mb-6">

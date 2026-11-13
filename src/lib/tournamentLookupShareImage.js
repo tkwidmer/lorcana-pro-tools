@@ -367,14 +367,17 @@ export async function renderBestOfShareImage({ matches, structure, standings, st
     if (i % 2 === 0) { ctx.fillStyle = INK_2; ctx.fillRect(PAD, y, W - PAD * 2, ROW) }
     drawInks(ctx, icons, r.inks, PAD + 10, mid, 30)
     const name = r.entry ? r.entry.user_event_status.best_identifier : 'No player yet'
-    text(ctx, fitText(ctx, name, COLS.standing - NAME_X - 140, `600 26px ${SANS}`), NAME_X, mid, {
-      font: `600 26px ${SANS}`, color: r.entry ? PAPER : MUTED, baseline: 'middle',
-    })
+    const others = r.tied.length ? `(and ${r.tied.length} other${r.tied.length === 1 ? '' : 's'})` : ''
+    ctx.font = `400 20px ${SANS}`
+    const othersW = others ? ctx.measureText(others).width + 12 : 0
+    const shown = fitText(ctx, name, COLS.standing - NAME_X - 140 - othersW, `600 26px ${SANS}`)
+    text(ctx, shown, NAME_X, mid, { font: `600 26px ${SANS}`, color: r.entry ? PAPER : MUTED, baseline: 'middle' })
+    if (others) text(ctx, others, NAME_X + ctx.measureText(shown).width + 12, mid + 1, { font: `400 20px ${SANS}`, color: MUTED, baseline: 'middle' })
     if (!r.entry) return
     text(ctx, ordinal(r.entry.rank), COLS.standing, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
     text(ctx, r.entry.match_record, COLS.record, mid, { font: `600 24px ${DISPLAY}`, color: FORGE, align: 'right', baseline: 'middle' })
   })
 
-  drawFooter(ctx, W, H, PAD, 'Highest standing on each ink pair wins its Best Of promo')
+  drawFooter(ctx, W, H, PAD, 'Highest standing on each ink pair wins its Best Of promo · others = tied with them on points')
   return canvas
 }

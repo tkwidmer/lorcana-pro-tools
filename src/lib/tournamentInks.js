@@ -108,17 +108,22 @@ export function inkPairMatrix(matches) {
 export const INK_PAIRS = VALID_INKS.flatMap((a, i) => VALID_INKS.slice(i + 1).map((b) => [a, b]))
 
 // "Best of" promo: the best-ranked player on each ink pair, read straight from
-// the standings so RPH's tiebreakers decide ties. Pairs with a leader come
-// first in standings order; pairs nobody is on follow with entry null.
+// the standings so RPH's tiebreakers decide ties, plus `tied`: the pair's
+// other players on the leader's match points, in standings order. Pairs with
+// a leader come first in standings order; pairs nobody is on follow with
+// entry null.
 export function bestOfLeaders(standings, inksById) {
-  const leaders = new Map()
+  const byPair = new Map()
   for (const entry of [...(standings ?? [])].sort((a, b) => a.rank - b.rank)) {
     const inks = inksById.get(String(entry.player.id))
     if (inks?.length !== 2) continue
     const key = pairKey(inks)
-    if (!leaders.has(key)) leaders.set(key, entry)
+    byPair.set(key, [...(byPair.get(key) ?? []), entry])
   }
   return INK_PAIRS
-    .map((inks) => ({ key: pairKey(inks), inks, entry: leaders.get(pairKey(inks)) ?? null }))
+    .map((inks) => {
+      const [entry = null, ...rest] = byPair.get(pairKey(inks)) ?? []
+      return { key: pairKey(inks), inks, entry, tied: entry ? rest.filter((e) => e.match_points === entry.match_points) : [] }
+    })
     .sort((x, y) => (x.entry?.rank ?? Infinity) - (y.entry?.rank ?? Infinity))
 }

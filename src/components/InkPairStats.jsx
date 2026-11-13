@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { renderMetaShareImage, renderMatchupShareImage, renderBestOfShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
 import { ShareDownloadLink } from './ShareDownloadLink'
 import { InkIcons } from './InkIcons'
@@ -127,6 +127,12 @@ export function InkMatrixTab({ allMatches, structure }) {
 // in standings order, so RPH's tiebreakers settle ties.
 export function BestOfTab({ standings, inksById, allMatches, structure, standingsLabel }) {
   const rows = useMemo(() => bestOfLeaders(standings, inksById), [standings, inksById])
+  const [open, setOpen] = useState(() => new Set())
+  const toggle = (key) => setOpen((prev) => {
+    const next = new Set(prev)
+    if (!next.delete(key)) next.add(key)
+    return next
+  })
   return (
     <div className="space-y-2">
       <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -142,22 +148,42 @@ export function BestOfTab({ standings, inksById, allMatches, structure, standing
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.key} className="border-t border-gray-100">
-                  <td className="px-4 py-2.5" title={r.inks.join(' / ')}>
-                    <InkIcons colors={r.inks} size={22} />
-                  </td>
-                  <td className={`px-4 py-2.5 ${r.entry ? 'font-medium text-gray-900' : 'text-gray-400'}`}>
-                    {r.entry ? r.entry.user_event_status.best_identifier : 'No player yet'}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{r.entry ? ordinal(r.entry.rank) : '—'}</td>
-                  <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{r.entry?.match_record ?? '—'}</td>
-                </tr>
+                <Fragment key={r.key}>
+                  <tr className="border-t border-gray-100">
+                    <td className="px-4 py-2.5" title={r.inks.join(' / ')}>
+                      <InkIcons colors={r.inks} size={22} />
+                    </td>
+                    <td className={`px-4 py-2.5 ${r.entry ? 'font-medium text-gray-900' : 'text-gray-400'}`}>
+                      {r.entry ? r.entry.user_event_status.best_identifier : 'No player yet'}
+                      {r.tied.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => toggle(r.key)}
+                          aria-expanded={open.has(r.key)}
+                          className="ml-2 text-xs font-normal text-forge-ink hover:underline"
+                        >
+                          {open.has(r.key) ? '▾' : '▸'} {r.tied.length} more on {r.entry.match_points} pts
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-700">{r.entry ? ordinal(r.entry.rank) : '—'}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{r.entry?.match_record ?? '—'}</td>
+                  </tr>
+                  {open.has(r.key) && r.tied.map((e) => (
+                    <tr key={e.player.id} className="bg-gray-50 text-gray-600">
+                      <td />
+                      <td className="px-4 py-1.5 pl-8">{e.user_event_status.best_identifier}</td>
+                      <td className="px-4 py-1.5 text-right font-mono">{ordinal(e.rank)}</td>
+                      <td className="px-4 py-1.5 text-right font-mono">{e.match_record}</td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>
         </div>
         <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
-          The highest-standing player on each ink pair wins its Best Of promo. {standingsLabel}.
+          The highest-standing player on each ink pair wins its Best Of promo; players tied on points are separated by RPH's tiebreakers. {standingsLabel}.
         </p>
       </div>
       <ShareDownloadLink render={() => renderBestOfShareImage({ matches: allMatches, structure, standings, standingsLabel })} filename={shareFilename(structure, 'best-of')} />

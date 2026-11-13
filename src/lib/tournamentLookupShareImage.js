@@ -57,7 +57,8 @@ const pct = (v, digits = 1) => (v == null ? '—' : `${v.toFixed(digits)}%`)
 const liftText = (lift) => (lift == null ? '—' : `${lift.toFixed(2)}×`)
 const liftFill = (lift) => (lift == null ? MUTED : lift >= 1.1 ? WIN : lift <= 0.9 ? LOSS : PAPER)
 
-// The field by ink pair: one row per pair with a bar painted half in each ink.
+// The field by ink pair, one row per pair; the 16:9 frame, which has the
+// width, adds a share bar painted half in each ink.
 // `firstCut` (the Metagame tab's { label, field, byKey }) adds the pair's
 // conversion through the first decided cut, colored by its lift.
 export async function renderMetaShareImage({ matches, structure, standings, firstCut, video }) {
@@ -91,11 +92,13 @@ export async function renderMetaShareImage({ matches, structure, standings, firs
     if (i % 2 === 0) { ctx.fillStyle = INK_2; ctx.fillRect(PAD, y, W - PAD * 2, ROW) }
     drawInks(ctx, icons, r.inks, PAD + 10, mid, 30)
     text(ctx, pairName(r.inks), NAME_X, mid, { font: `600 24px ${DISPLAY}`, baseline: 'middle' })
-    const len = Math.max(4, (r.share / maxShare) * BAR_W)
-    r.inks.forEach((ink, k) => {
-      ctx.fillStyle = INK_FILL[ink]
-      ctx.fillRect(BAR_X + (len / r.inks.length) * k, mid - 9, len / r.inks.length, 18)
-    })
+    if (video) {
+      const len = Math.max(4, (r.share / maxShare) * BAR_W)
+      r.inks.forEach((ink, k) => {
+        ctx.fillStyle = INK_FILL[ink]
+        ctx.fillRect(BAR_X + (len / r.inks.length) * k, mid - 9, len / r.inks.length, 18)
+      })
+    }
     text(ctx, String(r.players), COLS.players, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
     text(ctx, pct(r.share), COLS.share, mid, { font: `600 24px ${DISPLAY}`, color: FORGE, align: 'right', baseline: 'middle' })
     const wr = r.winRate

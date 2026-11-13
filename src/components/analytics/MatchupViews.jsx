@@ -132,10 +132,10 @@ export function MatchupMatrixView({ games }) {
 
               const winRate = (matchup.winsA / matchup.games * 100).toFixed(0)
               const firstStr = matchup.gamesFirst > 0
-                ? `${Math.round(matchup.winsFirst / matchup.gamesFirst * 100)}%`
+                ? `${Math.round(matchup.winsFirst / matchup.gamesFirst * 100)}% (${matchup.gamesFirst})`
                 : null
               const secondStr = matchup.gamesSecond > 0
-                ? `${Math.round(matchup.winsSecond / matchup.gamesSecond * 100)}%`
+                ? `${Math.round(matchup.winsSecond / matchup.gamesSecond * 100)}% (${matchup.gamesSecond})`
                 : null
 
               return (

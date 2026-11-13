@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitRoster, teamLiveSummary, formatMembership, teamInitials, parseRecord, teamsAtEvent } from '../teams'
+import { splitRoster, teamLiveSummary, formatMembership, teamInitials, parseRecord, teamsAtEvent, topTeamsByBestPlacement } from '../teams'
 
 const members = [
   { id: 'a', playerId: '1', playerName: 'Later Joiner', joinedOn: '2026-02-01', leftOn: null },
@@ -98,5 +98,22 @@ describe('teamsAtEvent', () => {
       { player: { id: 5 }, rank: 11, record: '3-0-0', match_points: 9 },
     ], null)
     expect(rows.map((r) => r.slug)).toEqual(['y', 'x'])
+  })
+})
+
+describe('topTeamsByBestPlacement', () => {
+  const row = (name, bestRank, points, entries = []) => ({ name, points, entries, summary: { bestRank } })
+  const e = (rank, name) => ({ rank, record: '5-1-0', player: { best_identifier: `${name} X` }, user_event_status: { best_identifier: name } })
+  it('ranks by best individual placement, names the player holding it, and keeps the top n', () => {
+    const rows = [
+      row('Points Leader', 9, 40, [e(9, 'Pat'), e(30, 'Sam')]),
+      row('Has #2', 2, 12, [e(14, 'Lee'), e(2, 'Kim')]),
+      row('Unranked', null, 0),
+      row('Tie Low Points', 4, 6, [e(4, 'Ann')]),
+      row('Tie High Points', 4, 18, [e(4, 'Bo')]),
+    ]
+    const top = topTeamsByBestPlacement(rows, 3)
+    expect(top.map((r) => r.name)).toEqual(['Has #2', 'Tie High Points', 'Tie Low Points'])
+    expect(top[0].topPlayer).toEqual({ name: 'Kim', rank: 2, record: '5-1-0' })
   })
 })

@@ -17,7 +17,7 @@ import { EliminationBracket } from '../components/EliminationBracket'
 import { FavoriteStar, TeamBadge } from '../components/PlayerTags'
 import { usePairingBadges } from '../hooks/usePairingBadges'
 import { pairKeyOf, fetchTeams } from '../lib/tournamentHistoryApi'
-import { teamLiveSummary, teamsAtEvent } from '../lib/teams'
+import { teamLiveSummary, teamsAtEvent, topTeamsByBestPlacement } from '../lib/teams'
 import { TeamLogo } from '../components/TeamLogo'
 import { LiveMajorsList } from '../components/LiveMajorsList'
 import { useLiveMajors } from '../hooks/useLiveMajors'
@@ -28,6 +28,8 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs, Tab } from '../components/ui/Tabs'
 import { InkIcons } from '../components/InkIcons'
 import { InkMetaTab, InkMatrixTab } from '../components/InkPairStats'
+import { ShareDownloadLink } from '../components/ShareDownloadLink'
+import { renderTeamsShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
 import { playerInks, inksOfRelationship } from '../lib/tournamentInks'
 
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
@@ -1366,6 +1368,12 @@ export function TournamentLookupPage() {
                     </tbody>
                   </table>
                 </div>
+              )}
+              {topTeamsByBestPlacement(teamRows).length > 0 && (
+                <ShareDownloadLink
+                  render={() => renderTeamsShareImage({ rows: topTeamsByBestPlacement(teamRows), structure })}
+                  filename={shareFilename(structure, 'teams')}
+                />
               )}
             </>
           ) : (

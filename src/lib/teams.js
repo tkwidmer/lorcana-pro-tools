@@ -59,6 +59,20 @@ export function teamsAtEvent(teams, entries, topCutSize) {
     .sort((a, b) => b.points - a.points || b.summary.wins - a.summary.wins || a.name.localeCompare(b.name))
 }
 
+// The Teams share image: the top `n` teams from teamsAtEvent() ranked by
+// their best individual placement (ties: combined points, then name), each
+// with the member who holds it. Teams with no ranked member are left out.
+export function topTeamsByBestPlacement(rows, n = 5) {
+  return rows
+    .filter((r) => r.summary.bestRank !== null)
+    .sort((a, b) => a.summary.bestRank - b.summary.bestRank || b.points - a.points || a.name.localeCompare(b.name))
+    .slice(0, n)
+    .map((r) => {
+      const top = r.entries.find((e) => e.rank === r.summary.bestRank)
+      return { ...r, topPlayer: { name: top.user_event_status?.best_identifier ?? top.player.best_identifier, rank: top.rank, record: top.record } }
+    })
+}
+
 function monthYear(yyyyMmDd) {
   return new Date(`${yyyyMmDd}T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }

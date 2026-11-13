@@ -1,38 +1,11 @@
-import { useMemo, useState } from 'react'
-import { renderMetaShareImage, renderMatchupShareImage } from '../lib/inkPairShareImage'
-import { downloadShareImage } from '../lib/tournamentShareImage'
+import { useMemo } from 'react'
+import { renderMetaShareImage, renderMatchupShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
+import { ShareDownloadLink } from './ShareDownloadLink'
 import { InkIcons } from './InkIcons'
 import { inkPairMeta, inkPairMatrix, winRate } from '../lib/tournamentInks'
 import { winrateCellColor, winrateTextColor } from '../lib/statColors'
 
 const pct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`)
-// "Download Social Media Share" under each tab: renders the PNG and saves it.
-function ShareDownload({ render, allMatches, structure, name }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
-  async function download() {
-    setBusy(true)
-    setError(null)
-    try {
-      const canvas = await render({ matches: allMatches, structure })
-      const slug = structure.eventName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-      await downloadShareImage(canvas, `${slug}-${name}.png`, 'image/png')
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-  return (
-    <p className="text-sm">
-      <button type="button" onClick={download} disabled={busy} className="text-forge-ink font-semibold underline decoration-dotted hover:decoration-solid disabled:opacity-50">
-        {busy ? 'Rendering…' : 'Download Social Media Share'}
-      </button>
-      {error && <span className="ml-2 text-red-600">{error}</span>}
-    </p>
-  )
-}
-
 const record = ({ wins, losses, draws }) => `${wins}-${losses}${draws ? `-${draws}` : ''}`
 
 // The field by ink pair, from the players' submitted decks on Play Hub.
@@ -82,7 +55,7 @@ export function InkMetaTab({ allMatches, structure }) {
           {players} players with a submitted deck. Win % counts reported matches against other pairs (draws as half), mirrors excluded.
         </p>
       </div>
-      <ShareDownload render={renderMetaShareImage} allMatches={allMatches} structure={structure} name="metagame" />
+      <ShareDownloadLink render={() => renderMetaShareImage({ matches: allMatches, structure })} filename={shareFilename(structure, 'metagame')} />
     </div>
   )
 }
@@ -144,7 +117,7 @@ export function InkMatrixTab({ allMatches, structure }) {
       <p className="text-xs text-gray-500">
         Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
       </p>
-      <ShareDownload render={renderMatchupShareImage} allMatches={allMatches} structure={structure} name="matchups" />
+      <ShareDownloadLink render={() => renderMatchupShareImage({ matches: allMatches, structure })} filename={shareFilename(structure, 'matchups')} />
     </div>
   )
 }

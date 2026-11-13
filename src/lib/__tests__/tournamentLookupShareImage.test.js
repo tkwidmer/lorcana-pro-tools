@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { pairAbbr, pairName, eventLine, cellFill } from '../inkPairShareImage'
+import { pairAbbr, pairName, eventLine, cellFill, shareFilename } from '../tournamentLookupShareImage'
 
-describe('inkPairShareImage helpers', () => {
+describe('tournamentLookupShareImage helpers', () => {
   it('names pairs for headers and rows', () => {
     expect(pairAbbr(['amber', 'emerald'])).toBe('AMB/EME')
     expect(pairName(['emerald', 'steel'])).toBe('EMERALD / STEEL')
+  })
+
+  it('names the file after the event', () => {
+    expect(shareFilename({ eventName: 'DLC London: Main Event 1' }, 'teams')).toBe('dlc-london-main-event-1-teams.png')
   })
 
   it('builds the event line: format, players, how far the data runs', () => {

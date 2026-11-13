@@ -2,7 +2,7 @@
 // on every match they play, as user_event_status.deck_descriptor_label
 // ({ parts: [{ value: 'amethyst,ruby' }] }); standings and registrations do
 // not carry it. A player who submitted no deck has no label.
-import { resolveColors } from './inkColors'
+import { resolveColors, VALID_INKS } from './inkColors'
 
 export function inksOfRelationship(rel) {
   const value = rel?.user_event_status?.deck_descriptor_label?.parts?.[0]?.value
@@ -102,4 +102,23 @@ export function inkPairMatrix(matches) {
     if (a !== b) addScore(cell(b, a), 1 - aScore)
   }
   return cells
+}
+
+// The 15 two-ink pairs, each sorted like resolveColors() returns them.
+export const INK_PAIRS = VALID_INKS.flatMap((a, i) => VALID_INKS.slice(i + 1).map((b) => [a, b]))
+
+// "Best of" promo: the best-ranked player on each ink pair, read straight from
+// the standings so RPH's tiebreakers decide ties. Pairs with a leader come
+// first in standings order; pairs nobody is on follow with entry null.
+export function bestOfLeaders(standings, inksById) {
+  const leaders = new Map()
+  for (const entry of [...(standings ?? [])].sort((a, b) => a.rank - b.rank)) {
+    const inks = inksById.get(String(entry.player.id))
+    if (inks?.length !== 2) continue
+    const key = pairKey(inks)
+    if (!leaders.has(key)) leaders.set(key, entry)
+  }
+  return INK_PAIRS
+    .map((inks) => ({ key: pairKey(inks), inks, entry: leaders.get(pairKey(inks)) ?? null }))
+    .sort((x, y) => (x.entry?.rank ?? Infinity) - (y.entry?.rank ?? Infinity))
 }

@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
-import { renderMetaShareImage, renderMatchupShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
+import { renderMetaShareImage, renderMatchupShareImage, renderBestOfShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
 import { ShareDownloadLink } from './ShareDownloadLink'
 import { InkIcons } from './InkIcons'
-import { inkPairMeta, inkPairMatrix, winRate } from '../lib/tournamentInks'
+import { inkPairMeta, inkPairMatrix, winRate, bestOfLeaders } from '../lib/tournamentInks'
+import { ordinal } from '../lib/resultsArchive'
 import { winrateCellColor, winrateTextColor } from '../lib/statColors'
 
 const pct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`)
@@ -118,6 +119,48 @@ export function InkMatrixTab({ allMatches, structure }) {
         Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
       </p>
       <ShareDownloadLink render={() => renderMatchupShareImage({ matches: allMatches, structure })} filename={shareFilename(structure, 'matchups')} />
+    </div>
+  )
+}
+
+// "Best of" promo tracker: the best-ranked player on each of the 15 ink pairs,
+// in standings order, so RPH's tiebreakers settle ties.
+export function BestOfTab({ standings, inksById, allMatches, structure, standingsLabel }) {
+  const rows = useMemo(() => bestOfLeaders(standings, inksById), [standings, inksById])
+  return (
+    <div className="space-y-2">
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[420px]">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <tr>
+                <th className="text-left px-4 py-2">Inks</th>
+                <th className="text-left px-4 py-2">Player</th>
+                <th className="text-right px-4 py-2">Standing</th>
+                <th className="text-right px-4 py-2">Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.key} className="border-t border-gray-100">
+                  <td className="px-4 py-2.5" title={r.inks.join(' / ')}>
+                    <InkIcons colors={r.inks} size={22} />
+                  </td>
+                  <td className={`px-4 py-2.5 ${r.entry ? 'font-medium text-gray-900' : 'text-gray-400'}`}>
+                    {r.entry ? r.entry.user_event_status.best_identifier : 'No player yet'}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{r.entry ? ordinal(r.entry.rank) : '—'}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{r.entry?.match_record ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
+          The highest-standing player on each ink pair wins its Best Of promo. {standingsLabel}.
+        </p>
+      </div>
+      <ShareDownloadLink render={() => renderBestOfShareImage({ matches: allMatches, structure, standings, standingsLabel })} filename={shareFilename(structure, 'best-of')} />
     </div>
   )
 }

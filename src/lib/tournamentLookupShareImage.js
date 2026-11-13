@@ -1,9 +1,10 @@
-// Social-media PNGs of Tournament Lookup's Metagame, Matchups and Teams
-// tabs, in the site's brand (ink black, forge gold, Oswald + Source Sans 3)
-// with the InkbornForge mark and URL. Data comes from tournamentInks.js and
-// teams.js; the pure helpers are exported for tests, the draw functions need
-// a browser canvas.
-import { inkPairMeta, inkPairMatrix, winRate } from './tournamentInks'
+// Social-media PNGs of Tournament Lookup's Metagame, Matchups, Best Of and
+// Teams tabs, in the site's brand (ink black, forge gold, Oswald + Source
+// Sans 3) with the InkbornForge mark and URL. Data comes from
+// tournamentInks.js and teams.js; the pure helpers are exported for tests,
+// the draw functions need a browser canvas.
+import { inkPairMeta, inkPairMatrix, winRate, playerInks, bestOfLeaders } from './tournamentInks'
+import { ordinal } from './resultsArchive'
 import { teamInitials } from './teams'
 
 const INK = '#17171a'
@@ -335,5 +336,43 @@ export async function renderTeamsShareImage({ rows, structure }) {
   })
 
   drawFooter(ctx, W, H, PAD, 'Ranked by each team\'s best individual placement · record is every member in the event combined')
+  return canvas
+}
+
+// Best Of promo leaders: the best-ranked player on each of the 15 ink pairs.
+export async function renderBestOfShareImage({ matches, structure, standings, standingsLabel }) {
+  const rows = bestOfLeaders(standings, playerInks(matches))
+  const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
+  const W = 1200
+  const PAD = 56
+  const ROW = 58
+  const TOP = 236
+  const H = TOP + rows.length * ROW + 110
+  const { canvas, ctx } = newCanvas(W, H)
+  drawHeader(ctx, W, PAD, { mark, title: 'BEST OF', structure })
+
+  const NAME_X = PAD + 100
+  const COLS = { standing: W - PAD - 180, record: W - PAD - 10 }
+  const head = { font: `500 17px ${DISPLAY}`, color: MUTED, align: 'right' }
+  text(ctx, 'INKS', PAD + 10, TOP - 20, { ...head, align: 'left' })
+  text(ctx, 'PLAYER', NAME_X, TOP - 20, { ...head, align: 'left' })
+  text(ctx, 'STANDING', COLS.standing, TOP - 20, head)
+  text(ctx, 'RECORD', COLS.record, TOP - 20, head)
+
+  rows.forEach((r, i) => {
+    const y = TOP + i * ROW
+    const mid = y + ROW / 2
+    if (i % 2 === 0) { ctx.fillStyle = INK_2; ctx.fillRect(PAD, y, W - PAD * 2, ROW) }
+    drawInks(ctx, icons, r.inks, PAD + 10, mid, 30)
+    const name = r.entry ? r.entry.user_event_status.best_identifier : 'No player yet'
+    text(ctx, fitText(ctx, name, COLS.standing - NAME_X - 140, `600 26px ${SANS}`), NAME_X, mid, {
+      font: `600 26px ${SANS}`, color: r.entry ? PAPER : MUTED, baseline: 'middle',
+    })
+    if (!r.entry) return
+    text(ctx, ordinal(r.entry.rank), COLS.standing, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
+    text(ctx, r.entry.match_record, COLS.record, mid, { font: `600 24px ${DISPLAY}`, color: FORGE, align: 'right', baseline: 'middle' })
+  })
+
+  drawFooter(ctx, W, H, PAD, `Highest standing on each ink pair wins its Best Of promo · ${standingsLabel}`)
   return canvas
 }

@@ -1,8 +1,9 @@
 // A [Format Coconut] deck as a share image in the InkbornForge brand: the
-// featured Coconut art, deck stats, cost curve and every card. Social: the
-// art leads an 8-wide grid. Video: 16:9, art + stats + curve on the left,
-// the grid on the right sized to fit above the webcam band.
-import { INK_2, PAPER, MUTED, FORGE, DISPLAY, SANS, INK_FILL, DPR, videoFrame, loadAssets, newCanvas, text, wrapText, drawHeader, drawFooter, roundRect } from './shareBrand'
+// featured Coconut art, deck stats, cost curve and every card. Social (4:5):
+// art with stats and curve beside it, the grid below. Video (16:9): art +
+// stats + curve on the left, the grid on the right above the webcam band.
+// The grid is sized to fit either way.
+import { INK_2, PAPER, MUTED, FORGE, DISPLAY, SANS, INK_FILL, frame, loadAssets, newCanvas, text, wrapText, drawHeader, drawFooter, roundRect } from './shareBrand'
 
 // Cost 7+ all bucket together, matching the mana-curve convention used
 // elsewhere in the app (DrawOddsPage's quest-pressure curves, etc.).
@@ -159,7 +160,7 @@ export async function generateCoconutDeckShareImage({ deckName, coconutName, coc
   const TOP = 184
 
   if (video) {
-    const { W, H, dpr, cam } = videoFrame(1920, 0)
+    const { W, H, dpr, cam } = frame(true, 1920, 0)
     const { canvas, ctx } = newCanvas(W, H, dpr)
     drawHeader(ctx, W, PAD, header)
     const bottom = H - cam.h - 24
@@ -185,31 +186,24 @@ export async function generateCoconutDeckShareImage({ deckName, coconutName, coc
     return canvas
   }
 
-  const W = 1200
-  const statsY = TOP + 40
-  const curveY = statsY + 44
-  const gridTop = curveY + 90 + 24
-  const cols = 8
-  const cellW = (W - PAD * 2 - gap * (cols - 1)) / cols
-  const cellH = cellW * CARD
-  const rows = Math.ceil((sorted.length + 4) / cols) // the featured art takes a 2x2 block
-  const H = gridTop + rows * (cellH + gap) - gap + 110
-  const { canvas, ctx } = newCanvas(W, H, DPR)
+  const { W, H, dpr } = frame(false, 1200, 0)
+  const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, header)
+  const artH = 320
+  const artW = artH / CARD
+  drawCard(ctx, coconutImg, { name: coconutName, color: null }, PAD, TOP, artW, artH, false)
+  const sx = PAD + artW + 32
+  const sw = W - PAD - sx
+  stats.forEach(([label, value], i) => drawStat(ctx, sx + i * (sw / stats.length), TOP + 36, value, label))
+  drawCurve(ctx, sx, TOP + 90, sw, artH - 90, curve)
 
-  const chipW = (W - PAD * 2) / stats.length
-  stats.forEach(([label, value], i) => drawStat(ctx, PAD + i * chipW, statsY, value, label))
-  drawCurve(ctx, PAD, curveY, W - PAD * 2, 90, curve)
-
-  drawCard(ctx, coconutImg, { name: coconutName, color: null }, PAD, gridTop, cellW * 2 + gap, cellH * 2 + gap, false)
-  let idx = 0
-  for (let cell = 0; idx < sorted.length; cell++) {
-    const col = cell % cols
-    const row = Math.floor(cell / cols)
-    if (row < 2 && col < 2) continue // the featured art
-    drawCard(ctx, cardImages[idx], sorted[idx], PAD + col * (cellW + gap), gridTop + row * (cellH + gap), cellW, cellH)
-    idx++
-  }
+  const gy = TOP + artH + 32
+  const areaW = W - PAD * 2
+  const fit = gridFit(sorted.length, areaW, H - 110 - gy, gap, CARD)
+  const gx = PAD + (areaW - fit.cols * (fit.cellW + gap) + gap) / 2
+  sorted.forEach((entry, i) => {
+    drawCard(ctx, cardImages[i], entry, gx + (i % fit.cols) * (fit.cellW + gap), gy + Math.floor(i / fit.cols) * (fit.cellH + gap), fit.cellW, fit.cellH)
+  })
   drawFooter(ctx, W, H, PAD, footer)
   return canvas
 }

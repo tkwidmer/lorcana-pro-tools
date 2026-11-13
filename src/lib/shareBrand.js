@@ -1,7 +1,7 @@
 // The InkbornForge look shared by every canvas share image: ink black,
 // forge gold, Oswald + Source Sans 3, the mark top-left and the tool's URL in
-// the footer. Video images are 16:9 at 3840x2160 with the bottom-right corner
-// left empty for a webcam.
+// the footer. Two formats: social is 4:5 portrait at 2160x2700; video is
+// 16:9 at 3840x2160 with the bottom-right corner left empty for a webcam.
 
 export const INK = '#17171a'
 export const INK_2 = '#232328'
@@ -17,25 +17,32 @@ export const INK_FILL = {
   amber: '#f4b223', amethyst: '#7c4ea0', emerald: '#2f9e5b', ruby: '#d1323f', sapphire: '#2a8fd0', steel: '#9aa3ad',
 }
 
-export const DPR = 2
+export const SOCIAL_W = 2160
 export const VIDEO_W = 3840
 export const CAM = 0.25 // video frames keep this share of width and height empty bottom-right for a webcam
 
-// Canvas size and row height. Social images grow with their rows; a video
-// image is a 16:9 frame big enough for rows at 80% of their height, its rows
-// stretched (up to 130%) to fill down to the webcam band, rendered 3840 wide.
-export function layout({ video, w, top, bottom, n, row, gap = 0 }) {
-  if (!video) return { W: w, H: top + n * (row + gap) + bottom, ROW: row, dpr: DPR }
-  const { W, H, dpr, cam } = videoFrame(w, top + n * (row * 0.8 + gap) + 24)
-  return { W, H, dpr, cam, ROW: Math.min(row * 1.3, (H - cam.h - 24 - top) / n - gap) }
+// The smallest frame at least `minW` wide with `minH` of room: social is
+// 4:5, video is 16:9 with `minH` above the webcam band. Drawn in these
+// logical units and scaled by `dpr` to the format's pixel width.
+export function frame(video, minW, minH) {
+  if (video) {
+    const H = Math.max((minW * 9) / 16, minH / (1 - CAM))
+    const W = (H * 16) / 9
+    return { W, H, dpr: VIDEO_W / W, cam: { w: W * CAM, h: H * CAM } }
+  }
+  const H = Math.max((minW * 5) / 4, minH)
+  const W = (H * 4) / 5
+  return { W, H, dpr: SOCIAL_W / W, cam: null }
 }
 
-// The smallest 16:9 frame at least `minW` wide whose height above the webcam
-// band is at least `minH`.
-export function videoFrame(minW, minH) {
-  const H = Math.max((minW * 9) / 16, minH / (1 - CAM))
-  const W = (H * 16) / 9
-  return { W, H, dpr: VIDEO_W / W, cam: { w: W * CAM, h: H * CAM } }
+// Frame and row height for a table of n rows: the frame fits rows at 80% of
+// their height, then the rows stretch (up to `maxRow` times) to fill it,
+// down to the footer on social and the webcam band on video.
+export function layout({ video, w, top, bottom, n, row, gap = 0, maxRow = 1.3 }) {
+  const foot = video ? 24 : bottom
+  const f = frame(video, w, top + n * (row * 0.8 + gap) + foot)
+  const end = video ? f.H - f.cam.h - 24 : f.H - bottom
+  return { ...f, ROW: Math.min(row * maxRow, (end - top) / n - gap) }
 }
 
 const imageCache = new Map()
@@ -125,8 +132,8 @@ export function drawHeader(ctx, w, pad, { mark, title, name, line }) {
   }
   text(ctx, 'INKBORNFORGE', pad + 66, 70, { font: `600 30px ${DISPLAY}`, color: PAPER })
   text(ctx, title, w - pad, 76, { font: `700 56px ${DISPLAY}`, color: FORGE, align: 'right' })
-  if (name) text(ctx, fitText(ctx, name.toUpperCase(), w - pad * 2 - 360, `600 28px ${DISPLAY}`), w - pad, 116, { font: `600 28px ${DISPLAY}`, align: 'right' })
-  if (line) text(ctx, fitText(ctx, line.toUpperCase(), w - pad * 2 - 360, `500 20px ${DISPLAY}`), w - pad, 148, { font: `500 20px ${DISPLAY}`, color: MUTED, align: 'right' })
+  if (name) text(ctx, fitText(ctx, name.toUpperCase(), w - pad * 2 - 320, `600 28px ${DISPLAY}`), w - pad, 116, { font: `600 28px ${DISPLAY}`, align: 'right' })
+  if (line) text(ctx, fitText(ctx, line.toUpperCase(), w - pad * 2 - 320, `500 20px ${DISPLAY}`), w - pad, 148, { font: `500 20px ${DISPLAY}`, color: MUTED, align: 'right' })
 }
 
 // Note left, URL right; with a webcam band, both sit in the band left of the camera.
@@ -140,8 +147,9 @@ export function drawFooter(ctx, w, h, pad, { note, url, cam }) {
     return
   }
   ctx.fillRect(pad, h - 64, w - pad * 2, 1)
-  if (note) text(ctx, fitText(ctx, note, w - pad * 2 - 420, `400 18px ${SANS}`), pad, h - 30, { font: `400 18px ${SANS}`, color: MUTED })
   text(ctx, url, w - pad, h - 30, { font: `600 22px ${DISPLAY}`, color: FORGE, align: 'right' })
+  const urlW = ctx.measureText(url).width
+  if (note) text(ctx, fitText(ctx, note, w - pad * 2 - urlW - 32, `400 18px ${SANS}`), pad, h - 30, { font: `400 18px ${SANS}`, color: MUTED })
 }
 
 export function drawInks(ctx, icons, inks, x, yMid, size) {

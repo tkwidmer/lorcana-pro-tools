@@ -1380,7 +1380,7 @@ export function TournamentLookupPage() {
               )}
               {topTeamsByBestPlacement(teamRows).length > 0 && (
                 <ShareDownloadLink
-                  render={() => renderTeamsShareImage({ rows: topTeamsByBestPlacement(teamRows), structure })}
+                  render={(video) => renderTeamsShareImage({ rows: topTeamsByBestPlacement(teamRows), structure, video })}
                   filename={shareFilename(structure, 'teams')}
                 />
               )}

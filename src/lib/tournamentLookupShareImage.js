@@ -6,6 +6,7 @@
 import { inkPairMeta, inkPairMatrix, winRate, playerInks, bestOfLeaders, bestRankByPair } from './tournamentInks'
 import { ordinal } from './resultsArchive'
 import { teamInitials } from './teams'
+import { VIDEO_W } from './tournamentShareImage'
 
 const INK = '#17171a'
 const INK_2 = '#232328'
@@ -18,6 +19,18 @@ const SANS = '"Source Sans 3", ui-sans-serif, system-ui, sans-serif'
 const URL_TEXT = 'inkbornforge.com/tournament-lookup'
 const DPR = 2
 const FEW = 5 // cells under this many matches are drawn faded
+const CAM = 0.25 // video frames keep this share of width and height empty bottom-right for a webcam
+
+// Canvas size and row height. Social images grow with their rows; a video
+// image is a 16:9 frame big enough for rows at 80% of their height, its rows
+// stretched (up to 130%) to fill down to the webcam band, rendered 3840 wide.
+export function layout({ video, w, top, bottom, n, row, gap = 0 }) {
+  if (!video) return { W: w, H: top + n * (row + gap) + bottom, ROW: row, dpr: DPR }
+  const H = Math.max((w * 9) / 16, (top + n * (row * 0.8 + gap) + 24) / (1 - CAM))
+  const W = (H * 16) / 9
+  const cam = { w: W * CAM, h: H * CAM }
+  return { W, H, dpr: VIDEO_W / W, cam, ROW: Math.min(row * 1.3, (H - cam.h - 24 - top) / n - gap) }
+}
 
 export const INK_FILL = {
   amber: '#f4b223', amethyst: '#7c4ea0', emerald: '#2f9e5b', ruby: '#d1323f', sapphire: '#2a8fd0', steel: '#9aa3ad',
@@ -80,12 +93,12 @@ async function loadAssets(inkLists) {
   return { icons, mark: await loadImage('/inkborn_forge_mark.png') }
 }
 
-function newCanvas(w, h) {
+function newCanvas(w, h, dpr) {
   const canvas = document.createElement('canvas')
-  canvas.width = w * DPR
-  canvas.height = h * DPR
+  canvas.width = Math.round(w * dpr)
+  canvas.height = Math.round(h * dpr)
   const ctx = canvas.getContext('2d')
-  ctx.scale(DPR, DPR)
+  ctx.scale(dpr, dpr)
   const bg = ctx.createLinearGradient(0, 0, w, h)
   bg.addColorStop(0, '#1d1d22')
   bg.addColorStop(1, INK)
@@ -130,7 +143,16 @@ function drawHeader(ctx, w, pad, { mark, title, structure, progress }) {
   text(ctx, eventLine(structure, progress).toUpperCase(), w - pad, 148, { font: `500 20px ${DISPLAY}`, color: MUTED, align: 'right' })
 }
 
-function drawFooter(ctx, w, h, pad, note) {
+// With a webcam band, the footer sits in the band left of the camera.
+function drawFooter(ctx, w, h, pad, note, cam) {
+  if (cam) {
+    const y = h - cam.h
+    ctx.fillStyle = LINE
+    ctx.fillRect(pad, y, w - cam.w - pad * 2, 1)
+    text(ctx, URL_TEXT, pad, y + 44, { font: `600 26px ${DISPLAY}`, color: FORGE })
+    text(ctx, fitText(ctx, note, w - cam.w - pad * 2, `400 18px ${SANS}`), pad, y + 80, { font: `400 18px ${SANS}`, color: MUTED })
+    return
+  }
   ctx.fillStyle = LINE
   ctx.fillRect(pad, h - 64, w - pad * 2, 1)
   text(ctx, note, pad, h - 30, { font: `400 18px ${SANS}`, color: MUTED })
@@ -151,17 +173,15 @@ function roundRect(ctx, x, y, w, h, r) {
 const pct = (v, digits = 1) => (v == null ? '—' : `${v.toFixed(digits)}%`)
 
 // The field by ink pair: one row per pair with a bar painted half in each ink.
-export async function renderMetaShareImage({ matches, structure, standings }) {
+export async function renderMetaShareImage({ matches, structure, standings, video }) {
   const rows = inkPairMeta(matches)
   const bestRank = bestRankByPair(standings, playerInks(matches))
   const rankCol = standings ? 100 : 0
   const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
-  const W = 1200
   const PAD = 56
-  const ROW = 58
   const TOP = 236
-  const H = TOP + rows.length * ROW + 110
-  const { canvas, ctx } = newCanvas(W, H)
+  const { W, H, ROW, dpr, cam } = layout({ video, w: 1200, top: TOP, bottom: 110, n: rows.length, row: 58 })
+  const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, { mark, title: 'METAGAME', structure })
 
   const players = rows.reduce((s, r) => s + r.players, 0)
@@ -196,14 +216,14 @@ export async function renderMetaShareImage({ matches, structure, standings }) {
     if (standings) text(ctx, bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—', COLS.best, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
   })
 
-  drawFooter(ctx, W, H, PAD, `${players.toLocaleString('en-US')} players with a submitted deck · win % vs other pairs, draws as half, mirrors left out`)
+  drawFooter(ctx, W, H, PAD, `${players.toLocaleString('en-US')} players with a submitted deck · win % vs other pairs, draws as half, mirrors left out`, cam)
   return canvas
 }
 
 // Row pair's match win rate against each column pair, beside its overall
 // win rate and record vs the field and (with standings) its best rank;
 // sized to the number of pairs.
-export async function renderMatchupShareImage({ matches, structure, standings }) {
+export async function renderMatchupShareImage({ matches, structure, standings, video }) {
   const pairs = inkPairMeta(matches)
   const cells = inkPairMatrix(matches)
   const bestRank = bestRankByPair(standings, playerInks(matches))
@@ -212,14 +232,14 @@ export async function renderMatchupShareImage({ matches, structure, standings })
   const LABEL_W = 270
   const FIELD_W = 150
   const BEST_W = standings ? 84 : 0
-  const CELL = 96
   const GAP = 6
-  const ROW = 74
-  const W = Math.max(1400, PAD * 2 + LABEL_W + FIELD_W + GAP + (BEST_W && BEST_W + GAP) + pairs.length * (CELL + GAP))
+  const LEFT = PAD + LABEL_W + GAP + FIELD_W + GAP + (BEST_W && BEST_W + GAP)
   const HEAD_TOP = 196
   const TOP = HEAD_TOP + 96
-  const H = TOP + pairs.length * (ROW + GAP) + 100
-  const { canvas, ctx } = newCanvas(W, H)
+  const { W, H, ROW, dpr, cam } = layout({ video, w: Math.max(1400, LEFT + PAD + pairs.length * (96 + GAP)), top: TOP, bottom: 100, n: pairs.length, row: 74, gap: GAP })
+  // A video frame is wider than the matrix needs: the cells take the slack.
+  const CELL = video ? (W - LEFT - PAD) / pairs.length - GAP : 96
+  const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, { mark, title: 'MATCHUPS', structure })
 
   const fieldX = PAD + LABEL_W + GAP
@@ -287,23 +307,21 @@ export async function renderMatchupShareImage({ matches, structure, standings })
     })
   })
 
-  drawFooter(ctx, W, H, PAD, `Row deck's match win % vs column deck · draws count as half · small number = matches · faded = under ${FEW} matches · ${decided.toLocaleString('en-US')} matches between different pairs`)
+  drawFooter(ctx, W, H, PAD, `Row deck's match win % vs column deck · draws count as half · small number = matches · faded = under ${FEW} matches · ${decided.toLocaleString('en-US')} matches between different pairs`, cam)
   return canvas
 }
 
 // Top teams by their best individual placement: logo, name, the player who
 // holds that placement, combined record and members playing / in the cut.
 // `rows` come from topTeamsByBestPlacement().
-export async function renderTeamsShareImage({ rows, structure }) {
+export async function renderTeamsShareImage({ rows, structure, video }) {
   const { mark } = await loadAssets([])
   const logos = await Promise.all(rows.map((r) => (r.logoUrl ? loadImage(r.logoUrl) : null)))
-  const W = 1200
   const PAD = 56
-  const ROW = 128
   const GAP = 12
   const TOP = 236
-  const H = TOP + rows.length * (ROW + GAP) + 100
-  const { canvas, ctx } = newCanvas(W, H)
+  const { W, H, ROW, dpr, cam } = layout({ video, w: 1200, top: TOP, bottom: 100, n: rows.length, row: 128, gap: GAP })
+  const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, { mark, title: 'TEAMS', structure })
 
   const cut = structure.topCutSize
@@ -353,20 +371,18 @@ export async function renderTeamsShareImage({ rows, structure }) {
     text(ctx, `of ${r.rosterSize}${cut ? ` · ${r.summary.inCut} in top ${cut}` : ''}`, COLS.members, mid + 28, { font: `400 18px ${SANS}`, color: MUTED, align: 'right', baseline: 'middle' })
   })
 
-  drawFooter(ctx, W, H, PAD, 'Ranked by each team\'s best individual placement · record is every member in the event combined')
+  drawFooter(ctx, W, H, PAD, 'Ranked by each team\'s best individual placement · record is every member in the event combined', cam)
   return canvas
 }
 
 // Best Of promo leaders: the best-ranked player on each of the 15 ink pairs.
-export async function renderBestOfShareImage({ matches, structure, standings, standingsLabel }) {
+export async function renderBestOfShareImage({ matches, structure, standings, standingsLabel, video }) {
   const rows = bestOfLeaders(standings, playerInks(matches))
   const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
-  const W = 1200
   const PAD = 56
-  const ROW = 58
   const TOP = 236
-  const H = TOP + rows.length * ROW + 110
-  const { canvas, ctx } = newCanvas(W, H)
+  const { W, H, ROW, dpr, cam } = layout({ video, w: 1200, top: TOP, bottom: 110, n: rows.length, row: 58 })
+  const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, { mark, title: 'BEST OF', structure, progress: standingsLabel })
 
   const NAME_X = PAD + 100
@@ -394,6 +410,6 @@ export async function renderBestOfShareImage({ matches, structure, standings, st
     text(ctx, r.entry.match_record, COLS.record, mid, { font: `600 24px ${DISPLAY}`, color: FORGE, align: 'right', baseline: 'middle' })
   })
 
-  drawFooter(ctx, W, H, PAD, 'Highest standing on each ink pair wins its Best Of promo · others = tied with them on points')
+  drawFooter(ctx, W, H, PAD, 'Highest standing on each ink pair wins its Best Of promo · others = tied with them on points', cam)
   return canvas
 }

@@ -27,7 +27,7 @@ import { Input } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs, Tab } from '../components/ui/Tabs'
 import { InkIcons } from '../components/InkIcons'
-import { InkMetaTab, InkMatrixTab } from '../components/InkPairStats'
+import { InkMetaTab, InkMatrixTab, BestOfTab } from '../components/InkPairStats'
 import { playerInks, inksOfRelationship } from '../lib/tournamentInks'
 
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
@@ -629,7 +629,7 @@ export function TournamentLookupPage() {
   // restore below — otherwise a caster following someone else's link would
   // just get bounced to whatever tournament they personally looked at last.
   useEffect(() => {
-    const VALID_TABS = ['standings', 'matches', 'bracket', 'meta', 'matrix', 'favorites', 'team', 'roster']
+    const VALID_TABS = ['standings', 'matches', 'bracket', 'meta', 'matrix', 'bestof', 'favorites', 'team', 'roster']
     if (initialParams.event) {
       const url = `https://tcg.ravensburgerplay.com/events/${initialParams.event}`
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1101,6 +1101,11 @@ export function TournamentLookupPage() {
               <Tab active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')}>
                 Matchups
               </Tab>
+              {allStandings && (
+                <Tab active={activeTab === 'bestof'} onClick={() => setActiveTab('bestof')}>
+                  Best Of
+                </Tab>
+              )}
             </>
           )}
           <Tab active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')}>
@@ -1258,6 +1263,15 @@ export function TournamentLookupPage() {
       {/* Ink pair tabs (events that show players' deck inks on pairings) */}
       {inksById.size > 0 && !player && activeTab === 'meta' && <InkMetaTab allMatches={allMatches} />}
       {inksById.size > 0 && !player && activeTab === 'matrix' && <InkMatrixTab allMatches={allMatches} />}
+      {inksById.size > 0 && allStandings && !player && activeTab === 'bestof' && (
+        <BestOfTab
+          standings={allStandings}
+          inksById={inksById}
+          eventName={structure?.eventName}
+          standingsLabel={`Standings after ${structure?.isElimination ? `${structure.currentPhaseName || 'Elimination'} round` : 'Round'} ${structure?.currentRoundNumber}`}
+          eventId={currentEventId}
+        />
+      )}
 
       {/* Roster tab (pre-tournament — no standings yet) */}
       {rosterMode && roster && !player && activeTab === 'roster' && (

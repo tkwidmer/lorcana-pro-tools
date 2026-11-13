@@ -57,16 +57,28 @@ export function winRate({ wins, losses, draws }) {
   return n ? ((wins + draws / 2) / n) * 100 : null
 }
 
+// The Day 2 field: player ids at or over the Day 2 points cutoff
+// (structure.dayTwoPoints) once Day 1's standings are final
+// (structure.dayOneOver); null before then or when the event has no cutoff.
+export function dayTwoQualifiers(standings, structure) {
+  if (!standings || !structure?.dayTwoPoints || !structure.dayOneOver) return null
+  return new Set(standings.filter((e) => e.match_points >= structure.dayTwoPoints).map((e) => String(e.player.id)))
+}
+
 // The field by ink pair, most played first: players on each pair, their share
 // of players with a known pair, and the pair's record against other pairs
-// (mirrors excluded, since they are always even).
-export function inkPairMeta(matches) {
+// (mirrors excluded, since they are always even). Once Day 2 starts, each
+// pair's Day 2 players and conversion (Day 2 / Day 1 players), and `lift`,
+// that conversion over the whole field's (1.25 = converted 25% better).
+export function inkPairMeta(matches, dayTwo = null) {
   const inksById = playerInks(matches)
   const rows = new Map()
-  for (const inks of inksById.values()) {
+  for (const [id, inks] of inksById) {
     const key = pairKey(inks)
-    if (!rows.has(key)) rows.set(key, { key, inks, players: 0, ...emptyRecord() })
-    rows.get(key).players++
+    if (!rows.has(key)) rows.set(key, { key, inks, players: 0, dayTwo: 0, ...emptyRecord() })
+    const row = rows.get(key)
+    row.players++
+    if (dayTwo?.has(id)) row.dayTwo++
   }
   for (const { a, b, aScore } of decidedPairings(matches, inksById)) {
     if (a === b) continue
@@ -74,8 +86,18 @@ export function inkPairMeta(matches) {
     addScore(rows.get(b), 1 - aScore)
   }
   const known = inksById.size
+  const fieldConversion = dayTwo ? [...rows.values()].reduce((n, r) => n + r.dayTwo, 0) / known : null
   return [...rows.values()]
-    .map((r) => ({ ...r, share: (r.players / known) * 100, winRate: winRate(r) }))
+    .map((r) => {
+      const conversion = dayTwo ? r.dayTwo / r.players : null
+      return {
+        ...r,
+        share: (r.players / known) * 100,
+        winRate: winRate(r),
+        conversion: conversion == null ? null : conversion * 100,
+        lift: conversion == null ? null : conversion / fieldConversion,
+      }
+    })
     .sort((x, y) => y.players - x.players || x.key.localeCompare(y.key))
 }
 

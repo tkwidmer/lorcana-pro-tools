@@ -4,16 +4,53 @@ export function extractEventId(url) {
   return match ? match[1] : null
 }
 
+// RPH keeps a phase's points cutoff (a DLC's 18 for Day 2) on the event's
+// configuration template, not on the event's own phases. The templates are
+// shared by every event, so they're fetched once per page load.
+let templatesPromise = null
+function fetchPhaseTemplates() {
+  templatesPromise ??= fetch('/api/tournament?type=templates')
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Failed to fetch event templates (HTTP ${response.status})`)
+      return response.json()
+    })
+    .catch((err) => {
+      templatesPromise = null
+      throw err
+    })
+  return templatesPromise
+}
+
+// Copies points_required_to_enter_phase from the event's phase template group
+// (event.phase_template_group) onto its phases, matched by order. Events
+// without a template group are returned unchanged.
+export function withPhasePoints(eventDetails, templates) {
+  const group = templates
+    .flatMap((t) => t.event_structure_policy?.allowed_phase_template_groups ?? [])
+    .find((g) => g.id === eventDetails.phase_template_group)
+  if (!group) return eventDetails
+  return {
+    ...eventDetails,
+    tournament_phases: eventDetails.tournament_phases.map((phase) => ({
+      ...phase,
+      points_required_to_enter_phase: group.phase_templates[phase.order_in_phases - 1]?.points_required_to_enter_phase ?? null,
+    })),
+  }
+}
+
 export async function fetchEventDetails(eventId) {
   try {
-    const response = await fetch(`/api/tournament?type=event&eventId=${eventId}`)
+    const [response, templates] = await Promise.all([
+      fetch(`/api/tournament?type=event&eventId=${eventId}`),
+      fetchPhaseTemplates(),
+    ])
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
       throw new Error(`${error.detail || error.error || 'Failed to fetch event details'} (HTTP ${response.status})`)
     }
 
-    return await response.json()
+    return withPhasePoints(await response.json(), templates)
   } catch (err) {
     console.error('Event details fetch error:', err)
     throw err
@@ -95,6 +132,12 @@ export async function fetchUniqueFanCount(events, concurrency = 5) {
   })
 
   return userIds.size
+}
+
+function dayOneOver(phases, dayOne, currentPhaseIndex, currentRoundNumber) {
+  if (!dayOne || currentPhaseIndex < 0) return false
+  const dayOneIndex = phases.indexOf(dayOne)
+  return currentPhaseIndex > dayOneIndex || (currentPhaseIndex === dayOneIndex && currentRoundNumber >= dayOne.number_of_rounds)
 }
 
 export function getTournamentStructure(eventDetails) {
@@ -186,6 +229,12 @@ export function getTournamentStructure(eventDetails) {
         value: nextPhase.rank_required_to_enter_phase,
         nextPhaseName: nextPhase.phase_name,
       }
+    } else if (nextPhase.points_required_to_enter_phase) {
+      advancementRequirement = {
+        type: 'points',
+        value: nextPhase.points_required_to_enter_phase,
+        nextPhaseName: nextPhase.phase_name,
+      }
     } else {
       const pointsMatch = nextPhase.phase_name.match(/(\d+)\s*point/i)
       if (pointsMatch) {
@@ -214,6 +263,11 @@ export function getTournamentStructure(eventDetails) {
     // is the *currently* displayed phase. Used to pick out bracket matches
     // from the flat `allMatches` list (each match carries `phase_name`).
     eliminationPhaseName: eliminationPhase?.phase_name ?? null,
+    // Day 2: the second Swiss phase's points cutoff (a DLC's 18), and whether
+    // the standings shown are from Day 1's last round or later, when the
+    // players at or over it are the Day 2 field.
+    dayTwoPoints: swissPhases[1]?.points_required_to_enter_phase ?? null,
+    dayOneOver: dayOneOver(phases, swissPhases[0], currentPhaseIndex, currentRoundNumber),
     isElimination,
     swissRoundsRemaining,
     advancementRequirement,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines, bestOfLeaders, bestRankByPair, INK_PAIRS } from '../tournamentInks'
+import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines, dayTwoQualifiers, bestOfLeaders, bestRankByPair, INK_PAIRS } from '../tournamentInks'
 import { metaSlices } from '../streamOverlay'
 
 const rel = (id, inks, order = 1) => ({
@@ -77,5 +77,23 @@ describe('tournamentInks', () => {
     expect(bestRankByPair([standing(5, 9, 12), standing(3, 4, 15), standing(1, 2, 15), standing(2, 1, 15)], inksById))
       .toEqual(new Map([['emerald/steel', 1], ['amber/emerald', 2]]))
     expect(bestRankByPair(null, inksById).size).toBe(0)
+  })
+  it('converts each pair to Day 2 against the field', () => {
+    // 18 points makes Day 2: players 1 and 2 do, 3 (amber/emerald) does not.
+    const standings = [{ player: { id: 1 }, match_points: 18 }, { player: { id: 2 }, match_points: 21 }, { player: { id: 3 }, match_points: 15 }]
+    const dayTwo = dayTwoQualifiers(standings, { dayTwoPoints: 18, dayOneOver: true })
+    const [ae, es] = inkPairMeta(matches, dayTwo)
+    expect(ae).toMatchObject({ dayTwo: 1, conversion: 50 })
+    expect(es).toMatchObject({ dayTwo: 1, conversion: 100 })
+    // field: 2 of 3 converted
+    expect(ae.lift).toBeCloseTo(0.75)
+    expect(es.lift).toBeCloseTo(1.5)
+  })
+
+  it('has no Day 2 field before Day 1 ends or without a cutoff', () => {
+    const standings = [{ player: { id: 1 }, match_points: 18 }]
+    expect(dayTwoQualifiers(standings, { dayTwoPoints: 18, dayOneOver: false })).toBeNull()
+    expect(dayTwoQualifiers(standings, { dayTwoPoints: null, dayOneOver: true })).toBeNull()
+    expect(inkPairMeta(matches)[0]).toMatchObject({ conversion: null, lift: null })
   })
 })

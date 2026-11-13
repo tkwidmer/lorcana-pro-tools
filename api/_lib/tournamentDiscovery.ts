@@ -64,6 +64,12 @@ const NAME_SEARCH_TERMS: Array<[string, DiscoveryLabel]> = [
   ['50,000', 'PRIZE'],
 ]
 
+// The Challenge Championship template also tags some CCQs (Fanfinity's "DLC
+// London: Challenge Championship Qualifier", 2026-11-14), so the name decides.
+export function templateLabel(templateLabel: DiscoveryLabel, name: string): DiscoveryLabel {
+  return templateLabel === 'Championship' && /qualifier|\bCCQ\b/i.test(name) ? 'CCQ' : templateLabel
+}
+
 async function fetchJson(url: string): Promise<any> {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Upstream request failed (${response.status}): ${url}`)
@@ -119,7 +125,7 @@ export async function discoverCandidateEvents(): Promise<DiscoveredEvent[]> {
     templates.map(([id]) => paginateEvents({ game_slug: GAME_SLUG, event_configuration_template_id: id }))
   )
   templateSearches.forEach((results, i) => {
-    for (const e of results) seen.set(e.id, { ...e, label: templates[i][1] })
+    for (const e of results) seen.set(e.id, { ...e, label: templateLabel(templates[i][1], e.name) })
   })
 
   // Name searches and the side-event store pass only need the template

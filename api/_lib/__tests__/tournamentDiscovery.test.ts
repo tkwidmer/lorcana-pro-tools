@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filterLiveCandidates } from '../tournamentDiscovery'
+import { filterLiveCandidates, templateLabel } from '../tournamentDiscovery'
 
 const now = new Date('2026-11-06T12:00:00Z')
 const e = (id: number, display_status: string, start: string | null, store = 'Fanfinity') =>
@@ -29,5 +29,14 @@ describe('filterLiveCandidates', () => {
       now
     )
     expect(out).toEqual([])
+  })
+})
+
+describe('templateLabel', () => {
+  it('labels a qualifier tagged with the Championship template as a CCQ', () => {
+    expect(templateLabel('Championship', 'DLC London: Challenge Championship Qualifier')).toBe('CCQ')
+    expect(templateLabel('Championship', 'European Championship')).toBe('Championship')
+    expect(templateLabel('Championship', 'Disney Lorcana Challenge North American Championship')).toBe('Championship')
+    expect(templateLabel('DLC', 'DLC London: Challenge Championship Qualifier')).toBe('DLC')
   })
 })

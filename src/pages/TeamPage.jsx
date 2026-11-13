@@ -12,7 +12,7 @@ import { Button } from '../components/ui/Button'
 import { StatCard } from '../components/StatCard'
 import { InkIcons } from '../components/InkIcons'
 import { TeamLogo } from '../components/TeamLogo'
-import { LiveMajorsList } from '../components/LiveMajorsList'
+import { LiveMajorsDetails, LiveMajorsList } from '../components/LiveMajorsList'
 import { useLiveMajors } from '../hooks/useLiveMajors'
 import { ArchiveFootnote, ArchiveLoading, ArchiveError } from '../components/ResultsArchive'
 
@@ -111,7 +111,8 @@ function TeamPageBody({ slug }) {
   const [loaded, setLoaded] = useState(null) // { slug, data } | { slug, error }
   const [showAll, setShowAll] = useState(false)
   const canManage = useCanManage(slug)
-  const liveEvents = useLiveMajors()
+  const [liveOpen, setLiveOpen] = useState(false)
+  const liveEvents = useLiveMajors(liveOpen)
 
   useEffect(() => {
     let cancelled = false
@@ -179,8 +180,8 @@ function TeamPageBody({ slug }) {
         <StatCard label="Best finish" value={best ? ordinal(best.rank) : '—'} hint={best?.eventName} size="lg" />
       </div>
 
-      {!disbanded && liveEvents && liveEvents.length > 0 && (
-        <Card className="p-5 mb-6" title="Live and upcoming majors">
+      {!disbanded && (
+        <LiveMajorsDetails events={liveEvents} onOpen={() => setLiveOpen(true)} className="mb-6">
           <LiveMajorsList
             events={liveEvents}
             renderMeta={(e) => {
@@ -203,7 +204,7 @@ function TeamPageBody({ slug }) {
           <p className="text-xs text-gray-400 mt-3">
             In-progress events and those starting within 14 days, from the Play Hub. Registrations refresh when you reload.
           </p>
-        </Card>
+        </LiveMajorsDetails>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

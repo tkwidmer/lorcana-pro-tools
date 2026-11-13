@@ -63,7 +63,7 @@ const liftFill = (lift) => (lift == null ? MUTED : lift >= 1.1 ? WIN : lift <= 0
 export async function renderMetaShareImage({ matches, structure, standings, firstCut, video }) {
   const rows = inkPairMeta(matches)
   const bestRank = bestRankByPair(standings, playerInks(matches))
-  const rankCol = (standings ? 100 : 0) + (firstCut ? 110 : 0)
+  const rankCol = (standings ? 100 : 0) + (firstCut ? 200 : 0)
   const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
   const PAD = 56
   const TOP = 236
@@ -103,13 +103,13 @@ export async function renderMetaShareImage({ matches, structure, standings, firs
     text(ctx, pct(wr), COLS.win, mid, { font: `600 24px ${DISPLAY}`, color, align: 'right', baseline: 'middle' })
     if (firstCut) {
       const cut = firstCut.byKey.get(r.key)
-      text(ctx, pct(cut?.conversion), COLS.cut, mid, { font: `600 24px ${DISPLAY}`, color: liftFill(cut?.lift), align: 'right', baseline: 'middle' })
+      text(ctx, `${pct(cut?.conversion)} (${liftText(cut?.lift)})`, COLS.cut, mid, { font: `600 24px ${DISPLAY}`, color: liftFill(cut?.lift), align: 'right', baseline: 'middle' })
     }
     if (standings) text(ctx, bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—', COLS.best, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
   })
 
   const note = firstCut
-    ? `${players.toLocaleString('en-US')} decks · win % vs other pairs, mirrors out · ${firstCut.label} %: made ${firstCut.label} (field ${pct(firstCut.field)})`
+    ? `${players.toLocaleString('en-US')} decks · win % vs other pairs, mirrors out · ${firstCut.label} % (× the field's ${pct(firstCut.field)})`
     : `${players.toLocaleString('en-US')} players with a submitted deck · win % vs other pairs, draws as half, mirrors left out`
   drawFooter(ctx, W, H, PAD, note, cam)
   return canvas

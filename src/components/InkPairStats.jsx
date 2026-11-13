@@ -169,8 +169,8 @@ export function InkMetaTab({ allMatches, structure, standings }) {
                   <td className="px-4 py-2.5 text-right font-mono text-gray-600">{record(r)}</td>
                   <td className={`px-4 py-2.5 text-right font-mono ${winrateTextColor(r.winRate)}`}>{pct(r.winRate)}</td>
                   {firstCut && (
-                    <td className={`px-4 py-2.5 text-right font-mono ${liftColor(firstCut.byKey.get(r.key)?.lift)}`} title={`${firstCut.byKey.get(r.key)?.count ?? 0} of ${r.players} · ${liftText(firstCut.byKey.get(r.key)?.lift)} the field`}>
-                      {pct(firstCut.byKey.get(r.key)?.conversion)}
+                    <td className={`px-4 py-2.5 text-right font-mono ${liftColor(firstCut.byKey.get(r.key)?.lift)}`} title={`${firstCut.byKey.get(r.key)?.count ?? 0} of ${r.players} made ${firstCut.label}`}>
+                      {pct(firstCut.byKey.get(r.key)?.conversion)} ({liftText(firstCut.byKey.get(r.key)?.lift)})
                     </td>
                   )}
                   {standings && <td className="px-4 py-2.5 text-right font-mono text-gray-700">{bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—'}</td>}
@@ -181,7 +181,7 @@ export function InkMetaTab({ allMatches, structure, standings }) {
         </div>
         <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
           {players} players with a submitted deck. Win % counts reported matches against other pairs (draws as half), mirrors excluded.
-          {firstCut && ` ${firstCut.label} % is the share of a pair's players who made ${firstCut.label} (field: ${pct(firstCut.field)}); green converted 10%+ better than the field, red 10%+ worse. The Conversion tab has every cut.`}
+          {firstCut && ` ${firstCut.label} % is the share of a pair's players who made ${firstCut.label} (field: ${pct(firstCut.field)}); in brackets, that over the field's rate, so (1.20×) converted 20% better than the field. The Conversion tab has every cut.`}
         </p>
       </div>
       <ShareDownloadLink render={(video) => renderMetaShareImage({ matches: allMatches, structure, standings, firstCut, video })} filename={shareFilename(structure, 'metagame')} />

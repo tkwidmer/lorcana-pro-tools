@@ -184,7 +184,7 @@ export function InkMetaTab({ allMatches, structure, standings }) {
           {firstCut && ` ${firstCut.label} % is the share of a pair's players who made ${firstCut.label} (field: ${pct(firstCut.field)}); green converted 10%+ better than the field, red 10%+ worse. The Conversion tab has every cut.`}
         </p>
       </div>
-      <ShareDownloadLink render={(video) => renderMetaShareImage({ matches: allMatches, structure, standings, video })} filename={shareFilename(structure, 'metagame')} />
+      <ShareDownloadLink render={(video) => renderMetaShareImage({ matches: allMatches, structure, standings, firstCut, video })} filename={shareFilename(structure, 'metagame')} />
     </div>
   )
 }

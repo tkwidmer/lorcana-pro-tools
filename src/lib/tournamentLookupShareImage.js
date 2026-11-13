@@ -53,12 +53,17 @@ function drawFooter(ctx, w, h, pad, note, cam) {
 }
 
 const pct = (v, digits = 1) => (v == null ? '—' : `${v.toFixed(digits)}%`)
+// Lift: a pair's conversion over the field's (1.25× = 25% better).
+const liftText = (lift) => (lift == null ? '—' : `${lift.toFixed(2)}×`)
+const liftFill = (lift) => (lift == null ? MUTED : lift >= 1.1 ? WIN : lift <= 0.9 ? LOSS : PAPER)
 
 // The field by ink pair: one row per pair with a bar painted half in each ink.
-export async function renderMetaShareImage({ matches, structure, standings, video }) {
+// `firstCut` (the Metagame tab's { label, field, byKey }) adds the pair's
+// conversion through the first decided cut, colored by its lift.
+export async function renderMetaShareImage({ matches, structure, standings, firstCut, video }) {
   const rows = inkPairMeta(matches)
   const bestRank = bestRankByPair(standings, playerInks(matches))
-  const rankCol = standings ? 100 : 0
+  const rankCol = (standings ? 100 : 0) + (firstCut ? 110 : 0)
   const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
   const PAD = 56
   const TOP = 236
@@ -70,12 +75,13 @@ export async function renderMetaShareImage({ matches, structure, standings, vide
   const NAME_X = PAD + 82
   const BAR_X = PAD + 400
   const BAR_W = W - PAD - BAR_X - 300 - rankCol
-  const COLS = { players: W - PAD - 210 - rankCol, share: W - PAD - 110 - rankCol, win: W - PAD - rankCol, best: W - PAD }
+  const COLS = { players: W - PAD - 210 - rankCol, share: W - PAD - 110 - rankCol, win: W - PAD - rankCol, cut: W - PAD - (standings ? 100 : 0), best: W - PAD }
   const head = { font: `500 17px ${DISPLAY}`, color: MUTED, align: 'right' }
   text(ctx, 'INK PAIR', NAME_X, TOP - 20, { ...head, align: 'left' })
   text(ctx, 'PLAYERS', COLS.players, TOP - 20, head)
   text(ctx, 'SHARE', COLS.share, TOP - 20, head)
   text(ctx, 'WIN %', COLS.win, TOP - 20, head)
+  if (firstCut) text(ctx, `${firstCut.label.toUpperCase()} %`, COLS.cut, TOP - 20, head)
   if (standings) text(ctx, 'BEST RANK', COLS.best, TOP - 20, head)
 
   const maxShare = Math.max(...rows.map((r) => r.share))
@@ -95,10 +101,17 @@ export async function renderMetaShareImage({ matches, structure, standings, vide
     const wr = r.winRate
     const color = wr == null ? MUTED : wr >= 52 ? '#6fd39a' : wr <= 48 ? '#f08a8a' : PAPER
     text(ctx, pct(wr), COLS.win, mid, { font: `600 24px ${DISPLAY}`, color, align: 'right', baseline: 'middle' })
+    if (firstCut) {
+      const cut = firstCut.byKey.get(r.key)
+      text(ctx, pct(cut?.conversion), COLS.cut, mid, { font: `600 24px ${DISPLAY}`, color: liftFill(cut?.lift), align: 'right', baseline: 'middle' })
+    }
     if (standings) text(ctx, bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—', COLS.best, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
   })
 
-  drawFooter(ctx, W, H, PAD, `${players.toLocaleString('en-US')} players with a submitted deck · win % vs other pairs, draws as half, mirrors left out`, cam)
+  const note = firstCut
+    ? `${players.toLocaleString('en-US')} decks · win % vs other pairs, mirrors out · ${firstCut.label} %: made ${firstCut.label} (field ${pct(firstCut.field)})`
+    : `${players.toLocaleString('en-US')} players with a submitted deck · win % vs other pairs, draws as half, mirrors left out`
+  drawFooter(ctx, W, H, PAD, note, cam)
   return canvas
 }
 
@@ -296,8 +309,6 @@ export async function renderBestOfShareImage({ matches, structure, standings, st
   return canvas
 }
 
-const liftText = (lift) => (lift == null ? '—' : `${lift.toFixed(2)}×`)
-const liftFill = (lift) => (lift == null ? MUTED : lift >= 1.1 ? WIN : lift <= 0.9 ? LOSS : PAPER)
 
 // Conversion through each cut: Day 1 players, then per cut its players, the
 // conversion from the stage before and the lift over the field's.

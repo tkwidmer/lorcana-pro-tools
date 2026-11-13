@@ -261,6 +261,33 @@ function canvasToBlob(canvas, type, quality) {
   })
 }
 
+// 16:9 frame for video (YouTube): the image scaled to fit inside a 4K
+// canvas with a 5% margin, centered on the brand ink.
+export const VIDEO_W = 3840
+export const VIDEO_H = 2160
+
+export function fitInFrame(w, h) {
+  const k = Math.min((VIDEO_W * 0.9) / w, (VIDEO_H * 0.9) / h)
+  return { x: (VIDEO_W - w * k) / 2, y: (VIDEO_H - h * k) / 2, w: w * k, h: h * k }
+}
+
+export function frameForVideo(canvas) {
+  const out = document.createElement('canvas')
+  out.width = VIDEO_W
+  out.height = VIDEO_H
+  const ctx = out.getContext('2d')
+  ctx.fillStyle = '#17171a'
+  ctx.fillRect(0, 0, VIDEO_W, VIDEO_H)
+  const r = fitInFrame(canvas.width, canvas.height)
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(canvas, r.x, r.y, r.w, r.h)
+  return out
+}
+
+export function videoFilename(filename) {
+  return filename.replace(/(\.\w+)?$/, '-16x9.png')
+}
+
 export async function downloadShareImage(canvas, filename = 'tournament-result.jpg', type = 'image/jpeg') {
   const blob = await canvasToBlob(canvas, type, 0.95)
   const url = URL.createObjectURL(blob)

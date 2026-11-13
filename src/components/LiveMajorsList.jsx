@@ -50,3 +50,23 @@ export function LiveMajorsList({ events, renderAction, renderMeta }) {
     </div>
   )
 }
+
+// Collapsed by default; the page fetches live majors on first open
+// (`useLiveMajors(open)`), so `events` is null until then.
+export function LiveMajorsDetails({ events, onOpen, className = '', children }) {
+  return (
+    <details
+      className={`border border-gray-200 rounded-lg bg-white ${className}`}
+      onToggle={(e) => { if (e.currentTarget.open) onOpen() }}
+    >
+      <summary className="px-4 py-3 font-display text-base font-medium uppercase tracking-wide text-gray-900 cursor-pointer select-none hover:bg-gray-50 rounded-lg">
+        Live and upcoming majors
+      </summary>
+      <div className="px-4 pb-4 pt-2 border-t border-gray-100">
+        {events === null && <p className="text-sm text-gray-500">Loading…</p>}
+        {events?.length === 0 && <p className="text-sm text-gray-500">No live or upcoming majors right now.</p>}
+        {events?.length > 0 && children}
+      </div>
+    </details>
+  )
+}

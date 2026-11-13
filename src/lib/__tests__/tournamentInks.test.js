@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines } from '../tournamentInks'
+import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines, bestOfLeaders, INK_PAIRS } from '../tournamentInks'
 import { metaSlices } from '../streamOverlay'
 
 const rel = (id, inks, order = 1) => ({
@@ -52,5 +52,16 @@ describe('tournamentInks', () => {
     expect(cells.get('amber/emerald|emerald/steel')).toEqual({ wins: 1, losses: 1, draws: 1 })
     expect(cells.get('emerald/steel|amber/emerald')).toEqual({ wins: 1, losses: 1, draws: 1 })
     expect(cells.get('amber/emerald|amber/emerald')).toEqual({ wins: 0, losses: 1, draws: 0 })
+  })
+
+  it('picks the best-ranked player on each of the 15 pairs', () => {
+    const standing = (id, rank) => ({ rank, player: { id } })
+    // ranks out of order on purpose; 4 has no pair
+    const rows = bestOfLeaders([standing(3, 1), standing(2, 4), standing(1, 2), standing(4, 3)], playerInks(matches))
+    expect(INK_PAIRS).toHaveLength(15)
+    expect(rows).toHaveLength(15)
+    expect(rows[0]).toMatchObject({ key: 'amber/emerald', entry: { rank: 1 } })
+    expect(rows[1]).toMatchObject({ key: 'emerald/steel', entry: { rank: 4 } })
+    expect(rows.slice(2).every((r) => r.entry === null)).toBe(true)
   })
 })

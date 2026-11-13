@@ -122,6 +122,10 @@ None is wired up yet; use them before building the same thing by hand.
 - `GET {RAVEN_BASE}/events/{eventId}/team-roster/`,
   `tournament-rounds/{id}/team-standings/` — team events.
 
+## Ink pairs on matches
+
+Since Nov 2026, matches on events that show deck descriptors carry each player's deck inks as `player_match_relationships[].user_event_status.deck_descriptor_label.parts[0].value` ("amethyst,ruby"), public on both hosts. Standings don't. Read by `src/lib/tournamentInks.js` and the import's `playerInksFromMatches()`; see `docs/agents/tournaments.md`.
+
 ## Fields already in our payloads that nothing reads yet
 
 - Match relationships: `is_starting_player`, `player_order` (who went

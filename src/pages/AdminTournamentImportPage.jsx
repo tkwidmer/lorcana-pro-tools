@@ -150,7 +150,7 @@ export function AdminTournamentImportPage() {
                 <p className="font-semibold">{result.eventName}</p>
                 <p className="text-xs mt-1 text-green-700">
                   {result.roundsImported} rounds · {result.standingsImported} standings ·{' '}
-                  {result.matchesImported} matches imported
+                  {result.matchesImported} matches · {result.inksImported} ink pairs imported
                 </p>
               </div>
             )}

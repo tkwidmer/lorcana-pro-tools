@@ -31,28 +31,11 @@ import { InkMetaTab, InkMatrixTab, BestOfTab } from '../components/InkPairStats'
 import { ShareDownloadLink } from '../components/ShareDownloadLink'
 import { renderTeamsShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
 import { playerInks, inksOfRelationship } from '../lib/tournamentInks'
+import { loadFavorites, toggleFavorite as saveFavoriteToggle } from '../lib/tournamentFavorites'
+import { useAuth } from '../hooks/useAuth'
 
-const FAVORITES_KEY = 'lorcana_tournament_favorites'
 const RECENTS_KEY = 'lorcana_tournament_recents'
 const MAX_RECENTS = 8
-
-// Keyed by the Ravensburger player id (stable across events), so a caster's
-// favorites list carries over between tournaments rather than resetting per-event.
-function getFavorites() {
-  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? '{}') } catch { return {} }
-}
-
-function toggleFavoriteStorage(playerId, name) {
-  const all = getFavorites()
-  const key = String(playerId)
-  if (all[key]) {
-    delete all[key]
-  } else {
-    all[key] = { name, addedAt: Date.now() }
-  }
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(all))
-  return all
-}
 
 // Minimal per-tournament bookmarks — enough to reload standings and show a
 // label, without persisting the (large, ever-changing) standings/roster data
@@ -511,7 +494,19 @@ export function TournamentLookupPage() {
   const [matchesLoading, setMatchesLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('standings')
   const inksById = useMemo(() => playerInks(allMatches), [allMatches])
-  const [favorites, setFavorites] = useState(getFavorites)
+  // Favorites follow the signed-in account (Supabase) or, signed out, this
+  // browser (localStorage); reloaded whenever the auth user changes.
+  const { user, isLoading: authLoading } = useAuth()
+  const userId = user?.id ?? null
+  const [favorites, setFavorites] = useState({})
+  useEffect(() => {
+    if (authLoading) return
+    let cancelled = false
+    loadFavorites(userId)
+      .then((favs) => { if (!cancelled) setFavorites(favs) })
+      .catch((err) => { if (!cancelled) setError(`Failed to load favorites: ${err.message}`) })
+    return () => { cancelled = true }
+  }, [authLoading, userId])
   // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
   // share the current URL and it reloads straight into the same event/tab/
   // search instead of a blank page. Only the *initial* read matters: after
@@ -677,7 +672,9 @@ export function TournamentLookupPage() {
   }, [allStandings])
 
   function toggleFavorite(playerId, name) {
-    setFavorites(toggleFavoriteStorage(playerId, name))
+    saveFavoriteToggle(userId, favorites, playerId, name)
+      .then(setFavorites)
+      .catch((err) => setError(`Failed to save favorite: ${err.message}`))
   }
 
   function selectRecent(recent) {

@@ -31,7 +31,8 @@ function useCanManage(slug) {
   return canManage
 }
 
-// How many of the current roster are registered in each live event. One
+// How many of the current roster are registered in each live event (null
+// when that event's registrations failed to load). One
 // registrations crawl per event (50 a page); a DLC is ~16 requests.
 // ponytail: fetched on every page view; cache per event id if the list grows past a handful.
 function useRegisteredCounts(liveEvents, rosterIds) {
@@ -47,7 +48,7 @@ function useRegisteredCounts(liveEvents, rosterIds) {
           const ids = new Set(regs.map((r) => String(r.user?.id)))
           setCounts((prev) => ({ ...prev, [e.eventId]: rosterIds.filter((id) => ids.has(id)).length }))
         })
-        .catch(() => {})
+        .catch(() => { if (!cancelled) setCounts((prev) => ({ ...prev, [e.eventId]: null })) })
     }
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,6 +140,13 @@ function TeamPageBody({ slug }) {
     .flatMap((e) => e.results.filter((r) => r.rank != null).map((r) => ({ rank: r.rank, eventName: e.eventName })))
     .sort((a, b) => a.rank - b.rank)[0]
   const playingNow = liveEvents?.find((e) => e.displayStatus === 'inProgress' && registered[e.eventId] > 0)
+  // Only the majors a current member is registered for; null (still loading)
+  // until every event's registrations have been checked.
+  const teamLiveEvents = !liveEvents ? null
+    : currentMembers.length === 0 ? []
+    : liveEvents.every((e) => e.eventId in registered) ? liveEvents.filter((e) => registered[e.eventId] > 0)
+    : null
+  const uncheckedCount = liveEvents?.filter((e) => registered[e.eventId] === null).length ?? 0
   const visibleEvents = showAll ? events : events.slice(0, INITIAL_EVENTS)
 
   return (
@@ -181,29 +189,31 @@ function TeamPageBody({ slug }) {
       </div>
 
       {!disbanded && (
-        <LiveMajorsDetails events={liveEvents} onOpen={() => setLiveOpen(true)} className="mb-6">
+        <LiveMajorsDetails
+          events={teamLiveEvents}
+          onOpen={() => setLiveOpen(true)}
+          emptyLabel={uncheckedCount > 0
+            ? `No current members found in the events checked; couldn't load registrations for ${uncheckedCount} ${uncheckedCount === 1 ? 'event' : 'events'}.`
+            : 'No current members are registered for a live or upcoming major.'}
+          className="mb-6"
+        >
           <LiveMajorsList
-            events={liveEvents}
-            renderMeta={(e) => {
-              const n = registered[e.eventId]
-              if (currentMembers.length === 0) return <span className="text-sm text-gray-500">No current members</span>
-              if (n === undefined) return <span className="text-xs text-gray-400">Checking registrations…</span>
-              if (n === 0) return <span className="text-sm text-gray-500">None registered yet</span>
-              return <span className="text-sm"><strong className="text-gray-900">{n}</strong> of {currentMembers.length} registered</span>
-            }}
+            events={teamLiveEvents}
+            renderMeta={(e) => (
+              <span className="text-sm"><strong className="text-gray-900">{registered[e.eventId]}</strong> of {currentMembers.length} registered</span>
+            )}
             renderAction={(e) => (
-              <Button
-                to={`/tournament-lookup?event=${e.eventId}&tab=team&team=${slug}`}
-                size="sm"
-                variant={registered[e.eventId] > 0 ? 'secondary' : 'quiet'}
-              >
-                {registered[e.eventId] > 0 ? 'View team live →' : 'Open in Tournament Lookup →'}
+              <Button to={`/tournament-lookup?event=${e.eventId}&tab=team&team=${slug}`} size="sm" variant="secondary">
+                View team live →
               </Button>
             )}
           />
           <p className="text-xs text-gray-400 mt-3">
-            In-progress events and those starting within 14 days, from the Play Hub. Registrations refresh when you reload.
+            In-progress events and those starting within 14 days, from the Play Hub, where a current member is registered. Registrations refresh when you reload.
           </p>
+          {uncheckedCount > 0 && (
+            <p className="text-xs text-red-600 mt-2">Couldn't check registrations for {uncheckedCount} {uncheckedCount === 1 ? 'event' : 'events'}.</p>
+          )}
         </LiveMajorsDetails>
       )}
 

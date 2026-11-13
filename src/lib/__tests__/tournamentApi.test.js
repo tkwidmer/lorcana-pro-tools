@@ -133,7 +133,7 @@ describe('withPhasePoints', () => {
   const london = {
     phase_template_group: 'g1',
     tournament_phases: [
-      { phase_name: 'Phase 1', order_in_phases: 1, round_type: 'SWISS', number_of_rounds: 8, rounds: [roundComplete('r7', 7), roundInProgress('r8', 8)] },
+      { phase_name: 'Phase 1', order_in_phases: 1, round_type: 'SWISS', number_of_rounds: 8, rounds: [1, 2, 3, 4, 5, 6, 7].map((n) => roundComplete(`r${n}`, n)).concat(roundInProgress('r8', 8)) },
       { phase_name: 'Phase 2', order_in_phases: 2, round_type: 'SWISS', number_of_rounds: 7, rounds: [] },
       { phase_name: 'Phase 3', order_in_phases: 3, round_type: 'RANKED_SINGLE_ELIMINATION', number_of_rounds: 3, rank_required_to_enter_phase: 8, rounds: [] },
     ],
@@ -148,16 +148,24 @@ describe('withPhasePoints', () => {
     expect(phases.map((p) => p.points_required_to_enter_phase)).toEqual([null, 18, null])
   })
 
-  it('gives the Day 2 cutoff and the advancement requirement from it', () => {
+  it('gives the cuts and the advancement requirement from the cutoff', () => {
     const s = getTournamentStructure(withPhasePoints(london, templates))
-    expect(s).toMatchObject({ dayTwoPoints: 18, dayOneOver: true })
+    expect(s.cuts).toEqual([
+      { label: 'Day 2', cutoff: { type: 'points', value: 18 }, fromRoundId: 'r8' },
+      { label: 'Top 8', cutoff: { type: 'rank', value: 8 }, fromRoundId: null },
+    ])
     expect(s.advancementRequirement).toEqual({ type: 'points', value: 18, nextPhaseName: 'Phase 2' })
+  })
+
+  it('has no Day 2 cut before Day 1 reaches its last round', () => {
+    const early = { ...london, tournament_phases: [{ ...london.tournament_phases[0], rounds: london.tournament_phases[0].rounds.slice(0, 7) }, ...london.tournament_phases.slice(1)] }
+    expect(getTournamentStructure(withPhasePoints(early, templates)).cuts[0].fromRoundId).toBeNull()
   })
 
   it('leaves an event without a template group unchanged', () => {
     const custom = { ...london, phase_template_group: null }
     expect(withPhasePoints(custom, templates)).toBe(custom)
-    expect(getTournamentStructure(custom).dayTwoPoints).toBeNull()
+    expect(getTournamentStructure(custom).cuts.map((c) => c.label)).toEqual(['Top 8'])
   })
 })
 

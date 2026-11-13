@@ -6,7 +6,7 @@
 import { inkPairMeta, inkPairMatrix, winRate, playerInks, bestOfLeaders, bestRankByPair } from './tournamentInks'
 import { ordinal } from './resultsArchive'
 import { teamInitials } from './teams'
-import { INK_2, LINE, PAPER, MUTED, FORGE, DISPLAY, SANS, INK_FILL, layout, loadImage, loadAssets, newCanvas, text, fitText, drawHeader as brandHeader, drawFooter as brandFooter, drawInks, roundRect } from './shareBrand'
+import { INK_2, LINE, PAPER, MUTED, FORGE, WIN, LOSS, DISPLAY, SANS, INK_FILL, layout, loadImage, loadAssets, newCanvas, text, fitText, drawHeader as brandHeader, drawFooter as brandFooter, drawInks, roundRect } from './shareBrand'
 
 const URL_TEXT = 'inkbornforge.com/tournament-lookup'
 const FEW = 5 // cells under this many matches are drawn faded
@@ -293,5 +293,58 @@ export async function renderBestOfShareImage({ matches, structure, standings, st
   })
 
   drawFooter(ctx, W, H, PAD, 'Highest standing on each ink pair wins its Best Of promo · others = tied with them on points', cam)
+  return canvas
+}
+
+const liftText = (lift) => (lift == null ? '—' : `${lift.toFixed(2)}×`)
+const liftFill = (lift) => (lift == null ? MUTED : lift >= 1.1 ? WIN : lift <= 0.9 ? LOSS : PAPER)
+
+// Conversion through each cut: Day 1 players, then per cut its players, the
+// conversion from the stage before and the lift over the field's.
+// `funnel` is conversionFunnel()'s result, `labels` the cut labels in order.
+export async function renderConversionShareImage({ funnel, labels, structure, video }) {
+  const { rows, field } = funnel
+  const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
+  const PAD = 56
+  const TOP = 266
+  const STAGE_W = 330
+  const NAME_W = 420
+  const { W, H, ROW, dpr, cam } = layout({ video, w: PAD * 2 + NAME_W + 130 + labels.length * STAGE_W, top: TOP, bottom: 110, n: rows.length, row: 58 })
+  const { canvas, ctx } = newCanvas(W, H, dpr)
+  drawHeader(ctx, W, PAD, { mark, title: 'CONVERSION', structure })
+
+  const NAME_X = PAD + 82
+  // Columns hang from the right edge, so a wide video frame widens the name column.
+  const DAY1_X = W - PAD - labels.length * STAGE_W
+  const stageX = (i) => DAY1_X + (i + 1) * STAGE_W // right edge of the stage's block
+  const head = { font: `500 17px ${DISPLAY}`, color: MUTED, align: 'right' }
+  text(ctx, 'INK PAIR', NAME_X, TOP - 20, { ...head, align: 'left' })
+  text(ctx, 'DAY 1', DAY1_X, TOP - 20, head)
+  labels.forEach((label, i) => {
+    const x = stageX(i)
+    text(ctx, label.toUpperCase(), x - STAGE_W / 2 + 40, TOP - 52, { font: `600 20px ${DISPLAY}`, color: FORGE, align: 'center' })
+    text(ctx, 'PLAYERS', x - 220, TOP - 20, head)
+    text(ctx, 'CONV.', x - 110, TOP - 20, head)
+    text(ctx, 'VS FIELD', x, TOP - 20, head)
+  })
+
+  rows.forEach((r, i) => {
+    const y = TOP + i * ROW
+    const mid = y + ROW / 2
+    if (i % 2 === 0) { ctx.fillStyle = INK_2; ctx.fillRect(PAD, y, W - PAD * 2, ROW) }
+    drawInks(ctx, icons, r.inks, PAD + 10, mid, 30)
+    text(ctx, pairName(r.inks), NAME_X, mid, { font: `600 24px ${DISPLAY}`, baseline: 'middle' })
+    const cell = { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' }
+    text(ctx, String(r.players), DAY1_X, mid, cell)
+    r.stages.forEach((s, k) => {
+      const x = stageX(k)
+      text(ctx, String(s.count), x - 220, mid, cell)
+      text(ctx, pct(s.conversion), x - 110, mid, { ...cell, color: MUTED })
+      text(ctx, liftText(s.lift), x, mid, { ...cell, color: liftFill(s.lift) })
+    })
+  })
+
+  const fieldNote = labels.map((label, i) => `${label} ${field.stages[i].count.toLocaleString('en-US')} (${pct(field.stages[i].conversion)})`).join(' · ')
+  drawFooter(ctx, W, H, PAD, `${field.players.toLocaleString('en-US')} decks · ${fieldNote} · 1.25× = 25% better than the field`, cam)
   return canvas
 }

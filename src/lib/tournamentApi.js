@@ -134,10 +134,25 @@ export async function fetchUniqueFanCount(events, concurrency = 5) {
   return userIds.size
 }
 
-function dayOneOver(phases, dayOne, currentPhaseIndex, currentRoundNumber) {
-  if (!dayOne || currentPhaseIndex < 0) return false
-  const dayOneIndex = phases.indexOf(dayOne)
-  return currentPhaseIndex > dayOneIndex || (currentPhaseIndex === dayOneIndex && currentRoundNumber >= dayOne.number_of_rounds)
+// The event's cuts, in phase order: each phase after the first with a rank
+// cutoff (Top 8) or a points cutoff (a DLC's Day 2, 18+). `fromRoundId` is the
+// previous phase's last round once its standings exist, the standings that
+// decide who made the cut; null before then.
+export function phaseCuts(phases) {
+  const swiss = phases.filter((p) => p.round_type === 'SWISS')
+  return phases.slice(1).flatMap((phase, k) => {
+    const prev = phases[k]
+    const rank = phase.rank_required_to_enter_phase
+    const points = phase.points_required_to_enter_phase
+    if (!rank && !points) return []
+    const last = prev.rounds?.at(-1)
+    const lastIsFinal = prev.rounds?.length === prev.number_of_rounds && last?.standings_status === 'GENERATED'
+    return [{
+      label: rank ? `Top ${rank}` : swiss.indexOf(phase) === 1 ? 'Day 2' : phase.phase_name,
+      cutoff: rank ? { type: 'rank', value: rank } : { type: 'points', value: points },
+      fromRoundId: lastIsFinal ? last.id : null,
+    }]
+  })
 }
 
 export function getTournamentStructure(eventDetails) {
@@ -263,11 +278,7 @@ export function getTournamentStructure(eventDetails) {
     // is the *currently* displayed phase. Used to pick out bracket matches
     // from the flat `allMatches` list (each match carries `phase_name`).
     eliminationPhaseName: eliminationPhase?.phase_name ?? null,
-    // Day 2: the second Swiss phase's points cutoff (a DLC's 18), and whether
-    // the standings shown are from Day 1's last round or later, when the
-    // players at or over it are the Day 2 field.
-    dayTwoPoints: swissPhases[1]?.points_required_to_enter_phase ?? null,
-    dayOneOver: dayOneOver(phases, swissPhases[0], currentPhaseIndex, currentRoundNumber),
+    cuts: phaseCuts(phases),
     isElimination,
     swissRoundsRemaining,
     advancementRequirement,

@@ -1,27 +1,116 @@
-import { Fragment, useMemo, useState } from 'react'
-import { renderMetaShareImage, renderMatchupShareImage, renderBestOfShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { renderMetaShareImage, renderMatchupShareImage, renderBestOfShareImage, renderConversionShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
 import { ShareDownloadLink } from './ShareDownloadLink'
 import { InkIcons } from './InkIcons'
-import { inkPairMeta, inkPairMatrix, winRate, bestOfLeaders, bestRankByPair, playerInks, dayTwoQualifiers } from '../lib/tournamentInks'
+import { inkPairMeta, inkPairMatrix, winRate, bestOfLeaders, bestRankByPair, playerInks, cutQualifiers, conversionFunnel } from '../lib/tournamentInks'
+import { fetchAllStandings } from '../lib/tournamentApi'
 import { ordinal } from '../lib/resultsArchive'
 import { winrateCellColor, winrateTextColor } from '../lib/statColors'
 
 const pct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`)
 const record = ({ wins, losses, draws }) => `${wins}-${losses}${draws ? `-${draws}` : ''}`
-// Day 2 lift: a pair's conversion over the field's (1.25× = 25% better).
+// Lift: a pair's conversion over the field's (1.25× = 25% better).
 const liftText = (lift) => (lift == null ? '—' : `${lift.toFixed(2)}×`)
-const liftColor = (lift) => (lift == null ? 'text-gray-400' : lift >= 1.1 ? 'text-green-700' : lift <= 0.9 ? 'text-red-600' : 'text-gray-700')
-const fieldConversion = (rows) => {
-  const players = rows.reduce((n, r) => n + r.players, 0)
-  return (rows.reduce((n, r) => n + r.dayTwo, 0) / players) * 100
+const liftColor = (lift) => (lift == null ? 'text-gray-400' : lift >= 1.1 ? 'text-green-700 font-semibold' : lift <= 0.9 ? 'text-red-600' : 'text-gray-700')
+
+// Conversion through each of the event's cuts that has been decided (a DLC's
+// Day 2 at 18 points, then its Top 8), from the standings of the round that
+// decided it.
+export function ConversionTab({ allMatches, structure }) {
+  const cuts = useMemo(() => structure.cuts.filter((c) => c.fromRoundId), [structure])
+  const roundIds = cuts.map((c) => c.fromRoundId).join(',')
+  const [standingsByRound, setStandingsByRound] = useState(null)
+  const [error, setError] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    Promise.all(roundIds.split(',').map((id) => fetchAllStandings(id)))
+      .then((lists) => { if (!cancelled) setStandingsByRound(lists) })
+      .catch((err) => { if (!cancelled) setError(err.message) })
+    return () => { cancelled = true }
+  }, [roundIds])
+
+  const funnel = useMemo(
+    () => standingsByRound && conversionFunnel(allMatches, cuts.map((c, i) => ({ label: c.label, ids: cutQualifiers(standingsByRound[i], c.cutoff) }))),
+    [standingsByRound, allMatches, cuts],
+  )
+  if (error) return <p className="text-sm text-red-600">{error}</p>
+  if (!funnel) return <p className="text-sm text-gray-500">Loading the standings that decided each cut…</p>
+
+  const labels = cuts.map((c) => c.label)
+  const cutoffText = (c) => (c.cutoff.type === 'rank' ? `the top ${c.cutoff.value}` : `${c.cutoff.value}+ match points`)
+  return (
+    <div className="space-y-2">
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <tr>
+                <th className="px-4 pt-2" colSpan={2} />
+                {labels.map((label) => (
+                  <th key={label} colSpan={3} className="px-4 pt-2 text-center text-gray-700 border-l border-gray-200">{label}</th>
+                ))}
+              </tr>
+              <tr>
+                <th className="text-left px-4 py-2">Ink pair</th>
+                <th className="text-right px-4 py-2">Day 1</th>
+                {labels.map((label) => (
+                  <Fragment key={label}>
+                    <th className="text-right px-4 py-2 border-l border-gray-200">Players</th>
+                    <th className="text-right px-4 py-2" title="Players who made this cut / the pair's players at the stage before">Conv.</th>
+                    <th className="text-right px-4 py-2" title="The pair's conversion over the whole field's">vs field</th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {funnel.rows.map((r) => (
+                <tr key={r.key} className="border-t border-gray-100">
+                  <td className="px-4 py-2.5">
+                    <span className="inline-flex items-center gap-2">
+                      <InkIcons colors={r.inks} size={18} />
+                      <span className="capitalize text-gray-900 font-medium">{r.inks.join(' / ')}</span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-900">{r.players}</td>
+                  {r.stages.map((st, k) => (
+                    <Fragment key={labels[k]}>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-900 border-l border-gray-100">{st.count}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-600">{pct(st.conversion)}</td>
+                      <td className={`px-4 py-2.5 text-right font-mono ${liftColor(st.lift)}`}>{liftText(st.lift)}</td>
+                    </Fragment>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-gray-50 border-t border-gray-200 font-semibold">
+              <tr>
+                <td className="px-4 py-2 text-gray-700">Field</td>
+                <td className="px-4 py-2 text-right font-mono text-gray-900">{funnel.field.players}</td>
+                {funnel.field.stages.map((st, k) => (
+                  <Fragment key={labels[k]}>
+                    <td className="px-4 py-2 text-right font-mono text-gray-900 border-l border-gray-100">{st.count}</td>
+                    <td className="px-4 py-2 text-right font-mono text-gray-600">{pct(st.conversion)}</td>
+                    <td className="px-4 py-2 text-right font-mono text-gray-700">1.00×</td>
+                  </Fragment>
+                ))}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
+          {cuts.map((c) => `${c.label} is ${cutoffText(c)}`).join('; ')}, read from the standings that decided it. Conv. is the share of a pair's players at the stage before who made the cut; vs field is that over the field's rate, so 1.25× converted 25% better. Players with no submitted deck are left out. Small pairs swing hard: a pair of 10 moves 10 points per player.
+        </p>
+      </div>
+      <ShareDownloadLink render={(video) => renderConversionShareImage({ funnel, labels, structure, video })} filename={shareFilename(structure, 'conversion')} />
+    </div>
+  )
 }
 
 // The field by ink pair, from the players' submitted decks on Play Hub.
 export function InkMetaTab({ allMatches, structure, standings }) {
-  const rows = useMemo(() => inkPairMeta(allMatches, dayTwoQualifiers(standings, structure)), [allMatches, standings, structure])
+  const rows = useMemo(() => inkPairMeta(allMatches), [allMatches])
   const bestRank = useMemo(() => bestRankByPair(standings, playerInks(allMatches)), [standings, allMatches])
   const players = rows.reduce((sum, r) => sum + r.players, 0)
-  const hasDayTwo = rows[0]?.conversion != null
   return (
     <div className="space-y-2">
       <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -34,13 +123,6 @@ export function InkMetaTab({ allMatches, structure, standings }) {
                 <th className="text-left px-4 py-2 w-1/3">Share</th>
                 <th className="text-right px-4 py-2" title="Matches against other pairs; mirrors excluded">Record</th>
                 <th className="text-right px-4 py-2">Win %</th>
-                {hasDayTwo && (
-                  <>
-                    <th className="text-right px-4 py-2">Day 2</th>
-                    <th className="text-right px-4 py-2" title="Day 2 players / Day 1 players on the pair">Conversion</th>
-                    <th className="text-right px-4 py-2" title="The pair's conversion over the whole field's">vs field</th>
-                  </>
-                )}
                 {standings && <th className="text-right px-4 py-2">Best rank</th>}
               </tr>
             </thead>
@@ -64,13 +146,6 @@ export function InkMetaTab({ allMatches, structure, standings }) {
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-600">{record(r)}</td>
                   <td className={`px-4 py-2.5 text-right font-mono ${winrateTextColor(r.winRate)}`}>{pct(r.winRate)}</td>
-                  {hasDayTwo && (
-                    <>
-                      <td className="px-4 py-2.5 text-right font-mono text-gray-900">{r.dayTwo}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{pct(r.conversion)}</td>
-                      <td className={`px-4 py-2.5 text-right font-mono ${liftColor(r.lift)}`}>{liftText(r.lift)}</td>
-                    </>
-                  )}
                   {standings && <td className="px-4 py-2.5 text-right font-mono text-gray-700">{bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—'}</td>}
                 </tr>
               ))}
@@ -79,7 +154,6 @@ export function InkMetaTab({ allMatches, structure, standings }) {
         </div>
         <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
           {players} players with a submitted deck. Win % counts reported matches against other pairs (draws as half), mirrors excluded.
-          {hasDayTwo && ` Day 2 is ${structure.dayTwoPoints}+ match points after Day 1. Conversion is the share of a pair's players who made it (field: ${pct(fieldConversion(rows))}); vs field is that over the field's rate, so 1.25× converted 25% better. Small pairs swing hard.`}
         </p>
       </div>
       <ShareDownloadLink render={(video) => renderMetaShareImage({ matches: allMatches, structure, standings, video })} filename={shareFilename(structure, 'metagame')} />
@@ -89,8 +163,7 @@ export function InkMetaTab({ allMatches, structure, standings }) {
 
 // Row pair's win rate against each column pair.
 export function InkMatrixTab({ allMatches, structure, standings }) {
-  const pairs = useMemo(() => inkPairMeta(allMatches, dayTwoQualifiers(standings, structure)), [allMatches, standings, structure])
-  const hasDayTwo = pairs[0]?.conversion != null
+  const pairs = useMemo(() => inkPairMeta(allMatches), [allMatches])
   const cells = useMemo(() => inkPairMatrix(allMatches), [allMatches])
   const bestRank = useMemo(() => bestRankByPair(standings, playerInks(allMatches)), [standings, allMatches])
   return (
@@ -102,7 +175,6 @@ export function InkMatrixTab({ allMatches, structure, standings }) {
               <th className="px-2 py-1 text-left text-gray-500 font-normal">Deck</th>
               <th className="px-2 py-1 text-right text-gray-500 font-normal">Win %</th>
               <th className="px-2 py-1 text-right text-gray-500 font-normal">Record</th>
-              {hasDayTwo && <th className="px-2 py-1 text-right text-gray-500 font-normal" title="Day 2 conversion over the field's">Day 2</th>}
               {standings && <th className="px-2 py-1 pr-4 text-right text-gray-500 font-normal">Best</th>}
               {pairs.map((p) => (
                 <th key={p.key} className="px-1 py-1" title={p.inks.join(' / ')}>
@@ -122,11 +194,6 @@ export function InkMatrixTab({ allMatches, structure, standings }) {
                 </th>
                 <td className={`px-2 py-1 text-right font-mono font-semibold ${winrateTextColor(row.winRate)}`}>{pct(row.winRate)}</td>
                 <td className="px-2 py-1 text-right font-mono text-gray-600 whitespace-nowrap">{record(row)}</td>
-                {hasDayTwo && (
-                  <td className={`px-2 py-1 text-right font-mono whitespace-nowrap ${liftColor(row.lift)}`} title={`${row.dayTwo} of ${row.players} made Day 2 (${pct(row.conversion)})`}>
-                    {liftText(row.lift)}
-                  </td>
-                )}
                 {standings && <td className="px-2 py-1 pr-4 text-right font-mono text-gray-700">{bestRank.has(row.key) ? `#${bestRank.get(row.key)}` : '—'}</td>}
                 {pairs.map((col) => {
                   const rec = cells.get(`${row.key}|${col.key}`)
@@ -156,7 +223,7 @@ export function InkMatrixTab({ allMatches, structure, standings }) {
         </table>
       </div>
       <p className="text-xs text-gray-500">
-        Win % and Record are each pair's matches against other pairs (mirrors left out); Day 2 is its Day 2 conversion over the field's (hover for the count); Best is its best standings rank. Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
+        Win % and Record are each pair's matches against other pairs (mirrors left out); Best is its best standings rank. Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
       </p>
       <ShareDownloadLink render={(video) => renderMatchupShareImage({ matches: allMatches, structure, standings, video })} filename={shareFilename(structure, 'matchups')} />
     </div>

@@ -16,23 +16,36 @@ const liftColor = (lift) => (lift == null ? 'text-gray-400' : lift >= 1.1 ? 'tex
 // Conversion through each of the event's cuts that has been decided (a DLC's
 // Day 2 at 18 points, then its Top 8), from the standings of the round that
 // decided it.
-export function ConversionTab({ allMatches, structure }) {
-  const cuts = useMemo(() => structure.cuts.filter((c) => c.fromRoundId), [structure])
+// The event's decided cuts, each as { label, ids } (the players who made it),
+// from the standings of the round that decided it. Fetched once per set of
+// deciding rounds, so live refreshes don't refetch. `stages` is null while
+// loading or before any cut is decided.
+function useCutStages(structure) {
+  const cuts = useMemo(() => structure?.cuts.filter((c) => c.fromRoundId) ?? [], [structure])
   const roundIds = cuts.map((c) => c.fromRoundId).join(',')
-  const [standingsByRound, setStandingsByRound] = useState(null)
-  const [error, setError] = useState(null)
+  const [loaded, setLoaded] = useState({ roundIds: null, lists: null, error: null })
   useEffect(() => {
+    if (!roundIds) return
     let cancelled = false
     Promise.all(roundIds.split(',').map((id) => fetchAllStandings(id)))
-      .then((lists) => { if (!cancelled) setStandingsByRound(lists) })
-      .catch((err) => { if (!cancelled) setError(err.message) })
+      .then((lists) => { if (!cancelled) setLoaded({ roundIds, lists, error: null }) })
+      .catch((err) => { if (!cancelled) setLoaded({ roundIds, lists: null, error: err.message }) })
     return () => { cancelled = true }
   }, [roundIds])
-
-  const funnel = useMemo(
-    () => standingsByRound && conversionFunnel(allMatches, cuts.map((c, i) => ({ label: c.label, ids: cutQualifiers(standingsByRound[i], c.cutoff) }))),
-    [standingsByRound, allMatches, cuts],
+  const current = loaded.roundIds === roundIds
+  const stages = useMemo(
+    () => (current && loaded.lists ? cuts.map((c, i) => ({ label: c.label, ids: cutQualifiers(loaded.lists[i], c.cutoff) })) : null),
+    [current, loaded, cuts],
   )
+  return { cuts, stages, error: current ? loaded.error : null }
+}
+
+// Conversion through each of the event's cuts that has been decided (a DLC's
+// Day 2 at 18 points, then its Top 8), from the standings of the round that
+// decided it.
+export function ConversionTab({ allMatches, structure }) {
+  const { cuts, stages, error } = useCutStages(structure)
+  const funnel = useMemo(() => stages && conversionFunnel(allMatches, stages), [stages, allMatches])
   if (error) return <p className="text-sm text-red-600">{error}</p>
   if (!funnel) return <p className="text-sm text-gray-500">Loading the standings that decided each cut…</p>
 
@@ -111,6 +124,14 @@ export function InkMetaTab({ allMatches, structure, standings }) {
   const rows = useMemo(() => inkPairMeta(allMatches), [allMatches])
   const bestRank = useMemo(() => bestRankByPair(standings, playerInks(allMatches)), [standings, allMatches])
   const players = rows.reduce((sum, r) => sum + r.players, 0)
+  // The first decided cut (a DLC's Day 2): each pair's conversion, colored by
+  // its lift over the field. The Conversion tab has the full funnel.
+  const { stages } = useCutStages(structure)
+  const firstCut = useMemo(() => {
+    if (!stages) return null
+    const { rows: funnelRows, field } = conversionFunnel(allMatches, stages.slice(0, 1))
+    return { label: stages[0].label, field: field.stages[0].conversion, byKey: new Map(funnelRows.map((r) => [r.key, r.stages[0]])) }
+  }, [stages, allMatches])
   return (
     <div className="space-y-2">
       <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -123,6 +144,7 @@ export function InkMetaTab({ allMatches, structure, standings }) {
                 <th className="text-left px-4 py-2 w-1/3">Share</th>
                 <th className="text-right px-4 py-2" title="Matches against other pairs; mirrors excluded">Record</th>
                 <th className="text-right px-4 py-2">Win %</th>
+                {firstCut && <th className="text-right px-4 py-2" title={`Share of the pair's players who made ${firstCut.label}; the field converted ${pct(firstCut.field)}`}>{firstCut.label} %</th>}
                 {standings && <th className="text-right px-4 py-2">Best rank</th>}
               </tr>
             </thead>
@@ -146,6 +168,11 @@ export function InkMetaTab({ allMatches, structure, standings }) {
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-600">{record(r)}</td>
                   <td className={`px-4 py-2.5 text-right font-mono ${winrateTextColor(r.winRate)}`}>{pct(r.winRate)}</td>
+                  {firstCut && (
+                    <td className={`px-4 py-2.5 text-right font-mono ${liftColor(firstCut.byKey.get(r.key)?.lift)}`} title={`${firstCut.byKey.get(r.key)?.count ?? 0} of ${r.players} · ${liftText(firstCut.byKey.get(r.key)?.lift)} the field`}>
+                      {pct(firstCut.byKey.get(r.key)?.conversion)}
+                    </td>
+                  )}
                   {standings && <td className="px-4 py-2.5 text-right font-mono text-gray-700">{bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—'}</td>}
                 </tr>
               ))}
@@ -154,6 +181,7 @@ export function InkMetaTab({ allMatches, structure, standings }) {
         </div>
         <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
           {players} players with a submitted deck. Win % counts reported matches against other pairs (draws as half), mirrors excluded.
+          {firstCut && ` ${firstCut.label} % is the share of a pair's players who made ${firstCut.label} (field: ${pct(firstCut.field)}); green converted 10%+ better than the field, red 10%+ worse. The Conversion tab has every cut.`}
         </p>
       </div>
       <ShareDownloadLink render={(video) => renderMetaShareImage({ matches: allMatches, structure, standings, video })} filename={shareFilename(structure, 'metagame')} />

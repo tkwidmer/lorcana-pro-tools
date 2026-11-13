@@ -1,9 +1,11 @@
-// Social-media PNGs of Tournament Lookup's Metagame and Matchups tabs, in the
-// site's brand (ink black, forge gold, Oswald + Source Sans 3) with the
-// InkbornForge mark and URL. Data comes from tournamentInks.js; the pure
-// helpers are exported for tests, the draw functions need a browser canvas.
+// Social-media PNGs of Tournament Lookup's Metagame, Matchups, Best Of and
+// Teams tabs, in the site's brand (ink black, forge gold, Oswald + Source
+// Sans 3) with the InkbornForge mark and URL. Data comes from
+// tournamentInks.js and teams.js; the pure helpers are exported for tests,
+// the draw functions need a browser canvas.
 import { inkPairMeta, inkPairMatrix, winRate, playerInks, bestOfLeaders } from './tournamentInks'
 import { ordinal } from './resultsArchive'
+import { teamInitials } from './teams'
 
 const INK = '#17171a'
 const INK_2 = '#232328'
@@ -24,6 +26,11 @@ export const INK_FILL = {
 const abbr = (ink) => ink.slice(0, 3).toUpperCase()
 export const pairAbbr = (inks) => inks.map(abbr).join('/')
 export const pairName = (inks) => inks.map((i) => i.toUpperCase()).join(' / ')
+
+export function shareFilename(structure, name) {
+  const slug = structure.eventName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return `${slug}-${name}.png`
+}
 
 // Subtitle shared by the images: format, players, how far the data runs.
 // Match data runs through the round in progress; Best Of, read from the
@@ -54,6 +61,10 @@ function loadImage(src) {
   if (!imageCache.has(src)) {
     imageCache.set(src, new Promise((resolve) => {
       const img = new Image()
+      // Team logos live on Supabase storage; without CORS a cross-origin
+      // image would taint the canvas, so a logo that refuses fails to load
+      // and the team gets its initials instead.
+      img.crossOrigin = 'anonymous'
       img.onload = () => resolve(img)
       img.onerror = () => resolve(null)
       img.src = src
@@ -261,6 +272,72 @@ export async function renderMatchupShareImage({ matches, structure }) {
   })
 
   drawFooter(ctx, W, H, PAD, `Row deck's match win % vs column deck · draws count as half · small number = matches · faded = under ${FEW} matches · ${decided.toLocaleString('en-US')} matches between different pairs`)
+  return canvas
+}
+
+// Top teams by their best individual placement: logo, name, the player who
+// holds that placement, combined record and members playing / in the cut.
+// `rows` come from topTeamsByBestPlacement().
+export async function renderTeamsShareImage({ rows, structure }) {
+  const { mark } = await loadAssets([])
+  const logos = await Promise.all(rows.map((r) => (r.logoUrl ? loadImage(r.logoUrl) : null)))
+  const W = 1200
+  const PAD = 56
+  const ROW = 128
+  const GAP = 12
+  const TOP = 236
+  const H = TOP + rows.length * (ROW + GAP) + 100
+  const { canvas, ctx } = newCanvas(W, H)
+  drawHeader(ctx, W, PAD, { mark, title: 'TEAMS', structure })
+
+  const cut = structure.topCutSize
+  const COLS = { record: W - PAD - 250, members: W - PAD - 24 }
+  const head = { font: `500 17px ${DISPLAY}`, color: MUTED, align: 'right' }
+  text(ctx, 'TEAM · TOP PLAYER', PAD + 214, TOP - 20, { ...head, align: 'left' })
+  text(ctx, 'COMBINED RECORD', COLS.record, TOP - 20, head)
+  text(ctx, 'PLAYING', COLS.members, TOP - 20, head)
+
+  rows.forEach((r, i) => {
+    const y = TOP + i * (ROW + GAP)
+    const mid = y + ROW / 2
+    ctx.fillStyle = INK_2
+    roundRect(ctx, PAD, y, W - PAD * 2, ROW, 4); ctx.fill()
+    if (i === 0) { ctx.fillStyle = FORGE; ctx.fillRect(PAD, y, 6, ROW) }
+    text(ctx, String(i + 1), PAD + 52, mid, { font: `700 56px ${DISPLAY}`, color: i === 0 ? FORGE : PAPER, align: 'center', baseline: 'middle' })
+
+    const LOGO = 92
+    const lx = PAD + 100
+    const ly = mid - LOGO / 2
+    ctx.save()
+    roundRect(ctx, lx, ly, LOGO, LOGO, 4); ctx.clip()
+    if (logos[i]) {
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(lx, ly, LOGO, LOGO)
+      const k = Math.min(LOGO / logos[i].width, LOGO / logos[i].height)
+      const w = logos[i].width * k
+      const h = logos[i].height * k
+      ctx.drawImage(logos[i], lx + (LOGO - w) / 2, ly + (LOGO - h) / 2, w, h)
+    } else {
+      ctx.fillStyle = '#34343b'
+      ctx.fillRect(lx, ly, LOGO, LOGO)
+      text(ctx, teamInitials(r.name), lx + LOGO / 2, mid, { font: `600 34px ${DISPLAY}`, align: 'center', baseline: 'middle' })
+    }
+    ctx.restore()
+
+    const nameX = PAD + 214
+    const nameW = COLS.record - 230 - nameX
+    text(ctx, fitText(ctx, r.name.toUpperCase(), nameW, `600 34px ${DISPLAY}`), nameX, mid - 10, { font: `600 34px ${DISPLAY}` })
+    const top = r.topPlayer
+    text(ctx, fitText(ctx, `#${top.rank}  ${top.name}  ·  ${top.record}`, nameW, `600 22px ${SANS}`), nameX, mid + 26, { font: `600 22px ${SANS}`, color: FORGE })
+
+    const { wins, losses, draws } = r.summary
+    text(ctx, `${wins}-${losses}-${draws}`, COLS.record, mid - 4, { font: `600 36px ${DISPLAY}`, align: 'right', baseline: 'middle' })
+    text(ctx, `${r.points} pts`, COLS.record, mid + 28, { font: `400 18px ${SANS}`, color: MUTED, align: 'right', baseline: 'middle' })
+    text(ctx, String(r.inEvent), COLS.members, mid - 4, { font: `600 36px ${DISPLAY}`, align: 'right', baseline: 'middle' })
+    text(ctx, `of ${r.rosterSize}${cut ? ` · ${r.summary.inCut} in top ${cut}` : ''}`, COLS.members, mid + 28, { font: `400 18px ${SANS}`, color: MUTED, align: 'right', baseline: 'middle' })
+  })
+
+  drawFooter(ctx, W, H, PAD, 'Ranked by each team\'s best individual placement · record is every member in the event combined')
   return canvas
 }
 

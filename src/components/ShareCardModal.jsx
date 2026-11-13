@@ -5,12 +5,12 @@ import {
   copyShareImageToClipboard,
   canNativeShareImage,
   nativeShareImage,
-  frameForVideo,
   videoFilename,
 } from '../lib/tournamentShareImage'
 
 // Modal for sharing a canvas-rendered image (tournament result card, Coconut
 // deck card, etc.) via native share / clipboard copy / download.
+// shareCard: { canvas, imageUrl, filename, video: () => Promise<16:9 canvas> }.
 export function ShareCardModal({ shareCard, onClose, title = 'Share card', altText = 'Share card', shareTitle = title, maxWidthClass = 'sm:max-w-lg' }) {
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false)
   const [status, setStatus] = useState(null) // null | 'copying' | 'copied' | 'error' | 'sharing'
@@ -52,7 +52,7 @@ export function ShareCardModal({ shareCard, onClose, title = 'Share card', altTe
   }
 
   async function handleDownloadVideo() {
-    await downloadShareImage(frameForVideo(shareCard.canvas), videoFilename(shareCard.filename), 'image/png')
+    await downloadShareImage(await shareCard.video(), videoFilename(shareCard.filename), 'image/png')
   }
 
   return (

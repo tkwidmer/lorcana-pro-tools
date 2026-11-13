@@ -1,50 +1,30 @@
-import { INK_HEX } from './tournamentShareImage'
+// A [Format Coconut] deck as a share image in the InkbornForge brand: the
+// featured Coconut art, deck stats, cost curve and every card. Social: the
+// art leads an 8-wide grid. Video: 16:9, art + stats + curve on the left,
+// the grid on the right sized to fit above the webcam band.
+import { INK_2, PAPER, MUTED, FORGE, DISPLAY, SANS, INK_FILL, DPR, videoFrame, loadAssets, newCanvas, text, wrapText, drawHeader, drawFooter, roundRect } from './shareBrand'
 
 // Cost 7+ all bucket together, matching the mana-curve convention used
 // elsewhere in the app (DrawOddsPage's quest-pressure curves, etc.).
 const CURVE_BUCKETS = [1, 2, 3, 4, 5, 6, 7]
+const PAD = 56
+const CARD = 1.4 // card height / width
 
 function costBucket(cost) {
   const c = Math.max(1, cost ?? 1)
   return c >= 7 ? 7 : c
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + w - r, y)
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-  ctx.lineTo(x + w, y + h - r)
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  ctx.lineTo(x + r, y + h)
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
-  ctx.closePath()
-}
-
-function clip(str, max) {
-  if (!str) return ''
-  return str.length <= max ? str : str.slice(0, max - 1) + '…'
-}
-
-function wrapText(ctx, text, maxWidth, maxLines) {
-  const words = text.split(' ')
-  const lines = []
-  let line = ''
-  for (const word of words) {
-    const candidate = line ? `${line} ${word}` : word
-    if (ctx.measureText(candidate).width > maxWidth && line) {
-      lines.push(line)
-      line = word
-      if (lines.length === maxLines - 1) break
-    } else {
-      line = candidate
-    }
+// The column count that gives n cells of the given aspect the biggest size
+// inside w x h.
+export function gridFit(n, w, h, gap, aspect) {
+  let best = null
+  for (let cols = 1; cols <= Math.max(1, n); cols++) {
+    const rows = Math.ceil(Math.max(1, n) / cols)
+    const cellW = Math.min((w - gap * (cols - 1)) / cols, (h - gap * (rows - 1)) / rows / aspect)
+    if (!best || cellW > best.cellW) best = { cols, rows, cellW, cellH: cellW * aspect }
   }
-  if (line) lines.push(line)
-  if (lines.length > maxLines) lines.length = maxLines
-  return lines
+  return best
 }
 
 // Card images come from LorcanaJSON's CDN, which doesn't send CORS headers —
@@ -73,50 +53,21 @@ function loadImage(url) {
   return promise
 }
 
-function darken(hex, amount) {
-  const n = parseInt(hex.slice(1), 16)
-  const r = Math.round(((n >> 16) & 0xff) * (1 - amount))
-  const g = Math.round(((n >> 8) & 0xff) * (1 - amount))
-  const b = Math.round((n & 0xff) * (1 - amount))
-  return `rgb(${r}, ${g}, ${b})`
+function drawStat(ctx, x, y, value, label) {
+  text(ctx, String(value), x, y, { font: `700 36px ${DISPLAY}`, color: PAPER })
+  text(ctx, label.toUpperCase(), x, y + 22, { font: `500 15px ${DISPLAY}`, color: MUTED })
 }
 
-function drawBackground(ctx, W, H, inks) {
-  const colors = (inks.length ? inks : ['steel']).map(i => INK_HEX[i] ?? '#6B7280')
-  const grad = ctx.createLinearGradient(0, 0, W, H)
-  if (colors.length === 1) {
-    grad.addColorStop(0, darken(colors[0], 0.15))
-    grad.addColorStop(1, darken(colors[0], 0.55))
-  } else {
-    colors.forEach((c, i) => grad.addColorStop(i / (colors.length - 1), darken(c, 0.35)))
-  }
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, W, H)
-}
-
-function drawStatChip(ctx, x, y, w, value, label) {
-  ctx.textAlign = 'center'
-  ctx.font = 'bold 26px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = '#FFFFFF'
-  ctx.fillText(String(value), x + w / 2, y)
-  ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = 'rgba(255,255,255,0.7)'
-  ctx.fillText(label, x + w / 2, y + 22)
-}
-
-function drawMiniCurve(ctx, x, y, w, h, curve) {
+function drawCurve(ctx, x, y, w, h, curve) {
   const max = Math.max(1, ...CURVE_BUCKETS.map(b => curve[b]))
   const barW = w / CURVE_BUCKETS.length
   CURVE_BUCKETS.forEach((b, i) => {
-    const barH = (curve[b] / max) * (h - 16)
+    const barH = (curve[b] / max) * (h - 22)
     const bx = x + i * barW
-    ctx.fillStyle = 'rgba(255,255,255,0.85)'
-    roundRect(ctx, bx + barW * 0.15, y + (h - 16) - barH, barW * 0.7, barH || 1, 2)
+    ctx.fillStyle = FORGE
+    roundRect(ctx, bx + barW * 0.15, y + (h - 22) - barH, barW * 0.7, barH || 1, 2)
     ctx.fill()
-    ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'
-    ctx.textAlign = 'center'
-    ctx.fillText(b === 7 ? '7+' : String(b), bx + barW / 2, y + h)
+    text(ctx, b === 7 ? '7+' : String(b), bx + barW / 2, y + h, { font: `500 15px ${DISPLAY}`, color: MUTED, align: 'center' })
   })
 }
 
@@ -124,19 +75,19 @@ function drawMiniCurve(ctx, x, y, w, h, curve) {
 // at some cost/quantity in the traditional sense, it's the format anchor
 // that's always in effect, so it gets pure art with no cost pip or count.
 function drawCard(ctx, img, entry, x, y, w, h, showBadges = true) {
-  roundRect(ctx, x, y, w, h, Math.max(4, w * 0.06))
+  roundRect(ctx, x, y, w, h, Math.max(3, w * 0.05))
   ctx.save()
   ctx.clip()
   if (img) {
     ctx.drawImage(img, x, y, w, h)
   } else {
     const ink = entry.color
-    ctx.fillStyle = ink ? (INK_HEX[ink] ?? '#374151') : '#374151'
+    ctx.fillStyle = ink ? (INK_FILL[ink] ?? INK_2) : INK_2
     ctx.fillRect(x, y, w, h)
     ctx.fillStyle = 'rgba(255,255,255,0.9)'
     ctx.textAlign = 'center'
-    ctx.font = `bold ${Math.max(9, w * 0.09)}px ui-sans-serif, system-ui, sans-serif`
-    const lines = wrapText(ctx, entry.name, w * 0.85, 4)
+    ctx.font = `bold ${Math.max(9, w * 0.09)}px ${SANS}`
+    const lines = wrapText(ctx, entry.name, w * 0.85, ctx.font).slice(0, 4)
     const lineH = Math.max(11, w * 0.11)
     const startY = y + h / 2 - (lines.length - 1) * lineH / 2
     lines.forEach((line, i) => ctx.fillText(line, x + w / 2, startY + i * lineH))
@@ -144,7 +95,7 @@ function drawCard(ctx, img, entry, x, y, w, h, showBadges = true) {
   ctx.restore()
   ctx.strokeStyle = 'rgba(255,255,255,0.25)'
   ctx.lineWidth = 1
-  roundRect(ctx, x, y, w, h, Math.max(4, w * 0.06))
+  roundRect(ctx, x, y, w, h, Math.max(3, w * 0.05))
   ctx.stroke()
 
   if (!showBadges) return
@@ -156,17 +107,17 @@ function drawCard(ctx, img, entry, x, y, w, h, showBadges = true) {
   ctx.fillStyle = 'rgba(15,15,20,0.85)'
   ctx.fill()
   ctx.fillStyle = '#FFFFFF'
-  ctx.font = `bold ${Math.max(9, pipR)}px ui-sans-serif, system-ui, sans-serif`
+  ctx.font = `bold ${Math.max(9, pipR)}px ${SANS}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(String(entry.cost ?? '?'), x + pipR + 4, y + pipR + 5)
 
   // Quantity badge (top-right)
   const badgeText = `${entry.qty}x`
-  ctx.font = `bold ${Math.max(9, w * 0.1)}px ui-sans-serif, system-ui, sans-serif`
+  ctx.font = `bold ${Math.max(9, w * 0.1)}px ${SANS}`
   const badgeW = ctx.measureText(badgeText).width + w * 0.1
   const badgeH = Math.max(16, w * 0.16)
-  roundRect(ctx, x + w - badgeW - 4, y + 4, badgeW, badgeH, 4)
+  roundRect(ctx, x + w - badgeW - 4, y + 4, badgeW, badgeH, 3)
   ctx.fillStyle = 'rgba(15,15,20,0.85)'
   ctx.fill()
   ctx.fillStyle = '#FFFFFF'
@@ -178,113 +129,87 @@ function drawCard(ctx, img, entry, x, y, w, h, showBadges = true) {
 // entries: [{ fullName, name, cost, type, color, qty, imageUrl, inkwell }] — the
 // Coconut card's linked base card stays in this list like any other card (it's
 // still part of the 60, at its real cost and quantity); the featured artwork
-// above the grid is a separate, badge-free "built around this" header, not a
-// stand-in for that card's normal grid slot.
-export async function generateCoconutDeckShareImage({ deckName, coconutName, coconutImageUrl, inks, entries }) {
+// is a separate, badge-free "built around this" image, not a stand-in for
+// that card's normal grid slot.
+export async function generateCoconutDeckShareImage({ deckName, coconutName, coconutImageUrl, entries, video }) {
   const sorted = [...entries].sort((a, b) => (a.cost - b.cost) || a.fullName.localeCompare(b.fullName))
 
   let totalCards = 0
   let uninkable = 0
   const typeCounts = {}
-  const curveAll = Object.fromEntries(CURVE_BUCKETS.map(b => [b, 0]))
+  const curve = Object.fromEntries(CURVE_BUCKETS.map(b => [b, 0]))
   for (const e of sorted) {
     totalCards += e.qty
     typeCounts[e.type] = (typeCounts[e.type] ?? 0) + e.qty
     if (e.inkwell === false) uninkable += e.qty
-    curveAll[costBucket(e.cost)] += e.qty
+    curve[costBucket(e.cost)] += e.qty
   }
-
-  const [coconutImg, ...cardImages] = await Promise.all([
-    loadImage(coconutImageUrl),
-    ...sorted.map(e => loadImage(e.imageUrl)),
-  ])
-
-  const DPR = 2
-  const W = 1080
-  const PAD = 44
-  const FOOTER_H = 36
-
-  // Header height is fixed content (title, subtitle, stats, mini curve); the
-  // grid below it is sized to the deck's actual card count rather than a
-  // worst-case, so a half-built deck doesn't render with a huge empty gap —
-  // canvas height is the header + that grid + footer, not a fixed portrait
-  // constant. A finished ~60-card deck naturally lands close to portrait.
-  const headerTop = PAD + 34
-  const statsY = headerTop + 26 + 40
-  const curveY = statsY + 34
-  const dividerY = curveY + 56 + 16
-  const gridTop = dividerY + 20
-
-  const gridW = W - PAD * 2
-  const cols = 8
-  const gap = 8
-  const cellW = (gridW - gap * (cols - 1)) / cols
-  const cellH = cellW * 1.4
-  const cellStepX = cellW + gap
-  const cellStepY = cellH + gap
-
-  const totalCells = sorted.length + 4 // featured Coconut art reserves an extra 2x2 block
-  const rows = Math.ceil(totalCells / cols)
-  const gridH = rows * cellH + (rows - 1) * gap
-
-  const H = gridTop + gridH + 24 + FOOTER_H
-
-  const canvas = document.createElement('canvas')
-  canvas.width = W * DPR
-  canvas.height = H * DPR
-  canvas.style.width = `${W}px`
-  canvas.style.height = `${H}px`
-  const ctx = canvas.getContext('2d')
-  ctx.scale(DPR, DPR)
-
-  drawBackground(ctx, W, H, inks)
-
-  // ── Header ──────────────────────────────────────────────────────────────
-  ctx.textAlign = 'left'
-  ctx.font = 'bold 34px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = '#FFFFFF'
-  ctx.fillText(clip(deckName, 26), PAD, headerTop)
-
-  ctx.font = '15px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = 'rgba(255,255,255,0.75)'
-  ctx.fillText(`[Format Coconut] · Built around ${clip(coconutName, 30)}`, PAD, headerTop + 26)
-
   const statOrder = ['Character', 'Action', 'Song', 'Item', 'Location']
   const stats = [['Cards', totalCards], ...statOrder.filter(t => typeCounts[t]).map(t => [`${t}${typeCounts[t] === 1 ? '' : 's'}`, typeCounts[t]])]
   if (uninkable) stats.push(['Uninkable', uninkable])
-  const chipW = (W - PAD * 2) / stats.length
-  stats.forEach(([label, value], i) => drawStatChip(ctx, PAD + i * chipW, statsY, chipW, value, label))
 
-  drawMiniCurve(ctx, PAD, curveY, W - PAD * 2, 56, curveAll)
+  const [{ mark }, coconutImg, ...cardImages] = await Promise.all([
+    loadAssets([]),
+    loadImage(coconutImageUrl),
+    ...sorted.map(e => loadImage(e.imageUrl)),
+  ])
+  const header = { mark, title: 'COCONUT DECK', name: deckName, line: `[Format Coconut] · Built around ${coconutName}` }
+  const footer = { note: 'Deck built in the InkbornForge Coconut Deck Builder', url: 'inkbornforge.com/coconut-deck-builder' }
+  const gap = 8
+  const TOP = 184
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)'
-  ctx.beginPath()
-  ctx.moveTo(PAD, dividerY)
-  ctx.lineTo(W - PAD, dividerY)
-  ctx.stroke()
+  if (video) {
+    const { W, H, dpr, cam } = videoFrame(1920, 0)
+    const { canvas, ctx } = newCanvas(W, H, dpr)
+    drawHeader(ctx, W, PAD, header)
+    const bottom = H - cam.h - 24
+    const colW = W * 0.3
+    const curveH = 90
+    const artH = bottom - TOP - curveH - 24
+    const artW = artH / CARD
+    drawCard(ctx, coconutImg, { name: coconutName, color: null }, PAD, TOP, artW, artH, false)
+    const step = Math.min(72, artH / stats.length)
+    stats.forEach(([label, value], i) => drawStat(ctx, PAD + artW + 24, TOP + 36 + i * step, value, label))
+    drawCurve(ctx, PAD, bottom - curveH, colW - PAD, curveH, curve)
 
-  // ── Card grid ───────────────────────────────────────────────────────────
-
-  drawCard(ctx, coconutImg, { name: coconutName, color: null }, PAD, gridTop, cellW * 2 + gap, cellH * 2 + gap, false)
-
-  let idx = 0
-  for (let cellIdx = 0; cellIdx < rows * cols && idx < sorted.length; cellIdx++) {
-    const col = cellIdx % cols
-    const row = Math.floor(cellIdx / cols)
-    if (row < 2 && col < 2) continue // reserved for the featured Coconut art
-    const entry = sorted[idx]
-    const img = cardImages[idx]
-    const x = PAD + col * cellStepX
-    const y = gridTop + row * cellStepY
-    drawCard(ctx, img, entry, x, y, cellW, cellH)
-    idx++
+    const areaX = PAD + colW
+    const areaW = W - PAD - areaX
+    const fit = gridFit(sorted.length, areaW, bottom - TOP, gap, CARD)
+    const gx = areaX + (areaW - fit.cols * (fit.cellW + gap) + gap) / 2 // centered when height limits the cells
+    sorted.forEach((entry, i) => {
+      const x = gx + (i % fit.cols) * (fit.cellW + gap)
+      const y = TOP + Math.floor(i / fit.cols) * (fit.cellH + gap)
+      drawCard(ctx, cardImages[i], entry, x, y, fit.cellW, fit.cellH)
+    })
+    drawFooter(ctx, W, H, PAD, { ...footer, cam })
+    return canvas
   }
 
-  // ── Footer ──────────────────────────────────────────────────────────────
-  ctx.font = '13px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = 'rgba(255,255,255,0.6)'
-  ctx.textAlign = 'center'
-  ctx.fillText('inkbornforge.com', W / 2, H - FOOTER_H / 2 + 4)
+  const W = 1200
+  const statsY = TOP + 40
+  const curveY = statsY + 44
+  const gridTop = curveY + 90 + 24
+  const cols = 8
+  const cellW = (W - PAD * 2 - gap * (cols - 1)) / cols
+  const cellH = cellW * CARD
+  const rows = Math.ceil((sorted.length + 4) / cols) // the featured art takes a 2x2 block
+  const H = gridTop + rows * (cellH + gap) - gap + 110
+  const { canvas, ctx } = newCanvas(W, H, DPR)
+  drawHeader(ctx, W, PAD, header)
 
+  const chipW = (W - PAD * 2) / stats.length
+  stats.forEach(([label, value], i) => drawStat(ctx, PAD + i * chipW, statsY, value, label))
+  drawCurve(ctx, PAD, curveY, W - PAD * 2, 90, curve)
+
+  drawCard(ctx, coconutImg, { name: coconutName, color: null }, PAD, gridTop, cellW * 2 + gap, cellH * 2 + gap, false)
+  let idx = 0
+  for (let cell = 0; idx < sorted.length; cell++) {
+    const col = cell % cols
+    const row = Math.floor(cell / cols)
+    if (row < 2 && col < 2) continue // the featured art
+    drawCard(ctx, cardImages[idx], sorted[idx], PAD + col * (cellW + gap), gridTop + row * (cellH + gap), cellW, cellH)
+    idx++
+  }
+  drawFooter(ctx, W, H, PAD, footer)
   return canvas
 }

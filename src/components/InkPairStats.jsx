@@ -59,7 +59,7 @@ export function InkMetaTab({ allMatches, structure, standings }) {
           {players} players with a submitted deck. Win % counts reported matches against other pairs (draws as half), mirrors excluded.
         </p>
       </div>
-      <ShareDownloadLink render={() => renderMetaShareImage({ matches: allMatches, structure, standings })} filename={shareFilename(structure, 'metagame')} />
+      <ShareDownloadLink render={(video) => renderMetaShareImage({ matches: allMatches, structure, standings, video })} filename={shareFilename(structure, 'metagame')} />
     </div>
   )
 }
@@ -128,7 +128,7 @@ export function InkMatrixTab({ allMatches, structure, standings }) {
       <p className="text-xs text-gray-500">
         Win % and Record are each pair's matches against other pairs (mirrors left out); Best is its best standings rank. Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
       </p>
-      <ShareDownloadLink render={() => renderMatchupShareImage({ matches: allMatches, structure, standings })} filename={shareFilename(structure, 'matchups')} />
+      <ShareDownloadLink render={(video) => renderMatchupShareImage({ matches: allMatches, structure, standings, video })} filename={shareFilename(structure, 'matchups')} />
     </div>
   )
 }
@@ -196,7 +196,7 @@ export function BestOfTab({ standings, inksById, allMatches, structure, standing
           The highest-standing player on each ink pair wins its Best Of promo; players tied on points are separated by RPH's tiebreakers. {standingsLabel}.
         </p>
       </div>
-      <ShareDownloadLink render={() => renderBestOfShareImage({ matches: allMatches, structure, standings, standingsLabel })} filename={shareFilename(structure, 'best-of')} />
+      <ShareDownloadLink render={(video) => renderBestOfShareImage({ matches: allMatches, structure, standings, standingsLabel, video })} filename={shareFilename(structure, 'best-of')} />
     </div>
   )
 }

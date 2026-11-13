@@ -125,7 +125,7 @@ function RoutedContent() {
         <Route path="/deck-doctor" element={<SupporterRoute><DeckDoctorPage /></SupporterRoute>} />
         <Route path="/deck-lab" element={<SupporterRoute><DeckLabPage /></SupporterRoute>} />
         <Route path="/field-breakdown" element={<SupporterRoute><FieldBreakdownPage /></SupporterRoute>} />
-        <Route path="/tournament-lookup" element={<SupporterRoute><TournamentLookupPage /></SupporterRoute>} />
+        <Route path="/tournament-lookup" element={<TournamentLookupPage />} />
         <Route path="/results" element={<ResultsPage />} />
         <Route path="/results/events/:eventId" element={<ResultsEventPage />} />
         <Route path="/results/players/:playerId" element={<ResultsPlayerPage />} />

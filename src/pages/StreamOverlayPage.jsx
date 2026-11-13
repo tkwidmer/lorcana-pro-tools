@@ -4,6 +4,7 @@ import { buildCardIndex } from '../lib/cardAnalysis'
 import { parseDeckList } from '../lib/parseDeckList'
 import { VALID_INKS } from '../lib/inkColors'
 import { fetchEventDetails, getTournamentStructure, extractEventId, fetchAllStandings, fetchAllRoundMatches, fetchRoundMatches } from '../lib/tournamentApi'
+import { inkPairCountLines } from '../lib/tournamentInks'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import {
   listMyTables, createTable, updateTable, updateWhileLinked, deleteTable, adjustTable, subscribeToTable, uploadLogo, resetLore,
@@ -109,6 +110,11 @@ export function StreamOverlayPage() {
   // on the row for the caster notes whenever they change.
   const rphEventId = row?.rph_event_id ?? null
   const lastResults = useRef(null)
+  // Read by the poll without restarting it on every keystroke.
+  const metaTextRef = useRef('')
+  const metaText = row?.meta_text ?? ''
+  useEffect(() => { metaTextRef.current = metaText }, [metaText])
+  const firstRoundMeta = useRef(null)
   useEffect(() => {
     if (!rowId || !rphEventId) return
     let cancelled = false
@@ -131,6 +137,18 @@ export function StreamOverlayPage() {
           const key = JSON.stringify(results)
           if (key !== lastResults.current) { lastResults.current = key; patch.results = results }
         }
+        // A blank Metagame card fills from round 1's pairings (the starting
+        // field) on events that show players' deck inks; typed text is never
+        // replaced, and clearing it refills on the next poll.
+        // Round 1 is fetched once per link (a failed fetch retries next poll).
+        const firstRoundId = details.tournament_phases?.[0]?.rounds?.[0]?.id
+        if (!metaTextRef.current.trim() && structure.activeRoundId && firstRoundId) {
+          if (!firstRoundMeta.current) {
+            firstRoundMeta.current = await fetchRoundMatches(rphEventId, firstRoundId).then(inkPairCountLines, () => null)
+            if (cancelled) return
+          }
+          if (firstRoundMeta.current?.length > 0) patch.meta_text = firstRoundMeta.current.join('\n')
+        }
         if (Object.keys(patch).length > 0) {
           setTables(ts => ts.map(t => (t.id === rowId ? { ...t, ...patch } : t)))
           updateWhileLinked(rowId, rphEventId, patch).then(writeLog.ok, e => { setError(e.message); writeLog.fail(e) })
@@ -146,7 +164,7 @@ export function StreamOverlayPage() {
     // round's clock, until the operator switched back to this tab.
     const ticker = new Worker(URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${RPH_POLL_MS})`], { type: 'text/javascript' })))
     ticker.onmessage = poll
-    return () => { cancelled = true; ticker.terminate(); setRphStructure(null); lastResults.current = null }
+    return () => { cancelled = true; ticker.terminate(); setRphStructure(null); lastResults.current = null; firstRoundMeta.current = null }
   }, [rowId, rphEventId])
 
   // Operator hotkeys (HOTKEYS in streamOverlay.js): scores go through the
@@ -233,7 +251,7 @@ export function StreamOverlayPage() {
       // The operator's own event name wins; RPH's only fills a blank one.
       eventName: row.event_name || (rphStructure.eventName ?? ''),
       round: activeRoundLabel(rphStructure),
-      players: pairing.players.map(p => ({ name: p.name, record: p.record })),
+      players: pairing.players.map(p => ({ name: p.name, record: p.record, inks: p.inks })),
       timer: timerFromRph(rphStructure),
       rphEventId,
       playerCard,
@@ -483,6 +501,7 @@ export function StreamOverlayPage() {
               <li>It copies one line per ink pair, like <code className="font-mono text-xs">Emerald/Steel 8</code>. Paste them below. Re-run it after the decklist deadline to catch late submissions.</li>
             </ol>
             <p className="mt-1 text-xs text-gray-500">Both run in your own browser with your organizer login; nothing is sent to InkbornForge. Hand-collected lists work too: Field Breakdown's "Copy for Stream Overlay" gives the same lines.</p>
+            <p className="mt-1 text-xs text-gray-500">A linked event that shows players' deck inks on its pairings fills a blank box from round 1 by itself; clear the box to refill it.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-[1fr_200px]">
             <Textarea value={row.meta_text} onChange={e => setField('meta_text', e.target.value)} rows={6} className="w-full font-mono text-xs" placeholder={'Emerald/Steel Midrange 7\nAmber/Sapphire Detectives 5\nAmber/Amethyst Midrange 4\n…'} />

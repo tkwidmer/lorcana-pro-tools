@@ -8,6 +8,7 @@ import { resolveColors } from './inkColors'
 import { bracketRoundLabel } from './bracket'
 import { resolveInkName } from './inkColors'
 import { ordinal } from './resultsArchive'
+import { inksOfRelationship } from './tournamentInks'
 
 export const OVERLAY_WIDTH = 1920
 export const OVERLAY_HEIGHT = 1080
@@ -257,7 +258,7 @@ export function activeRoundLabel(structure) {
 // feature match.
 export function currentRoundPairings(matches, standings) {
   const recordOf = id => standings.find(e => String(e.player.id) === String(id))?.record ?? ''
-  const side = p => ({ id: p.player.id, name: p.user_event_status?.best_identifier ?? p.player.best_identifier ?? '', record: recordOf(p.player.id) })
+  const side = p => ({ id: p.player.id, name: p.user_event_status?.best_identifier ?? p.player.best_identifier ?? '', record: recordOf(p.player.id), inks: inksOfRelationship(p) ?? [] })
   return matches
     .filter(m => !m.match_is_bye && (m.player_match_relationships ?? []).length === 2)
     .sort((a, b) => (a.table_number ?? 0) - (b.table_number ?? 0))
@@ -270,7 +271,8 @@ export function currentRoundPairings(matches, standings) {
 // A feature match picked in the panel: names, records, the round
 // clock and the event link come from RPH; lore, game wins and decklists
 // start fresh (the old pair's lists would be wrong) and no deck is shown;
-// inks are left alone (RPH doesn't know decks).
+// inks are the players' submitted decks' inks where the event shows them
+// (deck_descriptor_label), else cleared like the decklists.
 export function featureMatchPatch({ eventName, round, players, timer, rphEventId, playerCard = null }) {
   return {
     ...(timer ? timerPatch(timer) : {}),
@@ -279,8 +281,8 @@ export function featureMatchPatch({ eventName, round, players, timer, rphEventId
     card_shown: false,
     event_name: eventName,
     round,
-    p1_name: players[0].name, p1_record: players[0].record, p1_lore: 0, p1_game_wins: 0, p1_decklist: '', p1_featured: '', p1_featured_at: null,
-    p2_name: players[1].name, p2_record: players[1].record, p2_lore: 0, p2_game_wins: 0, p2_decklist: '', p2_featured: '', p2_featured_at: null,
+    p1_name: players[0].name, p1_record: players[0].record, p1_inks: players[0].inks ?? [], p1_lore: 0, p1_game_wins: 0, p1_decklist: '', p1_featured: '', p1_featured_at: null,
+    p2_name: players[1].name, p2_record: players[1].record, p2_inks: players[1].inks ?? [], p2_lore: 0, p2_game_wins: 0, p2_decklist: '', p2_featured: '', p2_featured_at: null,
     deck_shown: 0,
   }
 }

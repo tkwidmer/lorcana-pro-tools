@@ -79,6 +79,14 @@ export function inkPairMeta(matches) {
     .sort((x, y) => y.players - x.players || x.key.localeCompare(y.key))
 }
 
+const cap = (s) => s[0].toUpperCase() + s.slice(1)
+
+// The field as "Emerald/Steel 8" lines, the Stream Overlay Metagame card's
+// input (the same lines Field Breakdown and the carde.io bookmarklet give).
+export function inkPairCountLines(matches) {
+  return inkPairMeta(matches).map((r) => `${r.inks.map(cap).join('/')} ${r.players}`)
+}
+
 // Pair-vs-pair records: cells.get(`${row}|${col}`) is the row pair's record
 // against the column pair. The diagonal counts mirror matches.
 export function inkPairMatrix(matches) {

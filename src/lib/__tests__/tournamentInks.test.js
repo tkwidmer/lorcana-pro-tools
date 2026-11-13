@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix } from '../tournamentInks'
+import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines } from '../tournamentInks'
+import { metaSlices } from '../streamOverlay'
 
 const rel = (id, inks, order = 1) => ({
   player_order: order,
@@ -38,6 +39,12 @@ describe('tournamentInks', () => {
     expect(ae.share).toBeCloseTo(66.67, 1)
     expect(ae.winRate).toBe(50)
     expect(es).toMatchObject({ key: 'emerald/steel', players: 1, wins: 1, losses: 1, draws: 1 })
+  })
+
+  it('writes the field as Metagame card lines the overlay parses back', () => {
+    expect(inkPairCountLines(matches)).toEqual(['Amber/Emerald 2', 'Emerald/Steel 1'])
+    expect(metaSlices(inkPairCountLines(matches).join('\n'), null).slices.map((s) => [s.inks, s.count]))
+      .toEqual([[['amber', 'emerald'], 2], [['emerald', 'steel'], 1]])
   })
 
   it('builds the pair-vs-pair matrix from both sides, mirrors on the diagonal', () => {

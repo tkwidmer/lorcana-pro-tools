@@ -16,7 +16,6 @@ export const SUPPORTER_PATHS = new Set([
   '/practice-plan',
   '/deck-doctor',
   '/deck-lab',
-  '/tournament-lookup',
   '/field-breakdown',
   '/meta-synthesis',
   '/library',

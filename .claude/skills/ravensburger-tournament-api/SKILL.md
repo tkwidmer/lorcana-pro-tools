@@ -1,6 +1,6 @@
 ---
 name: ravensburger-tournament-api
-description: The undocumented Ravensburger Play Hub API, from this repo's two clients. Read before editing tournamentApi.js, api/tournament.ts, api/_lib/discordTournamentApi.ts, Tournament Lookup, Practice Plan or the Discord /tournament commands; match data needs a second host.
+description: The undocumented Ravensburger Play Hub API, from this repo's two clients. Read before editing tournamentApi.js, tournamentInks.js, api/tournament.ts, api/_lib/discordTournamentApi.ts, Tournament Lookup, Practice Plan or the Discord /tournament commands, or before reading player inks (deck descriptors, on matches only) or decklists (401 so far); match data needs a second host.
 ---
 
 # Ravensburger Play Hub Tournament API
@@ -63,11 +63,10 @@ IDs share one space across games, so an event ID found elsewhere (e.g. on
 zero.gg, a Riftbound results site built on the same API) resolves here.
 Our discovery and store-events calls filter with `game_slug=disney-lorcana`
 (`game=1` also works). Riftbound's per-player Legend arrives as
-`user_event_status.deck_defining_card`; it is `null` for every Lorcana row,
-and the only decklist read
-(`/api/magic-events/{id}/decklists_by_user_event_status/`) is 401 without
-a session even when `settings.decklist_status` is `PUBLISHED`. Play Hub
-still carries no Lorcana decks for us.
+`user_event_status.deck_defining_card`; it is `null` for every Lorcana row.
+Lorcana's per-player deck signal is the **deck descriptor** (its inks, see
+"Ink pairs on matches"); full decklists are still 401 for us (see
+"Decklists").
 
 ## Known endpoint shapes (routed by `?type=` on `/api/tournament`)
 
@@ -124,7 +123,48 @@ None is wired up yet; use them before building the same thing by hand.
 
 ## Ink pairs on matches
 
-Since Nov 2026, matches on events that show deck descriptors carry each player's deck inks as `player_match_relationships[].user_event_status.deck_descriptor_label.parts[0].value` ("amethyst,ruby"), public on both hosts. Standings don't. Read by `src/lib/tournamentInks.js` and the import's `playerInksFromMatches()`; see `docs/agents/tournaments.md`.
+Since Nov 2026, matches on events that show deck descriptors carry each player's deck inks, public on both hosts, no session. This is the **only** place a player's inks come from. Shape (DLC London 1254364, verified live):
+
+```json
+"user_event_status": {
+  "deck_defining_card": null,
+  "deck_descriptor_label": {
+    "label": "Emerald, Steel",
+    "parts": [{
+      "kind": "descriptor", "key": "", "value": "emerald,steel",
+      "display": "Emerald, Steel", "symbol_key": null,
+      "symbols": [{ "symbol_key": "emerald", "name": "Emerald",
+                    "image_url": "<signed GCS URL, 24h>",
+                    "fallback_text": "E", "hex_code": "#50C878" }, ...]
+    }]
+  }
+}
+```
+
+- Path: `matches/paginated` → `results[].player_match_relationships[].user_event_status.deck_descriptor_label.parts[0].value`. We read `value` (comma-joined, lowercase) through `resolveColors()`.
+- Standings and registrations **do not** carry it. Only matches do, so an event shows inks once round 1 pairings exist.
+- Gate: the event's `tournament_phases[].effective_show_deck_descriptor_to_opponents`. London is `true` on every phase; DLC Bangkok 1233041 is `false`, and its matches have no label.
+- No label on a relationship = the player submitted no deck (53 slots in London).
+- **Not** the inks: `full_profile_picture_url` (`.../profile/EmeraldRuby.webp`) is the player's chosen avatar, and `deck_defining_card` is Riftbound's Legend (`null` for Lorcana).
+- `api/tournament.ts` strips `symbols` (signed image URLs, most of the payload) like it strips the profile images.
+
+Read by `src/lib/tournamentInks.js` and the import's `playerInksFromMatches()`; see `docs/agents/tournaments.md`.
+
+## Decklists (401 for us as of Nov 2026)
+
+Full decklists exist on Play Hub but no unauthenticated read has worked. What the API exposes (event `GET {RAVEN_BASE}/events/{id}/`, public):
+
+- `settings.decklist_status`: `DecklistStatus` enum, seen `SUBMISSIONS_OPEN`, `SUBMISSIONS_CLOSED`, `PUBLISHED`. Also `settings.decklists_on_spicerack`, `allow_late_decklist_submissions`, `auto_close_decklist_submission_timestamp`.
+- Event lifecycle (`EventLifecycleStatus` in the bundle) has `EVENT_FINISHED`, `DECKLISTS_PUBLISHING`, `DECKLISTS_PUBLISHED`.
+- Per phase: `effective_show_decklists_to_opponents`, beside the descriptor flag. DLC London: Phase 1 (Day 1 Swiss) `false`, Phase 2 (Day 2 Swiss) and Phase 3 (top cut) `true`. "To opponents" suggests a signed-in opponent sees the list, not the public; unconfirmed.
+
+Decklist endpoints in the Play Hub bundle, all **401 unauthenticated on both hosts** for London on 2026-11-13 (Day 1, `SUBMISSIONS_CLOSED`):
+
+- `/api/magic-events/{id}/decklists_by_user_event_status/` (also 401 on earlier events with `decklist_status = PUBLISHED`)
+- `/api/v2/deckbuilder/deck-submissions/events/{event_id}/`, `.../all/`, `.../export/`, `.../export/csv/`, `.../export/preview/`
+- Not probed: `/api/magic-events/{id}/publish_decklists_with_final_standings/` (name suggests an organizer action, not a read).
+
+Day 2 test: once a phase with `effective_show_decklists_to_opponents = true` is running, or `decklist_status` changes, re-probe each endpoint without auth, on both hosts. Build only on an endpoint that answers 200. If all stay 401, capture a HAR while viewing an opponent's or published list and look at the request the page makes. A HAR exported from a signed-in Play Hub session holds the user's `Authorization: Token`, which the page's Next server action (`POST /events/{id}`, header `next-action`) returns in plain text. Never commit one.
 
 ## Fields already in our payloads that nothing reads yet
 
@@ -135,7 +175,8 @@ Since Nov 2026, matches on events that show deck descriptors carry each player's
 - Event: `timer_end_datetime`, `timer_is_running`,
   `timer_paused_at_datetime` (the live round clock),
   `day_2_start_datetime`, `is_test_event` (discovery excludes
-  Ravensburger's fixtures by store name instead), `settings.decklist_status`.
+  Ravensburger's fixtures by store name instead), `settings.decklist_status`
+  (see "Decklists").
 - Standings: `user_event_status.registration_status` (`COMPLETE`,
   `ELIMINATED`, drops). Registrations: `final_place_in_standings`,
   `matches_won/lost/drawn`, `team_name`.

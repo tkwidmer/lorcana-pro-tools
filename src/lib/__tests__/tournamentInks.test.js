@@ -64,4 +64,15 @@ describe('tournamentInks', () => {
     expect(rows[1]).toMatchObject({ key: 'emerald/steel', entry: { rank: 4 } })
     expect(rows.slice(2).every((r) => r.entry === null)).toBe(true)
   })
+
+  it('lists the pair\'s other players on the leader\'s points as tied, in standings order', () => {
+    const inksById = new Map([['1', ['amber', 'emerald']], ['3', ['amber', 'emerald']], ['5', ['amber', 'emerald']], ['2', ['emerald', 'steel']]])
+    const standing = (id, rank, match_points) => ({ rank, match_points, player: { id } })
+    const rows = bestOfLeaders([standing(5, 9, 12), standing(3, 4, 15), standing(1, 2, 15), standing(2, 1, 15)], inksById)
+    const ae = rows.find((r) => r.key === 'amber/emerald')
+    expect(ae.entry.rank).toBe(2)
+    expect(ae.tied.map((e) => e.rank)).toEqual([4])
+    expect(rows.find((r) => r.key === 'emerald/steel').tied).toEqual([])
+    expect(rows.find((r) => r.entry === null).tied).toEqual([])
+  })
 })

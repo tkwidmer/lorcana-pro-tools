@@ -5,6 +5,8 @@ import {
   copyShareImageToClipboard,
   canNativeShareImage,
   nativeShareImage,
+  frameForVideo,
+  videoFilename,
 } from '../lib/tournamentShareImage'
 
 // Modal for sharing a canvas-rendered image (tournament result card, Coconut
@@ -49,6 +51,10 @@ export function ShareCardModal({ shareCard, onClose, title = 'Share card', altTe
     await downloadShareImage(shareCard.canvas, shareCard.filename)
   }
 
+  async function handleDownloadVideo() {
+    await downloadShareImage(frameForVideo(shareCard.canvas), videoFilename(shareCard.filename), 'image/png')
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
@@ -76,6 +82,9 @@ export function ShareCardModal({ shareCard, onClose, title = 'Share card', altTe
           </Button>
           <Button variant="quiet" size="sm" onClick={handleDownload}>
             Download JPG
+          </Button>
+          <Button variant="quiet" size="sm" onClick={handleDownloadVideo}>
+            16:9 for Video
           </Button>
         </div>
       </div>

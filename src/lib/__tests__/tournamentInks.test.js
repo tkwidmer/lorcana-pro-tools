@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines, bestOfLeaders, INK_PAIRS } from '../tournamentInks'
+import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines, bestOfLeaders, bestRankByPair, INK_PAIRS } from '../tournamentInks'
 import { metaSlices } from '../streamOverlay'
 
 const rel = (id, inks, order = 1) => ({
@@ -74,5 +74,8 @@ describe('tournamentInks', () => {
     expect(ae.tied.map((e) => e.rank)).toEqual([4])
     expect(rows.find((r) => r.key === 'emerald/steel').tied).toEqual([])
     expect(rows.find((r) => r.entry === null).tied).toEqual([])
+    expect(bestRankByPair([standing(5, 9, 12), standing(3, 4, 15), standing(1, 2, 15), standing(2, 1, 15)], inksById))
+      .toEqual(new Map([['emerald/steel', 1], ['amber/emerald', 2]]))
+    expect(bestRankByPair(null, inksById).size).toBe(0)
   })
 })

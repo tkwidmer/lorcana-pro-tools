@@ -127,3 +127,9 @@ export function bestOfLeaders(standings, inksById) {
     })
     .sort((x, y) => (x.entry?.rank ?? Infinity) - (y.entry?.rank ?? Infinity))
 }
+
+// Each pair's best standings rank (Metagame's "Best rank"), from the same
+// leaders as Best Of. Empty before any standings exist.
+export function bestRankByPair(standings, inksById) {
+  return new Map(bestOfLeaders(standings, inksById).filter((r) => r.entry).map((r) => [r.key, r.entry.rank]))
+}

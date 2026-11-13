@@ -1256,8 +1256,8 @@ export function TournamentLookupPage() {
       )}
 
       {/* Ink pair tabs (events that show players' deck inks on pairings) */}
-      {inksById.size > 0 && !player && activeTab === 'meta' && <InkMetaTab allMatches={allMatches} />}
-      {inksById.size > 0 && !player && activeTab === 'matrix' && <InkMatrixTab allMatches={allMatches} />}
+      {inksById.size > 0 && !player && activeTab === 'meta' && <InkMetaTab allMatches={allMatches} structure={structure} />}
+      {inksById.size > 0 && !player && activeTab === 'matrix' && <InkMatrixTab allMatches={allMatches} structure={structure} />}
 
       {/* Roster tab (pre-tournament — no standings yet) */}
       {rosterMode && roster && !player && activeTab === 'roster' && (

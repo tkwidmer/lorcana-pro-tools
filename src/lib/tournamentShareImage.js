@@ -261,8 +261,8 @@ function canvasToBlob(canvas, type, quality) {
   })
 }
 
-export async function downloadShareImage(canvas, filename = 'tournament-result.jpg') {
-  const blob = await canvasToBlob(canvas, 'image/jpeg', 0.95)
+export async function downloadShareImage(canvas, filename = 'tournament-result.jpg', type = 'image/jpeg') {
+  const blob = await canvasToBlob(canvas, type, 0.95)
   const url = URL.createObjectURL(blob)
   const a   = document.createElement('a')
   a.href     = url

@@ -53,7 +53,7 @@ export function LiveMajorsList({ events, renderAction, renderMeta }) {
 
 // Collapsed by default; the page fetches live majors on first open
 // (`useLiveMajors(open)`), so `events` is null until then.
-export function LiveMajorsDetails({ events, onOpen, className = '', children }) {
+export function LiveMajorsDetails({ events, onOpen, emptyLabel = 'No live or upcoming majors right now.', className = '', children }) {
   return (
     <details
       className={`border border-gray-200 rounded-lg bg-white ${className}`}
@@ -64,7 +64,7 @@ export function LiveMajorsDetails({ events, onOpen, className = '', children }) 
       </summary>
       <div className="px-4 pb-4 pt-2 border-t border-gray-100">
         {events === null && <p className="text-sm text-gray-500">Loading…</p>}
-        {events?.length === 0 && <p className="text-sm text-gray-500">No live or upcoming majors right now.</p>}
+        {events?.length === 0 && <p className="text-sm text-gray-500">{emptyLabel}</p>}
         {events?.length > 0 && children}
       </div>
     </details>

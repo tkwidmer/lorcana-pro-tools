@@ -158,11 +158,11 @@ Full decklists exist on Play Hub but no unauthenticated read has worked. What th
 - Event lifecycle (`EventLifecycleStatus` in the bundle) has `EVENT_FINISHED`, `DECKLISTS_PUBLISHING`, `DECKLISTS_PUBLISHED`.
 - Per phase: `effective_show_decklists_to_opponents`, beside the descriptor flag. DLC London: Phase 1 (Day 1 Swiss) `false`, Phase 2 (Day 2 Swiss) and Phase 3 (top cut) `true`. "To opponents" suggests a signed-in opponent sees the list, not the public; unconfirmed.
 
-Decklist endpoints in the Play Hub bundle, all **401 unauthenticated** on hydraproxy for London on 2026-11-13 (Day 1, `SUBMISSIONS_CLOSED`):
+Decklist endpoints in the Play Hub bundle, all **401 unauthenticated on both hosts** for London on 2026-11-13 (Day 1, `SUBMISSIONS_CLOSED`):
 
 - `/api/magic-events/{id}/decklists_by_user_event_status/` (also 401 on earlier events with `decklist_status = PUBLISHED`)
-- `/api/v2/deckbuilder/deck-submissions/events/{event_id}/`, `.../all/`, `.../export/preview/`
-- Not yet probed: `.../export/`, `.../export/csv/`, `/api/magic-events/{id}/publish_decklists_with_final_standings/` (name suggests an organizer action).
+- `/api/v2/deckbuilder/deck-submissions/events/{event_id}/`, `.../all/`, `.../export/`, `.../export/csv/`, `.../export/preview/`
+- Not probed: `/api/magic-events/{id}/publish_decklists_with_final_standings/` (name suggests an organizer action, not a read).
 
 Day 2 test: once a phase with `effective_show_decklists_to_opponents = true` is running, or `decklist_status` changes, re-probe each endpoint without auth, on both hosts. Build only on an endpoint that answers 200. If all stay 401, capture a HAR while viewing an opponent's or published list and look at the request the page makes. A HAR exported from a signed-in Play Hub session holds the user's `Authorization: Token`, which the page's Next server action (`POST /events/{id}`, header `next-action`) returns in plain text. Never commit one.
 

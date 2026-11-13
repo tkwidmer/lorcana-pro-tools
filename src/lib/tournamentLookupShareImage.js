@@ -32,15 +32,17 @@ export function shareFilename(structure, name) {
   return `${slug}-${name}.png`
 }
 
-// Subtitle shared by every image: format, players, how far the data runs.
-export function eventLine(structure) {
+// Subtitle shared by the images: format, players, how far the data runs.
+// Match data runs through the round in progress; Best Of, read from the
+// standings, passes its own `progress` ("Standings after Round 6").
+export function eventLine(structure, progress) {
   const round = structure.activePhaseType === 'RANKED_SINGLE_ELIMINATION'
     ? structure.activePhaseName
     : structure.activeRoundNumber ? `Round ${structure.activeRoundNumber}` : null
   return [
     structure.gameplayFormat,
     structure.startingPlayerCount ? `${structure.startingPlayerCount.toLocaleString('en-US')} players` : null,
-    round ? `Through ${round}` : null,
+    progress ?? (round ? `Through ${round}` : null),
   ].filter(Boolean).join(' · ')
 }
 
@@ -113,7 +115,7 @@ function fitText(ctx, str, maxWidth, font) {
 }
 
 // Brand lockup top-left; title, event name and the event line top-right.
-function drawHeader(ctx, w, pad, { mark, title, structure }) {
+function drawHeader(ctx, w, pad, { mark, title, structure, progress }) {
   if (mark) {
     ctx.save()
     roundRect(ctx, pad, 34, 52, 52, 3)
@@ -125,7 +127,7 @@ function drawHeader(ctx, w, pad, { mark, title, structure }) {
   text(ctx, title, w - pad, 76, { font: `700 56px ${DISPLAY}`, color: FORGE, align: 'right' })
   const name = fitText(ctx, structure.eventName.toUpperCase(), w - pad * 2 - 360, `600 28px ${DISPLAY}`)
   text(ctx, name, w - pad, 116, { font: `600 28px ${DISPLAY}`, align: 'right' })
-  text(ctx, eventLine(structure).toUpperCase(), w - pad, 148, { font: `500 20px ${DISPLAY}`, color: MUTED, align: 'right' })
+  text(ctx, eventLine(structure, progress).toUpperCase(), w - pad, 148, { font: `500 20px ${DISPLAY}`, color: MUTED, align: 'right' })
 }
 
 function drawFooter(ctx, w, h, pad, note) {
@@ -349,7 +351,7 @@ export async function renderBestOfShareImage({ matches, structure, standings, st
   const TOP = 236
   const H = TOP + rows.length * ROW + 110
   const { canvas, ctx } = newCanvas(W, H)
-  drawHeader(ctx, W, PAD, { mark, title: 'BEST OF', structure })
+  drawHeader(ctx, W, PAD, { mark, title: 'BEST OF', structure, progress: standingsLabel })
 
   const NAME_X = PAD + 100
   const COLS = { standing: W - PAD - 180, record: W - PAD - 10 }
@@ -373,6 +375,6 @@ export async function renderBestOfShareImage({ matches, structure, standings, st
     text(ctx, r.entry.match_record, COLS.record, mid, { font: `600 24px ${DISPLAY}`, color: FORGE, align: 'right', baseline: 'middle' })
   })
 
-  drawFooter(ctx, W, H, PAD, `Highest standing on each ink pair wins its Best Of promo · ${standingsLabel}`)
+  drawFooter(ctx, W, H, PAD, 'Highest standing on each ink pair wins its Best Of promo')
   return canvas
 }

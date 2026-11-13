@@ -157,6 +157,13 @@ describe('withPhasePoints', () => {
     expect(s.advancementRequirement).toEqual({ type: 'points', value: 18, nextPhaseName: 'Phase 2' })
   })
 
+  it("counts only Day 1's rounds toward Day 2", () => {
+    // After round 8 of 8 a 12-point player can't reach 18: Day 2's 7 rounds come after the cut.
+    const s = getTournamentStructure(withPhasePoints(london, templates))
+    expect(s.phaseRoundsRemaining).toBe(0)
+    expect(analyzeAdvancement({ match_points: 12 }, s).status).toBe('eliminated')
+  })
+
   it('has no Day 2 cut before Day 1 reaches its last round', () => {
     const early = { ...london, tournament_phases: [{ ...london.tournament_phases[0], rounds: london.tournament_phases[0].rounds.slice(0, 7) }, ...london.tournament_phases.slice(1)] }
     expect(getTournamentStructure(withPhasePoints(early, templates)).cuts[0].fromRoundId).toBeNull()
@@ -203,7 +210,7 @@ describe('formatTiebreakers', () => {
 describe('analyzeAdvancement - points-based', () => {
   const structure = {
     advancementRequirement: { type: 'points', value: 18, nextPhaseName: 'Day 2' },
-    swissRoundsRemaining: 2,
+    phaseRoundsRemaining: 2,
   }
 
   it('returns secured when already at threshold', () => {

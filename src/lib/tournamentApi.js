@@ -229,6 +229,12 @@ export function getTournamentStructure(eventDetails) {
   const isElimination = currentPhaseType === 'RANKED_SINGLE_ELIMINATION'
   const swissRoundsRemaining =
     currentPhaseType === 'SWISS' ? totalSwissRounds - currentRoundNumber : 0
+  // Rounds left in the current phase: its cut (a DLC's Day 2) comes before
+  // later Swiss phases, so their rounds can't count toward it.
+  const currentPhase = phases[currentPhaseIndex]
+  const phaseRoundsRemaining = currentPhase
+    ? currentPhase.number_of_rounds - (currentPhase.rounds.findIndex((r) => r.id === currentRoundId) + 1)
+    : 0
 
   // Determine what's needed to advance to the next phase
   const nextPhase =
@@ -281,6 +287,7 @@ export function getTournamentStructure(eventDetails) {
     cuts: phaseCuts(phases),
     isElimination,
     swissRoundsRemaining,
+    phaseRoundsRemaining,
     advancementRequirement,
     tiebreakers: eventDetails.tiebreakers ?? [],
     eventName: eventDetails.name,
@@ -441,11 +448,11 @@ export function formatTiebreakers(entry, tiebreakerOrder = []) {
 export function analyzeAdvancement(playerEntry, structure) {
   if (!playerEntry || structure?.advancementRequirement?.type !== 'points') return null
 
-  const { advancementRequirement, swissRoundsRemaining } = structure
+  const { advancementRequirement, phaseRoundsRemaining } = structure
   const { value, nextPhaseName } = advancementRequirement
   const type = 'points'
   const myPoints = playerEntry.match_points
-  const maxPossible = myPoints + swissRoundsRemaining * 3
+  const maxPossible = myPoints + phaseRoundsRemaining * 3
   if (myPoints >= value) {
     return { status: 'secured', nextPhaseName, value, type }
   }

@@ -118,9 +118,9 @@ export async function renderMatchupShareImage({ matches, structure, standings, v
   const LEFT = PAD + LABEL_W + GAP + FIELD_W + GAP + (BEST_W && BEST_W + GAP)
   const HEAD_TOP = 196
   const TOP = HEAD_TOP + 96
-  const { W, H, ROW, dpr, cam } = layout({ video, w: Math.max(1400, LEFT + PAD + pairs.length * (96 + GAP)), top: TOP, bottom: 100, n: pairs.length, row: 74, gap: GAP })
-  // A video frame is wider than the matrix needs: the cells take the slack.
-  const CELL = video ? (W - LEFT - PAD) / pairs.length - GAP : 96
+  const { W, H, ROW, dpr, cam } = layout({ video, w: Math.max(1400, LEFT + PAD + pairs.length * (96 + GAP)), top: TOP, bottom: 100, n: pairs.length, row: 74, gap: GAP, maxRow: 2 })
+  // The frame can be wider than the matrix needs: the cells take the slack.
+  const CELL = (W - LEFT - PAD) / pairs.length - GAP
   const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, { mark, title: 'MATCHUPS', structure })
 
@@ -202,7 +202,7 @@ export async function renderTeamsShareImage({ rows, structure, video }) {
   const PAD = 56
   const GAP = 12
   const TOP = 236
-  const { W, H, ROW, dpr, cam } = layout({ video, w: 1200, top: TOP, bottom: 100, n: rows.length, row: 128, gap: GAP })
+  const { W, H, ROW, dpr, cam } = layout({ video, w: 1200, top: TOP, bottom: 100, n: rows.length, row: 128, gap: GAP, maxRow: 1.6 })
   const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, { mark, title: 'TEAMS', structure })
 
@@ -253,7 +253,7 @@ export async function renderTeamsShareImage({ rows, structure, video }) {
     text(ctx, `of ${r.rosterSize}${cut ? ` · ${r.summary.inCut} in top ${cut}` : ''}`, COLS.members, mid + 28, { font: `400 18px ${SANS}`, color: MUTED, align: 'right', baseline: 'middle' })
   })
 
-  drawFooter(ctx, W, H, PAD, 'Ranked by each team\'s best individual placement · record is every member in the event combined', cam)
+  drawFooter(ctx, W, H, PAD, 'Ranked by best individual placement · record is every member combined', cam)
   return canvas
 }
 

@@ -1,7 +1,7 @@
 // MetaSynthesisPage's summary (prose blocks + the Most Played Archetypes
-// table) as a share image in the InkbornForge brand. Social: one column.
-// Video: 16:9, prose left, the table right above the webcam corner.
-import { INK_2, PAPER, MUTED, FORGE, WIN, LOSS, DISPLAY, SANS, DPR, videoFrame, loadAssets, newCanvas, text, fitText, wrapText, drawHeader, drawFooter } from './shareBrand'
+// table) as a share image in the InkbornForge brand. Social (4:5): one
+// column. Video (16:9): prose left, the table right above the webcam corner.
+import { INK_2, PAPER, MUTED, FORGE, WIN, LOSS, DISPLAY, SANS, frame, loadAssets, newCanvas, text, fitText, wrapText, drawHeader, drawFooter } from './shareBrand'
 
 const PAD = 56
 const TOP = 200
@@ -49,21 +49,17 @@ export async function generateMetaSynthesisImage({ title, subtitle, blocks, topP
   const tableRows = (topPlayed ?? []).slice(0, 5)
   const mctx = document.createElement('canvas').getContext('2d')
 
-  let W, H, dpr, cam, body, textW
-  if (video) {
-    // Prose takes the left 60%; widening the frame only shortens it, so one
-    // re-wrap at the final width always fits.
-    const colW = (w) => w * 0.6 - PAD
-    ;({ W, H, dpr, cam } = videoFrame(1920, TOP + bodyLines(mctx, blocks, colW(1920)).height + 24))
-    textW = colW(W)
-    body = bodyLines(mctx, blocks, textW)
-  } else {
-    W = 1200
-    dpr = DPR
-    textW = W - PAD * 2
-    body = bodyLines(mctx, blocks, textW)
-    H = TOP + body.height + (tableRows.length ? 24 + 40 + tableRows.length * TABLE_ROW : 0) + 110
-  }
+  // Prose width follows the frame. The narrowest frame the prose fits in
+  // draws it largest; past the widest, the frame grows taller instead, and
+  // widening it only shortens the prose, so a re-wrap at its width fits.
+  const colW = (w) => (video ? w * 0.6 - PAD : w - PAD * 2)
+  const tableH = tableRows.length ? 24 + 40 + tableRows.length * TABLE_ROW : 0
+  const need = (w) => TOP + bodyLines(mctx, blocks, colW(w)).height + (video ? 24 : tableH + 110)
+  const maxW = video ? 1920 : 1200
+  let w = video ? 1400 : 960
+  while (w < maxW && frame(video, w, need(w)).W > w) w += 20
+  const { W, H, dpr, cam } = frame(video, w, need(w))
+  const body = bodyLines(mctx, blocks, colW(W))
 
   const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, { mark, title: title.toUpperCase(), name: subtitle })

@@ -26,6 +26,9 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs, Tab } from '../components/ui/Tabs'
+import { InkIcons } from '../components/InkIcons'
+import { InkMetaTab, InkMatrixTab } from '../components/InkPairStats'
+import { playerInks, inksOfRelationship } from '../lib/tournamentInks'
 
 const FAVORITES_KEY = 'lorcana_tournament_favorites'
 const RECENTS_KEY = 'lorcana_tournament_recents'
@@ -133,7 +136,7 @@ function pointsAsRecord(points, totalRounds) {
 
 // Shared by the Favorites and Team tabs — a flat roster of standings entries
 // with the same favorite toggle, team mark and click-through as the main Standings table.
-function RosterTable({ entries, favorites, team, toggleFavorite, registrationMap, onSelectPlayer, emptyMessage, disableSelect = false }) {
+function RosterTable({ entries, favorites, team, toggleFavorite, registrationMap, onSelectPlayer, emptyMessage, inksById, disableSelect = false }) {
   if (entries.length === 0) {
     return <p className="text-sm text-gray-500 py-8 text-center px-4">{emptyMessage}</p>
   }
@@ -176,6 +179,7 @@ function RosterTable({ entries, favorites, team, toggleFavorite, registrationMap
                     <span className="font-medium text-gray-900">
                       {entry.user_event_status.best_identifier}
                     </span>
+                    <InkIcons colors={inksById?.get(String(entry.player.id))} size={16} />
                     {dropped && (
                       <span className="text-xs text-gray-400 font-normal">dropped</span>
                     )}
@@ -451,6 +455,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                                   <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
                                 )}
                                 {p1?.user_event_status.best_identifier ?? '—'}
+                                {p1 && <InkIcons colors={inksOfRelationship(p1)} size={16} className="ml-1" />}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
@@ -461,6 +466,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                             </td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`inline-flex items-center justify-end gap-1 font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
+                                {p2 && !isBye && <InkIcons colors={inksOfRelationship(p2)} size={16} className="mr-1" />}
                                 {p2?.user_event_status.best_identifier ?? '—'}
                                 {p2HasPedigree && (
                                   <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
@@ -502,6 +508,7 @@ export function TournamentLookupPage() {
   const [allMatches, setAllMatches] = useState(null)
   const [matchesLoading, setMatchesLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('standings')
+  const inksById = useMemo(() => playerInks(allMatches), [allMatches])
   const [favorites, setFavorites] = useState(getFavorites)
   // Deep-link support (?event=<id>&tab=<tab>&q=<search>) — a caster can
   // share the current URL and it reloads straight into the same event/tab/
@@ -622,7 +629,7 @@ export function TournamentLookupPage() {
   // restore below — otherwise a caster following someone else's link would
   // just get bounced to whatever tournament they personally looked at last.
   useEffect(() => {
-    const VALID_TABS = ['standings', 'matches', 'bracket', 'favorites', 'team', 'roster']
+    const VALID_TABS = ['standings', 'matches', 'bracket', 'meta', 'matrix', 'favorites', 'team', 'roster']
     if (initialParams.event) {
       const url = `https://tcg.ravensburgerplay.com/events/${initialParams.event}`
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1086,6 +1093,16 @@ export function TournamentLookupPage() {
               Bracket
             </Tab>
           )}
+          {inksById.size > 0 && (
+            <>
+              <Tab active={activeTab === 'meta'} onClick={() => setActiveTab('meta')}>
+                Metagame
+              </Tab>
+              <Tab active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')}>
+                Matchups
+              </Tab>
+            </>
+          )}
           <Tab active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')}>
             ★ Favorites
             {favoritedEntries.length > 0 && (
@@ -1186,6 +1203,7 @@ export function TournamentLookupPage() {
                               <span className="font-medium text-gray-900">
                                 {entry.user_event_status.best_identifier}
                               </span>
+                              <InkIcons colors={inksById.get(String(entry.player.id))} size={16} />
                               {dropped && (
                                 <span className="text-xs text-gray-400 font-normal">dropped</span>
                               )}
@@ -1237,6 +1255,10 @@ export function TournamentLookupPage() {
         </div>
       )}
 
+      {/* Ink pair tabs (events that show players' deck inks on pairings) */}
+      {inksById.size > 0 && !player && activeTab === 'meta' && <InkMetaTab allMatches={allMatches} />}
+      {inksById.size > 0 && !player && activeTab === 'matrix' && <InkMatrixTab allMatches={allMatches} />}
+
       {/* Roster tab (pre-tournament — no standings yet) */}
       {rosterMode && roster && !player && activeTab === 'roster' && (
         <div className="space-y-3">
@@ -1260,6 +1282,7 @@ export function TournamentLookupPage() {
                 team={team}
                 toggleFavorite={toggleFavorite}
                 registrationMap={registrationMap}
+                inksById={inksById}
                 onSelectPlayer={() => {}}
                 disableSelect
                 emptyMessage="No registered players found."
@@ -1278,6 +1301,7 @@ export function TournamentLookupPage() {
             team={team}
             toggleFavorite={toggleFavorite}
             registrationMap={registrationMap}
+            inksById={inksById}
             onSelectPlayer={rosterMode ? () => {} : setPlayer}
             disableSelect={rosterMode}
             emptyMessage="No favorited players yet. Tap the star next to a player in the Standings/Roster tab to track them here."
@@ -1390,6 +1414,7 @@ export function TournamentLookupPage() {
                   team={team}
                   toggleFavorite={toggleFavorite}
                   registrationMap={registrationMap}
+                  inksById={inksById}
                   onSelectPlayer={rosterMode ? () => {} : setPlayer}
                   disableSelect={rosterMode}
                   emptyMessage="None of this team's current members are in this event."

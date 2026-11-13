@@ -21,8 +21,10 @@ const NUMERIC_ID_RE = /^[0-9]{1,10}$/
 
 // Signed Google Storage image URLs (~1 KB each, one per player per row) are
 // over half of a standings or matches payload and nothing on the site shows
-// them. A JSON.parse reviver returning undefined drops the key.
-const IMAGE_URL_KEYS = new Set(['full_profile_picture_url', 'game_user_profile_picture_url', 'full_header_image_url'])
+// them; so are the ink `symbols` (signed icon URLs) on each match's
+// deck_descriptor_label, whose `parts[].value` is all the site reads. A
+// JSON.parse reviver returning undefined drops the key.
+const IMAGE_URL_KEYS = new Set(['full_profile_picture_url', 'game_user_profile_picture_url', 'full_header_image_url', 'symbols'])
 const dropImageUrls = (key: string, value: unknown) => (IMAGE_URL_KEYS.has(key) ? undefined : value)
 
 function clampInt(v: string | undefined, def: number, max: number): number {

@@ -119,17 +119,17 @@ describe('streamOverlay row mapping', () => {
     expect(activeRoundLabel({ activePhaseType: 'RANKED_SINGLE_ELIMINATION', activePhaseName: 'Top 8', activeRoundNumber: 9 })).toBe('Top 8')
   })
 
-  it('lists the current round\'s pairings in table order with records, byes left out', () => {
-    const rel = (order, id) => ({ player_order: order, player: { id, best_identifier: id }, user_event_status: { best_identifier: id } })
+  it('lists the current round\'s pairings in table order with records and inks, byes left out', () => {
+    const rel = (order, id, inks) => ({ player_order: order, player: { id, best_identifier: id }, user_event_status: { best_identifier: id, deck_descriptor_label: inks ? { parts: [{ value: inks }] } : null } })
     const matches = [
       { id: 'm2', table_number: 2, player_match_relationships: [rel(2, 'Di'), rel(1, 'Cy')] },
-      { id: 'm1', table_number: 1, player_match_relationships: [rel(1, 'Ann'), rel(2, 'Bo')] },
+      { id: 'm1', table_number: 1, player_match_relationships: [rel(1, 'Ann', 'steel,emerald'), rel(2, 'Bo')] },
       { id: 'bye', table_number: null, match_is_bye: true, player_match_relationships: [rel(1, 'Ed')] },
     ]
     const standings = [{ player: { id: 'Ann' }, record: '3-0-0' }, { player: { id: 'Bo' }, record: '2-1-0' }, { player: { id: 'Cy' }, record: '2-1-0' }]
     expect(currentRoundPairings(matches, standings)).toEqual([
-      { id: 'm1', table: 1, players: [{ id: 'Ann', name: 'Ann', record: '3-0-0' }, { id: 'Bo', name: 'Bo', record: '2-1-0' }] },
-      { id: 'm2', table: 2, players: [{ id: 'Cy', name: 'Cy', record: '2-1-0' }, { id: 'Di', name: 'Di', record: '' }] },
+      { id: 'm1', table: 1, players: [{ id: 'Ann', name: 'Ann', record: '3-0-0', inks: ['emerald', 'steel'] }, { id: 'Bo', name: 'Bo', record: '2-1-0', inks: [] }] },
+      { id: 'm2', table: 2, players: [{ id: 'Cy', name: 'Cy', record: '2-1-0', inks: [] }, { id: 'Di', name: 'Di', record: '', inks: [] }] },
     ])
   })
 
@@ -345,16 +345,16 @@ describe('streamOverlay RPH', () => {
     expect(rphRoundPatch({ activeRoundId: null, activePhaseType: null, activePhaseName: null, activeRoundNumber: null })).toBeNull()
   })
 
-  it('builds the feature-match patch: names, records, event, round, clock, link; scores reset; inks untouched', () => {
+  it('builds the feature-match patch: names, records, event, round, clock, link; scores reset; inks from RPH or cleared', () => {
     const p = featureMatchPatch({
       eventName: 'Open', round: 'Top 16', rphEventId: 528227,
-      players: [{ name: 'Ryan', record: '5-2-0' }, { name: 'Dylan', record: '5-0-2' }],
+      players: [{ name: 'Ryan', record: '5-2-0', inks: ['amber', 'steel'] }, { name: 'Dylan', record: '5-0-2' }],
       timer: { timerEndsAt: null, timerRemainingMs: 70 * 60 * 1000 },
     })
     expect(p).toEqual({
       timer_ends_at: null, timer_remaining_ms: 70 * 60 * 1000, rph_event_id: 528227, event_name: 'Open', round: 'Top 16',
-      p1_name: 'Ryan', p1_record: '5-2-0', p1_lore: 0, p1_game_wins: 0, p1_decklist: '', p1_featured: '', p1_featured_at: null,
-      p2_name: 'Dylan', p2_record: '5-0-2', p2_lore: 0, p2_game_wins: 0, p2_decklist: '', p2_featured: '', p2_featured_at: null,
+      p1_name: 'Ryan', p1_record: '5-2-0', p1_inks: ['amber', 'steel'], p1_lore: 0, p1_game_wins: 0, p1_decklist: '', p1_featured: '', p1_featured_at: null,
+      p2_name: 'Dylan', p2_record: '5-0-2', p2_inks: [], p2_lore: 0, p2_game_wins: 0, p2_decklist: '', p2_featured: '', p2_featured_at: null,
       deck_shown: 0, player_card: null, card_shown: false,
     })
     expect(featureMatchPatch({ eventName: '', round: '', rphEventId: 1, players: [{ name: 'A', record: '' }, { name: 'B', record: '' }], timer: null }))

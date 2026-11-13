@@ -7,6 +7,7 @@ import {
   deriveEventTier,
   fetchFinalStandings,
   fetchAllRoundMatchesServer,
+  playerInksFromMatches,
   eventDateOf,
   eliminationPhaseName,
 } from './_lib/tournamentImport.js'
@@ -185,6 +186,18 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
       }))
     )
 
+    // Ink pairs from the matches (events that show deck descriptors). Only
+    // players RPH has a pair for are written, so a pair uploaded by hand on
+    // an older event survives a re-import.
+    const inksById = playerInksFromMatches(matches)
+    const inkRows = standingsRaw.flatMap((entry: any) => {
+      const inks = inksById.get(String(entry.player.id))
+      return inks
+        ? [{ playerId: String(entry.player.id), playerName: entry.user_event_status?.best_identifier ?? entry.player?.best_identifier ?? 'Unknown', inks }]
+        : []
+    })
+    await setStandingInks(dbEventId, inkRows)
+
     const matchesImported = await upsertMatches(
       dbEventId,
       matches.map((match: any) => {
@@ -217,6 +230,7 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
       eventTier: tier,
       standingsImported,
       matchesImported,
+      inksImported: inkRows.length,
       roundsImported: new Set(matches.map((m: any) => m.round_number)).size,
     })
   } catch (err) {

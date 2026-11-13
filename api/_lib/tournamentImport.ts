@@ -11,6 +11,8 @@
 // See the `ravensburger-tournament-api` skill for background on why there
 // are two upstream hosts and why match data requires the Hydra-proxied one.
 
+import { normalizeInks } from './deckInks.js'
+
 const RAVEN_BASE = 'https://api.ravensburgerplay.com/api/v2'
 const HYDRA_BASE = 'https://api.cloudflare.ravensburgerplay.com/hydraproxy/api/v2'
 
@@ -219,4 +221,21 @@ export async function fetchAllRoundMatchesServer(eventDetails: any): Promise<any
 
   allMatches.sort((a, b) => a.round_number - b.round_number)
   return allMatches
+}
+
+// Each player's ink pair from the matches they played: RPH puts the
+// submitted deck's inks on every match as
+// user_event_status.deck_descriptor_label (`parts[0].value` "amethyst,ruby";
+// src/lib/tournamentInks.js reads the same field client-side). Only events
+// that show deck descriptors carry it; players without one are left out.
+export function playerInksFromMatches(matches: any[]): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  for (const match of matches) {
+    for (const rel of match.player_match_relationships ?? []) {
+      const value = rel?.user_event_status?.deck_descriptor_label?.parts?.[0]?.value
+      const inks = typeof value === 'string' ? normalizeInks(value.split(',')) : null
+      if (inks && rel.player?.id != null) map.set(String(rel.player.id), inks)
+    }
+  }
+  return map
 }

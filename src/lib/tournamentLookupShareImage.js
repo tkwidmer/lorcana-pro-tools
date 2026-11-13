@@ -200,19 +200,22 @@ export async function renderMetaShareImage({ matches, structure, standings }) {
   return canvas
 }
 
-// Row pair's match win rate against each column pair, with an overall
-// "vs field" column, sized to the number of pairs.
-export async function renderMatchupShareImage({ matches, structure }) {
+// Row pair's match win rate against each column pair, beside its overall
+// win rate and record vs the field and (with standings) its best rank;
+// sized to the number of pairs.
+export async function renderMatchupShareImage({ matches, structure, standings }) {
   const pairs = inkPairMeta(matches)
   const cells = inkPairMatrix(matches)
+  const bestRank = bestRankByPair(standings, playerInks(matches))
   const { icons, mark } = await loadAssets(pairs.map((p) => p.inks))
   const PAD = 48
   const LABEL_W = 270
-  const FIELD_W = 112
+  const FIELD_W = 150
+  const BEST_W = standings ? 84 : 0
   const CELL = 96
   const GAP = 6
   const ROW = 74
-  const W = Math.max(1400, PAD * 2 + LABEL_W + FIELD_W + GAP + pairs.length * (CELL + GAP))
+  const W = Math.max(1400, PAD * 2 + LABEL_W + FIELD_W + GAP + (BEST_W && BEST_W + GAP) + pairs.length * (CELL + GAP))
   const HEAD_TOP = 196
   const TOP = HEAD_TOP + 96
   const H = TOP + pairs.length * (ROW + GAP) + 100
@@ -220,9 +223,14 @@ export async function renderMatchupShareImage({ matches, structure }) {
   drawHeader(ctx, W, PAD, { mark, title: 'MATCHUPS', structure })
 
   const fieldX = PAD + LABEL_W + GAP
-  const colX = (j) => fieldX + FIELD_W + GAP + j * (CELL + GAP)
+  const bestX = fieldX + FIELD_W + GAP
+  const colX = (j) => bestX + (BEST_W && BEST_W + GAP) + j * (CELL + GAP)
   text(ctx, 'VS FIELD', fieldX + FIELD_W / 2, HEAD_TOP + 62, { font: `600 18px ${DISPLAY}`, color: FORGE, align: 'center' })
-  text(ctx, 'overall', fieldX + FIELD_W / 2, HEAD_TOP + 84, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+  text(ctx, 'win % · record', fieldX + FIELD_W / 2, HEAD_TOP + 84, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+  if (BEST_W) {
+    text(ctx, 'BEST', bestX + BEST_W / 2, HEAD_TOP + 62, { font: `600 18px ${DISPLAY}`, color: FORGE, align: 'center' })
+    text(ctx, 'rank', bestX + BEST_W / 2, HEAD_TOP + 84, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+  }
   pairs.forEach((p, j) => {
     const cx = colX(j) + CELL / 2
     drawInks(ctx, icons, p.inks, cx - 29, HEAD_TOP + 28, 26)
@@ -243,9 +251,13 @@ export async function renderMatchupShareImage({ matches, structure }) {
     ctx.strokeStyle = FORGE
     ctx.lineWidth = 1.5
     roundRect(ctx, fieldX, y, FIELD_W, ROW, 4); ctx.stroke()
-    const fieldN = row.wins + row.losses + row.draws
     text(ctx, pct(row.winRate), fieldX + FIELD_W / 2, mid - 2, { font: `700 26px ${DISPLAY}`, color: FORGE, align: 'center' })
-    text(ctx, `${fieldN}m`, fieldX + FIELD_W / 2, mid + 22, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+    text(ctx, `${row.wins}-${row.losses}${row.draws ? `-${row.draws}` : ''}`, fieldX + FIELD_W / 2, mid + 22, { font: `400 15px ${SANS}`, color: MUTED, align: 'center' })
+    if (BEST_W) {
+      ctx.fillStyle = INK_2
+      roundRect(ctx, bestX, y, BEST_W, ROW, 4); ctx.fill()
+      text(ctx, bestRank.has(row.key) ? `#${bestRank.get(row.key)}` : '—', bestX + BEST_W / 2, mid, { font: `600 24px ${DISPLAY}`, align: 'center', baseline: 'middle' })
+    }
 
     pairs.forEach((col, j) => {
       const x = colX(j)

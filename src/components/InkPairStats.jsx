@@ -65,16 +65,20 @@ export function InkMetaTab({ allMatches, structure, standings }) {
 }
 
 // Row pair's win rate against each column pair.
-export function InkMatrixTab({ allMatches, structure }) {
+export function InkMatrixTab({ allMatches, structure, standings }) {
   const pairs = useMemo(() => inkPairMeta(allMatches), [allMatches])
   const cells = useMemo(() => inkPairMatrix(allMatches), [allMatches])
+  const bestRank = useMemo(() => bestRankByPair(standings, playerInks(allMatches)), [standings, allMatches])
   return (
     <div className="space-y-2">
       <div className="overflow-x-auto border border-gray-200 rounded-lg">
         <table className="text-xs border-separate border-spacing-0.5">
           <thead>
             <tr>
-              <th className="px-2 py-1 text-left text-gray-500 font-normal">vs →</th>
+              <th className="px-2 py-1 text-left text-gray-500 font-normal">Deck</th>
+              <th className="px-2 py-1 text-right text-gray-500 font-normal">Win %</th>
+              <th className="px-2 py-1 text-right text-gray-500 font-normal">Record</th>
+              {standings && <th className="px-2 py-1 pr-4 text-right text-gray-500 font-normal">Best</th>}
               {pairs.map((p) => (
                 <th key={p.key} className="px-1 py-1" title={p.inks.join(' / ')}>
                   <InkIcons colors={p.inks} size={16} className="justify-center" />
@@ -91,6 +95,9 @@ export function InkMatrixTab({ allMatches, structure }) {
                     <span className="font-mono text-gray-400 font-normal">{row.players}</span>
                   </span>
                 </th>
+                <td className={`px-2 py-1 text-right font-mono font-semibold ${winrateTextColor(row.winRate)}`}>{pct(row.winRate)}</td>
+                <td className="px-2 py-1 text-right font-mono text-gray-600 whitespace-nowrap">{record(row)}</td>
+                {standings && <td className="px-2 py-1 pr-4 text-right font-mono text-gray-700">{bestRank.has(row.key) ? `#${bestRank.get(row.key)}` : '—'}</td>}
                 {pairs.map((col) => {
                   const rec = cells.get(`${row.key}|${col.key}`)
                   const mirror = row.key === col.key
@@ -119,9 +126,9 @@ export function InkMatrixTab({ allMatches, structure }) {
         </table>
       </div>
       <p className="text-xs text-gray-500">
-        Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
+        Win % and Record are each pair's matches against other pairs (mirrors left out); Best is its best standings rank. Each cell is the row pair's match win rate against the column pair, with the number of reported matches below. Draws count as half; the diagonal counts mirror matches. Small samples swing hard.
       </p>
-      <ShareDownloadLink render={() => renderMatchupShareImage({ matches: allMatches, structure })} filename={shareFilename(structure, 'matchups')} />
+      <ShareDownloadLink render={() => renderMatchupShareImage({ matches: allMatches, structure, standings })} filename={shareFilename(structure, 'matchups')} />
     </div>
   )
 }

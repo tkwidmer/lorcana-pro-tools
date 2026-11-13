@@ -1,254 +1,75 @@
-export const INK_HEX = {
-  amber:    '#F59E0B',
-  amethyst: '#8B5CF6',
-  emerald:  '#10B981',
-  ruby:     '#EF4444',
-  sapphire: '#3B82F6',
-  steel:    '#9CA3AF',
-}
+// A player's tournament result (Tournament Lookup's match history) as a
+// share image in the InkbornForge brand, plus the download / copy / native
+// share helpers every share image uses.
+import { INK_2, LINE, PAPER, MUTED, FORGE, WIN, LOSS, DISPLAY, SANS, layout, loadAssets, newCanvas, text, fitText, drawHeader, drawFooter, drawInks, roundRect } from './shareBrand'
 
 const RESULT_STYLES = {
-  WIN:  { bg: '#14532D', text: '#4ADE80' },
-  LOSS: { bg: '#7F1D1D', text: '#FCA5A5' },
-  DRAW: { bg: '#292524', text: '#A8A29E' },
-  BYE:  { bg: '#1E3A5F', text: '#93C5FD' },
+  WIN: { bg: '#1f4d33', color: WIN },
+  LOSS: { bg: '#5c2626', color: LOSS },
+  DRAW: { bg: LINE, color: PAPER },
+  BYE: { bg: LINE, color: MUTED },
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + w - r, y)
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-  ctx.lineTo(x + w, y + h - r)
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  ctx.lineTo(x + r, y + h)
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
-  ctx.closePath()
-}
-
-function clip(str, max) {
-  if (!str) return '—'
-  return str.length <= max ? str : str.slice(0, max - 1) + '…'
-}
-
-// Cached by color — the same handful of ink icons get reused across every row/regeneration.
-const inkImageCache = new Map()
-
-function loadInkImage(color) {
-  if (inkImageCache.has(color)) return inkImageCache.get(color)
-  const promise = new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
-    img.src = `/ink/${color}.png`
-  })
-  inkImageCache.set(color, promise)
-  return promise
-}
+const inkLabel = (inks) => inks.map((c) => c.charAt(0).toUpperCase() + c.slice(1)).join(' / ')
 
 // rows: [{ round, result, score, opponent, oppColors: string[], onPlay: bool|null }]
-// Renders a compact card sized to fit its content — each match is a two-line entry
-// (rather than a wide table) so the card stays legible and portrait-ish for social
-// media at any round count, without padding short match histories out further.
-export async function generateShareImage({ playerName, rank, totalPlayers, record, matchPoints, winPct, eventName, rows }) {
-  const usedColors = [...new Set(rows.flatMap((r) => r.oppColors ?? []))]
-  const inkImages = Object.fromEntries(
-    await Promise.all(usedColors.map(async (c) => [c, await loadInkImage(c)]))
-  )
+// One row per match under a strip of the player's rank, record, points and
+// win rate; `video` lays it out 16:9 with the webcam corner.
+export async function generateShareImage({ playerName, rank, totalPlayers, record, matchPoints, winPct, eventName, rows, video }) {
+  const { icons, mark } = await loadAssets(rows.map((r) => r.oppColors ?? []))
+  const PAD = 56
+  const TOP = 340
+  const { W, H, ROW, dpr, cam } = layout({ video, w: 1200, top: TOP, bottom: 110, n: rows.length, row: 58 })
+  const { canvas, ctx } = newCanvas(W, H, dpr)
+  drawHeader(ctx, W, PAD, { mark, title: 'RESULT', name: playerName, line: eventName })
 
-  const DPR   = 4
-  // Narrow enough that a typical 5-9 round match history is naturally taller than
-  // wide, without needing a fixed portrait floor that pads short histories with
-  // empty space — height always tracks content directly.
-  const W     = 640
-  const PAD   = 40
-  const CW    = W - PAD * 2
-
-  const HEADER_H  = 56
-  const PLAYER_H  = 120
-  const SECTION_H = 36
-  const ROW_H     = 72
-  const FOOTER_H  = 44
-
-  const H = HEADER_H + PLAYER_H + SECTION_H + rows.length * ROW_H + FOOTER_H
-
-  const canvas = document.createElement('canvas')
-  canvas.width  = W  * DPR
-  canvas.height = H  * DPR
-  canvas.style.width  = `${W}px`
-  canvas.style.height = `${H}px`
-
-  const ctx = canvas.getContext('2d')
-  ctx.scale(DPR, DPR)
-
-  // ── Background ──────────────────────────────────────────────────────────────
-  const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0, '#0F172A')
-  bg.addColorStop(1, '#1E1B4B')
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, W, H)
-
-  // Left accent bar
-  ctx.fillStyle = '#6366F1'
-  ctx.fillRect(0, 0, 5, H)
-
-  // ── Header ──────────────────────────────────────────────────────────────────
-  ctx.textBaseline = 'middle'
-
-  ctx.font = 'bold 13px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = '#818CF8'
-  ctx.textAlign = 'left'
-  ctx.fillText('LORCANA PRO TOOLS', PAD + 6, HEADER_H / 2)
-
-  if (eventName) {
-    ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
-    ctx.fillStyle = '#475569'
-    ctx.textAlign = 'right'
-    ctx.fillText(clip(eventName, 24), W - PAD, HEADER_H / 2)
-  }
-
-  // Divider
-  ctx.strokeStyle = '#1E293B'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(PAD, HEADER_H)
-  ctx.lineTo(W - PAD, HEADER_H)
-  ctx.stroke()
-
-  // ── Player / Stats ──────────────────────────────────────────────────────────
-  const playerMid = HEADER_H + PLAYER_H / 2
-
-  ctx.textAlign = 'left'
-  ctx.font = 'bold 27px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = '#F1F5F9'
-  ctx.fillText(clip(playerName, 19), PAD + 6, playerMid - 26)
-
-  if (rank) {
-    ctx.font = 'bold 17px ui-sans-serif, system-ui, sans-serif'
-    ctx.fillStyle = '#818CF8'
-    ctx.textAlign = 'right'
-    ctx.fillText(`#${rank}` + (totalPlayers ? ` / ${totalPlayers}` : ''), W - PAD, playerMid - 26)
-    ctx.textAlign = 'left'
-  }
-
-  const statsItems = [record, `${matchPoints} pts`, `${winPct}% WR`].filter(Boolean)
-  ctx.font = '14px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = '#94A3B8'
-  ctx.fillText(statsItems.join('   ·   '), PAD + 6, playerMid + 10)
-
-  // Divider
-  ctx.strokeStyle = '#1E293B'
-  ctx.beginPath()
-  ctx.moveTo(PAD, HEADER_H + PLAYER_H)
-  ctx.lineTo(W - PAD, HEADER_H + PLAYER_H)
-  ctx.stroke()
-
-  // ── Section label ────────────────────────────────────────────────────────────
-  const sectionTop = HEADER_H + PLAYER_H
-  ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = '#475569'
-  ctx.textAlign = 'left'
-  ctx.fillText('MATCH HISTORY', PAD + 6, sectionTop + SECTION_H / 2)
-
-  // ── Rows (two lines each: round/result/score + opponent, then colors + play) ──
-  const tableTop = sectionTop + SECTION_H
-
-  rows.forEach((row, i) => {
-    const rowY   = tableTop + i * ROW_H
-    const line1Y = rowY + ROW_H * 0.34
-    const line2Y = rowY + ROW_H * 0.72
-
-    if (i % 2 === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.025)'
-      ctx.fillRect(PAD, rowY, CW, ROW_H)
-    }
-
-    ctx.textBaseline = 'middle'
-
-    // Line 1, left: round + result badge + score
-    ctx.textAlign = 'left'
-    ctx.font = 'bold 14px ui-sans-serif, system-ui, sans-serif'
-    ctx.fillStyle = '#64748B'
-    ctx.fillText(`R${row.round}`, PAD + 6, line1Y)
-
-    const rs = RESULT_STYLES[row.result] ?? RESULT_STYLES.DRAW
-    ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif'
-    const badgeTxt = row.result
-    const badgeW    = ctx.measureText(badgeTxt).width + 18
-    const badgeH    = 22
-    const badgeX    = PAD + 44
-    roundRect(ctx, badgeX, line1Y - badgeH / 2, badgeW, badgeH, 4)
-    ctx.fillStyle = rs.bg
-    ctx.fill()
-    ctx.fillStyle = rs.text
-    ctx.textAlign = 'center'
-    ctx.fillText(badgeTxt, badgeX + badgeW / 2, line1Y)
-
-    ctx.textAlign = 'left'
-    ctx.font = '13px ui-monospace, monospace'
-    ctx.fillStyle = '#64748B'
-    ctx.fillText(row.score || '—', badgeX + badgeW + 12, line1Y)
-
-    // Line 1, right: opponent name
-    ctx.font = '14px ui-sans-serif, system-ui, sans-serif'
-    ctx.fillStyle = '#E2E8F0'
-    ctx.textAlign = 'right'
-    ctx.fillText(clip(row.opponent, 16), W - PAD - 6, line1Y)
-
-    // Line 2, left: ink icons + color label
-    ctx.textAlign = 'left'
-    if (row.oppColors?.length) {
-      const iconSize = 18
-      const step = iconSize + 5
-      row.oppColors.forEach((color, ci) => {
-        const cx = PAD + 6 + ci * step
-        const img = inkImages[color]
-        if (img) {
-          ctx.drawImage(img, cx, line2Y - iconSize / 2, iconSize, iconSize)
-        } else {
-          ctx.beginPath()
-          ctx.arc(cx + iconSize / 2, line2Y, iconSize / 2, 0, Math.PI * 2)
-          ctx.fillStyle = INK_HEX[color] ?? '#6B7280'
-          ctx.fill()
-        }
-      })
-      const labelX = PAD + 6 + row.oppColors.length * step + 4
-      ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
-      ctx.fillStyle = '#475569'
-      const colorLabel = row.oppColors.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(' / ')
-      ctx.fillText(colorLabel, labelX, line2Y)
-    } else {
-      ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
-      ctx.fillStyle = '#334155'
-      ctx.fillText('—', PAD + 6, line2Y)
-    }
-
-    // Line 2, right: play/draw
-    const pd = row.onPlay === true ? 'PLAY' : row.onPlay === false ? 'DRAW' : '—'
-    ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif'
-    ctx.fillStyle = row.onPlay === true ? '#4ADE80' : row.onPlay === false ? '#93C5FD' : '#334155'
-    ctx.textAlign = 'right'
-    ctx.fillText(pd, W - PAD - 6, line2Y)
-
-    // Row divider
-    ctx.strokeStyle = '#1E293B'
-    ctx.lineWidth   = 0.5
-    ctx.beginPath()
-    ctx.moveTo(PAD, rowY + ROW_H)
-    ctx.lineTo(W - PAD, rowY + ROW_H)
-    ctx.stroke()
+  const stats = [
+    ['STANDING', rank ? `#${rank}${totalPlayers ? ` / ${totalPlayers}` : ''}` : '—'],
+    ['RECORD', record],
+    ['POINTS', String(matchPoints)],
+    ['WIN %', `${winPct}%`],
+  ]
+  const chipW = (W - PAD * 2) / stats.length
+  stats.forEach(([label, value], i) => {
+    const x = PAD + i * chipW
+    ctx.fillStyle = INK_2
+    roundRect(ctx, x, 180, chipW - 12, 92, 4); ctx.fill()
+    text(ctx, value, x + 20, 236, { font: `700 44px ${DISPLAY}`, color: i === 0 ? FORGE : PAPER })
+    text(ctx, label, x + 20, 262, { font: `500 16px ${DISPLAY}`, color: MUTED })
   })
 
-  // ── Footer ───────────────────────────────────────────────────────────────────
-  const footerY = H - FOOTER_H / 2
-  ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
-  ctx.fillStyle = '#1E293B'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('inkbornforge.com', W / 2, footerY)
+  const COLS = { round: PAD + 10, result: PAD + 76, score: PAD + 186, name: PAD + 280, deck: W - PAD - 420, play: W - PAD - 10 }
+  const head = { font: `500 17px ${DISPLAY}`, color: MUTED }
+  text(ctx, 'ROUND', COLS.round, TOP - 20, head)
+  text(ctx, 'RESULT', COLS.result, TOP - 20, head)
+  text(ctx, 'SCORE', COLS.score, TOP - 20, head)
+  text(ctx, 'OPPONENT', COLS.name, TOP - 20, head)
+  text(ctx, 'DECK', COLS.deck, TOP - 20, head)
+  text(ctx, 'PLAY / DRAW', COLS.play, TOP - 20, { ...head, align: 'right' })
 
+  rows.forEach((r, i) => {
+    const y = TOP + i * ROW
+    const mid = y + ROW / 2
+    if (i % 2 === 0) { ctx.fillStyle = INK_2; ctx.fillRect(PAD, y, W - PAD * 2, ROW) }
+    const mono = { font: `600 24px ${DISPLAY}`, baseline: 'middle' }
+    text(ctx, `R${r.round}`, COLS.round, mid, { ...mono, color: MUTED })
+    const rs = RESULT_STYLES[r.result] ?? RESULT_STYLES.DRAW
+    ctx.fillStyle = rs.bg
+    roundRect(ctx, COLS.result, mid - 16, 84, 32, 3); ctx.fill()
+    text(ctx, r.result, COLS.result + 42, mid + 1, { font: `600 18px ${DISPLAY}`, color: rs.color, align: 'center', baseline: 'middle' })
+    text(ctx, r.score || '—', COLS.score, mid, mono)
+    text(ctx, fitText(ctx, r.opponent || '—', COLS.deck - COLS.name - 24, `600 24px ${SANS}`), COLS.name, mid, { font: `600 24px ${SANS}`, baseline: 'middle' })
+    if (r.oppColors?.length) {
+      drawInks(ctx, icons, r.oppColors, COLS.deck, mid, 30)
+      text(ctx, inkLabel(r.oppColors), COLS.deck + r.oppColors.length * 34 + 8, mid, { font: `400 20px ${SANS}`, color: MUTED, baseline: 'middle' })
+    } else {
+      text(ctx, '—', COLS.deck, mid, { font: `400 20px ${SANS}`, color: MUTED, baseline: 'middle' })
+    }
+    const pd = r.onPlay === true ? 'PLAY' : r.onPlay === false ? 'DRAW' : '—'
+    text(ctx, pd, COLS.play, mid, { ...mono, color: r.onPlay == null ? MUTED : FORGE, align: 'right' })
+  })
+
+  drawFooter(ctx, W, H, PAD, { note: 'Match history from the Ravensburger Play Hub', url: 'inkbornforge.com/tournament-lookup', cam })
   return canvas
 }
 
@@ -259,29 +80,6 @@ function canvasToBlob(canvas, type, quality) {
       else reject(new Error('Failed to render share image'))
     }, type, quality)
   })
-}
-
-// 16:9 frame for video (YouTube): the image scaled to fit inside a 4K
-// canvas with a 5% margin, centered on the brand ink.
-export const VIDEO_W = 3840
-export const VIDEO_H = 2160
-
-export function fitInFrame(w, h) {
-  const k = Math.min((VIDEO_W * 0.9) / w, (VIDEO_H * 0.9) / h)
-  return { x: (VIDEO_W - w * k) / 2, y: (VIDEO_H - h * k) / 2, w: w * k, h: h * k }
-}
-
-export function frameForVideo(canvas) {
-  const out = document.createElement('canvas')
-  out.width = VIDEO_W
-  out.height = VIDEO_H
-  const ctx = out.getContext('2d')
-  ctx.fillStyle = '#17171a'
-  ctx.fillRect(0, 0, VIDEO_W, VIDEO_H)
-  const r = fitInFrame(canvas.width, canvas.height)
-  ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(canvas, r.x, r.y, r.w, r.h)
-  return out
 }
 
 export function videoFilename(filename) {

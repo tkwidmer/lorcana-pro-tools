@@ -122,7 +122,7 @@ export function PlayerMatchHistory({ player, allMatches, matchesLoading, structu
       }
     })
 
-    const canvas = await generateShareImage({
+    const input = {
       playerName:   player?.user_event_status?.best_identifier ?? '—',
       rank:         player?.rank ?? null,
       totalPlayers: null,
@@ -131,10 +131,11 @@ export function PlayerMatchHistory({ player, allMatches, matchesLoading, structu
       winPct,
       eventName:    structure?.eventName ?? null,
       rows,
-    })
+    }
+    const canvas = await generateShareImage(input)
 
     const name = (player?.user_event_status?.best_identifier ?? 'player').replace(/\s+/g, '-').toLowerCase()
-    setShareCard({ canvas, imageUrl: canvas.toDataURL('image/jpeg', 0.95), filename: `${name}-tournament.jpg` })
+    setShareCard({ canvas, imageUrl: canvas.toDataURL('image/jpeg', 0.95), filename: `${name}-tournament.jpg`, video: () => generateShareImage({ ...input, video: true }) })
   }
 
   return (

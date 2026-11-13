@@ -1,178 +1,76 @@
-// Renders MetaSynthesisPage's summary (prose blocks + a Most Played
-// Archetypes mini-table) as a shareable canvas card. Follows the same
-// visual language as tournamentShareImage.js — this repo's other
-// canvas-card generator — so `ShareCardModal` and the copy/download/native-
-// share flow can be reused as-is.
+// MetaSynthesisPage's summary (prose blocks + the Most Played Archetypes
+// table) as a share image in the InkbornForge brand. Social: one column.
+// Video: 16:9, prose left, the table right above the webcam corner.
+import { INK_2, PAPER, MUTED, FORGE, WIN, LOSS, DISPLAY, SANS, DPR, videoFrame, loadAssets, newCanvas, text, fitText, wrapText, drawHeader, drawFooter } from './shareBrand'
 
-const FONT = 'ui-sans-serif, system-ui, sans-serif'
+const PAD = 56
+const TOP = 200
+const BODY = `400 22px ${SANS}`
+const INTRO = `600 22px ${SANS}`
+const ITEM = `400 20px ${SANS}`
+const BULLET = 26
+const TABLE_ROW = 46
 
-function wrapText(ctx, text, maxWidth) {
-  const words = text.split(' ')
-  const lines = []
-  let current = ''
-  for (const word of words) {
-    const attempt = current ? `${current} ${word}` : word
-    if (current && ctx.measureText(attempt).width > maxWidth) {
-      lines.push(current)
-      current = word
-    } else {
-      current = attempt
+// Every line of the prose wrapped to `width`: [{ str, x, y, font, color }]
+// with y relative to the top, and the total height.
+function bodyLines(ctx, blocks, width) {
+  const out = []
+  let y = 0
+  const add = (lines, x, font, color, lineH) => lines.forEach((str) => { y += lineH; out.push({ str, x, y, font, color }) })
+  for (const b of blocks) {
+    if (b.type === 'text') add(wrapText(ctx, b.text, width, BODY), 0, BODY, PAPER, 32)
+    else {
+      add(wrapText(ctx, b.intro, width, INTRO), 0, INTRO, PAPER, 32)
+      b.items.forEach((item) => add(wrapText(ctx, item, width - BULLET, ITEM).map((l, i) => (i ? l : `•  ${l}`)), BULLET, ITEM, MUTED, 30))
     }
+    y += 14
   }
-  if (current) lines.push(current)
-  return lines
+  return { lines: out, height: y }
+}
+
+function drawTable(ctx, rows, x, y, w) {
+  text(ctx, 'MOST PLAYED ARCHETYPES', x, y + 24, { font: `500 17px ${DISPLAY}`, color: MUTED })
+  rows.forEach((a, i) => {
+    const ry = y + 40 + i * TABLE_ROW
+    const mid = ry + TABLE_ROW / 2
+    if (i % 2 === 0) { ctx.fillStyle = INK_2; ctx.fillRect(x, ry, w, TABLE_ROW) }
+    text(ctx, fitText(ctx, a.name, w - 260, `600 22px ${SANS}`), x + 12, mid, { font: `600 22px ${SANS}`, baseline: 'middle' })
+    text(ctx, `${a.metaShare.toFixed(1)}%`, x + w - 130, mid, { font: `600 22px ${DISPLAY}`, color: FORGE, align: 'right', baseline: 'middle' })
+    const color = a.winRate >= 52 ? WIN : a.winRate <= 48 ? LOSS : PAPER
+    text(ctx, `${a.winRate.toFixed(1)}% WIN`, x + w - 12, mid, { font: `600 22px ${DISPLAY}`, color, align: 'right', baseline: 'middle' })
+  })
+  return rows.length ? 40 + rows.length * TABLE_ROW : 0
 }
 
 // `blocks`: the { type: 'text' | 'list', ... } sequence from metaSynthesis.js
-// (synthesis.blocks, optionally concatenated with a comparison/weekTrend's
-// blocks — whatever's currently rendered on the page).
-// `topPlayed`: synthesis.topPlayed, for the mini reference table.
-export async function generateMetaSynthesisImage({ title, subtitle, blocks, topPlayed }) {
-  const DPR = 4
-  const W = 640
-  const PAD = 40
-  const CW = W - PAD * 2
-  const LINE_H = 20
-  const BULLET_INDENT = 16
-
-  // Text measurement needs a live 2D context before the real canvas (whose
-  // size depends on the measured line counts) can be created.
-  const measureCanvas = document.createElement('canvas')
-  const mctx = measureCanvas.getContext('2d')
-
-  const wrappedBlocks = blocks.map(b => {
-    if (b.type === 'text') {
-      mctx.font = `14px ${FONT}`
-      return { type: 'text', lines: wrapText(mctx, b.text, CW) }
-    }
-    mctx.font = `bold 14px ${FONT}`
-    const introLines = wrapText(mctx, b.intro, CW)
-    mctx.font = `13px ${FONT}`
-    const itemLines = b.items.map(item => wrapText(mctx, `•  ${item}`, CW - BULLET_INDENT))
-    return { type: 'list', introLines, itemLines }
-  })
-
-  let bodyH = 0
-  for (const b of wrappedBlocks) {
-    if (b.type === 'text') {
-      bodyH += b.lines.length * LINE_H + 6
-    } else {
-      bodyH += b.introLines.length * LINE_H
-      bodyH += b.itemLines.reduce((sum, lines) => sum + lines.length * LINE_H, 0)
-      bodyH += 6
-    }
-  }
-
-  const TABLE_ROW_H = 26
+// (whatever is rendered on the page); `topPlayed`: synthesis.topPlayed.
+export async function generateMetaSynthesisImage({ title, subtitle, blocks, topPlayed, video }) {
+  const { mark } = await loadAssets([])
   const tableRows = (topPlayed ?? []).slice(0, 5)
-  const tableH = tableRows.length > 0 ? 44 + tableRows.length * TABLE_ROW_H : 0
+  const mctx = document.createElement('canvas').getContext('2d')
 
-  const HEADER_H = 56
-  const TITLE_H = 60
-  const FOOTER_H = 40
-  const H = HEADER_H + TITLE_H + bodyH + tableH + FOOTER_H + 10
-
-  const canvas = document.createElement('canvas')
-  canvas.width = W * DPR
-  canvas.height = H * DPR
-  canvas.style.width = `${W}px`
-  canvas.style.height = `${H}px`
-  const ctx = canvas.getContext('2d')
-  ctx.scale(DPR, DPR)
-
-  // Background
-  const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0, '#0F172A')
-  bg.addColorStop(1, '#1E1B4B')
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, W, H)
-  ctx.fillStyle = '#6366F1'
-  ctx.fillRect(0, 0, 5, H)
-
-  ctx.textBaseline = 'middle'
-  ctx.font = `bold 13px ${FONT}`
-  ctx.fillStyle = '#818CF8'
-  ctx.textAlign = 'left'
-  ctx.fillText('LORCANA PRO TOOLS', PAD + 6, HEADER_H / 2)
-
-  ctx.strokeStyle = '#1E293B'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(PAD, HEADER_H)
-  ctx.lineTo(W - PAD, HEADER_H)
-  ctx.stroke()
-
-  ctx.textBaseline = 'alphabetic'
-  let y = HEADER_H + 30
-  ctx.font = `bold 22px ${FONT}`
-  ctx.fillStyle = '#F1F5F9'
-  ctx.fillText(title, PAD + 6, y)
-  y += 24
-  ctx.font = `13px ${FONT}`
-  ctx.fillStyle = '#94A3B8'
-  ctx.fillText(subtitle, PAD + 6, y)
-  y += 22
-
-  for (const b of wrappedBlocks) {
-    if (b.type === 'text') {
-      ctx.font = `14px ${FONT}`
-      ctx.fillStyle = '#E2E8F0'
-      for (const line of b.lines) {
-        y += LINE_H
-        ctx.fillText(line, PAD + 6, y)
-      }
-      y += 6
-    } else {
-      ctx.font = `bold 14px ${FONT}`
-      ctx.fillStyle = '#CBD5E1'
-      for (const line of b.introLines) {
-        y += LINE_H
-        ctx.fillText(line, PAD + 6, y)
-      }
-      ctx.font = `13px ${FONT}`
-      ctx.fillStyle = '#94A3B8'
-      for (const itemLines of b.itemLines) {
-        for (const line of itemLines) {
-          y += LINE_H
-          ctx.fillText(line, PAD + 6 + BULLET_INDENT, y)
-        }
-      }
-      y += 6
-    }
+  let W, H, dpr, cam, body, textW
+  if (video) {
+    // Prose takes the left 60%; widening the frame only shortens it, so one
+    // re-wrap at the final width always fits.
+    const colW = (w) => w * 0.6 - PAD
+    ;({ W, H, dpr, cam } = videoFrame(1920, TOP + bodyLines(mctx, blocks, colW(1920)).height + 24))
+    textW = colW(W)
+    body = bodyLines(mctx, blocks, textW)
+  } else {
+    W = 1200
+    dpr = DPR
+    textW = W - PAD * 2
+    body = bodyLines(mctx, blocks, textW)
+    H = TOP + body.height + (tableRows.length ? 24 + 40 + tableRows.length * TABLE_ROW : 0) + 110
   }
 
-  if (tableRows.length > 0) {
-    y += 8
-    ctx.strokeStyle = '#1E293B'
-    ctx.beginPath()
-    ctx.moveTo(PAD, y)
-    ctx.lineTo(W - PAD, y)
-    ctx.stroke()
-    y += 26
-    ctx.font = `bold 11px ${FONT}`
-    ctx.fillStyle = '#475569'
-    ctx.textAlign = 'left'
-    ctx.fillText('MOST PLAYED ARCHETYPES', PAD + 6, y)
+  const { canvas, ctx } = newCanvas(W, H, dpr)
+  drawHeader(ctx, W, PAD, { mark, title: title.toUpperCase(), name: subtitle })
+  body.lines.forEach((l) => text(ctx, l.str, PAD + l.x, TOP + l.y, { font: l.font, color: l.color }))
+  if (video) drawTable(ctx, tableRows, W * 0.6 + 24, TOP, W * 0.4 - PAD - 24)
+  else drawTable(ctx, tableRows, PAD, TOP + body.height + 24, W - PAD * 2)
 
-    for (const a of tableRows) {
-      y += TABLE_ROW_H
-      ctx.font = `13px ${FONT}`
-      ctx.fillStyle = '#E2E8F0'
-      ctx.textAlign = 'left'
-      ctx.fillText(a.name, PAD + 6, y)
-      ctx.font = `12px ui-monospace, monospace`
-      ctx.fillStyle = '#94A3B8'
-      ctx.textAlign = 'right'
-      ctx.fillText(`${a.metaShare.toFixed(1)}% meta · ${a.winRate.toFixed(1)}% win`, W - PAD - 6, y)
-      ctx.textAlign = 'left'
-    }
-  }
-
-  ctx.font = `12px ${FONT}`
-  ctx.fillStyle = '#1E293B'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('inkbornforge.com', W / 2, H - FOOTER_H / 2)
-
+  drawFooter(ctx, W, H, PAD, { note: 'Meta share and win rate from duels.ink games', url: 'inkbornforge.com/meta-synthesis', cam })
   return canvas
 }

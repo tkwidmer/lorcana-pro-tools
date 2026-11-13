@@ -991,15 +991,15 @@ function BuildView({ initialDeck, cards, onBack }) {
           inkwell: real?.inkwell ?? null,
         }
       })
-      const canvas = await generateCoconutDeckShareImage({
+      const input = {
         deckName: deck.name,
         coconutName: coconutDisplayName(coconutCard),
         coconutImageUrl: getCoconutCardImageUrl(coconutCard),
-        inks: deck.inks,
         entries,
-      })
+      }
+      const canvas = await generateCoconutDeckShareImage(input)
       const filename = `${deck.name.replace(/\s+/g, '-').toLowerCase()}-coconut-deck.jpg`
-      setShareCard({ canvas, imageUrl: canvas.toDataURL('image/jpeg', 0.92), filename })
+      setShareCard({ canvas, imageUrl: canvas.toDataURL('image/jpeg', 0.92), filename, video: () => generateCoconutDeckShareImage({ ...input, video: true }) })
     } finally {
       setExporting(false)
     }

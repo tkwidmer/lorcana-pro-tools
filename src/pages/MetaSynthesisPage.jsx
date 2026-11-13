@@ -364,16 +364,18 @@ export function MetaSynthesisPage() {
       ...(weekTrend?.blocks ?? []),
     ]
     const subtitle = `${queueName} · ${periodLabel} · ${band === 'ALL' ? 'All Players' : `${band}+`}`
-    const canvas = await generateMetaSynthesisImage({
+    const input = {
       title: 'Meta Synthesis',
       subtitle,
       blocks: allBlocks,
       topPlayed: synthesis.topPlayed,
-    })
+    }
+    const canvas = await generateMetaSynthesisImage(input)
     setShareCard({
       canvas,
       imageUrl: canvas.toDataURL('image/jpeg', 0.95),
       filename: `meta-synthesis-${queue}.jpg`,
+      video: () => generateMetaSynthesisImage({ ...input, video: true }),
     })
   }
 

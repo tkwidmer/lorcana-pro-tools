@@ -6,35 +6,10 @@
 import { inkPairMeta, inkPairMatrix, winRate, playerInks, bestOfLeaders, bestRankByPair } from './tournamentInks'
 import { ordinal } from './resultsArchive'
 import { teamInitials } from './teams'
-import { VIDEO_W } from './tournamentShareImage'
+import { INK_2, LINE, PAPER, MUTED, FORGE, DISPLAY, SANS, INK_FILL, layout, loadImage, loadAssets, newCanvas, text, fitText, drawHeader as brandHeader, drawFooter as brandFooter, drawInks, roundRect } from './shareBrand'
 
-const INK = '#17171a'
-const INK_2 = '#232328'
-const LINE = '#34343b'
-const PAPER = '#f2f1ee'
-const MUTED = '#a3a29d'
-const FORGE = '#d6a24a'
-const DISPLAY = 'Oswald, "Arial Narrow", sans-serif'
-const SANS = '"Source Sans 3", ui-sans-serif, system-ui, sans-serif'
 const URL_TEXT = 'inkbornforge.com/tournament-lookup'
-const DPR = 2
 const FEW = 5 // cells under this many matches are drawn faded
-const CAM = 0.25 // video frames keep this share of width and height empty bottom-right for a webcam
-
-// Canvas size and row height. Social images grow with their rows; a video
-// image is a 16:9 frame big enough for rows at 80% of their height, its rows
-// stretched (up to 130%) to fill down to the webcam band, rendered 3840 wide.
-export function layout({ video, w, top, bottom, n, row, gap = 0 }) {
-  if (!video) return { W: w, H: top + n * (row + gap) + bottom, ROW: row, dpr: DPR }
-  const H = Math.max((w * 9) / 16, (top + n * (row * 0.8 + gap) + 24) / (1 - CAM))
-  const W = (H * 16) / 9
-  const cam = { w: W * CAM, h: H * CAM }
-  return { W, H, dpr: VIDEO_W / W, cam, ROW: Math.min(row * 1.3, (H - cam.h - 24 - top) / n - gap) }
-}
-
-export const INK_FILL = {
-  amber: '#f4b223', amethyst: '#7c4ea0', emerald: '#2f9e5b', ruby: '#d1323f', sapphire: '#2a8fd0', steel: '#9aa3ad',
-}
 
 const abbr = (ink) => ink.slice(0, 3).toUpperCase()
 export const pairAbbr = (inks) => inks.map(abbr).join('/')
@@ -69,105 +44,12 @@ export function cellFill(wr) {
   return `rgb(${mix(r, 52)}, ${mix(g, 52)}, ${mix(b, 59)})`
 }
 
-const imageCache = new Map()
-function loadImage(src) {
-  if (!imageCache.has(src)) {
-    imageCache.set(src, new Promise((resolve) => {
-      const img = new Image()
-      // Team logos live on Supabase storage; without CORS a cross-origin
-      // image would taint the canvas, so a logo that refuses fails to load
-      // and the team gets its initials instead.
-      img.crossOrigin = 'anonymous'
-      img.onload = () => resolve(img)
-      img.onerror = () => resolve(null)
-      img.src = src
-    }))
-  }
-  return imageCache.get(src)
-}
-
-async function loadAssets(inkLists) {
-  await Promise.all(['600 20px Oswald', '700 20px Oswald', '400 20px "Source Sans 3"', '600 20px "Source Sans 3"'].map((f) => document.fonts.load(f)))
-  const inks = [...new Set(inkLists.flat())]
-  const icons = Object.fromEntries(await Promise.all(inks.map(async (i) => [i, await loadImage(`/ink/${i}.png`)])))
-  return { icons, mark: await loadImage('/inkborn_forge_mark.png') }
-}
-
-function newCanvas(w, h, dpr) {
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.round(w * dpr)
-  canvas.height = Math.round(h * dpr)
-  const ctx = canvas.getContext('2d')
-  ctx.scale(dpr, dpr)
-  const bg = ctx.createLinearGradient(0, 0, w, h)
-  bg.addColorStop(0, '#1d1d22')
-  bg.addColorStop(1, INK)
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, w, h)
-  ctx.fillStyle = FORGE
-  ctx.fillRect(0, 0, w, 6)
-  return { canvas, ctx }
-}
-
-function text(ctx, str, x, y, { font, color = PAPER, align = 'left', baseline = 'alphabetic', alpha = 1 }) {
-  ctx.globalAlpha = alpha
-  ctx.font = font
-  ctx.fillStyle = color
-  ctx.textAlign = align
-  ctx.textBaseline = baseline
-  ctx.fillText(str, x, y)
-  ctx.globalAlpha = 1
-}
-
-function fitText(ctx, str, maxWidth, font) {
-  ctx.font = font
-  if (ctx.measureText(str).width <= maxWidth) return str
-  let s = str
-  while (s.length > 1 && ctx.measureText(`${s}…`).width > maxWidth) s = s.slice(0, -1)
-  return `${s}…`
-}
-
-// Brand lockup top-left; title, event name and the event line top-right.
 function drawHeader(ctx, w, pad, { mark, title, structure, progress }) {
-  if (mark) {
-    ctx.save()
-    roundRect(ctx, pad, 34, 52, 52, 3)
-    ctx.clip()
-    ctx.drawImage(mark, pad, 34, 52, 52)
-    ctx.restore()
-  }
-  text(ctx, 'INKBORNFORGE', pad + 66, 70, { font: `600 30px ${DISPLAY}`, color: PAPER })
-  text(ctx, title, w - pad, 76, { font: `700 56px ${DISPLAY}`, color: FORGE, align: 'right' })
-  const name = fitText(ctx, structure.eventName.toUpperCase(), w - pad * 2 - 360, `600 28px ${DISPLAY}`)
-  text(ctx, name, w - pad, 116, { font: `600 28px ${DISPLAY}`, align: 'right' })
-  text(ctx, eventLine(structure, progress).toUpperCase(), w - pad, 148, { font: `500 20px ${DISPLAY}`, color: MUTED, align: 'right' })
+  brandHeader(ctx, w, pad, { mark, title, name: structure.eventName, line: eventLine(structure, progress) })
 }
 
-// With a webcam band, the footer sits in the band left of the camera.
 function drawFooter(ctx, w, h, pad, note, cam) {
-  if (cam) {
-    const y = h - cam.h
-    ctx.fillStyle = LINE
-    ctx.fillRect(pad, y, w - cam.w - pad * 2, 1)
-    text(ctx, URL_TEXT, pad, y + 44, { font: `600 26px ${DISPLAY}`, color: FORGE })
-    text(ctx, fitText(ctx, note, w - cam.w - pad * 2, `400 18px ${SANS}`), pad, y + 80, { font: `400 18px ${SANS}`, color: MUTED })
-    return
-  }
-  ctx.fillStyle = LINE
-  ctx.fillRect(pad, h - 64, w - pad * 2, 1)
-  text(ctx, note, pad, h - 30, { font: `400 18px ${SANS}`, color: MUTED })
-  text(ctx, URL_TEXT, w - pad, h - 30, { font: `600 22px ${DISPLAY}`, color: FORGE, align: 'right' })
-}
-
-function drawInks(ctx, icons, inks, x, yMid, size) {
-  inks.forEach((ink, i) => {
-    if (icons[ink]) ctx.drawImage(icons[ink], x + i * (size + 4), yMid - size / 2, size, size)
-  })
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath()
-  ctx.roundRect(x, y, w, h, r)
+  brandFooter(ctx, w, h, pad, { note, url: URL_TEXT, cam })
 }
 
 const pct = (v, digits = 1) => (v == null ? '—' : `${v.toFixed(digits)}%`)

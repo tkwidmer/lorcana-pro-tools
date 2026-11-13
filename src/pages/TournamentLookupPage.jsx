@@ -1261,15 +1261,15 @@ export function TournamentLookupPage() {
       )}
 
       {/* Ink pair tabs (events that show players' deck inks on pairings) */}
-      {inksById.size > 0 && !player && activeTab === 'meta' && <InkMetaTab allMatches={allMatches} />}
-      {inksById.size > 0 && !player && activeTab === 'matrix' && <InkMatrixTab allMatches={allMatches} />}
+      {inksById.size > 0 && !player && activeTab === 'meta' && <InkMetaTab allMatches={allMatches} structure={structure} />}
+      {inksById.size > 0 && !player && activeTab === 'matrix' && <InkMatrixTab allMatches={allMatches} structure={structure} />}
       {inksById.size > 0 && allStandings && !player && activeTab === 'bestof' && (
         <BestOfTab
           standings={allStandings}
           inksById={inksById}
-          eventName={structure?.eventName}
+          allMatches={allMatches}
+          structure={structure}
           standingsLabel={`Standings after ${structure?.isElimination ? `${structure.currentPhaseName || 'Elimination'} round` : 'Round'} ${structure?.currentRoundNumber}`}
-          eventId={currentEventId}
         />
       )}
 

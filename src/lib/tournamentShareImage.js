@@ -88,6 +88,13 @@ export function videoFilename(filename) {
 
 export async function downloadShareImage(canvas, filename = 'tournament-result.jpg', type = 'image/jpeg') {
   const blob = await canvasToBlob(canvas, type, 0.95)
+  // Phones: the share sheet has "Save Image" (iOS) / save to Photos (Android);
+  // an anchor download lands in Files/Downloads instead.
+  const file = new File([blob], filename, { type })
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file] })
+    return
+  }
   const url = URL.createObjectURL(blob)
   const a   = document.createElement('a')
   a.href     = url

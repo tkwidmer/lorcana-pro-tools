@@ -13,7 +13,7 @@ export function ShareDownloadLink({ render, filename }) {
       if (video) await downloadShareImage(await render(true), videoFilename(filename), 'image/png')
       else await downloadShareImage(await render(false), filename, 'image/png')
     } catch (e) {
-      setError(e.message)
+      if (e.name !== 'AbortError') setError(e.message)
     } finally {
       setBusy(false)
     }

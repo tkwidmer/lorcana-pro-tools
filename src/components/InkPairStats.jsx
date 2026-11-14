@@ -27,8 +27,13 @@ function useCutStages(structure) {
   useEffect(() => {
     if (!roundIds) return
     let cancelled = false
-    Promise.all(roundIds.split(',').map((id) => fetchAllStandings(id)))
-      .then((lists) => { if (!cancelled) setLoaded({ roundIds, lists, error: null }) })
+    // A DLC's Top 32 and Top 8 share a deciding round: fetch it once.
+    const unique = [...new Set(roundIds.split(','))]
+    Promise.all(unique.map((id) => fetchAllStandings(id)))
+      .then((fetched) => {
+        const byId = new Map(unique.map((id, i) => [id, fetched[i]]))
+        if (!cancelled) setLoaded({ roundIds, lists: roundIds.split(',').map((id) => byId.get(id)), error: null })
+      })
       .catch((err) => { if (!cancelled) setLoaded({ roundIds, lists: null, error: err.message }) })
     return () => { cancelled = true }
   }, [roundIds])
@@ -50,7 +55,7 @@ export function ConversionTab({ allMatches, structure }) {
   if (!funnel) return <p className="text-sm text-gray-500">Loading the standings that decided each cut…</p>
 
   const labels = cuts.map((c) => c.label)
-  const cutoffText = (c) => (c.cutoff.type === 'rank' ? `the top ${c.cutoff.value}` : `${c.cutoff.value}+ match points`)
+  const cutoffText = (c) => (c.cutoff.type === 'rank' ? `the top ${c.cutoff.value}${c.cutoff.ties ? ' and anyone tied on its match points' : ''}` : `${c.cutoff.value}+ match points`)
   return (
     <div className="space-y-2">
       <div className="border border-gray-200 rounded-lg overflow-hidden">

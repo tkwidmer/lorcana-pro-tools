@@ -135,9 +135,11 @@ export function bestRankByPair(standings, inksById) {
 }
 
 // The players who made a cut, from the standings that decide it: rank within
-// a rank cutoff, or match points at or over a points cutoff.
-export function cutQualifiers(standings, { type, value }) {
-  const made = type === 'rank' ? (e) => e.rank != null && e.rank <= value : (e) => e.match_points >= value
+// a rank cutoff (with `ties`, anyone on the last place's match points too),
+// or match points at or over a points cutoff.
+export function cutQualifiers(standings, { type, value, ties }) {
+  const line = ties ? standings.find((e) => e.rank === value)?.match_points : null
+  const made = line != null ? (e) => e.match_points >= line : type === 'rank' ? (e) => e.rank != null && e.rank <= value : (e) => e.match_points >= value
   return new Set(standings.filter(made).map((e) => String(e.player.id)))
 }
 

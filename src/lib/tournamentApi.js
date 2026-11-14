@@ -137,13 +137,13 @@ export async function fetchUniqueFanCount(events, concurrency = 5) {
 // The event's cuts, in phase order: each phase after the first with a rank
 // cutoff (Top 8) or a points cutoff (a DLC's Day 2, 18+). `fromRoundId` is the
 // previous phase's last round once its standings exist, the standings that
-// decide who made the cut; null before then. An event with a Day 2 (a DLC)
-// also gets a Top 32 before its Top 8: Top 32 qualifies for Nationals, but
-// RPH has no phase for it, so it reads the same final Swiss standings, and
-// everyone tied on 32nd place's match points gets the invite (`ties`).
+// decide who made the cut; null before then. A rank cut under 32 also gets
+// an `optional` Top 32 before it (Conversion's toggle, off by default): at a
+// DLC Top 32 qualifies for Nationals, but RPH has no phase for it, so it
+// reads the same final Swiss standings, and everyone tied on 32nd place's
+// match points gets the invite (`ties`).
 export function phaseCuts(phases) {
   const swiss = phases.filter((p) => p.round_type === 'SWISS')
-  const hasDay2 = phases.some((p) => p.points_required_to_enter_phase)
   return phases.slice(1).flatMap((phase, k) => {
     const prev = phases[k]
     const rank = phase.rank_required_to_enter_phase
@@ -157,7 +157,7 @@ export function phaseCuts(phases) {
       cutoff: rank ? { type: 'rank', value: rank } : { type: 'points', value: points },
       fromRoundId,
     }
-    return hasDay2 && rank && rank < 32 ? [{ label: 'Top 32', cutoff: { type: 'rank', value: 32, ties: true }, fromRoundId }, cut] : [cut]
+    return rank && rank < 32 ? [{ label: 'Top 32', cutoff: { type: 'rank', value: 32, ties: true }, fromRoundId, optional: true }, cut] : [cut]
   })
 }
 

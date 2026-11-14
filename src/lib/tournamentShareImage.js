@@ -19,7 +19,7 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
   const { icons, mark } = await loadAssets(rows.map((r) => r.oppColors ?? []))
   const PAD = 56
   const TOP = 340
-  const { W, H, ROW, dpr, cam } = layout({ video, w: 1200, top: TOP, bottom: 110, n: rows.length, row: 58 })
+  const { W, H, ROW, dpr, cam } = layout({ video, w: 1060, top: TOP, bottom: 110, n: rows.length, row: 58, maxRow: 1.8 })
   const { canvas, ctx } = newCanvas(W, H, dpr)
   drawHeader(ctx, W, PAD, { mark, title: 'RESULT', name: playerName, line: eventName })
 
@@ -38,7 +38,7 @@ export async function generateShareImage({ playerName, rank, totalPlayers, recor
     text(ctx, label, x + 20, 262, { font: `500 16px ${DISPLAY}`, color: MUTED })
   })
 
-  const COLS = { round: PAD + 10, result: PAD + 76, score: PAD + 186, name: PAD + 280, deck: W - PAD - 420, play: W - PAD - 10 }
+  const COLS = { round: PAD + 10, result: PAD + 76, score: PAD + 186, name: PAD + 280, deck: W - PAD - 380, play: W - PAD - 10 }
   const head = { font: `500 17px ${DISPLAY}`, color: MUTED }
   text(ctx, 'ROUND', COLS.round, TOP - 20, head)
   text(ctx, 'RESULT', COLS.result, TOP - 20, head)

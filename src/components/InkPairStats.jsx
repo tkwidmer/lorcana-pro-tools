@@ -19,9 +19,10 @@ const liftColor = (lift) => (lift == null ? 'text-gray-400' : lift >= 1.1 ? 'tex
 // The event's decided cuts, each as { label, ids } (the players who made it),
 // from the standings of the round that decided it. Fetched once per set of
 // deciding rounds, so live refreshes don't refetch. `stages` is null while
-// loading or before any cut is decided.
-function useCutStages(structure) {
-  const cuts = useMemo(() => structure?.cuts.filter((c) => c.fromRoundId) ?? [], [structure])
+// loading or before any cut is decided. Optional cuts (Top 32) only with
+// `withOptional`.
+function useCutStages(structure, withOptional = false) {
+  const cuts = useMemo(() => structure?.cuts.filter((c) => c.fromRoundId && (withOptional || !c.optional)) ?? [], [structure, withOptional])
   const roundIds = cuts.map((c) => c.fromRoundId).join(',')
   const [loaded, setLoaded] = useState({ roundIds: null, lists: null, error: null })
   useEffect(() => {
@@ -49,15 +50,23 @@ function useCutStages(structure) {
 // Day 2 at 18 points, then its Top 8), from the standings of the round that
 // decided it.
 export function ConversionTab({ allMatches, structure }) {
-  const { cuts, stages, error } = useCutStages(structure)
+  const [showTop32, setShowTop32] = useState(false)
+  const { cuts, stages, error } = useCutStages(structure, showTop32)
   const funnel = useMemo(() => stages && conversionFunnel(allMatches, stages), [stages, allMatches])
+  const top32Toggle = structure.cuts.some((c) => c.optional && c.fromRoundId) && (
+    <label className="flex items-center gap-2 text-sm text-gray-500">
+      <input type="checkbox" checked={showTop32} onChange={(e) => setShowTop32(e.target.checked)} />
+      Show Top 32 (Nationals qualification at a DLC)
+    </label>
+  )
   if (error) return <p className="text-sm text-red-600">{error}</p>
-  if (!funnel) return <p className="text-sm text-gray-500">Loading the standings that decided each cut…</p>
+  if (!funnel) return <div className="space-y-2">{top32Toggle}<p className="text-sm text-gray-500">Loading the standings that decided each cut…</p></div>
 
   const labels = cuts.map((c) => c.label)
   const cutoffText = (c) => (c.cutoff.type === 'rank' ? `the top ${c.cutoff.value}${c.cutoff.ties ? ' and anyone tied on its match points' : ''}` : `${c.cutoff.value}+ match points`)
   return (
     <div className="space-y-2">
+      {top32Toggle}
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[560px]">

@@ -4,16 +4,53 @@ export function extractEventId(url) {
   return match ? match[1] : null
 }
 
+// RPH keeps a phase's points cutoff (a DLC's 18 for Day 2) on the event's
+// configuration template, not on the event's own phases. The templates are
+// shared by every event, so they're fetched once per page load.
+let templatesPromise = null
+function fetchPhaseTemplates() {
+  templatesPromise ??= fetch('/api/tournament?type=templates')
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Failed to fetch event templates (HTTP ${response.status})`)
+      return response.json()
+    })
+    .catch((err) => {
+      templatesPromise = null
+      throw err
+    })
+  return templatesPromise
+}
+
+// Copies points_required_to_enter_phase from the event's phase template group
+// (event.phase_template_group) onto its phases, matched by order. Events
+// without a template group are returned unchanged.
+export function withPhasePoints(eventDetails, templates) {
+  const group = templates
+    .flatMap((t) => t.event_structure_policy?.allowed_phase_template_groups ?? [])
+    .find((g) => g.id === eventDetails.phase_template_group)
+  if (!group) return eventDetails
+  return {
+    ...eventDetails,
+    tournament_phases: eventDetails.tournament_phases.map((phase) => ({
+      ...phase,
+      points_required_to_enter_phase: group.phase_templates[phase.order_in_phases - 1]?.points_required_to_enter_phase ?? null,
+    })),
+  }
+}
+
 export async function fetchEventDetails(eventId) {
   try {
-    const response = await fetch(`/api/tournament?type=event&eventId=${eventId}`)
+    const [response, templates] = await Promise.all([
+      fetch(`/api/tournament?type=event&eventId=${eventId}`),
+      fetchPhaseTemplates(),
+    ])
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
       throw new Error(`${error.detail || error.error || 'Failed to fetch event details'} (HTTP ${response.status})`)
     }
 
-    return await response.json()
+    return withPhasePoints(await response.json(), templates)
   } catch (err) {
     console.error('Event details fetch error:', err)
     throw err
@@ -97,6 +134,27 @@ export async function fetchUniqueFanCount(events, concurrency = 5) {
   return userIds.size
 }
 
+// The event's cuts, in phase order: each phase after the first with a rank
+// cutoff (Top 8) or a points cutoff (a DLC's Day 2, 18+). `fromRoundId` is the
+// previous phase's last round once its standings exist, the standings that
+// decide who made the cut; null before then.
+export function phaseCuts(phases) {
+  const swiss = phases.filter((p) => p.round_type === 'SWISS')
+  return phases.slice(1).flatMap((phase, k) => {
+    const prev = phases[k]
+    const rank = phase.rank_required_to_enter_phase
+    const points = phase.points_required_to_enter_phase
+    if (!rank && !points) return []
+    const last = prev.rounds?.at(-1)
+    const lastIsFinal = prev.rounds?.length === prev.number_of_rounds && last?.standings_status === 'GENERATED'
+    return [{
+      label: rank ? `Top ${rank}` : swiss.indexOf(phase) === 1 ? 'Day 2' : phase.phase_name,
+      cutoff: rank ? { type: 'rank', value: rank } : { type: 'points', value: points },
+      fromRoundId: lastIsFinal ? last.id : null,
+    }]
+  })
+}
+
 export function getTournamentStructure(eventDetails) {
   if (!eventDetails || !eventDetails.tournament_phases) return null
 
@@ -171,6 +229,12 @@ export function getTournamentStructure(eventDetails) {
   const isElimination = currentPhaseType === 'RANKED_SINGLE_ELIMINATION'
   const swissRoundsRemaining =
     currentPhaseType === 'SWISS' ? totalSwissRounds - currentRoundNumber : 0
+  // Rounds left in the current phase: its cut (a DLC's Day 2) comes before
+  // later Swiss phases, so their rounds can't count toward it.
+  const currentPhase = phases[currentPhaseIndex]
+  const phaseRoundsRemaining = currentPhase
+    ? currentPhase.number_of_rounds - (currentPhase.rounds.findIndex((r) => r.id === currentRoundId) + 1)
+    : 0
 
   // Determine what's needed to advance to the next phase
   const nextPhase =
@@ -184,6 +248,12 @@ export function getTournamentStructure(eventDetails) {
       advancementRequirement = {
         type: 'rank',
         value: nextPhase.rank_required_to_enter_phase,
+        nextPhaseName: nextPhase.phase_name,
+      }
+    } else if (nextPhase.points_required_to_enter_phase) {
+      advancementRequirement = {
+        type: 'points',
+        value: nextPhase.points_required_to_enter_phase,
         nextPhaseName: nextPhase.phase_name,
       }
     } else {
@@ -214,8 +284,10 @@ export function getTournamentStructure(eventDetails) {
     // is the *currently* displayed phase. Used to pick out bracket matches
     // from the flat `allMatches` list (each match carries `phase_name`).
     eliminationPhaseName: eliminationPhase?.phase_name ?? null,
+    cuts: phaseCuts(phases),
     isElimination,
     swissRoundsRemaining,
+    phaseRoundsRemaining,
     advancementRequirement,
     tiebreakers: eventDetails.tiebreakers ?? [],
     eventName: eventDetails.name,
@@ -376,11 +448,11 @@ export function formatTiebreakers(entry, tiebreakerOrder = []) {
 export function analyzeAdvancement(playerEntry, structure) {
   if (!playerEntry || structure?.advancementRequirement?.type !== 'points') return null
 
-  const { advancementRequirement, swissRoundsRemaining } = structure
+  const { advancementRequirement, phaseRoundsRemaining } = structure
   const { value, nextPhaseName } = advancementRequirement
   const type = 'points'
   const myPoints = playerEntry.match_points
-  const maxPossible = myPoints + swissRoundsRemaining * 3
+  const maxPossible = myPoints + phaseRoundsRemaining * 3
   if (myPoints >= value) {
     return { status: 'secured', nextPhaseName, value, type }
   }

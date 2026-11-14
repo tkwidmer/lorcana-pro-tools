@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines, bestOfLeaders, bestRankByPair, INK_PAIRS } from '../tournamentInks'
+import { inksOfRelationship, playerInks, inkPairMeta, inkPairMatrix, inkPairCountLines, cutQualifiers, conversionFunnel, bestOfLeaders, bestRankByPair, INK_PAIRS } from '../tournamentInks'
 import { metaSlices } from '../streamOverlay'
 
 const rel = (id, inks, order = 1) => ({
@@ -77,5 +77,27 @@ describe('tournamentInks', () => {
     expect(bestRankByPair([standing(5, 9, 12), standing(3, 4, 15), standing(1, 2, 15), standing(2, 1, 15)], inksById))
       .toEqual(new Map([['emerald/steel', 1], ['amber/emerald', 2]]))
     expect(bestRankByPair(null, inksById).size).toBe(0)
+  })
+  it('picks a cut by points or by rank', () => {
+    const standings = [{ player: { id: 1 }, rank: 1, match_points: 21 }, { player: { id: 2 }, rank: 2, match_points: 18 }, { player: { id: 3 }, rank: 3, match_points: 15 }]
+    expect([...cutQualifiers(standings, { type: 'points', value: 18 })]).toEqual(['1', '2'])
+    expect([...cutQualifiers(standings, { type: 'rank', value: 1 })]).toEqual(['1'])
+  })
+
+  it('converts each pair through each cut against the field', () => {
+    // Day 2: players 1 (amber/emerald) and 2 (emerald/steel); Top 1: player 2.
+    const { field, rows } = conversionFunnel(matches, [
+      { label: 'Day 2', ids: new Set(['1', '2']) },
+      { label: 'Top 1', ids: new Set(['2']) },
+    ])
+    expect(field).toEqual({ players: 3, stages: [{ count: 2, conversion: (2 / 3) * 100 }, { count: 1, conversion: 50 }] })
+    const [es, ae] = rows // sorted by the last stage's lift
+    expect(es.key).toBe('emerald/steel')
+    expect(es.stages[0]).toMatchObject({ count: 1, conversion: 100 })
+    expect(es.stages[0].lift).toBeCloseTo(1.5)
+    expect(es.stages[1]).toMatchObject({ count: 1, conversion: 100, lift: 2 })
+    expect(ae.stages[0]).toMatchObject({ count: 1, conversion: 50 })
+    expect(ae.stages[0].lift).toBeCloseTo(0.75)
+    expect(ae.stages[1]).toMatchObject({ count: 0, conversion: 0, lift: 0 })
   })
 })

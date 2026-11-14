@@ -27,7 +27,7 @@ import { Input } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs, Tab } from '../components/ui/Tabs'
 import { InkIcons } from '../components/InkIcons'
-import { InkMetaTab, InkMatrixTab, BestOfTab } from '../components/InkPairStats'
+import { InkMetaTab, InkMatrixTab, BestOfTab, ConversionTab } from '../components/InkPairStats'
 import { ShareDownloadLink } from '../components/ShareDownloadLink'
 import { renderTeamsShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
 import { playerInks, inksOfRelationship } from '../lib/tournamentInks'
@@ -627,7 +627,7 @@ export function TournamentLookupPage() {
   // restore below — otherwise a caster following someone else's link would
   // just get bounced to whatever tournament they personally looked at last.
   useEffect(() => {
-    const VALID_TABS = ['standings', 'matches', 'bracket', 'meta', 'matrix', 'bestof', 'favorites', 'team', 'roster']
+    const VALID_TABS = ['standings', 'matches', 'bracket', 'meta', 'matrix', 'conversion', 'bestof', 'favorites', 'team', 'roster']
     if (initialParams.event) {
       const url = `https://tcg.ravensburgerplay.com/events/${initialParams.event}`
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1098,6 +1098,11 @@ export function TournamentLookupPage() {
               <Tab active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')}>
                 Matchups
               </Tab>
+              {structure?.cuts.some((c) => c.fromRoundId) && (
+                <Tab active={activeTab === 'conversion'} onClick={() => setActiveTab('conversion')}>
+                  Conversion
+                </Tab>
+              )}
               {allStandings && (
                 <Tab active={activeTab === 'bestof'} onClick={() => setActiveTab('bestof')}>
                   Best Of
@@ -1260,6 +1265,7 @@ export function TournamentLookupPage() {
       {/* Ink pair tabs (events that show players' deck inks on pairings) */}
       {inksById.size > 0 && !player && activeTab === 'meta' && <InkMetaTab allMatches={allMatches} structure={structure} standings={allStandings} />}
       {inksById.size > 0 && !player && activeTab === 'matrix' && <InkMatrixTab allMatches={allMatches} structure={structure} standings={allStandings} />}
+      {inksById.size > 0 && !player && activeTab === 'conversion' && structure.cuts.some((c) => c.fromRoundId) && <ConversionTab allMatches={allMatches} structure={structure} />}
       {inksById.size > 0 && allStandings && !player && activeTab === 'bestof' && (
         <BestOfTab
           standings={allStandings}

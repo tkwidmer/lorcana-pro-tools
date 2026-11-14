@@ -6,7 +6,7 @@
 import { inkPairMeta, inkPairMatrix, winRate, playerInks, bestOfLeaders, bestRankByPair } from './tournamentInks'
 import { ordinal } from './resultsArchive'
 import { teamInitials } from './teams'
-import { INK_2, LINE, PAPER, MUTED, FORGE, DISPLAY, SANS, INK_FILL, layout, loadImage, loadAssets, newCanvas, text, fitText, drawHeader as brandHeader, drawFooter as brandFooter, drawInks, roundRect } from './shareBrand'
+import { INK_2, LINE, PAPER, MUTED, FORGE, WIN, LOSS, DISPLAY, SANS, INK_FILL, layout, loadImage, loadAssets, newCanvas, text, fitText, drawHeader as brandHeader, drawFooter as brandFooter, drawInks, roundRect } from './shareBrand'
 
 const URL_TEXT = 'inkbornforge.com/tournament-lookup'
 const FEW = 5 // cells under this many matches are drawn faded
@@ -53,12 +53,30 @@ function drawFooter(ctx, w, h, pad, note, cam) {
 }
 
 const pct = (v, digits = 1) => (v == null ? '—' : `${v.toFixed(digits)}%`)
+// Lift: a pair's conversion over the field's (1.25× = 25% better).
+const liftText = (lift) => (lift == null ? '—' : `${lift.toFixed(2)}×`)
+const liftFill = (lift) => (lift == null ? MUTED : lift >= 1.1 ? WIN : lift <= 0.9 ? LOSS : PAPER)
 
-// The field by ink pair: one row per pair with a bar painted half in each ink.
-export async function renderMetaShareImage({ matches, structure, standings, video }) {
+// A conversion cell, right-aligned at x: "17.0%" with its lift "(1.20×)"
+// smaller after it, both colored by the lift.
+function drawConversion(ctx, { conversion, lift }, x, mid) {
+  if (conversion == null) return text(ctx, '—', x, mid + 9, { font: `600 24px ${DISPLAY}`, color: MUTED, align: 'right' })
+  const small = `500 17px ${DISPLAY}`
+  const ratio = `(${liftText(lift)})`
+  ctx.font = small
+  const ratioW = ctx.measureText(ratio).width
+  text(ctx, ratio, x, mid + 9, { font: small, color: liftFill(lift), align: 'right' })
+  text(ctx, pct(conversion), x - ratioW - 6, mid + 9, { font: `600 24px ${DISPLAY}`, color: liftFill(lift), align: 'right' })
+}
+
+// The field by ink pair, one row per pair; the 16:9 frame, which has the
+// width, adds a share bar painted half in each ink.
+// `firstCut` (the Metagame tab's { label, field, byKey }) adds the pair's
+// conversion through the first decided cut, colored by its lift.
+export async function renderMetaShareImage({ matches, structure, standings, firstCut, video }) {
   const rows = inkPairMeta(matches)
   const bestRank = bestRankByPair(standings, playerInks(matches))
-  const rankCol = standings ? 100 : 0
+  const rankCol = (standings ? 100 : 0) + (firstCut ? 170 : 0)
   const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
   const PAD = 56
   const TOP = 236
@@ -70,12 +88,13 @@ export async function renderMetaShareImage({ matches, structure, standings, vide
   const NAME_X = PAD + 82
   const BAR_X = PAD + 400
   const BAR_W = W - PAD - BAR_X - 300 - rankCol
-  const COLS = { players: W - PAD - 210 - rankCol, share: W - PAD - 110 - rankCol, win: W - PAD - rankCol, best: W - PAD }
+  const COLS = { players: W - PAD - 210 - rankCol, share: W - PAD - 110 - rankCol, win: W - PAD - rankCol, cut: W - PAD - (standings ? 100 : 0), best: W - PAD }
   const head = { font: `500 17px ${DISPLAY}`, color: MUTED, align: 'right' }
   text(ctx, 'INK PAIR', NAME_X, TOP - 20, { ...head, align: 'left' })
   text(ctx, 'PLAYERS', COLS.players, TOP - 20, head)
   text(ctx, 'SHARE', COLS.share, TOP - 20, head)
   text(ctx, 'WIN %', COLS.win, TOP - 20, head)
+  if (firstCut) text(ctx, `${firstCut.label.toUpperCase()} %`, COLS.cut, TOP - 20, head)
   if (standings) text(ctx, 'BEST RANK', COLS.best, TOP - 20, head)
 
   const maxShare = Math.max(...rows.map((r) => r.share))
@@ -85,20 +104,28 @@ export async function renderMetaShareImage({ matches, structure, standings, vide
     if (i % 2 === 0) { ctx.fillStyle = INK_2; ctx.fillRect(PAD, y, W - PAD * 2, ROW) }
     drawInks(ctx, icons, r.inks, PAD + 10, mid, 30)
     text(ctx, pairName(r.inks), NAME_X, mid, { font: `600 24px ${DISPLAY}`, baseline: 'middle' })
-    const len = Math.max(4, (r.share / maxShare) * BAR_W)
-    r.inks.forEach((ink, k) => {
-      ctx.fillStyle = INK_FILL[ink]
-      ctx.fillRect(BAR_X + (len / r.inks.length) * k, mid - 9, len / r.inks.length, 18)
-    })
+    if (video) {
+      const len = Math.max(4, (r.share / maxShare) * BAR_W)
+      r.inks.forEach((ink, k) => {
+        ctx.fillStyle = INK_FILL[ink]
+        ctx.fillRect(BAR_X + (len / r.inks.length) * k, mid - 9, len / r.inks.length, 18)
+      })
+    }
     text(ctx, String(r.players), COLS.players, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
     text(ctx, pct(r.share), COLS.share, mid, { font: `600 24px ${DISPLAY}`, color: FORGE, align: 'right', baseline: 'middle' })
     const wr = r.winRate
     const color = wr == null ? MUTED : wr >= 52 ? '#6fd39a' : wr <= 48 ? '#f08a8a' : PAPER
     text(ctx, pct(wr), COLS.win, mid, { font: `600 24px ${DISPLAY}`, color, align: 'right', baseline: 'middle' })
+    if (firstCut) {
+      drawConversion(ctx, firstCut.byKey.get(r.key) ?? {}, COLS.cut, mid)
+    }
     if (standings) text(ctx, bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—', COLS.best, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
   })
 
-  drawFooter(ctx, W, H, PAD, `${players.toLocaleString('en-US')} players with a submitted deck · win % vs other pairs, draws as half, mirrors left out`, cam)
+  const note = firstCut
+    ? `${players.toLocaleString('en-US')} decks · win % vs other pairs, mirrors out · ${firstCut.label} % (× the field's ${pct(firstCut.field)})`
+    : `${players.toLocaleString('en-US')} players with a submitted deck · win % vs other pairs, draws as half, mirrors left out`
+  drawFooter(ctx, W, H, PAD, note, cam)
   return canvas
 }
 
@@ -293,5 +320,54 @@ export async function renderBestOfShareImage({ matches, structure, standings, st
   })
 
   drawFooter(ctx, W, H, PAD, 'Highest standing on each ink pair wins its Best Of promo · others = tied with them on points', cam)
+  return canvas
+}
+
+
+// Conversion through each cut: Day 1 players, then per cut its players and
+// the conversion from the stage before with its lift over the field's.
+// `funnel` is conversionFunnel()'s result, `labels` the cut labels in order.
+export async function renderConversionShareImage({ funnel, labels, structure, video }) {
+  const { rows, field } = funnel
+  const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
+  const PAD = 56
+  const TOP = 266
+  const STAGE_W = 290
+  const NAME_W = 420
+  const { W, H, ROW, dpr, cam } = layout({ video, w: PAD * 2 + NAME_W + 130 + labels.length * STAGE_W, top: TOP, bottom: 110, n: rows.length, row: 58 })
+  const { canvas, ctx } = newCanvas(W, H, dpr)
+  drawHeader(ctx, W, PAD, { mark, title: 'CONVERSION', structure })
+
+  const NAME_X = PAD + 82
+  // Columns hang from the right edge, so a wide video frame widens the name column.
+  const DAY1_X = W - PAD - labels.length * STAGE_W
+  const stageX = (i) => DAY1_X + (i + 1) * STAGE_W // right edge of the stage's block
+  const head = { font: `500 17px ${DISPLAY}`, color: MUTED, align: 'right' }
+  text(ctx, 'INK PAIR', NAME_X, TOP - 20, { ...head, align: 'left' })
+  text(ctx, 'DAY 1', DAY1_X, TOP - 20, head)
+  labels.forEach((label, i) => {
+    const x = stageX(i)
+    text(ctx, label.toUpperCase(), x - STAGE_W / 2 + 40, TOP - 52, { font: `600 20px ${DISPLAY}`, color: FORGE, align: 'center' })
+    text(ctx, 'PLAYERS', x - 180, TOP - 20, head)
+    text(ctx, 'CONV. (VS FIELD)', x, TOP - 20, head)
+  })
+
+  rows.forEach((r, i) => {
+    const y = TOP + i * ROW
+    const mid = y + ROW / 2
+    if (i % 2 === 0) { ctx.fillStyle = INK_2; ctx.fillRect(PAD, y, W - PAD * 2, ROW) }
+    drawInks(ctx, icons, r.inks, PAD + 10, mid, 30)
+    text(ctx, pairName(r.inks), NAME_X, mid, { font: `600 24px ${DISPLAY}`, baseline: 'middle' })
+    const cell = { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' }
+    text(ctx, String(r.players), DAY1_X, mid, cell)
+    r.stages.forEach((s, k) => {
+      const x = stageX(k)
+      text(ctx, String(s.count), x - 180, mid, cell)
+      drawConversion(ctx, s, x, mid)
+    })
+  })
+
+  const fieldNote = labels.map((label, i) => `${label} ${field.stages[i].count.toLocaleString('en-US')} (${pct(field.stages[i].conversion)})`).join(' · ')
+  drawFooter(ctx, W, H, PAD, `${field.players.toLocaleString('en-US')} decks · ${fieldNote} · 1.25× = 25% better than the field`, cam)
   return canvas
 }

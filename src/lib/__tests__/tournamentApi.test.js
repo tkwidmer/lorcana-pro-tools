@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getTournamentStructure, formatTiebreakers, analyzeAdvancement, analyzeId, projectCut, extractEventId } from '../tournamentApi'
+import { getTournamentStructure, withPhasePoints, formatTiebreakers, analyzeAdvancement, analyzeId, projectCut, extractEventId } from '../tournamentApi'
 
 const roundComplete = (id, n) => ({ id, round_number: n, status: 'COMPLETE', standings_status: 'GENERATED' })
 const roundInProgress = (id, n) => ({ id, round_number: n, status: 'IN_PROGRESS', standings_status: 'GENERATED' })
@@ -127,6 +127,55 @@ describe('getTournamentStructure', () => {
   })
 })
 
+// DLC London (1254364) during Day 1's last round: its phases carry no
+// points cutoff; its template group does (Phase 2 needs 18).
+describe('withPhasePoints', () => {
+  const london = {
+    phase_template_group: 'g1',
+    tournament_phases: [
+      { phase_name: 'Phase 1', order_in_phases: 1, round_type: 'SWISS', number_of_rounds: 8, rounds: [1, 2, 3, 4, 5, 6, 7].map((n) => roundComplete(`r${n}`, n)).concat(roundInProgress('r8', 8)) },
+      { phase_name: 'Phase 2', order_in_phases: 2, round_type: 'SWISS', number_of_rounds: 7, rounds: [] },
+      { phase_name: 'Phase 3', order_in_phases: 3, round_type: 'RANKED_SINGLE_ELIMINATION', number_of_rounds: 3, rank_required_to_enter_phase: 8, rounds: [] },
+    ],
+  }
+  const templates = [{ event_structure_policy: { allowed_phase_template_groups: [
+    { id: 'g0', phase_templates: [{}, { points_required_to_enter_phase: 99 }] },
+    { id: 'g1', phase_templates: [{ points_required_to_enter_phase: null }, { points_required_to_enter_phase: 18 }, { points_required_to_enter_phase: null }] },
+  ] } }]
+
+  it("copies the group's points cutoff onto the event's phases", () => {
+    const phases = withPhasePoints(london, templates).tournament_phases
+    expect(phases.map((p) => p.points_required_to_enter_phase)).toEqual([null, 18, null])
+  })
+
+  it('gives the cuts and the advancement requirement from the cutoff', () => {
+    const s = getTournamentStructure(withPhasePoints(london, templates))
+    expect(s.cuts).toEqual([
+      { label: 'Day 2', cutoff: { type: 'points', value: 18 }, fromRoundId: 'r8' },
+      { label: 'Top 8', cutoff: { type: 'rank', value: 8 }, fromRoundId: null },
+    ])
+    expect(s.advancementRequirement).toEqual({ type: 'points', value: 18, nextPhaseName: 'Phase 2' })
+  })
+
+  it("counts only Day 1's rounds toward Day 2", () => {
+    // After round 8 of 8 a 12-point player can't reach 18: Day 2's 7 rounds come after the cut.
+    const s = getTournamentStructure(withPhasePoints(london, templates))
+    expect(s.phaseRoundsRemaining).toBe(0)
+    expect(analyzeAdvancement({ match_points: 12 }, s).status).toBe('eliminated')
+  })
+
+  it('has no Day 2 cut before Day 1 reaches its last round', () => {
+    const early = { ...london, tournament_phases: [{ ...london.tournament_phases[0], rounds: london.tournament_phases[0].rounds.slice(0, 7) }, ...london.tournament_phases.slice(1)] }
+    expect(getTournamentStructure(withPhasePoints(early, templates)).cuts[0].fromRoundId).toBeNull()
+  })
+
+  it('leaves an event without a template group unchanged', () => {
+    const custom = { ...london, phase_template_group: null }
+    expect(withPhasePoints(custom, templates)).toBe(custom)
+    expect(getTournamentStructure(custom).cuts.map((c) => c.label)).toEqual(['Top 8'])
+  })
+})
+
 describe('formatTiebreakers', () => {
   const entry = {
     rank: 5,
@@ -161,7 +210,7 @@ describe('formatTiebreakers', () => {
 describe('analyzeAdvancement - points-based', () => {
   const structure = {
     advancementRequirement: { type: 'points', value: 18, nextPhaseName: 'Day 2' },
-    swissRoundsRemaining: 2,
+    phaseRoundsRemaining: 2,
   }
 
   it('returns secured when already at threshold', () => {

@@ -27,9 +27,43 @@ export function extractEventId(url: string | null | undefined): string | null {
   return match ? match[1] : null
 }
 
+// RPH keeps a phase's points cutoff (a DLC's 18 for Day 2) on the event's
+// configuration template, not on the event's own phases. The templates are
+// shared by every event, so a warm function instance fetches them once.
+let templatesPromise: Promise<any[]> | null = null
+function fetchPhaseTemplates() {
+  templatesPromise ??= ravenFetch('/event-configuration-templates/?game_slug=disney-lorcana').catch((err) => {
+    templatesPromise = null
+    throw err
+  })
+  return templatesPromise
+}
+
+// Copies points_required_to_enter_phase from the event's phase template group
+// (event.phase_template_group) onto its phases, matched by order. Events
+// without a template group are returned unchanged. Same as withPhasePoints()
+// in src/lib/tournamentApi.js.
+export function withPhasePoints(eventDetails: any, templates: any[]) {
+  const group = templates
+    .flatMap((t: any) => t.event_structure_policy?.allowed_phase_template_groups ?? [])
+    .find((g: any) => g.id === eventDetails.phase_template_group)
+  if (!group) return eventDetails
+  return {
+    ...eventDetails,
+    tournament_phases: eventDetails.tournament_phases.map((phase: any) => ({
+      ...phase,
+      points_required_to_enter_phase: group.phase_templates[phase.order_in_phases - 1]?.points_required_to_enter_phase ?? null,
+    })),
+  }
+}
+
 export async function fetchEventDetails(eventId: string) {
   assertValidId(eventId, 'eventId')
-  return ravenFetch(`/events/${encodeURIComponent(eventId)}`)
+  const [eventDetails, templates] = await Promise.all([
+    ravenFetch(`/events/${encodeURIComponent(eventId)}`),
+    fetchPhaseTemplates(),
+  ])
+  return withPhasePoints(eventDetails, templates)
 }
 
 // A round's full standings in one call, with match_points normalized to the
@@ -90,6 +124,12 @@ export function getTournamentStructure(eventDetails: any) {
   const isElimination = currentPhaseType === 'RANKED_SINGLE_ELIMINATION'
   const swissRoundsRemaining =
     currentPhaseType === 'SWISS' ? totalSwissRounds - (currentRoundNumber as number) : 0
+  // Rounds left in the current phase: its cut (a DLC's Day 2) comes before
+  // later Swiss phases, so their rounds can't count toward it.
+  const currentPhase = phases[currentPhaseIndex]
+  const phaseRoundsRemaining = currentPhase
+    ? currentPhase.number_of_rounds - (currentPhase.rounds.findIndex((r: any) => r.id === currentRoundId) + 1)
+    : 0
 
   const nextPhase =
     currentPhaseIndex >= 0 && currentPhaseIndex + 1 < phases.length
@@ -102,6 +142,12 @@ export function getTournamentStructure(eventDetails: any) {
       advancementRequirement = {
         type: 'rank',
         value: nextPhase.rank_required_to_enter_phase,
+        nextPhaseName: nextPhase.phase_name,
+      }
+    } else if (nextPhase.points_required_to_enter_phase) {
+      advancementRequirement = {
+        type: 'points',
+        value: nextPhase.points_required_to_enter_phase,
         nextPhaseName: nextPhase.phase_name,
       }
     } else {
@@ -125,6 +171,7 @@ export function getTournamentStructure(eventDetails: any) {
     currentPhaseName,
     isElimination,
     swissRoundsRemaining,
+    phaseRoundsRemaining,
     advancementRequirement,
     tiebreakers: eventDetails.tiebreakers ?? [],
     eventName: eventDetails.name,
@@ -142,11 +189,11 @@ export function getTournamentStructure(eventDetails: any) {
 export function analyzeAdvancement(playerEntry: any, structure: any) {
   if (!playerEntry || structure?.advancementRequirement?.type !== 'points') return null
 
-  const { advancementRequirement, swissRoundsRemaining } = structure
+  const { advancementRequirement, phaseRoundsRemaining } = structure
   const { value, nextPhaseName } = advancementRequirement
   const type = 'points'
   const myPoints = playerEntry.match_points
-  const maxPossible = myPoints + swissRoundsRemaining * 3
+  const maxPossible = myPoints + phaseRoundsRemaining * 3
   if (myPoints >= value) return { status: 'secured', nextPhaseName, value, type }
   if (maxPossible < value) return { status: 'eliminated', nextPhaseName, value, type }
   const winsNeeded = Math.ceil((value - myPoints) / 3)

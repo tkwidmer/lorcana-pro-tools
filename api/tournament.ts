@@ -70,6 +70,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!ID_RE.test(storeId)) return res.status(400).json({ error: 'Invalid storeId' })
       url = `${HYDRA_BASE}/game-stores/${encodeURIComponent(storeId)}/`
       break
+    case 'templates':
+      // Event configuration templates: the only place RPH keeps a phase's
+      // points cutoff (points_required_to_enter_phase, a DLC's 18 for Day 2).
+      url = `${HYDRA_BASE}/event-configuration-templates/?game_slug=disney-lorcana`
+      break
     case 'storeEvents':
       if (!storeNumericId) return res.status(400).json({ error: 'Missing storeNumericId' })
       if (!NUMERIC_ID_RE.test(storeNumericId)) return res.status(400).json({ error: 'Invalid storeNumericId' })

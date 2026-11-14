@@ -133,3 +133,49 @@ export function bestOfLeaders(standings, inksById) {
 export function bestRankByPair(standings, inksById) {
   return new Map(bestOfLeaders(standings, inksById).filter((r) => r.entry).map((r) => [r.key, r.entry.rank]))
 }
+
+// The players who made a cut, from the standings that decide it: rank within
+// a rank cutoff, or match points at or over a points cutoff.
+export function cutQualifiers(standings, { type, value }) {
+  const made = type === 'rank' ? (e) => e.rank != null && e.rank <= value : (e) => e.match_points >= value
+  return new Set(standings.filter(made).map((e) => String(e.player.id)))
+}
+
+// The field's conversion through each cut, by ink pair. `stages` is
+// [{ label, ids }], each a Set of player ids that made that cut, in order.
+// Per pair and stage: `count` (its players who made it), `conversion` (count
+// over the pair's count at the previous stage, Day 1's players first) and
+// `lift` (that over the whole field's conversion; 1.25 = 25% better).
+// Pairs nobody played are left out; rows sort by the last stage's lift.
+export function conversionFunnel(matches, stages) {
+  const inksById = playerInks(matches)
+  const rows = new Map()
+  for (const [id, inks] of inksById) {
+    const key = pairKey(inks)
+    if (!rows.has(key)) rows.set(key, { key, inks, players: 0, counts: stages.map(() => 0) })
+    const row = rows.get(key)
+    row.players++
+    stages.forEach((stage, i) => { if (stage.ids.has(id)) row.counts[i]++ })
+  }
+  const field = { players: inksById.size, counts: stages.map((_, i) => [...rows.values()].reduce((n, r) => n + r.counts[i], 0)) }
+  const rates = (r) => r.counts.map((count, i) => {
+    const from = i === 0 ? r.players : r.counts[i - 1]
+    return from ? count / from : null
+  })
+  const fieldRates = rates(field)
+  const out = [...rows.values()].map((r) => ({
+    ...r,
+    stages: rates(r).map((rate, i) => ({
+      count: r.counts[i],
+      conversion: rate == null ? null : rate * 100,
+      lift: rate == null || !fieldRates[i] ? null : rate / fieldRates[i],
+    })),
+  }))
+  const last = stages.length - 1
+  const lift = (r) => r.stages[last]?.lift ?? -1
+  return {
+    field: { players: field.players, stages: field.counts.map((count, i) => ({ count, conversion: fieldRates[i] == null ? null : fieldRates[i] * 100 })) },
+    rows: out.sort((x, y) => lift(y) - lift(x) || y.players - x.players),
+  }
+}
+

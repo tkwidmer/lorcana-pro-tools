@@ -170,7 +170,7 @@ export function InkMetaTab({ allMatches, structure, standings }) {
                   <td className={`px-4 py-2.5 text-right font-mono ${winrateTextColor(r.winRate)}`}>{pct(r.winRate)}</td>
                   {firstCut && (
                     <td className={`px-4 py-2.5 text-right font-mono ${liftColor(firstCut.byKey.get(r.key)?.lift)}`} title={`${firstCut.byKey.get(r.key)?.count ?? 0} of ${r.players} made ${firstCut.label}`}>
-                      {pct(firstCut.byKey.get(r.key)?.conversion)} ({liftText(firstCut.byKey.get(r.key)?.lift)})
+                      {pct(firstCut.byKey.get(r.key)?.conversion)} <span className="text-xs">({liftText(firstCut.byKey.get(r.key)?.lift)})</span>
                     </td>
                   )}
                   {standings && <td className="px-4 py-2.5 text-right font-mono text-gray-700">{bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—'}</td>}

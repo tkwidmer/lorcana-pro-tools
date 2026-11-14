@@ -57,6 +57,18 @@ const pct = (v, digits = 1) => (v == null ? '—' : `${v.toFixed(digits)}%`)
 const liftText = (lift) => (lift == null ? '—' : `${lift.toFixed(2)}×`)
 const liftFill = (lift) => (lift == null ? MUTED : lift >= 1.1 ? WIN : lift <= 0.9 ? LOSS : PAPER)
 
+// A conversion cell, right-aligned at x: "17.0%" with its lift "(1.20×)"
+// smaller after it, both colored by the lift.
+function drawConversion(ctx, { conversion, lift }, x, mid) {
+  if (conversion == null) return text(ctx, '—', x, mid + 9, { font: `600 24px ${DISPLAY}`, color: MUTED, align: 'right' })
+  const small = `500 17px ${DISPLAY}`
+  const ratio = `(${liftText(lift)})`
+  ctx.font = small
+  const ratioW = ctx.measureText(ratio).width
+  text(ctx, ratio, x, mid + 9, { font: small, color: liftFill(lift), align: 'right' })
+  text(ctx, pct(conversion), x - ratioW - 6, mid + 9, { font: `600 24px ${DISPLAY}`, color: liftFill(lift), align: 'right' })
+}
+
 // The field by ink pair, one row per pair; the 16:9 frame, which has the
 // width, adds a share bar painted half in each ink.
 // `firstCut` (the Metagame tab's { label, field, byKey }) adds the pair's
@@ -64,7 +76,7 @@ const liftFill = (lift) => (lift == null ? MUTED : lift >= 1.1 ? WIN : lift <= 0
 export async function renderMetaShareImage({ matches, structure, standings, firstCut, video }) {
   const rows = inkPairMeta(matches)
   const bestRank = bestRankByPair(standings, playerInks(matches))
-  const rankCol = (standings ? 100 : 0) + (firstCut ? 200 : 0)
+  const rankCol = (standings ? 100 : 0) + (firstCut ? 170 : 0)
   const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
   const PAD = 56
   const TOP = 236
@@ -105,8 +117,7 @@ export async function renderMetaShareImage({ matches, structure, standings, firs
     const color = wr == null ? MUTED : wr >= 52 ? '#6fd39a' : wr <= 48 ? '#f08a8a' : PAPER
     text(ctx, pct(wr), COLS.win, mid, { font: `600 24px ${DISPLAY}`, color, align: 'right', baseline: 'middle' })
     if (firstCut) {
-      const cut = firstCut.byKey.get(r.key)
-      text(ctx, `${pct(cut?.conversion)} (${liftText(cut?.lift)})`, COLS.cut, mid, { font: `600 24px ${DISPLAY}`, color: liftFill(cut?.lift), align: 'right', baseline: 'middle' })
+      drawConversion(ctx, firstCut.byKey.get(r.key) ?? {}, COLS.cut, mid)
     }
     if (standings) text(ctx, bestRank.has(r.key) ? `#${bestRank.get(r.key)}` : '—', COLS.best, mid, { font: `600 24px ${DISPLAY}`, align: 'right', baseline: 'middle' })
   })
@@ -313,15 +324,15 @@ export async function renderBestOfShareImage({ matches, structure, standings, st
 }
 
 
-// Conversion through each cut: Day 1 players, then per cut its players, the
-// conversion from the stage before and the lift over the field's.
+// Conversion through each cut: Day 1 players, then per cut its players and
+// the conversion from the stage before with its lift over the field's.
 // `funnel` is conversionFunnel()'s result, `labels` the cut labels in order.
 export async function renderConversionShareImage({ funnel, labels, structure, video }) {
   const { rows, field } = funnel
   const { icons, mark } = await loadAssets(rows.map((r) => r.inks))
   const PAD = 56
   const TOP = 266
-  const STAGE_W = 330
+  const STAGE_W = 290
   const NAME_W = 420
   const { W, H, ROW, dpr, cam } = layout({ video, w: PAD * 2 + NAME_W + 130 + labels.length * STAGE_W, top: TOP, bottom: 110, n: rows.length, row: 58 })
   const { canvas, ctx } = newCanvas(W, H, dpr)
@@ -337,9 +348,8 @@ export async function renderConversionShareImage({ funnel, labels, structure, vi
   labels.forEach((label, i) => {
     const x = stageX(i)
     text(ctx, label.toUpperCase(), x - STAGE_W / 2 + 40, TOP - 52, { font: `600 20px ${DISPLAY}`, color: FORGE, align: 'center' })
-    text(ctx, 'PLAYERS', x - 220, TOP - 20, head)
-    text(ctx, 'CONV.', x - 110, TOP - 20, head)
-    text(ctx, 'VS FIELD', x, TOP - 20, head)
+    text(ctx, 'PLAYERS', x - 180, TOP - 20, head)
+    text(ctx, 'CONV. (VS FIELD)', x, TOP - 20, head)
   })
 
   rows.forEach((r, i) => {
@@ -352,9 +362,8 @@ export async function renderConversionShareImage({ funnel, labels, structure, vi
     text(ctx, String(r.players), DAY1_X, mid, cell)
     r.stages.forEach((s, k) => {
       const x = stageX(k)
-      text(ctx, String(s.count), x - 220, mid, cell)
-      text(ctx, pct(s.conversion), x - 110, mid, { ...cell, color: MUTED })
-      text(ctx, liftText(s.lift), x, mid, { ...cell, color: liftFill(s.lift) })
+      text(ctx, String(s.count), x - 180, mid, cell)
+      drawConversion(ctx, s, x, mid)
     })
   })
 

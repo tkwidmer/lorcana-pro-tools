@@ -152,6 +152,7 @@ describe('withPhasePoints', () => {
     const s = getTournamentStructure(withPhasePoints(london, templates))
     expect(s.cuts).toEqual([
       { label: 'Day 2', cutoff: { type: 'points', value: 18 }, fromRoundId: 'r8' },
+      { label: 'Top 32', cutoff: { type: 'rank', value: 32, ties: true }, fromRoundId: null },
       { label: 'Top 8', cutoff: { type: 'rank', value: 8 }, fromRoundId: null },
     ])
     expect(s.advancementRequirement).toEqual({ type: 'points', value: 18, nextPhaseName: 'Phase 2' })

@@ -82,6 +82,8 @@ describe('tournamentInks', () => {
     const standings = [{ player: { id: 1 }, rank: 1, match_points: 21 }, { player: { id: 2 }, rank: 2, match_points: 18 }, { player: { id: 3 }, rank: 3, match_points: 15 }]
     expect([...cutQualifiers(standings, { type: 'points', value: 18 })]).toEqual(['1', '2'])
     expect([...cutQualifiers(standings, { type: 'rank', value: 1 })]).toEqual(['1'])
+    const tiedAt2 = [...standings.slice(0, 2), { player: { id: 3 }, rank: 3, match_points: 18 }, { player: { id: 4 }, rank: 4, match_points: 15 }]
+    expect([...cutQualifiers(tiedAt2, { type: 'rank', value: 2, ties: true })]).toEqual(['1', '2', '3'])
   })
 
   it('converts each pair through each cut against the field', () => {

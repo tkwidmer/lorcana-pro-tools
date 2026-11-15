@@ -133,7 +133,7 @@ export async function renderMetaShareImage({ matches, structure, standings, firs
 // win rate and record vs the field and (with standings) its best rank;
 // sized to the number of pairs.
 export async function renderMatchupShareImage({ matches, structure, standings, video }) {
-  const pairs = video ? inkPairMeta(matches) : inkPairMeta(matches).slice(0, 6)
+  const pairs = video ? inkPairMeta(matches) : inkPairMeta(matches).slice(0, 7)
   const cells = inkPairMatrix(matches)
   const bestRank = bestRankByPair(standings, playerInks(matches))
   const { icons, mark } = await loadAssets(pairs.map((p) => p.inks))

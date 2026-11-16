@@ -148,7 +148,8 @@ export function cutQualifiers(standings, { type, value, ties }) {
 // Per pair and stage: `count` (its players who made it), `conversion` (count
 // over the pair's count at the previous stage, Day 1's players first) and
 // `lift` (that over the whole field's conversion; 1.25 = 25% better).
-// Pairs nobody played are left out; rows sort by the last stage's lift.
+// Pairs nobody played are left out; rows sort by the last stage's lift, ties
+// by each earlier stage's in turn.
 export function conversionFunnel(matches, stages) {
   const inksById = playerInks(matches)
   const rows = new Map()
@@ -173,11 +174,17 @@ export function conversionFunnel(matches, stages) {
       lift: rate == null || !fieldRates[i] ? null : rate / fieldRates[i],
     })),
   }))
-  const last = stages.length - 1
-  const lift = (r) => r.stages[last]?.lift ?? -1
+  // Last stage's lift first; a tie falls back to the stage before, then players.
+  const byLift = (x, y) => {
+    for (let i = stages.length - 1; i >= 0; i--) {
+      const d = (y.stages[i].lift ?? -1) - (x.stages[i].lift ?? -1)
+      if (d) return d
+    }
+    return y.players - x.players
+  }
   return {
     field: { players: field.players, stages: field.counts.map((count, i) => ({ count, conversion: fieldRates[i] == null ? null : fieldRates[i] * 100 })) },
-    rows: out.sort((x, y) => lift(y) - lift(x) || y.players - x.players),
+    rows: out.sort(byLift),
   }
 }
 

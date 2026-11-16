@@ -513,7 +513,7 @@ export function MatchHistoryPage() {
     }
     setSelected(new Set())
     if (done > 0) {
-      navigate('/analytics')
+      navigate('/analytics', { state: { importFailed: errors } })
     } else {
       setTimeout(() => setBulkOp(null), 4000)
     }

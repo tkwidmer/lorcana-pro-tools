@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { getAllGamelogs, deleteGamelog, saveGamelog } from '../lib/gamelogHistory'
 import { importGamesFromZip } from '../lib/gameImport'
 import { downloadGameIds } from '../lib/exportGameIds'
@@ -46,7 +46,10 @@ function saveImportedGameIds(ids) {
 export function AnalyticsPage() {
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const { state: navState } = useLocation()
+  const [error, setError] = useState(navState?.importFailed
+    ? `${navState.importFailed} gamelog${navState.importFailed === 1 ? '' : 's'} failed to import. Retry ${navState.importFailed === 1 ? 'it' : 'them'} from Match History.`
+    : null)
   const [dragOver, setDragOver] = useState(false)
   const [importedIds, setImportedIds] = useState(getImportedGameIds())
   const [importedOpen, setImportedOpen] = useState(true)

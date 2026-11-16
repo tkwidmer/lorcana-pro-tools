@@ -505,14 +505,15 @@ export function MatchHistoryPage() {
         })
         await saveGamelog(game.gamelog_id, parsed, logs)
         done++
-      } catch {
+      } catch (err) {
+        console.error(`Gamelog import failed for ${game.gamelog_id}:`, err)
         errors++
       }
       setBulkOp({ done, total: toImport.length, errors, label: 'Importing gamelogs' })
     }
     setSelected(new Set())
-    if (errors === 0) {
-      navigate('/analytics')
+    if (done > 0) {
+      navigate('/analytics', { state: { importFailed: errors } })
     } else {
       setTimeout(() => setBulkOp(null), 4000)
     }

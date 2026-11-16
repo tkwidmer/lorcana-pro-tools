@@ -102,4 +102,15 @@ describe('tournamentInks', () => {
     expect(ae.stages[0].lift).toBeCloseTo(0.75)
     expect(ae.stages[1]).toMatchObject({ count: 0, conversion: 0, lift: 0 })
   })
+
+  it('breaks a tie at the last cut by the cut before it, not by field size', () => {
+    // amber/emerald: 2 players, none in Day 2. emerald/steel: 1 player, in Day 2. Top 4 and Top 1: player 5 (ruby/sapphire).
+    const field = [...matches, match(rel(5, 'ruby,sapphire'), rel(6, 'ruby,sapphire', 2), { winning_player: 5 })]
+    const { rows } = conversionFunnel(field, [
+      { label: 'Day 2', ids: new Set(['2', '5']) },
+      { label: 'Top 4', ids: new Set(['5']) },
+      { label: 'Top 1', ids: new Set(['5']) },
+    ])
+    expect(rows.map((r) => r.key)).toEqual(['ruby/sapphire', 'emerald/steel', 'amber/emerald'])
+  })
 })

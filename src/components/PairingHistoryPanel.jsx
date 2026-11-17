@@ -77,11 +77,6 @@ function PlayerSummaryCard({ label, playerId, history, loading, error }) {
   )
 }
 
-// Below this many prior meetings (in *other* events — the currently loaded
-// event's own matches are excluded, see below) a "rivalry" banner isn't
-// interesting enough to show.
-const MIN_RIVALRY_MEETINGS = 2
-
 export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, currentEventId }) {
   const { p1, p2 } = pairing
   const [historyA, setHistoryA] = useState(null)
@@ -155,7 +150,7 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700">
               First meeting — no prior matches found in imported events.
             </div>
-          ) : priorMatches.length >= MIN_RIVALRY_MEETINGS ? (
+          ) : (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-sm font-bold text-amber-900 mb-2">
                 Met {priorMatches.length}x previously — {p1.name} {priorMetRecord.playerAWins}-{priorMetRecord.playerBWins}
@@ -171,7 +166,7 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
                 ))}
               </ul>
             </div>
-          ) : null}
+          )}
 
           {/* Row 1: cross-event summary cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -46,6 +46,10 @@ export async function fetchArchiveEvent(eventId) {
   return publicFetch(`?endpoint=event&eventId=${encodeURIComponent(eventId)}`)
 }
 
+export async function fetchArchiveEventMatches(eventId) {
+  return publicFetch(`?endpoint=event-matches&eventId=${encodeURIComponent(eventId)}`)
+}
+
 export async function fetchArchiveEventPlayer(eventId, playerId) {
   return publicFetch(
     `?endpoint=event-player&eventId=${encodeURIComponent(eventId)}&playerId=${encodeURIComponent(playerId)}`

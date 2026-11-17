@@ -377,6 +377,19 @@ export async function getEventMatches(eventDbId: string, phaseName: string) {
   return data ?? []
 }
 
+// Every match of an event, for the results page's ink-pair tabs. A DLC is
+// ~10k rows, so paged.
+export function getEventAllMatches(eventDbId: string) {
+  const supabase = getSupabaseServiceClient()
+  return fetchAllRanges<any>(() =>
+    supabase
+      .from('tournament_history_matches')
+      .select(MATCH_COLUMNS)
+      .eq('event_id', eventDbId)
+      .order('id') // stable order across .range() pages
+  )
+}
+
 // `playerId` must already be validated (ID_RE in the route): it is
 // interpolated into PostgREST's .or() filter syntax.
 export async function getEventPlayerMatches(eventDbId: string, playerId: string) {

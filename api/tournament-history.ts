@@ -26,6 +26,7 @@ import {
   getEventByRphId,
   getEventStandings,
   getEventMatches,
+  getEventAllMatches,
   getEventPlayerMatches,
   getPlayerMatches,
   getMajorParents,
@@ -414,6 +415,22 @@ async function handleEvent(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     console.error('tournament-history event failed:', err instanceof Error ? err.message : err)
     return res.status(500).json({ error: 'Failed to load event' })
+  }
+}
+
+async function handleEventMatches(req: VercelRequest, res: VercelResponse) {
+  const eventId = str(req.query.eventId)
+  if (!eventId || !ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
+  try {
+    const row = await getEventByRphId(eventId)
+    if (!row) return res.status(404).json({ error: 'Event not found' })
+    const rows = await getEventAllMatches(row.id)
+    res.setHeader('Cache-Control', PUBLIC_CACHE)
+    res.setHeader('Vercel-Cache-Tag', eventCacheTag(eventId))
+    return res.status(200).json({ matches: rows.map((m: any) => matchShape(m, eventId)) })
+  } catch (err) {
+    console.error('tournament-history event-matches failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to load event matches' })
   }
 }
 
@@ -978,6 +995,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleEvents(req, res)
     case 'event':
       return handleEvent(req, res)
+    case 'event-matches':
+      return handleEventMatches(req, res)
     case 'event-player':
       return handleEventPlayer(req, res)
     case 'player':

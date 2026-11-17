@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { inkPairMeta, inkPairMatrix, bestOfLeaders } from '../tournamentInks'
 import {
+  archiveInkData,
   MAJOR_MIN_PLAYERS, isMajor, matchOutcome, toBracketMatch, playerSummary, formatEventDate, ordinal, formatRating, ratingDelta,
 } from '../resultsArchive'
 
@@ -144,5 +146,39 @@ describe('ratings', () => {
     expect(ratingDelta(-7.6)).toBe('−8')
     expect(ratingDelta(0.2)).toBe('0')
     expect(ratingDelta(null)).toBe('—')
+  })
+})
+
+describe('archiveInkData', () => {
+  const p = (id) => ({ id, name: `P${id}` })
+  const m = (a, b, winnerId, extra = {}) => ({ roundNumber: 1, player1: p(a), player2: b ? p(b) : null, winnerId, isBye: !b, isDraw: false, ...extra })
+  const data = archiveInkData({
+    event: { eventName: 'DLC Test', gameplayFormat: 'Core Constructed', startingPlayerCount: 4, topCutSize: 8 },
+    standings: [
+      { playerId: '1', playerName: 'P1', rank: 1, matchPoints: 6, record: '2-0', inks: ['amber', 'steel'] },
+      { playerId: '2', playerName: 'P2', rank: 2, matchPoints: 3, record: '1-1', inks: ['emerald', 'ruby'] },
+      { playerId: '3', playerName: 'P3', rank: 3, matchPoints: 3, record: '1-1', inks: ['amber', 'steel'] },
+      { playerId: '4', playerName: 'P4', rank: null, matchPoints: 0, record: '0-2', inks: null },
+    ],
+    matches: [m('1', '2', '1'), m('3', '4', '3'), m('1', '3', '1'), m('2', null, '2'), m('2', '3', null, { isDraw: true })],
+  })
+
+  it('puts each standing pair back on the matches for the ink-pair tabs', () => {
+    const meta = inkPairMeta(data.allMatches)
+    expect(meta.map((r) => [r.key, r.players, r.wins, r.losses, r.draws])).toEqual([
+      ['amber/steel', 2, 1, 0, 1],
+      ['emerald/ruby', 1, 0, 1, 1],
+    ])
+    expect(inkPairMatrix(data.allMatches).get('amber/steel|amber/steel')).toEqual({ wins: 1, losses: 0, draws: 0 })
+  })
+
+  it('gives Best Of ranked standings in the RPH shape', () => {
+    expect(data.standings).toHaveLength(3)
+    const leaders = bestOfLeaders(data.standings, data.inksById).filter((r) => r.entry)
+    expect(leaders.map((r) => [r.key, r.entry.user_event_status.best_identifier, r.entry.match_record])).toEqual([
+      ['amber/steel', 'P1', '2-0'],
+      ['emerald/ruby', 'P2', '1-1'],
+    ])
+    expect(data.structure).toMatchObject({ eventName: 'DLC Test', cuts: [] })
   })
 })

@@ -46,6 +46,44 @@ export function toBracketMatch(match) {
   }
 }
 
+// An archived event as the RPH shapes Tournament Lookup's ink-pair tabs
+// (InkPairStats.jsx) read. The archive keeps each player's pair on their
+// standing (from Play Hub's deck descriptors or an inkdecks upload), so it is
+// put back on every match as the deck descriptor label. Unranked standings
+// are left out; the event has no live round or decided cuts.
+export function archiveInkData({ event, standings, matches }) {
+  const inksById = new Map(standings.filter((s) => s.inks).map((s) => [String(s.playerId), s.inks]))
+  const label = (id) => {
+    const inks = inksById.get(String(id))
+    return inks ? { parts: [{ value: inks.join(',') }] } : undefined
+  }
+  const allMatches = matches.map((m) => {
+    const match = toBracketMatch(m)
+    for (const rel of match.player_match_relationships) rel.user_event_status.deck_descriptor_label = label(rel.player.id)
+    return match
+  })
+  return {
+    inksById,
+    allMatches,
+    standings: standings
+      .filter((s) => s.rank != null)
+      .map((s) => ({
+        rank: s.rank,
+        match_points: s.matchPoints,
+        match_record: s.record,
+        player: { id: s.playerId },
+        user_event_status: { best_identifier: s.playerName },
+      })),
+    structure: {
+      eventName: event.eventName,
+      gameplayFormat: event.gameplayFormat,
+      startingPlayerCount: event.startingPlayerCount,
+      topCutSize: event.topCutSize,
+      cuts: [],
+    },
+  }
+}
+
 const MAX_RIVALS = 10
 
 // DLCs and Championships played, from each event's RPH template (event_tier).

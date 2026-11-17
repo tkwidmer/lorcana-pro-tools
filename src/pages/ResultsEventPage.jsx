@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchArchiveEvent, uploadEventInkPairs } from '../lib/tournamentHistoryApi'
+import { fetchArchiveEvent, fetchArchiveEventMatches, uploadEventInkPairs } from '../lib/tournamentHistoryApi'
 import { useSupporter } from '../hooks/useSupporter'
-import { toBracketMatch, formatEventDate } from '../lib/resultsArchive'
+import { toBracketMatch, formatEventDate, archiveInkData } from '../lib/resultsArchive'
 import { EliminationBracket } from '../components/EliminationBracket'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
@@ -13,6 +13,7 @@ import { Tabs, Tab } from '../components/ui/Tabs'
 import { TeamLogo } from '../components/TeamLogo'
 import { ordinal } from '../lib/resultsArchive'
 import { InkIcons } from '../components/InkIcons'
+import { InkMetaTab, InkMatrixTab, BestOfTab } from '../components/InkPairStats'
 import { ArchiveFootnote, ArchiveLoading, ArchiveError } from '../components/ResultsArchive'
 
 // Team Tracker teams with a member in this event (who was on the team that
@@ -172,6 +173,24 @@ function InkPairUpload({ eventId, onSaved }) {
   )
 }
 
+const INK_TABS = [['meta', 'Metagame'], ['matrix', 'Matchups'], ['bestof', 'Best Of']]
+
+// Tournament Lookup's ink-pair tabs over the archive. Every match of the event
+// is loaded the first time one of them opens.
+function InkTabs({ tab, eventId, event, standings }) {
+  const [matches, setMatches] = useState(null)
+  const [error, setError] = useState(null)
+  useEffect(() => {
+    fetchArchiveEventMatches(eventId).then((r) => setMatches(r.matches)).catch(setError)
+  }, [eventId])
+  const ink = useMemo(() => matches && archiveInkData({ event, standings, matches }), [event, standings, matches])
+  if (error) return <p className="text-sm text-red-700">Could not load this event's matches.</p>
+  if (!ink) return <ArchiveLoading label="Loading matches…" />
+  if (tab === 'meta') return <InkMetaTab allMatches={ink.allMatches} structure={ink.structure} standings={ink.standings} />
+  if (tab === 'matrix') return <InkMatrixTab allMatches={ink.allMatches} structure={ink.structure} standings={ink.standings} />
+  return <BestOfTab standings={ink.standings} inksById={ink.inksById} allMatches={ink.allMatches} structure={ink.structure} standingsLabel="Final standings" />
+}
+
 // Keyed on the id so navigating between events starts from fresh state.
 export function ResultsEventPage() {
   const { eventId } = useParams()
@@ -233,6 +252,9 @@ function EventView({ eventId }) {
       <Tabs className="mt-4 mb-4">
         <Tab active={tab === 'standings'} onClick={() => setTab('standings')}>Standings</Tab>
         {hasBracket && <Tab active={tab === 'bracket'} onClick={() => setTab('bracket')}>Bracket</Tab>}
+        {hasInks && INK_TABS.map(([key, label]) => (
+          <Tab key={key} active={tab === key} onClick={() => setTab(key)}>{label}</Tab>
+        ))}
         {teams.length > 0 && (
           <Tab active={tab === 'teams'} onClick={() => setTab('teams')}>
             Teams <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({teams.length})</span>
@@ -244,6 +266,8 @@ function EventView({ eventId }) {
         <Card className="p-4">
           <EliminationBracket allMatches={bracket.map(toBracketMatch)} phaseName={bracket[0].phaseName} />
         </Card>
+      ) : hasInks && INK_TABS.some(([key]) => key === tab) ? (
+        <InkTabs tab={tab} eventId={eventId} event={event} standings={data.standings} />
       ) : tab === 'teams' && teams.length > 0 ? (
         <TeamsTab teams={teams} />
       ) : (

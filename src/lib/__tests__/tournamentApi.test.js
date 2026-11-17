@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { getTournamentStructure, withPhasePoints, formatTiebreakers, analyzeAdvancement, analyzeId, projectCut, extractEventId } from '../tournamentApi'
+import { describe, it, expect, vi } from 'vitest'
+import { getTournamentStructure, withPhasePoints, formatTiebreakers, analyzeAdvancement, analyzeId, projectCut, extractEventId, fetchRoundMatches } from '../tournamentApi'
 
 const roundComplete = (id, n) => ({ id, round_number: n, status: 'COMPLETE', standings_status: 'GENERATED' })
 const roundInProgress = (id, n) => ({ id, round_number: n, status: 'IN_PROGRESS', standings_status: 'GENERATED' })
@@ -331,5 +331,21 @@ describe('analyzeId', () => {
       const me = standings.find((e) => e.match_points === 12)
       expect(analyzeId(me, standings, structure).status).toBe('danger')
     })
+  })
+})
+
+describe('fetchRoundMatches', () => {
+  it('fetches the estimated pages in parallel, then follows any page past the estimate', async () => {
+    const requested = []
+    vi.stubGlobal('fetch', async (url) => {
+      const page = Number(new URL(url, 'http://x').searchParams.get('page'))
+      requested.push(page)
+      return { ok: true, json: async () => ({ results: [{ id: page }], next_page_number: page < 3 ? page + 1 : null }) }
+    })
+    // 1633 players → 817 matches → 2 pages up front; page 3 only once page 2 points at it.
+    const matches = await fetchRoundMatches('1', '2', 1633)
+    vi.unstubAllGlobals()
+    expect(requested).toEqual([1, 2, 3])
+    expect(matches.map((m) => m.id)).toEqual([1, 2, 3])
   })
 })

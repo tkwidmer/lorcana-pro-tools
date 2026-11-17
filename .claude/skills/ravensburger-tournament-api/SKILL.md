@@ -169,7 +169,7 @@ Day 2 test: once a phase with `effective_show_decklists_to_opponents = true` is 
 ## Fields already in our payloads that nothing reads yet
 
 - Match relationships: `is_starting_player`, `player_order` (who went
-  first). Match: `is_feature_match`, `reports_are_in_conflict`,
+  first). Match: `reports_are_in_conflict`,
   `time_extension_seconds`, `assigned_judge`, `table_label`,
   `table_section_label`, `public_table_tags`.
 - Event: `timer_end_datetime`, `timer_is_running`,
@@ -180,6 +180,15 @@ Day 2 test: once a phase with `effective_show_decklists_to_opponents = true` is 
 - Standings: `user_event_status.registration_status` (`COMPLETE`,
   `ELIMINATED`, drops). Registrations: `final_place_in_standings`,
   `matches_won/lost/drawn`, `team_name`.
+
+## Feature match
+
+`is_feature_match` on a match is what the Play Hub's "Feature Match" label
+reads (its strings: "Feature Match", "Do not start playing until you have
+spoken to a judge"). The Matches tab sorts it above team and favorites and
+tints the row. Never yet seen `true`: all ~7,000 matches of finished DLC
+London 1254364 are `false`, so it is probably cleared when the round ends.
+Confirm against a live round.
 
 ## Other quirks to know
 

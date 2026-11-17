@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, rphRoundPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, latestResult, resultLine, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, casterNotesPath, deckCardWidth,
+  timerFromRph, rphClockPatch, rphRoundPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, latestResult, resultLine, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, casterNotesPath, playerRounds, deckCardWidth,
   featuredPhase, FEATURED_SECONDS, FEATURED_FADE_MS, CLEAR_FEATURED_PATCH,
 } from '../streamOverlay'
 
@@ -60,7 +60,7 @@ describe('streamOverlay row mapping', () => {
     const ev = (eventName, eventDate, rank, o = {}) => ({ eventName, eventDate, rank, startingPlayerCount: 500, topCutSize: 32, madeTopCut: false, madeDayTwo: false, ...o })
     const histories = [
       { eventsPlayed: 4, majorsPlayed: 3, topCutCount: 1, dayTwoCount: 1, rating: { rating: 1712.4, rd: 60, matches: 30, rank: 14, established: true, history: [] }, events: [
-        ev('Open A', '2026-01-01', 40), ev('Disney Lorcana Challenge: Milwaukee', '2026-03-01', 150, { madeDayTwo: true }),
+        ev('Open A', '2026-01-01', 40), ev('Disney Lorcana Challenge: Milwaukee', '2026-03-01', 150, { madeDayTwo: true, eventTier: 'challenge' }),
         ev('CCQ B', '2026-05-01', 3, { madeTopCut: true, madeDayTwo: true }), ev('Open C', '2026-06-01', 9, { sideEvent: true }),
       ] },
       { eventsPlayed: 1, majorsPlayed: 1, topCutCount: 0, dayTwoCount: 0, rating: null, events: [ev('Open A', '2026-01-01', 77)] },
@@ -76,6 +76,8 @@ describe('streamOverlay row mapping', () => {
     ])
     expect(card.players[0].finishes[0].year).toBe(2026)
     expect(card.players[0].majorsPlayed).toBe(3)
+    expect([card.players[0].dlcs, card.players[0].championships]).toEqual([1, 0])
+    expect(card.players.map(p => p.playerId)).toEqual(['a', 'b'])
     expect([card.players[0].rating, card.players[0].rank]).toEqual([1712, 14])
     expect([card.players[1].rating, card.players[1].rank]).toEqual([null, null])
     expect(card.players[0].finishes.map(f => f.side)).toEqual([false, false, true, false])
@@ -401,7 +403,23 @@ describe('streamOverlay caster notes link', () => {
   const rel = (id, name, inks) => ({ player: { id }, user_event_status: { best_identifier: name, ...(inks && { deck_descriptor_label: { parts: [{ value: inks }] } }) } })
   it('carries ids, names, records, deck inks and the event; a side without a deck has no inks', () => {
     const records = { 11: '7-1-0', 22: '6-2-0' }
-    const params = new URLSearchParams(casterNotesPath(rel(11, 'Ryan', 'ruby,amber'), rel(22, 'Dylan & Co'), id => records[id], 'Open').split('?')[1])
-    expect(Object.fromEntries(params)).toEqual({ p1: '11', n1: 'Ryan', r1: '7-1-0', i1: 'amber,ruby', p2: '22', n2: 'Dylan & Co', r2: '6-2-0', i2: '', event: 'Open' })
+    const params = new URLSearchParams(casterNotesPath(rel(11, 'Ryan', 'ruby,amber'), rel(22, 'Dylan & Co'), id => records[id], 'Open', '1254364').split('?')[1])
+    expect(Object.fromEntries(params)).toEqual({ p1: '11', n1: 'Ryan', r1: '7-1-0', i1: 'amber,ruby', p2: '22', n2: 'Dylan & Co', r2: '6-2-0', i2: '', event: 'Open', eid: '1254364' })
+  })
+  it('lists one player\'s rounds with the opponent, their inks, result and score from the player\'s side', () => {
+    const match = (round, a, b, o = {}) => ({ round_number: round, status: 'COMPLETE', player_match_relationships: [a, b].filter(Boolean), ...o })
+    const matches = [
+      match(1, rel(11, 'Ryan'), null, { match_is_bye: true }),
+      match(2, rel(11, 'Ryan'), rel(22, 'Dylan', 'steel,ruby'), { winning_player: 22, games_won_by_winner: 2, games_won_by_loser: 1 }),
+      match(2, rel(33, 'Cara'), rel(44, 'Eli')),
+      match(3, rel(55, 'Finn', 'amber'), rel(11, 'Ryan'), { winning_player: 11, games_won_by_winner: 2, games_won_by_loser: 0 }),
+      match(4, rel(11, 'Ryan'), rel(66, 'Gus'), { status: 'IN_PROGRESS' }),
+    ]
+    expect(playerRounds(matches, '11')).toEqual([
+      { round: 1, result: 'BYE', score: '', opponent: 'BYE', inks: [] },
+      { round: 2, result: 'LOSS', score: '1-2', opponent: 'Dylan', inks: ['ruby', 'steel'] },
+      { round: 3, result: 'WIN', score: '2-0', opponent: 'Finn', inks: ['amber'] },
+      { round: 4, result: 'IN PROGRESS', score: '—', opponent: 'Gus', inks: [] },
+    ])
   })
 })

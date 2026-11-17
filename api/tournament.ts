@@ -28,9 +28,11 @@ const IMAGE_URL_KEYS = new Set(['full_profile_picture_url', 'game_user_profile_p
 const dropImageUrls = (key: string, value: unknown) => (IMAGE_URL_KEYS.has(key) ? undefined : value)
 
 // A page of matches that are all COMPLETE won't change (barring a judge's
-// correction), so the CDN and browser keep it a day instead of 30 s: a
-// finished round is fetched from upstream (7–20 s a page) once, not on every
-// load and refresh. The ink pairs on those matches come along with it.
+// correction before the next round pairs), so Vercel's CDN keeps it a year,
+// shared by every visitor since the URL is per event and round, not per user;
+// the browser keeps it a day. A finished round is fetched from upstream
+// (7–20 s a page) once per region, not on every load and refresh. The ink
+// pairs on those matches come along with it.
 function isSettled(type: string, data: any): boolean {
   if (type !== 'matches') return false
   const matches = data?.results ?? data?.matches
@@ -121,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.status(200)
-      .setHeader('Cache-Control', isSettled(type, data) ? 'max-age=86400, s-maxage=86400' : 'max-age=30, s-maxage=30')
+      .setHeader('Cache-Control', isSettled(type, data) ? 'public, max-age=86400, s-maxage=31536000' : 'max-age=30, s-maxage=30')
       .json(data)
   } catch (e) {
     console.error('tournament upstream unreachable', type, url, e)

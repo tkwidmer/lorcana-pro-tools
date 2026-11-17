@@ -12,7 +12,6 @@ import {
   analyzeAdvancement,
 } from '../lib/tournamentApi'
 import { PlayerMatchHistory } from '../components/PlayerMatchHistory'
-import { PairingHistoryPanel } from '../components/PairingHistoryPanel'
 import { EliminationBracket } from '../components/EliminationBracket'
 import { FavoriteStar, TeamBadge } from '../components/PlayerTags'
 import { usePairingBadges } from '../hooks/usePairingBadges'
@@ -254,7 +253,7 @@ function describeTrackedMatch(match, favorites, team) {
   return `${winnerName} beat ${loserName}${score} — Round ${match.round_number}`
 }
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, notesPathFor, favorites, team, badges, toggleFavorite, searchTerm, onSearchChange, currentEventId }) {
+function MatchesTab({ allMatches, matchesLoading, notesPathFor, favorites, team, badges, toggleFavorite, searchTerm, onSearchChange, currentEventId }) {
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
   // only the latest round expanded — large events can have 1000+ matches
@@ -414,7 +413,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, notesPathFor,
                         // RPH reports them winner-first.
                         const p1Games = p1Won ? match.games_won_by_winner : match.games_won_by_loser
                         const p2Games = p1Won ? match.games_won_by_loser : match.games_won_by_winner
-                        const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
+                        const paired = !isBye && p1 && p2
                         const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id), currentEventId)
                         const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
                         const p2HasPedigree = p2 && !isBye && badges?.hasPedigree(p2.player.id)
@@ -423,19 +422,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, notesPathFor,
                         const p2IsFavorite = p2 && !isBye && Boolean(favorites[String(p2.player.id)])
                         const p2OnTeam = p2 && !isBye && Boolean(team[String(p2.player.id)])
                         return (
-                          <tr
-                            key={match.id}
-                            onClick={
-                              clickable
-                                ? () =>
-                                    onSelectPairing({
-                                      p1: { id: p1.player.id, name: p1.user_event_status.best_identifier },
-                                      p2: { id: p2.player.id, name: p2.user_event_status.best_identifier },
-                                    })
-                                : undefined
-                            }
-                            className={`border-t border-gray-100${match.is_feature_match ? ' bg-forge-soft' : ''}${clickable ? ' hover:bg-gray-50 cursor-pointer' : ''}`}
-                          >
+                          <tr key={match.id} className={`border-t border-gray-100${match.is_feature_match ? ' bg-forge-soft' : ''}`}>
                             <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
                             <td className="px-4 py-2.5">
                               <span className={`inline-flex items-center gap-1 font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
@@ -481,12 +468,11 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, notesPathFor,
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-right">
-                              {clickable && (
+                              {paired && (
                                 <Link
                                   to={notesPathFor(p1, p2)}
                                   target="_blank"
                                   rel="noopener"
-                                  onClick={(e) => e.stopPropagation()}
                                   title="Caster notes for this match"
                                   className="text-xs text-forge-ink hover:underline whitespace-nowrap"
                                 >
@@ -577,7 +563,6 @@ export function TournamentLookupPage() {
   const [rosterMode, setRosterMode] = useState(false)
   const [recents, setRecents] = useState(getRecents)
   const [currentEventId, setCurrentEventId] = useState(null)
-  const [selectedPairing, setSelectedPairing] = useState(null) // { p1: {id, name}, p2: {id, name} } | null
   const [lastLiveUpdateAt, setLastLiveUpdateAt] = useState(null)
   // Instantiated once so MatchesTab and EliminationBracket share one badge
   // cache — elimination matches also appear in allMatches, so there's real
@@ -585,7 +570,7 @@ export function TournamentLookupPage() {
   const pairingBadges = usePairingBadges()
   // Caster notes link for one match (Matches tab rows and bracket cards).
   const notesPathFor = (p1, p2) =>
-    casterNotesPath(p1, p2, (id) => allStandings?.find((e) => String(e.player.id) === String(id))?.match_record ?? '', structure?.eventName)
+    casterNotesPath(p1, p2, (id) => allStandings?.find((e) => String(e.player.id) === String(id))?.match_record ?? '', structure?.eventName, currentEventId)
 
   // "Tracked Player Activity" ticker — a running, session-only feed of
   // completed matches involving a favorited player or a team member, newest
@@ -1259,7 +1244,6 @@ export function TournamentLookupPage() {
         <MatchesTab
           allMatches={allMatches}
           matchesLoading={matchesLoading}
-          onSelectPairing={setSelectedPairing}
           favorites={favorites}
           team={team}
           badges={pairingBadges}
@@ -1277,7 +1261,6 @@ export function TournamentLookupPage() {
           <EliminationBracket
             allMatches={allMatches}
             phaseName={structure?.eliminationPhaseName}
-            onSelectPairing={setSelectedPairing}
             notesPathFor={notesPathFor}
             badges={pairingBadges}
             favorites={favorites}
@@ -1608,15 +1591,6 @@ export function TournamentLookupPage() {
         </div>
       )}
 
-      {selectedPairing && (
-        <PairingHistoryPanel
-          pairing={selectedPairing}
-          onClose={() => setSelectedPairing(null)}
-          allMatches={allMatches}
-          structure={structure}
-          currentEventId={currentEventId}
-        />
-      )}
     </div>
   )
 }

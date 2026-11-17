@@ -254,6 +254,7 @@ async function handlePlayerHistory(req: VercelRequest, res: VercelResponse) {
       eventName: r.event?.event_name ?? null,
       eventDate: r.event?.event_date ?? null,
       storeName: r.event?.store_name ?? null,
+      eventTier: r.event?.event_tier ?? null,
       rank: r.rank,
       matchPoints: r.match_points,
       record: r.record,

@@ -166,9 +166,11 @@ function PlayerView({ playerId }) {
       />
       <Link to="/results" className="text-sm text-gray-500 hover:underline">← All results</Link>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 my-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 my-6">
         <RatingTile rating={data.rating} />
         <StatCard size="lg" label="Events played" value={summary.eventsPlayed} />
+        <StatCard size="lg" label="DLCs" value={summary.dlcs} />
+        <StatCard size="lg" label="Championships" value={summary.championships} />
         <StatCard size="lg" label="Top cuts" value={summary.topCuts} />
         <StatCard
           size="lg"

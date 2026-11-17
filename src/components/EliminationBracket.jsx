@@ -9,14 +9,14 @@ import { bracketRoundLabel } from '../lib/bracket'
 // within each round. That matches the standard seeded-bracket convention
 // (table order = bracket slot) that RPH's own elimination pairings follow.
 
-function BracketMatch({ match, onSelectPairing, notesPathFor, badges, favorites, team, toggleFavorite, currentEventId }) {
+function BracketMatch({ match, notesPathFor, badges, favorites, team, toggleFavorite, currentEventId }) {
   const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
   const isBye = match.match_is_bye
   const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
   const p1Won = match.winning_player === p1?.player.id
   const p2Won = match.winning_player === p2?.player.id
   const inProgress = !isBye && !isDraw && (match.status !== 'COMPLETE' || match.winning_player == null)
-  const clickable = !isBye && p1 && p2 && Boolean(onSelectPairing)
+  const paired = !isBye && p1 && p2
 
   const isRivalry = !isBye && p1 && p2 && badges?.hasRivalry(pairKeyOf(p1.player.id, p2.player.id), currentEventId)
   const p1HasPedigree = p1 && badges?.hasPedigree(p1.player.id)
@@ -28,20 +28,7 @@ function BracketMatch({ match, onSelectPairing, notesPathFor, badges, favorites,
   const isTagged = p1IsFavorite || p1OnTeam || p2IsFavorite || p2OnTeam
 
   return (
-    <div
-      onClick={
-        clickable
-          ? () =>
-              onSelectPairing({
-                p1: { id: p1.player.id, name: p1.user_event_status.best_identifier },
-                p2: { id: p2.player.id, name: p2.user_event_status.best_identifier },
-              })
-          : undefined
-      }
-      className={`border rounded-lg bg-white text-xs overflow-hidden w-48 shrink-0 ${
-        isTagged ? 'border-yellow-300' : 'border-gray-200'
-      } ${clickable ? 'cursor-pointer hover:border-gray-900 hover:shadow-sm transition-all' : ''}`}
-    >
+    <div className={`border rounded-lg bg-white text-xs overflow-hidden w-48 shrink-0 ${isTagged ? 'border-yellow-300' : 'border-gray-200'}`}>
       <div className={`px-2.5 py-1.5 flex items-center justify-between gap-2 ${p1Won ? 'bg-green-50' : isTagged ? 'bg-yellow-50' : ''}`}>
         <span className={`font-medium truncate flex items-center gap-1 ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-500'}`}>
           {p1 && toggleFavorite && (
@@ -76,12 +63,11 @@ function BracketMatch({ match, onSelectPairing, notesPathFor, badges, favorites,
       {inProgress && (
         <div className="px-2.5 py-0.5 bg-forge-soft text-forge-ink text-[10px] font-semibold uppercase tracking-wider text-center">In Progress</div>
       )}
-      {clickable && notesPathFor && (
+      {paired && notesPathFor && (
         <Link
           to={notesPathFor(p1, p2)}
           target="_blank"
           rel="noopener"
-          onClick={(e) => e.stopPropagation()}
           title="Caster notes for this match"
           className="block px-2.5 py-0.5 border-t border-gray-100 text-[10px] text-forge-ink text-right hover:underline"
         >
@@ -93,9 +79,8 @@ function BracketMatch({ match, onSelectPairing, notesPathFor, badges, favorites,
 }
 
 // Renders the RANKED_SINGLE_ELIMINATION phase of an event as a left-to-right
-// bracket instead of a flat matches list. Clicking a completed pairing opens
-// the same PairingHistoryPanel as the Matches tab (via onSelectPairing).
-export function EliminationBracket({ allMatches, phaseName, onSelectPairing, notesPathFor, badges, favorites, team, toggleFavorite, currentEventId }) {
+// bracket instead of a flat matches list. Each pairing links to its caster notes.
+export function EliminationBracket({ allMatches, phaseName, notesPathFor, badges, favorites, team, toggleFavorite, currentEventId }) {
   const rounds = useMemo(() => {
     const bracketMatches = (allMatches ?? []).filter((m) => m.phase_name === phaseName)
     const roundNumbers = [...new Set(bracketMatches.map((m) => m.round_number))].sort((a, b) => a - b)
@@ -147,7 +132,6 @@ export function EliminationBracket({ allMatches, phaseName, onSelectPairing, not
                 <div key={match.id} style={{ flexGrow: 2 ** roundIndex }} className="flex items-center">
                   <BracketMatch
                     match={match}
-                    onSelectPairing={onSelectPairing}
                     notesPathFor={notesPathFor}
                     badges={badges}
                     favorites={favorites}

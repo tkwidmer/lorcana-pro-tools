@@ -246,7 +246,21 @@ function describeTrackedMatch(match, favorites, team) {
   return `${winnerName} beat ${loserName}${score} — Round ${match.round_number}`
 }
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, searchTerm, onSearchChange, currentEventId }) {
+// The caster notes page for one pairing (StreamOverlayNotesPage without a
+// table): ids for the archive lookup, plus each side's name, current record
+// and the inks of the deck they submitted for this match.
+function casterNotesPath(p1, p2, recordOf, eventName) {
+  const side = (rel, n) => ({
+    [`p${n}`]: rel.player.id,
+    [`n${n}`]: rel.user_event_status.best_identifier,
+    [`r${n}`]: recordOf(rel.player.id),
+    [`i${n}`]: (inksOfRelationship(rel) ?? []).join(','),
+  })
+  return `/stream-overlay/notes?${new URLSearchParams({ ...side(p1, 1), ...side(p2, 2), event: eventName ?? '' })}`
+}
+
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, searchTerm, onSearchChange, currentEventId, standings, eventName }) {
+  const recordOf = (id) => standings?.find((e) => String(e.player.id) === String(id))?.match_record ?? ''
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
   // only the latest round expanded — large events can have 1000+ matches
@@ -388,6 +402,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                         <th className="text-left px-4 py-2">Player 1</th>
                         <th className="text-center px-4 py-2 w-20">Result</th>
                         <th className="text-right px-4 py-2">Player 2</th>
+                        <th className="px-4 py-2 w-16"><span className="sr-only">Caster notes</span></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -464,6 +479,20 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                                   />
                                 )}
                               </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              {clickable && (
+                                <Link
+                                  to={casterNotesPath(p1, p2, recordOf, eventName)}
+                                  target="_blank"
+                                  rel="noopener"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Caster notes for this match"
+                                  className="text-xs text-forge-ink hover:underline whitespace-nowrap"
+                                >
+                                  Notes ↗
+                                </Link>
+                              )}
                             </td>
                           </tr>
                         )
@@ -1243,6 +1272,8 @@ export function TournamentLookupPage() {
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           currentEventId={currentEventId}
+          standings={allStandings}
+          eventName={structure?.eventName}
         />
       )}
 
@@ -1592,8 +1623,6 @@ export function TournamentLookupPage() {
           allMatches={allMatches}
           structure={structure}
           currentEventId={currentEventId}
-          inksById={inksById}
-          standings={allStandings}
         />
       )}
     </div>

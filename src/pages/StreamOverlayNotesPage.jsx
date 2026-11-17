@@ -17,7 +17,7 @@ import { InkIcon } from '../components/InkIcons'
 // carries only the table id, so it can't change anything.
 //
 // Without a table, `?p1=<id>&n1=<name>&r1=<record>&i1=<ink,ink>&p2=…&event=<name>` (the
-// Tournament Lookup matchup modal's link) shows the same notes for any
+// link on each Tournament Lookup match row) shows the same notes for any
 // pairing from the archive alone: no clock, score, results or standings.
 export function StreamOverlayNotesPage() {
   const [searchParams] = useSearchParams()

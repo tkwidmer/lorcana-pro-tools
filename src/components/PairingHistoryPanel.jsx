@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import { formatRating } from '../lib/resultsArchive'
 import { PlayerMatchHistory } from './PlayerMatchHistory'
+import { Button } from './ui/Button'
 
 // Player-shaped stub so PlayerMatchHistory (built for a standings-entry
 // shape) can render this event's history for either side of a clicked
@@ -137,6 +138,14 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
           <h2 className="text-sm font-semibold text-gray-900">{p1.name} vs {p2.name}</h2>
           <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              to={`/stream-overlay/notes?${new URLSearchParams({ p1: p1.id, n1: p1.name, p2: p2.id, n2: p2.name, event: structure?.eventName ?? '' })}`}
+              target="_blank"
+              rel="noopener"
+            >
+              Caster notes
+            </Button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
           </div>
         </div>

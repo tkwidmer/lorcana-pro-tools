@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchArchiveEvent, fetchArchiveEventMatches, uploadEventInkPairs } from '../lib/tournamentHistoryApi'
+import { fetchArchiveEvent, fetchArchiveEventMatches, uploadEventInkPairs, setEventBestOfPrizing } from '../lib/tournamentHistoryApi'
 import { useSupporter } from '../hooks/useSupporter'
 import { toBracketMatch, formatEventDate, archiveInkData } from '../lib/resultsArchive'
 import { EliminationBracket } from '../components/EliminationBracket'
@@ -173,6 +173,36 @@ function InkPairUpload({ eventId, onSaved }) {
   )
 }
 
+function BestOfPrizingToggle({ eventId, on, onSaved }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function toggle(e) {
+    setBusy(true)
+    setError(null)
+    try {
+      onSaved((await setEventBestOfPrizing(eventId, e.target.checked)).bestOfPrizing)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card title="Best Of prizing (admin)" className="p-4 mt-6">
+      <label className="inline-flex items-center gap-2 text-sm text-gray-900">
+        <input type="checkbox" checked={on} onChange={toggle} disabled={busy} />
+        This event paid Best Of prizing
+      </label>
+      <p className="text-sm text-gray-500 mt-2">
+        The best-ranked player on each two-ink pair is credited with a Best Of on their player page.
+      </p>
+      {error && <p className="text-sm text-red-700 mt-3">{error}</p>}
+    </Card>
+  )
+}
+
 const INK_TABS = [['meta', 'Metagame'], ['matrix', 'Matchups'], ['conversion', 'Conversion'], ['bestof', 'Best Of']]
 
 // Tournament Lookup's ink-pair tabs over the archive. `matches` is null while
@@ -335,6 +365,13 @@ function EventView({ eventId }) {
           </div>
           {standings.length === 0 && <p className="text-sm text-gray-500 py-4">No players match.</p>}
         </Card>
+      )}
+      {isAdmin && (
+        <BestOfPrizingToggle
+          eventId={eventId}
+          on={event.bestOfPrizing}
+          onSaved={(on) => setData((d) => ({ ...d, event: { ...d.event, bestOfPrizing: on } }))}
+        />
       )}
       {isAdmin && <InkPairUpload eventId={eventId} onSaved={applyInks} />}
       <ArchiveFootnote />

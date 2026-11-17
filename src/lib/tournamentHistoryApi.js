@@ -109,6 +109,14 @@ export async function uploadEventInkPairs(eventId, decks) {
   })
 }
 
+export async function setEventBestOfPrizing(eventId, on) {
+  return apiFetch('?endpoint=best-of-prizing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventId, on }),
+  })
+}
+
 // Matches the server's generated `player_pair` column format (LEAST:GREATEST)
 // so client-computed pair keys always agree with the DB's — see
 // supabase/migrations/008_tournament_history.sql.

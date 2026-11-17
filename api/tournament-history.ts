@@ -29,6 +29,8 @@ import {
   getEventAllMatches,
   getEventPlayerMatches,
   getPlayerMatches,
+  getPairBestRank,
+  setBestOfPrizing,
   getMajorParents,
   recomputeRatings,
   getTopRatings,
@@ -88,6 +90,8 @@ const SEARCH_MIN_CHARS = 3
 // Tags the edge-cached `event` read so an admin write can purge it.
 const eventCacheTag = (eventId: string) => `event-${eventId}`
 const TEAMS_CACHE_TAG = 'teams'
+// Tags every `player` read: a Best Of toggle changes the counts of everyone at the event.
+const PLAYER_CACHE_TAG = 'player'
 const LIVE_CACHE = 'public, s-maxage=300, stale-while-revalidate=3600'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -350,7 +354,15 @@ function eventShape(r: any) {
     hasElimination: Boolean(r.has_elimination),
     totalSwissRounds: r.total_swiss_rounds ?? 0,
     eventTier: r.event_tier ?? null,
+    bestOfPrizing: Boolean(r.best_of_prizing),
   }
+}
+
+// Whether the player won the event's Best Of: it paid Best Of prizing and they
+// are the best-ranked player on their two-ink pair.
+async function wonBestOf(r: any): Promise<boolean> {
+  if (!r.event?.best_of_prizing || r.inks?.length !== 2 || r.rank == null) return false
+  return (await getPairBestRank(r.event.rph_event_id, r.inks)) === r.rank
 }
 
 function matchShape(r: any, eventId: string | null) {
@@ -463,7 +475,8 @@ async function handlePlayer(req: VercelRequest, res: VercelResponse) {
       listTeamsForPlayer(playerId),
     ])
     if (history.length === 0) return res.status(404).json({ error: 'Player not found' })
-    const events = history.map((r: any) => ({
+    const bestOf = await Promise.all(history.map(wonBestOf))
+    const events = history.map((r: any, i: number) => ({
       eventId: r.event?.rph_event_id ?? null,
       eventName: r.event?.event_name ?? null,
       eventDate: r.event?.event_date ?? null,
@@ -475,11 +488,13 @@ async function handlePlayer(req: VercelRequest, res: VercelResponse) {
       record: r.record,
       madeTopCut: Boolean(r.made_top_cut),
       inks: r.inks ?? null,
+      wonBestOf: bestOf[i],
       topCutSize: r.event?.top_cut_size ?? null,
       startingPlayerCount: r.event?.starting_player_count ?? null,
     }))
     res.setHeader('Cache-Control', PUBLIC_CACHE)
-    res.setHeader('Vercel-Cache-Tag', TEAMS_CACHE_TAG) // team badges: purged by every team write
+    // Team badges: purged by every team write; Best Ofs: by a Best Of toggle.
+    res.setHeader('Vercel-Cache-Tag', `${TEAMS_CACHE_TAG},${PLAYER_CACHE_TAG}`)
     return res.status(200).json({
       playerId,
       playerName: history[0].player_name, // getPlayerHistory sorts newest first
@@ -573,6 +588,23 @@ async function handleInkPairs(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     console.error('tournament-history ink-pairs failed:', err instanceof Error ? err.message : err)
     return res.status(500).json({ error: 'Failed to save ink pairs' })
+  }
+}
+
+async function handleBestOfPrizing(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireAdmin(req, res))) return
+  const { eventId, on } = req.body ?? {}
+  if (typeof eventId !== 'string' || !ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
+  if (typeof on !== 'boolean') return res.status(400).json({ error: 'on must be a boolean' })
+  try {
+    const row = await getEventByRphId(eventId)
+    if (!row) return res.status(404).json({ error: 'Event not found' })
+    await setBestOfPrizing(row.id, on)
+    await dangerouslyDeleteByTag([eventCacheTag(eventId), PLAYER_CACHE_TAG])
+    return res.status(200).json({ bestOfPrizing: on })
+  } catch (err) {
+    console.error('tournament-history best-of-prizing failed:', err instanceof Error ? err.message : err)
+    return res.status(500).json({ error: 'Failed to save Best Of prizing' })
   }
 }
 
@@ -964,13 +996,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const endpoint = str(req.query.endpoint)
 
   const teamPost = endpoint && Object.hasOwn(TEAM_POST_ENDPOINTS, endpoint) ? TEAM_POST_ENDPOINTS[endpoint] : undefined
-  if (endpoint === 'import' || endpoint === 'recompute-ratings' || endpoint === 'ink-pairs' || teamPost) {
+  if (endpoint === 'import' || endpoint === 'recompute-ratings' || endpoint === 'ink-pairs' || endpoint === 'best-of-prizing' || teamPost) {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')
       return res.status(405).json({ error: 'Method not allowed' })
     }
     if (teamPost) return teamPost(req, res)
     if (endpoint === 'ink-pairs') return handleInkPairs(req, res)
+    if (endpoint === 'best-of-prizing') return handleBestOfPrizing(req, res)
     return endpoint === 'import' ? handleImport(req, res) : handleRecomputeRatings(req, res)
   }
 

@@ -31,6 +31,7 @@ import { InkMetaTab, InkMatrixTab, BestOfTab, ConversionTab } from '../component
 import { ShareDownloadLink } from '../components/ShareDownloadLink'
 import { renderTeamsShareImage, shareFilename } from '../lib/tournamentLookupShareImage'
 import { playerInks, inksOfRelationship } from '../lib/tournamentInks'
+import { casterNotesPath } from '../lib/streamOverlay'
 import { loadFavorites, toggleFavorite as saveFavoriteToggle } from '../lib/tournamentFavorites'
 import { useAuth } from '../hooks/useAuth'
 
@@ -246,7 +247,7 @@ function describeTrackedMatch(match, favorites, team) {
   return `${winnerName} beat ${loserName}${score} — Round ${match.round_number}`
 }
 
-function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, team, badges, toggleFavorite, searchTerm, onSearchChange, currentEventId }) {
+function MatchesTab({ allMatches, matchesLoading, onSelectPairing, notesPathFor, favorites, team, badges, toggleFavorite, searchTerm, onSearchChange, currentEventId }) {
   const [filterMode, setFilterMode] = useState('all') // 'all' | 'favorites' | 'team'
   // Rounds toggled away from their default expand/collapse state (default:
   // only the latest round expanded — large events can have 1000+ matches
@@ -388,6 +389,7 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                         <th className="text-left px-4 py-2">Player 1</th>
                         <th className="text-center px-4 py-2 w-20">Result</th>
                         <th className="text-right px-4 py-2">Player 2</th>
+                        <th className="px-4 py-2 w-16"><span className="sr-only">Caster notes</span></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -464,6 +466,20 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, favorites, te
                                   />
                                 )}
                               </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              {clickable && (
+                                <Link
+                                  to={notesPathFor(p1, p2)}
+                                  target="_blank"
+                                  rel="noopener"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Caster notes for this match"
+                                  className="text-xs text-forge-ink hover:underline whitespace-nowrap"
+                                >
+                                  Notes ↗
+                                </Link>
+                              )}
                             </td>
                           </tr>
                         )
@@ -555,6 +571,9 @@ export function TournamentLookupPage() {
   // cache — elimination matches also appear in allMatches, so there's real
   // overlap to save on when switching tabs.
   const pairingBadges = usePairingBadges()
+  // Caster notes link for one match (Matches tab rows and bracket cards).
+  const notesPathFor = (p1, p2) =>
+    casterNotesPath(p1, p2, (id) => allStandings?.find((e) => String(e.player.id) === String(id))?.match_record ?? '', structure?.eventName)
 
   // "Tracked Player Activity" ticker — a running, session-only feed of
   // completed matches involving a favorited player or a team member, newest
@@ -1243,6 +1262,7 @@ export function TournamentLookupPage() {
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           currentEventId={currentEventId}
+          notesPathFor={notesPathFor}
         />
       )}
 
@@ -1253,6 +1273,7 @@ export function TournamentLookupPage() {
             allMatches={allMatches}
             phaseName={structure?.eliminationPhaseName}
             onSelectPairing={setSelectedPairing}
+            notesPathFor={notesPathFor}
             badges={pairingBadges}
             favorites={favorites}
             team={team}

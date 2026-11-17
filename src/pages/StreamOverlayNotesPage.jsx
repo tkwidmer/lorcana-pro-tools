@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchPublicTable, subscribeToTable, logStreamEvent } from '../lib/streamTables'
-import { rowToState, timerRemainingMs, formatClock, casterPoints } from '../lib/streamOverlay'
+import { rowToState, timerRemainingMs, formatClock, casterPoints, buildPlayerCard } from '../lib/streamOverlay'
+import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import { parseDeckList } from '../lib/parseDeckList'
 import { ordinal } from '../lib/resultsArchive'
 import { InkIcon } from '../components/InkIcons'
@@ -14,17 +15,32 @@ import { InkIcon } from '../components/InkIcons'
 // broadcasts, so a new pairing or a sent standings snapshot shows up by
 // itself. Unguarded like the view: casters have no session, and the link
 // carries only the table id, so it can't change anything.
+//
+// Without a table, `?p1=<id>&n1=<name>&r1=<record>&i1=<ink,ink>&p2=…&event=<name>` (the
+// link on each Tournament Lookup match row) shows the same notes for any
+// pairing from the archive alone: no clock, score, results or standings.
 export function StreamOverlayNotesPage() {
   const [searchParams] = useSearchParams()
   const tableId = searchParams.get('table') ?? ''
+  const id1 = searchParams.get('p1')
+  const id2 = searchParams.get('p2')
+  const matchup = Boolean(!tableId && id1 && id2)
   const [row, setRow] = useState(null)
   const [error, setError] = useState(null)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
+    if (!matchup) return
+    Promise.all([fetchPlayerTournamentHistory(id1), fetchPlayerTournamentHistory(id2), fetchHeadToHead(id1, id2)])
+      .then(([historyA, historyB, headToHead]) => setRow({ player_card: buildPlayerCard({ histories: [historyA, historyB], headToHead, playerIds: [id1, id2] }) }))
+      .catch(e => setError(e.message))
+  }, [matchup, id1, id2])
+
+  useEffect(() => {
+    if (matchup) return
     fetchPublicTable(tableId).then(setRow).catch(e => { setError(e.message); logStreamEvent(tableId, 'notes', 'load_failed', e.message) })
     return subscribeToTable(tableId, 'notes', setRow)
-  }, [tableId])
+  }, [tableId, matchup])
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -32,14 +48,15 @@ export function StreamOverlayNotesPage() {
   }, [])
 
   if (!row) {
-    return <div className="h-screen grid place-items-center font-display text-2xl uppercase tracking-widest text-gray-500 text-center px-6">{error ?? 'Loading the stream table…'}</div>
+    return <div className="h-screen grid place-items-center font-display text-2xl uppercase tracking-widest text-gray-500 text-center px-6">{error ?? (matchup ? 'Loading the archive…' : 'Loading the stream table…')}</div>
   }
 
-  const state = rowToState(row)
+  const state = matchup
+    ? { eventName: searchParams.get('event'), players: [1, 2].map(n => ({ name: searchParams.get(`n${n}`) ?? '', record: searchParams.get(`r${n}`) ?? '', inks: (searchParams.get(`i${n}`) ?? '').split(',').filter(Boolean) })) }
+    : rowToState(row)
   const { players } = state
   const card = row.player_card
   const names = players.map(p => p.name)
-  const remaining = timerRemainingMs(state, now)
   const standings = row.standings
   const results = row.results
   const onStream = r => [r.p1, r.p2].some(n => n && names.includes(n))
@@ -49,9 +66,11 @@ export function StreamOverlayNotesPage() {
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b-2 border-gray-900 pb-3">
         <h1 className="text-3xl">Caster notes</h1>
         <span className="font-display uppercase tracking-wide text-gray-600">{[state.eventName, state.round, state.note].filter(Boolean).join(' · ')}</span>
-        <span className={`ml-auto font-display uppercase tracking-widest text-sm ${state.mode === 'break' ? 'text-gray-500' : 'text-emerald-700'}`}>
-          {state.mode === 'break' ? 'Break' : 'Live'} · {formatClock(remaining)} left
-        </span>
+        {!matchup && (
+          <span className={`ml-auto font-display uppercase tracking-widest text-sm ${state.mode === 'break' ? 'text-gray-500' : 'text-emerald-700'}`}>
+            {state.mode === 'break' ? 'Break' : 'Live'} · {formatClock(timerRemainingMs(state, now))} left
+          </span>
+        )}
       </div>
 
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_300px_1fr] gap-6">
@@ -149,11 +168,15 @@ export function StreamOverlayNotesPage() {
             </>
           )}
 
-          <h3 className="mt-6 font-display uppercase tracking-wider text-xs text-gray-500">Table</h3>
-          <div className="mt-1 text-sm">
-            {players.map((p, i) => <div key={i}>{p.name || `Player ${i + 1}`}: {p.lore} lore, {p.gameWins} game win{p.gameWins === 1 ? '' : 's'}</div>)}
-          </div>
-          <div className="text-xs text-gray-500 mt-1">Follows the stream table live</div>
+          {!matchup && (
+            <>
+              <h3 className="mt-6 font-display uppercase tracking-wider text-xs text-gray-500">Table</h3>
+              <div className="mt-1 text-sm">
+                {players.map((p, i) => <div key={i}>{p.name || `Player ${i + 1}`}: {p.lore} lore, {p.gameWins} game win{p.gameWins === 1 ? '' : 's'}</div>)}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">Follows the stream table live</div>
+            </>
+          )}
         </div>
       </div>
 

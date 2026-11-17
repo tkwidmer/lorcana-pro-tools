@@ -450,6 +450,20 @@ export function buildPlayerCard({ histories, headToHead, playerIds }) {
   return { players, headToHead: { wins, draws, matches } }
 }
 
+// The caster notes page for one Play Hub match without a stream table
+// (StreamOverlayNotesPage reads these params): both player match
+// relationships, recordOf(playerId) for each side's current record, and the
+// event name. Inks are the deck each player submitted for this match.
+export function casterNotesPath(p1, p2, recordOf, eventName) {
+  const side = (rel, n) => ({
+    [`p${n}`]: rel.player.id,
+    [`n${n}`]: rel.user_event_status.best_identifier,
+    [`r${n}`]: recordOf(rel.player.id),
+    [`i${n}`]: (inksOfRelationship(rel) ?? []).join(','),
+  })
+  return `/stream-overlay/notes?${new URLSearchParams({ ...side(p1, 1), ...side(p2, 2), event: eventName ?? '' })}`
+}
+
 // Plain-English lines a caster can read off for one side of the player
 // card: the majors record, the rating once ranked, the best finish, and the head-to-head. Built
 // from the card's own data, so the notes page needs nothing the OBS view

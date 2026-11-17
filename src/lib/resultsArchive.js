@@ -48,6 +48,15 @@ export function toBracketMatch(match) {
 
 const MAX_RIVALS = 10
 
+// DLCs and Championships played, from each event's RPH template (event_tier).
+// RPH also runs some CCQs on the championship template (DLC London's, 1256351).
+export function seriesCounts(events) {
+  return {
+    dlcs: events.filter((e) => e.eventTier === 'challenge').length,
+    championships: events.filter((e) => e.eventTier === 'challenge_championship' && !/qualifier/i.test(e.eventName ?? '')).length,
+  }
+}
+
 export function playerSummary({ events, matches, playerId }) {
   const record = { wins: 0, losses: 0, draws: 0 }
   const byOpponent = new Map()
@@ -89,9 +98,7 @@ export function playerSummary({ events, matches, playerId }) {
   return {
     eventsPlayed: events.length,
     topCuts: events.filter((e) => e.madeTopCut).length,
-    dlcs: events.filter((e) => e.eventTier === 'challenge').length,
-    // RPH also runs some CCQs on the championship template (DLC London's, 1256351).
-    championships: events.filter((e) => e.eventTier === 'challenge_championship' && !/qualifier/i.test(e.eventName ?? '')).length,
+    ...seriesCounts(events),
     bestFinish,
     record,
     rivals,

@@ -60,7 +60,7 @@ describe('streamOverlay row mapping', () => {
     const ev = (eventName, eventDate, rank, o = {}) => ({ eventName, eventDate, rank, startingPlayerCount: 500, topCutSize: 32, madeTopCut: false, madeDayTwo: false, ...o })
     const histories = [
       { eventsPlayed: 4, majorsPlayed: 3, topCutCount: 1, dayTwoCount: 1, rating: { rating: 1712.4, rd: 60, matches: 30, rank: 14, established: true, history: [] }, events: [
-        ev('Open A', '2026-01-01', 40), ev('Disney Lorcana Challenge: Milwaukee', '2026-03-01', 150, { madeDayTwo: true }),
+        ev('Open A', '2026-01-01', 40), ev('Disney Lorcana Challenge: Milwaukee', '2026-03-01', 150, { madeDayTwo: true, eventTier: 'challenge' }),
         ev('CCQ B', '2026-05-01', 3, { madeTopCut: true, madeDayTwo: true }), ev('Open C', '2026-06-01', 9, { sideEvent: true }),
       ] },
       { eventsPlayed: 1, majorsPlayed: 1, topCutCount: 0, dayTwoCount: 0, rating: null, events: [ev('Open A', '2026-01-01', 77)] },
@@ -76,6 +76,7 @@ describe('streamOverlay row mapping', () => {
     ])
     expect(card.players[0].finishes[0].year).toBe(2026)
     expect(card.players[0].majorsPlayed).toBe(3)
+    expect([card.players[0].dlcs, card.players[0].championships]).toEqual([1, 0])
     expect([card.players[0].rating, card.players[0].rank]).toEqual([1712, 14])
     expect([card.players[1].rating, card.players[1].rank]).toEqual([null, null])
     expect(card.players[0].finishes.map(f => f.side)).toEqual([false, false, true, false])

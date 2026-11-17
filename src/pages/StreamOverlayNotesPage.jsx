@@ -83,7 +83,7 @@ export function StreamOverlayNotesPage() {
             </div>
             {card && (
               <div className="text-sm text-gray-600">
-                {card.players[i].majorsPlayed} majors · {card.players[i].topCutCount} top cut{card.players[i].topCutCount === 1 ? '' : 's'} · {card.players[i].dayTwoCount} Day 2{card.players[i].dayTwoCount === 1 ? '' : 's'}
+                {card.players[i].majorsPlayed} majors · {card.players[i].dlcs} DLC{card.players[i].dlcs === 1 ? '' : 's'} · {card.players[i].championships} championship{card.players[i].championships === 1 ? '' : 's'} · {card.players[i].topCutCount} top cut{card.players[i].topCutCount === 1 ? '' : 's'} · {card.players[i].dayTwoCount} Day 2{card.players[i].dayTwoCount === 1 ? '' : 's'}
               </div>
             )}
 

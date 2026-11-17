@@ -7,7 +7,7 @@
 import { resolveColors } from './inkColors'
 import { bracketRoundLabel } from './bracket'
 import { resolveInkName } from './inkColors'
-import { ordinal } from './resultsArchive'
+import { ordinal, seriesCounts } from './resultsArchive'
 import { inksOfRelationship } from './tournamentInks'
 
 export const OVERLAY_WIDTH = 1920
@@ -418,6 +418,7 @@ export function buildPlayerCard({ histories, headToHead, playerIds }) {
     majorsPlayed: h.majorsPlayed,
     topCutCount: h.topCutCount,
     dayTwoCount: h.dayTwoCount ?? 0,
+    ...seriesCounts(h.events),
     finishes: [...h.events]
       .filter(e => e.rank != null)
       .sort((a, b) => tier(a) - tier(b) || a.rank - b.rank || Date.parse(b.eventDate ?? 0) - Date.parse(a.eventDate ?? 0))

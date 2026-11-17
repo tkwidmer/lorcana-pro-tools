@@ -338,17 +338,20 @@ function extractMatches(data) {
   return { matches: [], nextPage: null }
 }
 
-// Every page of one round's matches.
-export async function fetchRoundMatches(eventId, roundId) {
-  const all = []
-  let page = 1
-  let hasMore = true
-  while (hasMore) {
-    const data = await fetchEventMatches(eventId, roundId, page, 500)
-    const { matches, nextPage } = extractMatches(data)
+// Every page of one round's matches. Each page costs the upstream 7–20 s, so
+// the pages a field of `players` needs (half as many matches, 500 a page) are
+// fetched in parallel; a page past that estimate, if any, follows in turn.
+export async function fetchRoundMatches(eventId, roundId, players = 0) {
+  const estimate = Math.max(1, Math.ceil(players / 2 / 500))
+  const pages = await Promise.all(
+    Array.from({ length: estimate }, (_, i) => fetchEventMatches(eventId, roundId, i + 1, 500).then(extractMatches))
+  )
+  const all = pages.flatMap((p) => p.matches)
+  let next = pages.at(-1).nextPage
+  while (next !== null) {
+    const { matches, nextPage } = extractMatches(await fetchEventMatches(eventId, roundId, next, 500))
     all.push(...matches)
-    hasMore = nextPage !== null
-    page = nextPage || page + 1
+    next = nextPage
   }
   return all
 }
@@ -375,7 +378,7 @@ export async function fetchAllRoundMatches(eventId, eventDetails) {
   await Promise.all(
     rounds.map(async ({ roundId, roundNumber, phaseName }) => {
       try {
-        for (const match of await fetchRoundMatches(eventId, roundId)) {
+        for (const match of await fetchRoundMatches(eventId, roundId, eventDetails.starting_player_count)) {
           allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
         }
       } catch {

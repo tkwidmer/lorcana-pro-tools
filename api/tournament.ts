@@ -27,6 +27,16 @@ const NUMERIC_ID_RE = /^[0-9]{1,10}$/
 const IMAGE_URL_KEYS = new Set(['full_profile_picture_url', 'game_user_profile_picture_url', 'full_header_image_url', 'symbols'])
 const dropImageUrls = (key: string, value: unknown) => (IMAGE_URL_KEYS.has(key) ? undefined : value)
 
+// A page of matches that are all COMPLETE won't change (barring a judge's
+// correction), so the CDN and browser keep it a day instead of 30 s: a
+// finished round is fetched from upstream (7–20 s a page) once, not on every
+// load and refresh. The ink pairs on those matches come along with it.
+function isSettled(type: string, data: any): boolean {
+  if (type !== 'matches') return false
+  const matches = data?.results ?? data?.matches
+  return Array.isArray(matches) && matches.length > 0 && matches.every((m: any) => m.status === 'COMPLETE')
+}
+
 function clampInt(v: string | undefined, def: number, max: number): number {
   const n = parseInt(v ?? '', 10)
   if (!Number.isFinite(n) || n < 1) return def
@@ -48,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     case 'event':
       if (!eventId) return res.status(400).json({ error: 'Missing eventId' })
       if (!ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
-      url = `${RAVEN_BASE}/events/${encodeURIComponent(eventId)}`
+      url = `${RAVEN_BASE}/events/${encodeURIComponent(eventId)}/`
       break
     case 'registrations':
       if (!eventId) return res.status(400).json({ error: 'Missing eventId' })
@@ -91,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!response.ok) {
       if (response.status === 404 && type === 'matches') {
-        return res.status(200).json({ matches: [], results: [], next_page_number: null })
+        return res.status(200).setHeader('Cache-Control', 'max-age=30, s-maxage=30').json({ matches: [], results: [], next_page_number: null })
       }
       console.error('tournament upstream error', type, response.status, url)
       return res.status(response.status).json({ error: 'Tournament API error', status: response.status })
@@ -111,7 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.status(200)
-      .setHeader('Cache-Control', 'max-age=30, s-maxage=30')
+      .setHeader('Cache-Control', isSettled(type, data) ? 'max-age=86400, s-maxage=86400' : 'max-age=30, s-maxage=30')
       .json(data)
   } catch (e) {
     console.error('tournament upstream unreachable', type, url, e)

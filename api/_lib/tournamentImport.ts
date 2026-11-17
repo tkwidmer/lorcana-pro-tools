@@ -80,7 +80,7 @@ async function fetchJson(url: string): Promise<any> {
 }
 
 export async function fetchEventDetailsServer(eventId: string): Promise<any> {
-  return fetchJson(`${RAVEN_BASE}/events/${encodeURIComponent(eventId)}`)
+  return fetchJson(`${RAVEN_BASE}/events/${encodeURIComponent(eventId)}/`)
 }
 
 // Derives the same structure fields as getTournamentStructure() in

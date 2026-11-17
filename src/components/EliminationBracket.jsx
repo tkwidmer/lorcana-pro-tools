@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { pairKeyOf } from '../lib/tournamentHistoryApi'
 import { FavoriteStar, TeamBadge } from './PlayerTags'
 import { bracketRoundLabel } from '../lib/bracket'
@@ -8,7 +9,7 @@ import { bracketRoundLabel } from '../lib/bracket'
 // within each round. That matches the standard seeded-bracket convention
 // (table order = bracket slot) that RPH's own elimination pairings follow.
 
-function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleFavorite, currentEventId }) {
+function BracketMatch({ match, onSelectPairing, notesPathFor, badges, favorites, team, toggleFavorite, currentEventId }) {
   const [p1, p2] = [...match.player_match_relationships].sort((a, b) => a.player_order - b.player_order)
   const isBye = match.match_is_bye
   const isDraw = match.match_is_intentional_draw || match.match_is_unintentional_draw
@@ -75,6 +76,18 @@ function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleF
       {inProgress && (
         <div className="px-2.5 py-0.5 bg-forge-soft text-forge-ink text-[10px] font-semibold uppercase tracking-wider text-center">In Progress</div>
       )}
+      {clickable && notesPathFor && (
+        <Link
+          to={notesPathFor(p1, p2)}
+          target="_blank"
+          rel="noopener"
+          onClick={(e) => e.stopPropagation()}
+          title="Caster notes for this match"
+          className="block px-2.5 py-0.5 border-t border-gray-100 text-[10px] text-forge-ink text-right hover:underline"
+        >
+          Notes ↗
+        </Link>
+      )}
     </div>
   )
 }
@@ -82,7 +95,7 @@ function BracketMatch({ match, onSelectPairing, badges, favorites, team, toggleF
 // Renders the RANKED_SINGLE_ELIMINATION phase of an event as a left-to-right
 // bracket instead of a flat matches list. Clicking a completed pairing opens
 // the same PairingHistoryPanel as the Matches tab (via onSelectPairing).
-export function EliminationBracket({ allMatches, phaseName, onSelectPairing, badges, favorites, team, toggleFavorite, currentEventId }) {
+export function EliminationBracket({ allMatches, phaseName, onSelectPairing, notesPathFor, badges, favorites, team, toggleFavorite, currentEventId }) {
   const rounds = useMemo(() => {
     const bracketMatches = (allMatches ?? []).filter((m) => m.phase_name === phaseName)
     const roundNumbers = [...new Set(bracketMatches.map((m) => m.round_number))].sort((a, b) => a - b)
@@ -135,6 +148,7 @@ export function EliminationBracket({ allMatches, phaseName, onSelectPairing, bad
                   <BracketMatch
                     match={match}
                     onSelectPairing={onSelectPairing}
+                    notesPathFor={notesPathFor}
                     badges={badges}
                     favorites={favorites}
                     team={team}

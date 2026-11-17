@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToState, startTimer, pauseTimer, resetTimer, timerRemainingMs, timerPatch, formatClock,
-  timerFromRph, rphClockPatch, rphRoundPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, latestResult, resultLine, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, deckCardWidth,
+  timerFromRph, rphClockPatch, rphRoundPatch, featureMatchPatch, swapSidesPatch, winnerIndex, breakHeadline, themeTextColor, DEFAULT_THEME, nameSizeClass, hotkeyAction, deckInks, buildPlayerCard, shortEventName, clearTablePatch, buildStandingsSnapshot, buildBracketSnapshot, buildResultsSnapshot, latestResult, resultLine, parseMeta, metaSlices, metaInks, roundLabel, activeRoundLabel, currentRoundPairings, casterPoints, casterNotesPath, deckCardWidth,
   featuredPhase, FEATURED_SECONDS, FEATURED_FADE_MS, CLEAR_FEATURED_PATCH,
 } from '../streamOverlay'
 
@@ -394,5 +394,14 @@ describe('streamOverlay featured cards', () => {
 
   it('X clears both sides', () => {
     expect(CLEAR_FEATURED_PATCH).toEqual({ p1_featured: '', p1_featured_at: null, p2_featured: '', p2_featured_at: null })
+  })
+})
+
+describe('streamOverlay caster notes link', () => {
+  const rel = (id, name, inks) => ({ player: { id }, user_event_status: { best_identifier: name, ...(inks && { deck_descriptor_label: { parts: [{ value: inks }] } }) } })
+  it('carries ids, names, records, deck inks and the event; a side without a deck has no inks', () => {
+    const records = { 11: '7-1-0', 22: '6-2-0' }
+    const params = new URLSearchParams(casterNotesPath(rel(11, 'Ryan', 'ruby,amber'), rel(22, 'Dylan & Co'), id => records[id], 'Open').split('?')[1])
+    expect(Object.fromEntries(params)).toEqual({ p1: '11', n1: 'Ryan', r1: '7-1-0', i1: 'amber,ruby', p2: '22', n2: 'Dylan & Co', r2: '6-2-0', i2: '', event: 'Open' })
   })
 })

@@ -162,9 +162,13 @@ function RosterTable({ entries, favorites, team, toggleFavorite, registrationMap
                 <td className="px-4 py-2.5 text-gray-500 font-medium">{entry.rank ?? '—'}</td>
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900">
+                    <Link
+                      to={`/results/players/${entry.player.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium text-gray-900 hover:underline"
+                    >
                       {entry.user_event_status.best_identifier}
-                    </span>
+                    </Link>
                     <InkIcons colors={inksById?.get(String(entry.player.id))} size={16} />
                     {dropped && (
                       <span className="text-xs text-gray-400 font-normal">dropped</span>
@@ -294,8 +298,9 @@ function MatchesTab({ allMatches, matchesLoading, onSelectPairing, notesPathFor,
     return <p className="text-sm text-gray-500 py-8 text-center">No match data available.</p>
   }
 
-  const rounds = [...new Set(allMatches.map((m) => m.round_number))].sort((a, b) => a - b)
-  const latestRound = rounds[rounds.length - 1]
+  // Most recent round first.
+  const rounds = [...new Set(allMatches.map((m) => m.round_number))].sort((a, b) => b - a)
+  const latestRound = rounds[0]
   const searchActive = searchTerm.trim() !== '' || filterMode !== 'all'
 
   function toggleRound(roundNum) {
@@ -1226,9 +1231,13 @@ export function TournamentLookupPage() {
                               {pairingBadges.hasPedigree(entry.player.id) && (
                                 <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
                               )}
-                              <span className="font-medium text-gray-900">
+                              <Link
+                                to={`/results/players/${entry.player.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="font-medium text-gray-900 hover:underline"
+                              >
                                 {entry.user_event_status.best_identifier}
-                              </span>
+                              </Link>
                               <InkIcons colors={inksById.get(String(entry.player.id))} size={16} />
                               {dropped && (
                                 <span className="text-xs text-gray-400 font-normal">dropped</span>

@@ -50,7 +50,9 @@ export function toBracketMatch(match) {
 // (InkPairStats.jsx) read. The archive keeps each player's pair on their
 // standing (from Play Hub's deck descriptors or an inkdecks upload), so it is
 // put back on every match as the deck descriptor label. Unranked standings
-// are left out; the event has no live round or decided cuts.
+// are left out; the event has no live round. `stages` are the cuts the import
+// recorded (Day 2: played in the second Swiss phase; the top cut), for the
+// Conversion tab, each kept only when someone made it.
 export function archiveInkData({ event, standings, matches }) {
   const inksById = new Map(standings.filter((s) => s.inks).map((s) => [String(s.playerId), s.inks]))
   const label = (id) => {
@@ -62,9 +64,14 @@ export function archiveInkData({ event, standings, matches }) {
     for (const rel of match.player_match_relationships) rel.user_event_status.deck_descriptor_label = label(rel.player.id)
     return match
   })
+  const stages = [
+    { label: 'Day 2', ids: new Set(standings.filter((s) => s.madeDayTwo).map((s) => String(s.playerId))) },
+    { label: `Top ${event.topCutSize}`, ids: new Set(standings.filter((s) => s.madeTopCut).map((s) => String(s.playerId))) },
+  ].filter((s) => s.ids.size > 0)
   return {
     inksById,
     allMatches,
+    stages,
     standings: standings
       .filter((s) => s.rank != null)
       .map((s) => ({

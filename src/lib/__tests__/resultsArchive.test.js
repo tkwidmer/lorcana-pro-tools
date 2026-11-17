@@ -155,7 +155,7 @@ describe('archiveInkData', () => {
   const data = archiveInkData({
     event: { eventName: 'DLC Test', gameplayFormat: 'Core Constructed', startingPlayerCount: 4, topCutSize: 8 },
     standings: [
-      { playerId: '1', playerName: 'P1', rank: 1, matchPoints: 6, record: '2-0', inks: ['amber', 'steel'] },
+      { playerId: '1', playerName: 'P1', rank: 1, matchPoints: 6, record: '2-0', inks: ['amber', 'steel'], madeDayTwo: true },
       { playerId: '2', playerName: 'P2', rank: 2, matchPoints: 3, record: '1-1', inks: ['emerald', 'ruby'] },
       { playerId: '3', playerName: 'P3', rank: 3, matchPoints: 3, record: '1-1', inks: ['amber', 'steel'] },
       { playerId: '4', playerName: 'P4', rank: null, matchPoints: 0, record: '0-2', inks: null },
@@ -180,5 +180,9 @@ describe('archiveInkData', () => {
       ['emerald/ruby', 'P2', '1-1'],
     ])
     expect(data.structure).toMatchObject({ eventName: 'DLC Test', cuts: [] })
+  })
+
+  it('keeps only the cuts someone made, as Conversion stages', () => {
+    expect(data.stages.map((s) => [s.label, [...s.ids]])).toEqual([['Day 2', ['1']]])
   })
 })

@@ -408,6 +408,7 @@ async function handleEvent(req: VercelRequest, res: VercelResponse) {
         matchPoints: s.match_points,
         record: s.record,
         madeTopCut: Boolean(s.made_top_cut),
+        madeDayTwo: Boolean(s.made_day_two),
         inks: s.inks,
       })),
       bracket: bracketRows.map((m: any) => matchShape(m, eventId)),

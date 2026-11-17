@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchArchiveEvent, uploadEventInkPairs } from '../lib/tournamentHistoryApi'
+import { fetchArchiveEvent, fetchArchiveEventMatches, uploadEventInkPairs } from '../lib/tournamentHistoryApi'
 import { useSupporter } from '../hooks/useSupporter'
-import { toBracketMatch, formatEventDate } from '../lib/resultsArchive'
+import { toBracketMatch, formatEventDate, archiveInkData } from '../lib/resultsArchive'
 import { EliminationBracket } from '../components/EliminationBracket'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card } from '../components/ui/Card'
@@ -13,6 +13,7 @@ import { Tabs, Tab } from '../components/ui/Tabs'
 import { TeamLogo } from '../components/TeamLogo'
 import { ordinal } from '../lib/resultsArchive'
 import { InkIcons } from '../components/InkIcons'
+import { InkMetaTab, InkMatrixTab, BestOfTab, ConversionTable, Top32Toggle } from '../components/InkPairStats'
 import { ArchiveFootnote, ArchiveLoading, ArchiveError } from '../components/ResultsArchive'
 
 // Team Tracker teams with a member in this event (who was on the team that
@@ -172,6 +173,35 @@ function InkPairUpload({ eventId, onSaved }) {
   )
 }
 
+const INK_TABS = [['meta', 'Metagame'], ['matrix', 'Matchups'], ['conversion', 'Conversion'], ['bestof', 'Best Of']]
+
+// Tournament Lookup's ink-pair tabs over the archive. `matches` is null while
+// the event's matches load, an Error if they failed.
+function InkTabs({ tab, event, standings, matches }) {
+  const ink = useMemo(() => Array.isArray(matches) && archiveInkData({ event, standings, matches }), [event, standings, matches])
+  const [showTop32, setShowTop32] = useState(false)
+  if (matches instanceof Error) return <p className="text-sm text-red-700">Could not load this event's matches.</p>
+  if (!ink) return <ArchiveLoading label="Loading matches…" />
+  const cuts = ink.stages.filter((s) => !s.optional)
+  if (tab === 'conversion') {
+    const hasTop32 = ink.stages.some((s) => s.optional)
+    return (
+      <div className="space-y-2">
+        {hasTop32 && <Top32Toggle checked={showTop32} onChange={setShowTop32} />}
+        <ConversionTable
+          allMatches={ink.allMatches}
+          structure={ink.structure}
+          stages={showTop32 ? ink.stages : cuts}
+          cutNote={`Day 2 is the players who played in the second Swiss phase;${hasTop32 && showTop32 ? " Top 32 is the top 32 and anyone tied on its match points after the last Swiss round;" : ''} the top cut is the players who made the bracket.`}
+        />
+      </div>
+    )
+  }
+  if (tab === 'meta') return <InkMetaTab allMatches={ink.allMatches} structure={ink.structure} standings={ink.standings} stages={cuts.length ? cuts : null} />
+  if (tab === 'matrix') return <InkMatrixTab allMatches={ink.allMatches} structure={ink.structure} standings={ink.standings} />
+  return <BestOfTab standings={ink.standings} inksById={ink.inksById} allMatches={ink.allMatches} structure={ink.structure} standingsLabel="Final standings" />
+}
+
 // Keyed on the id so navigating between events starts from fresh state.
 export function ResultsEventPage() {
   const { eventId } = useParams()
@@ -184,6 +214,13 @@ function EventView({ eventId }) {
   const [tab, setTab] = useState('standings')
   const [filter, setFilter] = useState('')
   const { isAdmin } = useSupporter()
+  // Every match of the event, loaded once, the first time an ink tab opens.
+  const [matches, setMatches] = useState(null)
+  const inkTab = INK_TABS.some(([key]) => key === tab)
+  useEffect(() => {
+    if (!inkTab || matches) return
+    fetchArchiveEventMatches(eventId).then((r) => setMatches(r.matches)).catch(setMatches)
+  }, [inkTab, matches, eventId])
 
   useEffect(() => {
     fetchArchiveEvent(eventId).then(setData).catch(setError)
@@ -213,6 +250,7 @@ function EventView({ eventId }) {
   const hasBracket = bracket.length > 0
   // Inks are unknown (null) until a source fills them; hide the column until one does.
   const hasInks = data.standings.some((s) => s.inks)
+  const hasCut = data.standings.some((s) => s.madeDayTwo || s.madeTopCut)
   const teams = data.teams ?? []
 
   return (
@@ -233,6 +271,9 @@ function EventView({ eventId }) {
       <Tabs className="mt-4 mb-4">
         <Tab active={tab === 'standings'} onClick={() => setTab('standings')}>Standings</Tab>
         {hasBracket && <Tab active={tab === 'bracket'} onClick={() => setTab('bracket')}>Bracket</Tab>}
+        {hasInks && INK_TABS.filter(([key]) => key !== 'conversion' || hasCut).map(([key, label]) => (
+          <Tab key={key} active={tab === key} onClick={() => setTab(key)}>{label}</Tab>
+        ))}
         {teams.length > 0 && (
           <Tab active={tab === 'teams'} onClick={() => setTab('teams')}>
             Teams <span className="text-xs text-gray-400 font-sans normal-case tracking-normal">({teams.length})</span>
@@ -244,6 +285,8 @@ function EventView({ eventId }) {
         <Card className="p-4">
           <EliminationBracket allMatches={bracket.map(toBracketMatch)} phaseName={bracket[0].phaseName} />
         </Card>
+      ) : hasInks && inkTab ? (
+        <InkTabs tab={tab} event={event} standings={data.standings} matches={matches} />
       ) : tab === 'teams' && teams.length > 0 ? (
         <TeamsTab teams={teams} />
       ) : (

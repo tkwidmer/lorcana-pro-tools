@@ -296,6 +296,7 @@ export function getTournamentStructure(eventDetails) {
     phaseRoundsRemaining,
     advancementRequirement,
     tiebreakers: eventDetails.tiebreakers ?? [],
+    eventId: String(eventDetails.id),
     eventName: eventDetails.name,
     startingPlayerCount: eventDetails.starting_player_count ?? null,
     timerEndDatetime: eventDetails.timer_end_datetime ?? null,
@@ -417,9 +418,10 @@ export async function fetchAllRegistrations(eventId) {
 
 // A round's full standings in one call ({ standings, round_number }), with
 // match_points normalized to the current total — the standings snapshot
-// field is stale mid-event.
-export async function fetchAllStandings(roundId) {
-  const response = await fetch(`/api/tournament?type=standings&roundId=${roundId}`)
+// field is stale mid-event. With `eventId`, the proxy caches a finished
+// event's standings for a week.
+export async function fetchAllStandings(roundId, eventId = '') {
+  const response = await fetch(`/api/tournament?type=standings&roundId=${roundId}&eventId=${eventId}`)
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throw new Error(`${error.detail || error.error || 'Failed to fetch standings'} (HTTP ${response.status})`)

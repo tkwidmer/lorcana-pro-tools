@@ -746,7 +746,7 @@ export function TournamentLookupPage() {
       setRosterMode(false)
       setActiveTab('standings')
 
-      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId)
+      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId, tournamentStructure.eventId)
       setAllStandings(normalized)
 
       // Fetch matches per round in parallel (non-blocking — updates independently)
@@ -785,7 +785,7 @@ export function TournamentLookupPage() {
         return
       }
 
-      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId)
+      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId, tournamentStructure.eventId)
       setAllStandings(normalized)
 
       // The event just started (or standings just generated for the first

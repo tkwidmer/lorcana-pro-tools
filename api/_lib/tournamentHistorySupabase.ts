@@ -375,7 +375,7 @@ export function getEventStandings(eventDbId: string) {
   return fetchAllRanges<any>(() =>
     supabase
       .from('tournament_history_standings')
-      .select('rph_player_id, player_name, rank, match_points, record, made_top_cut, inks')
+      .select('rph_player_id, player_name, rank, match_points, record, made_top_cut, made_day_two, inks')
       .eq('event_id', eventDbId)
       .order('rank', { ascending: true, nullsFirst: false })
       .order('id') // stable order across .range() pages
@@ -396,6 +396,19 @@ export async function getEventMatches(eventDbId: string, phaseName: string) {
     .order('table_number')
   if (error) throw error
   return data ?? []
+}
+
+// Every match of an event, for the results page's ink-pair tabs. A DLC is
+// ~10k rows, so paged.
+export function getEventAllMatches(eventDbId: string) {
+  const supabase = getSupabaseServiceClient()
+  return fetchAllRanges<any>(() =>
+    supabase
+      .from('tournament_history_matches')
+      .select(MATCH_COLUMNS)
+      .eq('event_id', eventDbId)
+      .order('id') // stable order across .range() pages
+  )
 }
 
 // `playerId` must already be validated (ID_RE in the route): it is

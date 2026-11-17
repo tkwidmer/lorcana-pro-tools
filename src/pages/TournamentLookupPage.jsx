@@ -436,7 +436,11 @@ function MatchesTab({ allMatches, matchesLoading, notesPathFor, favorites, team,
                                 {p1HasPedigree && (
                                   <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
                                 )}
-                                {p1?.user_event_status.best_identifier ?? '—'}
+                                {p1 ? (
+                                  <Link to={`/results/players/${p1.player.id}`} className="hover:underline">
+                                    {p1.user_event_status.best_identifier}
+                                  </Link>
+                                ) : '—'}
                                 {p1 && <InkIcons colors={inksOfRelationship(p1)} size={16} className="ml-1" />}
                               </span>
                             </td>
@@ -454,7 +458,11 @@ function MatchesTab({ allMatches, matchesLoading, notesPathFor, favorites, team,
                             <td className="px-4 py-2.5 text-right">
                               <span className={`inline-flex items-center justify-end gap-1 font-medium ${p2Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
                                 {p2 && !isBye && <InkIcons colors={inksOfRelationship(p2)} size={16} className="mr-1" />}
-                                {p2?.user_event_status.best_identifier ?? '—'}
+                                {p2 ? (
+                                  <Link to={`/results/players/${p2.player.id}`} className="hover:underline">
+                                    {p2.user_event_status.best_identifier}
+                                  </Link>
+                                ) : '—'}
                                 {p2HasPedigree && (
                                   <span title="Made top cut at a Challenge or Challenge Championship">🏆</span>
                                 )}

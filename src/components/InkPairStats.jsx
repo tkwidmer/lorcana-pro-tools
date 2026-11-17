@@ -53,21 +53,39 @@ function useCutStages(structure, withOptional = false) {
 export function ConversionTab({ allMatches, structure }) {
   const [showTop32, setShowTop32] = useState(false)
   const { cuts, stages, error } = useCutStages(structure, showTop32)
-  const funnel = useMemo(() => stages && conversionFunnel(allMatches, stages), [stages, allMatches])
-  const top32Toggle = structure.cuts.some((c) => c.optional && c.fromRoundId) && (
-    <label className="flex items-center gap-2 text-sm text-gray-500">
-      <input type="checkbox" checked={showTop32} onChange={(e) => setShowTop32(e.target.checked)} />
-      Show Top 32 (Nationals qualification at a DLC)
-    </label>
-  )
+  const top32Toggle = structure.cuts.some((c) => c.optional && c.fromRoundId) && <Top32Toggle checked={showTop32} onChange={setShowTop32} />
   if (error) return <p className="text-sm text-red-600">{error}</p>
-  if (!funnel) return <div className="space-y-2">{top32Toggle}<p className="text-sm text-gray-500">Loading the standings that decided each cut…</p></div>
-
-  const labels = cuts.map((c) => c.label)
+  if (!stages) return <div className="space-y-2">{top32Toggle}<p className="text-sm text-gray-500">Loading the standings that decided each cut…</p></div>
   const cutoffText = (c) => (c.cutoff.type === 'rank' ? `the top ${c.cutoff.value}${c.cutoff.ties ? ' and anyone tied on its match points' : ''}` : `${c.cutoff.value}+ match points`)
   return (
     <div className="space-y-2">
       {top32Toggle}
+      <ConversionTable
+        allMatches={allMatches}
+        structure={structure}
+        stages={stages}
+        cutNote={`${cuts.map((c) => `${c.label} is ${cutoffText(c)}`).join('; ')}, read from the standings that decided it.`}
+      />
+    </div>
+  )
+}
+
+export function Top32Toggle({ checked, onChange }) {
+  return (
+    <label className="flex items-center gap-2 text-sm text-gray-500">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      Show Top 32 (Nationals qualification at a DLC)
+    </label>
+  )
+}
+
+// The funnel table and its share image. `stages` is [{ label, ids }];
+// `cutNote` says how each cut was decided.
+export function ConversionTable({ allMatches, structure, stages, cutNote }) {
+  const funnel = useMemo(() => conversionFunnel(allMatches, stages), [stages, allMatches])
+  const labels = stages.map((s) => s.label)
+  return (
+    <div className="space-y-2">
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[560px]">
@@ -126,7 +144,7 @@ export function ConversionTab({ allMatches, structure }) {
           </table>
         </div>
         <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
-          {cuts.map((c) => `${c.label} is ${cutoffText(c)}`).join('; ')}, read from the standings that decided it. Conv. is the share of a pair's players at the stage before who made the cut; vs field is that over the field's rate, so 1.25× converted 25% better. Players with no submitted deck are left out. Small pairs swing hard: a pair of 10 moves 10 points per player.
+          {cutNote} Conv. is the share of a pair's players at the stage before who made the cut; vs field is that over the field's rate, so 1.25× converted 25% better. Players with no submitted deck are left out. Small pairs swing hard: a pair of 10 moves 10 points per player.
         </p>
       </div>
       <ShareDownloadLink render={(video) => renderConversionShareImage({ funnel, labels, structure, video })} filename={shareFilename(structure, 'conversion')} />
@@ -135,13 +153,16 @@ export function ConversionTab({ allMatches, structure }) {
 }
 
 // The field by ink pair, from the players' submitted decks on Play Hub.
-export function InkMetaTab({ allMatches, structure, standings }) {
+// `stages` overrides the cuts read live from Play Hub (the results archive
+// passes the ones it recorded at import).
+export function InkMetaTab({ allMatches, structure, standings, stages: givenStages }) {
   const rows = useMemo(() => inkPairMeta(allMatches), [allMatches])
   const bestRank = useMemo(() => bestRankByPair(standings, playerInks(allMatches)), [standings, allMatches])
   const players = rows.reduce((sum, r) => sum + r.players, 0)
   // The first decided cut (a DLC's Day 2): each pair's conversion, colored by
   // its lift over the field. The Conversion tab has the full funnel.
-  const { stages } = useCutStages(structure)
+  const liveStages = useCutStages(structure).stages
+  const stages = givenStages ?? liveStages
   const firstCut = useMemo(() => {
     if (!stages) return null
     const { rows: funnelRows, field } = conversionFunnel(allMatches, stages.slice(0, 1))

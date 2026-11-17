@@ -13,7 +13,7 @@ import { Tabs, Tab } from '../components/ui/Tabs'
 import { TeamLogo } from '../components/TeamLogo'
 import { ordinal } from '../lib/resultsArchive'
 import { InkIcons } from '../components/InkIcons'
-import { InkMetaTab, InkMatrixTab, BestOfTab, ConversionTable } from '../components/InkPairStats'
+import { InkMetaTab, InkMatrixTab, BestOfTab, ConversionTable, Top32Toggle } from '../components/InkPairStats'
 import { ArchiveFootnote, ArchiveLoading, ArchiveError } from '../components/ResultsArchive'
 
 // Team Tracker teams with a member in this event (who was on the team that
@@ -179,12 +179,25 @@ const INK_TABS = [['meta', 'Metagame'], ['matrix', 'Matchups'], ['conversion', '
 // the event's matches load, an Error if they failed.
 function InkTabs({ tab, event, standings, matches }) {
   const ink = useMemo(() => Array.isArray(matches) && archiveInkData({ event, standings, matches }), [event, standings, matches])
+  const [showTop32, setShowTop32] = useState(false)
   if (matches instanceof Error) return <p className="text-sm text-red-700">Could not load this event's matches.</p>
   if (!ink) return <ArchiveLoading label="Loading matches…" />
+  const cuts = ink.stages.filter((s) => !s.optional)
   if (tab === 'conversion') {
-    return <ConversionTable allMatches={ink.allMatches} structure={ink.structure} stages={ink.stages} cutNote="Day 2 is the players who played in the second Swiss phase; the top cut is the players who made the bracket." />
+    const hasTop32 = ink.stages.some((s) => s.optional)
+    return (
+      <div className="space-y-2">
+        {hasTop32 && <Top32Toggle checked={showTop32} onChange={setShowTop32} />}
+        <ConversionTable
+          allMatches={ink.allMatches}
+          structure={ink.structure}
+          stages={showTop32 ? ink.stages : cuts}
+          cutNote={`Day 2 is the players who played in the second Swiss phase;${hasTop32 && showTop32 ? " Top 32 is the top 32 and anyone tied on its match points after the last Swiss round;" : ''} the top cut is the players who made the bracket.`}
+        />
+      </div>
+    )
   }
-  if (tab === 'meta') return <InkMetaTab allMatches={ink.allMatches} structure={ink.structure} standings={ink.standings} stages={ink.stages.length ? ink.stages : null} />
+  if (tab === 'meta') return <InkMetaTab allMatches={ink.allMatches} structure={ink.structure} standings={ink.standings} stages={cuts.length ? cuts : null} />
   if (tab === 'matrix') return <InkMatrixTab allMatches={ink.allMatches} structure={ink.structure} standings={ink.standings} />
   return <BestOfTab standings={ink.standings} inksById={ink.inksById} allMatches={ink.allMatches} structure={ink.structure} standingsLabel="Final standings" />
 }

@@ -185,4 +185,14 @@ describe('archiveInkData', () => {
   it('keeps only the cuts someone made, as Conversion stages', () => {
     expect(data.stages.map((s) => [s.label, [...s.ids]])).toEqual([['Day 2', ['1']]])
   })
+
+  it('adds an optional Top 32 before a smaller top cut: the top 32 and anyone on 32nd place\'s points', () => {
+    const standings = Array.from({ length: 34 }, (_, i) => ({
+      playerId: String(i + 1), playerName: `P${i + 1}`, rank: i + 1, matchPoints: i < 33 ? 40 - i : 0, record: '', inks: null,
+      madeTopCut: i < 8, madeDayTwo: true,
+    }))
+    standings[32].matchPoints = standings[31].matchPoints // 33rd tied with 32nd
+    const { stages } = archiveInkData({ event: { eventName: 'X', topCutSize: 8 }, standings, matches: [] })
+    expect(stages.map((s) => [s.label, s.ids.size, Boolean(s.optional)])).toEqual([['Day 2', 34, false], ['Top 32', 33, true], ['Top 8', 8, false]])
+  })
 })

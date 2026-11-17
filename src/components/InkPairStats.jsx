@@ -53,12 +53,7 @@ function useCutStages(structure, withOptional = false) {
 export function ConversionTab({ allMatches, structure }) {
   const [showTop32, setShowTop32] = useState(false)
   const { cuts, stages, error } = useCutStages(structure, showTop32)
-  const top32Toggle = structure.cuts.some((c) => c.optional && c.fromRoundId) && (
-    <label className="flex items-center gap-2 text-sm text-gray-500">
-      <input type="checkbox" checked={showTop32} onChange={(e) => setShowTop32(e.target.checked)} />
-      Show Top 32 (Nationals qualification at a DLC)
-    </label>
-  )
+  const top32Toggle = structure.cuts.some((c) => c.optional && c.fromRoundId) && <Top32Toggle checked={showTop32} onChange={setShowTop32} />
   if (error) return <p className="text-sm text-red-600">{error}</p>
   if (!stages) return <div className="space-y-2">{top32Toggle}<p className="text-sm text-gray-500">Loading the standings that decided each cut…</p></div>
   const cutoffText = (c) => (c.cutoff.type === 'rank' ? `the top ${c.cutoff.value}${c.cutoff.ties ? ' and anyone tied on its match points' : ''}` : `${c.cutoff.value}+ match points`)
@@ -72,6 +67,15 @@ export function ConversionTab({ allMatches, structure }) {
         cutNote={`${cuts.map((c) => `${c.label} is ${cutoffText(c)}`).join('; ')}, read from the standings that decided it.`}
       />
     </div>
+  )
+}
+
+export function Top32Toggle({ checked, onChange }) {
+  return (
+    <label className="flex items-center gap-2 text-sm text-gray-500">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      Show Top 32 (Nationals qualification at a DLC)
+    </label>
   )
 }
 

@@ -3,6 +3,7 @@
 // up into summary stats, and adapt archived bracket rows to the RPH match
 // shape EliminationBracket already renders. Server shapes are documented in
 // docs/superpowers/specs/2026-10-22-public-tournament-results-design.md.
+import { cutQualifiers } from './tournamentInks'
 
 // The discovery sweep that feeds the archive also picks up 4–8 player "CCQ
 // trial" events; the results list hides anything under this by default.
@@ -52,7 +53,10 @@ export function toBracketMatch(match) {
 // put back on every match as the deck descriptor label. Unranked standings
 // are left out; the event has no live round. `stages` are the cuts the import
 // recorded (Day 2: played in the second Swiss phase; the top cut), for the
-// Conversion tab, each kept only when someone made it.
+// Conversion tab, each kept only when someone made it. Under a top cut smaller
+// than 32 an `optional` Top 32 comes before it, decided like Tournament
+// Lookup's: everyone on or above 32nd place's match points. Final ranks below
+// the bracket are the last Swiss round's (DLC London: the same 38 players).
 export function archiveInkData({ event, standings, matches }) {
   const inksById = new Map(standings.filter((s) => s.inks).map((s) => [String(s.playerId), s.inks]))
   const label = (id) => {
@@ -64,23 +68,26 @@ export function archiveInkData({ event, standings, matches }) {
     for (const rel of match.player_match_relationships) rel.user_event_status.deck_descriptor_label = label(rel.player.id)
     return match
   })
-  const stages = [
-    { label: 'Day 2', ids: new Set(standings.filter((s) => s.madeDayTwo).map((s) => String(s.playerId))) },
-    { label: `Top ${event.topCutSize}`, ids: new Set(standings.filter((s) => s.madeTopCut).map((s) => String(s.playerId))) },
-  ].filter((s) => s.ids.size > 0)
+  const ranked = standings
+    .filter((s) => s.rank != null)
+    .map((s) => ({
+      rank: s.rank,
+      match_points: s.matchPoints,
+      match_record: s.record,
+      player: { id: s.playerId },
+      user_event_status: { best_identifier: s.playerName },
+    }))
+  const ids = (pick) => new Set(standings.filter(pick).map((s) => String(s.playerId)))
+  const topCut = { label: `Top ${event.topCutSize}`, ids: ids((s) => s.madeTopCut) }
+  const top32 = topCut.ids.size > 0 && event.topCutSize < 32 && ranked.some((s) => s.rank === 32)
+    ? { label: 'Top 32', ids: cutQualifiers(ranked, { type: 'rank', value: 32, ties: true }), optional: true }
+    : null
+  const stages = [{ label: 'Day 2', ids: ids((s) => s.madeDayTwo) }, top32, topCut].filter((s) => s?.ids.size > 0)
   return {
     inksById,
     allMatches,
     stages,
-    standings: standings
-      .filter((s) => s.rank != null)
-      .map((s) => ({
-        rank: s.rank,
-        match_points: s.matchPoints,
-        match_record: s.record,
-        player: { id: s.playerId },
-        user_event_status: { best_identifier: s.playerName },
-      })),
+    standings: ranked,
     structure: {
       eventName: event.eventName,
       gameplayFormat: event.gameplayFormat,

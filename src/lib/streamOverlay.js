@@ -9,6 +9,7 @@ import { bracketRoundLabel } from './bracket'
 import { resolveInkName } from './inkColors'
 import { ordinal, seriesCounts } from './resultsArchive'
 import { inksOfRelationship } from './tournamentInks'
+import { matchResultForPlayer } from './tournamentApi'
 
 export const OVERLAY_WIDTH = 1920
 export const OVERLAY_HEIGHT = 1080
@@ -412,7 +413,8 @@ export const PLAYER_CARD_MEETINGS = 5
 // Rating: the whole Glicko rating, and the archive rank (null while provisional).
 export function buildPlayerCard({ histories, headToHead, playerIds }) {
   const tier = e => (e.madeTopCut ? 0 : e.madeDayTwo ? 1 : 2)
-  const players = histories.map(h => ({
+  const players = histories.map((h, i) => ({
+    playerId: playerIds[i],
     rating: h.rating ? Math.round(h.rating.rating) : null,
     rank: h.rating?.rank ?? null,
     majorsPlayed: h.majorsPlayed,
@@ -455,14 +457,25 @@ export function buildPlayerCard({ histories, headToHead, playerIds }) {
 // (StreamOverlayNotesPage reads these params): both player match
 // relationships, recordOf(playerId) for each side's current record, and the
 // event name. Inks are the deck each player submitted for this match.
-export function casterNotesPath(p1, p2, recordOf, eventName) {
+export function casterNotesPath(p1, p2, recordOf, eventName, eventId) {
   const side = (rel, n) => ({
     [`p${n}`]: rel.player.id,
     [`n${n}`]: rel.user_event_status.best_identifier,
     [`r${n}`]: recordOf(rel.player.id),
     [`i${n}`]: (inksOfRelationship(rel) ?? []).join(','),
   })
-  return `/stream-overlay/notes?${new URLSearchParams({ ...side(p1, 1), ...side(p2, 2), event: eventName ?? '' })}`
+  return `/stream-overlay/notes?${new URLSearchParams({ ...side(p1, 1), ...side(p2, 2), event: eventName ?? '', eid: eventId })}`
+}
+
+// One player's rounds in a Play Hub event, from fetchAllRoundMatches():
+// round number, opponent and their deck's inks, result and score.
+export function playerRounds(matches, playerId) {
+  return matches.flatMap(m => {
+    const me = m.player_match_relationships.find(r => String(r.player.id) === String(playerId))
+    if (!me) return []
+    const opp = m.player_match_relationships.find(r => r !== me)
+    return [{ round: m.round_number, ...matchResultForPlayer(m, me.player.id), inks: (opp && inksOfRelationship(opp)) ?? [] }]
+  })
 }
 
 // Plain-English lines a caster can read off for one side of the player

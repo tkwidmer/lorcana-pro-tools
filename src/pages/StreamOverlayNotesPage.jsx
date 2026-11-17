@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchPublicTable, subscribeToTable, logStreamEvent } from '../lib/streamTables'
-import { rowToState, timerRemainingMs, formatClock, casterPoints, buildPlayerCard } from '../lib/streamOverlay'
+import { rowToState, timerRemainingMs, formatClock, casterPoints, buildPlayerCard, playerRounds } from '../lib/streamOverlay'
+import { fetchEventDetails, fetchAllRoundMatches } from '../lib/tournamentApi'
 import { fetchPlayerTournamentHistory, fetchHeadToHead } from '../lib/tournamentHistoryApi'
 import { parseDeckList } from '../lib/parseDeckList'
 import { ordinal } from '../lib/resultsArchive'
@@ -19,6 +20,9 @@ import { InkIcon } from '../components/InkIcons'
 // Without a table, `?p1=<id>&n1=<name>&r1=<record>&i1=<ink,ink>&p2=…&event=<name>` (the
 // link on each Tournament Lookup match row) shows the same notes for any
 // pairing from the archive alone: no clock, score, results or standings.
+//
+// Both modes show each player's rounds at the Play Hub event (`eid`, or the
+// table's linked event), fetched again whenever the table's round changes.
 export function StreamOverlayNotesPage() {
   const [searchParams] = useSearchParams()
   const tableId = searchParams.get('table') ?? ''
@@ -42,6 +46,21 @@ export function StreamOverlayNotesPage() {
     return subscribeToTable(tableId, 'notes', setRow)
   }, [tableId, matchup])
 
+  // Player ids come from the archive card (buildPlayerCard), which mirrors with a side swap.
+  const roundsEventId = matchup ? searchParams.get('eid') : row?.rph_event_id
+  const roundsKey = [roundsEventId, ...(matchup ? [id1, id2] : row?.player_card?.players.map(p => p.playerId) ?? []), row?.round].join('|')
+  const [rounds, setRounds] = useState(null) // { key, lists } | { key, error }
+  useEffect(() => {
+    const [eventId, ...rest] = roundsKey.split('|')
+    const ids = rest.slice(0, 2)
+    if (!eventId || ids.length < 2 || ids.some(id => !id)) return
+    let cancelled = false
+    fetchEventDetails(eventId)
+      .then(details => fetchAllRoundMatches(eventId, details))
+      .then(matches => { if (!cancelled) setRounds({ key: roundsKey, lists: ids.map(id => playerRounds(matches, id)) }) })
+      .catch(e => { if (!cancelled) setRounds({ key: roundsKey, error: e.message }) })
+    return () => { cancelled = true }
+  }, [roundsKey])
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
@@ -59,6 +78,7 @@ export function StreamOverlayNotesPage() {
   const names = players.map(p => p.name)
   const standings = row.standings
   const results = row.results
+  const eventRounds = rounds?.key === roundsKey ? rounds : null
   const onStream = r => [r.p1, r.p2].some(n => n && names.includes(n))
 
   return (
@@ -93,6 +113,30 @@ export function StreamOverlayNotesPage() {
                 {casterPoints(card, i, names).map(t => <li key={t} className="pl-3 border-l-2 border-forge">{t}</li>)}
               </ul>
             ) : <p className="mt-1 text-sm text-gray-500">No archive data for this pairing.</p>}
+
+            {eventRounds?.error && <p className="mt-4 text-sm text-gray-500">Rounds at this event unavailable: {eventRounds.error}</p>}
+            {eventRounds?.lists?.[i].length > 0 && (
+              <>
+                <h3 className="mt-4 font-display uppercase tracking-wider text-xs text-gray-500">Rounds at this event</h3>
+                <table className="mt-1 w-full text-sm">
+                  <tbody>
+                    {eventRounds.lists[i].map(r => (
+                      <tr key={r.round} className="border-b border-gray-200">
+                        <td className="py-1 pr-2 text-gray-500 tabular-nums w-10">R{r.round}</td>
+                        <td className="py-1 pr-2">
+                          <span className="inline-flex items-center gap-1.5">
+                            {r.opponent}
+                            {r.inks.map(ink => <InkIcon key={ink} color={ink} size={14} />)}
+                          </span>
+                        </td>
+                        <td className={`py-1 pr-2 text-xs font-semibold uppercase tracking-wider whitespace-nowrap ${r.result === 'WIN' ? 'text-green-700' : r.result === 'LOSS' ? 'text-red-700' : 'text-gray-500'}`}>{r.result}</td>
+                        <td className="py-1 text-right tabular-nums text-gray-500 whitespace-nowrap">{r.score}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
 
             {card && card.players[i].finishes.length > 0 && (
               <>

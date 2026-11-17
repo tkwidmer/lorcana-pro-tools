@@ -388,6 +388,31 @@ export async function fetchAllRoundMatches(eventId, eventDetails) {
   return allMatches
 }
 
+// One player's side of a match: result (WIN, LOSS, DRAW, BYE, IN PROGRESS),
+// the score from their side and the opponent's name.
+export function matchResultForPlayer(match, playerId) {
+  if (match.match_is_bye) return { result: 'BYE', score: '', opponent: 'BYE' }
+  if (match.match_is_intentional_draw || match.match_is_unintentional_draw) {
+    const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
+    return { result: 'DRAW', score: '—', opponent: opp?.user_event_status.best_identifier ?? '—' }
+  }
+  const opp = match.player_match_relationships.find((r) => r.player.id !== playerId)
+  const oppName = opp?.user_event_status.best_identifier ?? '—'
+  // An assigned loss (no-show, late entry) is one player, COMPLETE, with no winner.
+  if (match.match_is_loss) return { result: 'LOSS', score: '—', opponent: oppName }
+  // A round can be reported to the app before every match in it has a
+  // winner — an unfinished match has no winning_player yet, which must not
+  // be read as a loss.
+  if (match.status !== 'COMPLETE' || match.winning_player == null) {
+    return { result: 'IN PROGRESS', score: '—', opponent: oppName }
+  }
+  const won = match.winning_player === playerId
+  const w = match.games_won_by_winner
+  const l = match.games_won_by_loser
+  const score = won ? `${w}-${l}` : `${l}-${w}`
+  return { result: won ? 'WIN' : 'LOSS', score, opponent: oppName }
+}
+
 // Keep backward compat
 export function getCurrentRoundId(eventDetails) {
   return getTournamentStructure(eventDetails)?.currentRoundId ?? null

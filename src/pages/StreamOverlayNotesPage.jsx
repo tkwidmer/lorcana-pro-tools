@@ -16,7 +16,7 @@ import { InkIcon } from '../components/InkIcons'
 // itself. Unguarded like the view: casters have no session, and the link
 // carries only the table id, so it can't change anything.
 //
-// Without a table, `?p1=<id>&n1=<name>&p2=<id>&n2=<name>&event=<name>` (the
+// Without a table, `?p1=<id>&n1=<name>&r1=<record>&i1=<ink,ink>&p2=…&event=<name>` (the
 // Tournament Lookup matchup modal's link) shows the same notes for any
 // pairing from the archive alone: no clock, score, results or standings.
 export function StreamOverlayNotesPage() {
@@ -52,7 +52,7 @@ export function StreamOverlayNotesPage() {
   }
 
   const state = matchup
-    ? { eventName: searchParams.get('event'), players: ['n1', 'n2'].map(k => ({ name: searchParams.get(k) ?? '', record: '', inks: [] })) }
+    ? { eventName: searchParams.get('event'), players: [1, 2].map(n => ({ name: searchParams.get(`n${n}`) ?? '', record: searchParams.get(`r${n}`) ?? '', inks: (searchParams.get(`i${n}`) ?? '').split(',').filter(Boolean) })) }
     : rowToState(row)
   const { players } = state
   const card = row.player_card

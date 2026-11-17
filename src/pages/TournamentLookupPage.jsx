@@ -1592,6 +1592,8 @@ export function TournamentLookupPage() {
           allMatches={allMatches}
           structure={structure}
           currentEventId={currentEventId}
+          inksById={inksById}
+          standings={allStandings}
         />
       )}
     </div>

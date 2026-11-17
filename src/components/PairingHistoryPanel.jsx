@@ -83,8 +83,14 @@ function PlayerSummaryCard({ label, playerId, history, loading, error }) {
 // interesting enough to show.
 const MIN_RIVALRY_MEETINGS = 2
 
-export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, currentEventId }) {
+export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, currentEventId, inksById, standings }) {
   const { p1, p2 } = pairing
+  const recordOf = (id) => standings?.find((e) => String(e.player.id) === String(id))?.match_record ?? ''
+  const notesParams = new URLSearchParams({
+    p1: p1.id, n1: p1.name, r1: recordOf(p1.id), i1: (inksById.get(String(p1.id)) ?? []).join(','),
+    p2: p2.id, n2: p2.name, r2: recordOf(p2.id), i2: (inksById.get(String(p2.id)) ?? []).join(','),
+    event: structure?.eventName ?? '',
+  })
   const [historyA, setHistoryA] = useState(null)
   const [historyB, setHistoryB] = useState(null)
   const [headToHead, setHeadToHead] = useState(null)
@@ -140,7 +146,7 @@ export function PairingHistoryPanel({ pairing, onClose, allMatches, structure, c
           <div className="flex items-center gap-3">
             <Button
               size="sm"
-              to={`/stream-overlay/notes?${new URLSearchParams({ p1: p1.id, n1: p1.name, p2: p2.id, n2: p2.name, event: structure?.eventName ?? '' })}`}
+              to={`/stream-overlay/notes?${notesParams}`}
               target="_blank"
               rel="noopener"
             >

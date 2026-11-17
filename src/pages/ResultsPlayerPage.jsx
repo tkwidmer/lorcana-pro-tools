@@ -205,6 +205,9 @@ function PlayerView({ playerId }) {
                   <td className="py-1.5 pr-4 text-gray-500">
                     {p.events} {p.events === 1 ? 'event' : 'events'}
                     {p.topCuts > 0 && ` · ${p.topCuts} top ${p.topCuts === 1 ? 'cut' : 'cuts'}`}
+                    {p.bestOfs > 0 && (
+                      <Badge className="ml-2">{p.bestOfs > 1 ? `${p.bestOfs}× Best Of` : 'Best Of'}</Badge>
+                    )}
                   </td>
                   <td className="py-1.5 tabular-nums">{formatRecord(p)}</td>
                 </tr>

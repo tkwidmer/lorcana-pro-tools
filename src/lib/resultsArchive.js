@@ -65,9 +65,10 @@ export function playerSummary({ events, matches, playerId }) {
   const byPair = new Map()
   for (const e of events) {
     if (!e.inks) continue
-    const p = byPair.get(e.inks.join('/')) ?? { inks: e.inks, events: 0, topCuts: 0, wins: 0, losses: 0, draws: 0 }
+    const p = byPair.get(e.inks.join('/')) ?? { inks: e.inks, events: 0, topCuts: 0, bestOfs: 0, wins: 0, losses: 0, draws: 0 }
     p.events += 1
     if (e.madeTopCut) p.topCuts += 1
+    if (e.wonBestOf) p.bestOfs += 1
     byPair.set(e.inks.join('/'), p)
   }
   for (const match of matches) {

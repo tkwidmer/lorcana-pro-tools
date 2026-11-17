@@ -89,6 +89,9 @@ export function playerSummary({ events, matches, playerId }) {
   return {
     eventsPlayed: events.length,
     topCuts: events.filter((e) => e.madeTopCut).length,
+    dlcs: events.filter((e) => e.eventTier === 'challenge').length,
+    // RPH also runs some CCQs on the championship template (DLC London's, 1256351).
+    championships: events.filter((e) => e.eventTier === 'challenge_championship' && !/qualifier/i.test(e.eventName ?? '')).length,
     bestFinish,
     record,
     rivals,

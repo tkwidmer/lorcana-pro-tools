@@ -24,20 +24,21 @@ const liftColor = (lift) => (lift == null ? 'text-gray-400' : lift >= 1.1 ? 'tex
 function useCutStages(structure, withOptional = false) {
   const cuts = useMemo(() => structure?.cuts.filter((c) => c.fromRoundId && (withOptional || !c.optional)) ?? [], [structure, withOptional])
   const roundIds = cuts.map((c) => c.fromRoundId).join(',')
+  const eventId = structure?.eventId
   const [loaded, setLoaded] = useState({ roundIds: null, lists: null, error: null })
   useEffect(() => {
     if (!roundIds) return
     let cancelled = false
     // A DLC's Top 32 and Top 8 share a deciding round: fetch it once.
     const unique = [...new Set(roundIds.split(','))]
-    Promise.all(unique.map((id) => fetchAllStandings(id)))
+    Promise.all(unique.map((id) => fetchAllStandings(id, eventId)))
       .then((fetched) => {
         const byId = new Map(unique.map((id, i) => [id, fetched[i]]))
         if (!cancelled) setLoaded({ roundIds, lists: roundIds.split(',').map((id) => byId.get(id)), error: null })
       })
       .catch((err) => { if (!cancelled) setLoaded({ roundIds, lists: null, error: err.message }) })
     return () => { cancelled = true }
-  }, [roundIds])
+  }, [roundIds, eventId])
   const current = loaded.roundIds === roundIds
   const stages = useMemo(
     () => (current && loaded.lists ? cuts.map((c, i) => ({ label: c.label, ids: cutQualifiers(loaded.lists[i], c.cutoff) })) : null),

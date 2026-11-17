@@ -27,6 +27,31 @@ const NUMERIC_ID_RE = /^[0-9]{1,10}$/
 const IMAGE_URL_KEYS = new Set(['full_profile_picture_url', 'game_user_profile_picture_url', 'full_header_image_url', 'symbols'])
 const dropImageUrls = (key: string, value: unknown) => (IMAGE_URL_KEYS.has(key) ? undefined : value)
 
+// A finished event's standings won't change either. The standings carry no
+// status, so the proxy reads the event (display_status is 'complete' only
+// once every round is, not when the estimated end time passes) and checks the
+// round is the event's, so a mismatched eventId can't cache a live round.
+async function eventFinishedWith(eventId: string | undefined, roundId: string | undefined): Promise<boolean> {
+  if (!eventId) return false
+  const response = await fetch(`${RAVEN_BASE}/events/${encodeURIComponent(eventId)}/`)
+  if (!response.ok) return false
+  const event = await response.json()
+  return event.display_status === 'complete' &&
+    event.tournament_phases.some((p: any) => (p.rounds ?? []).some((r: any) => String(r.id) === roundId))
+}
+
+// A page of matches that are all COMPLETE won't change (barring a judge's
+// correction before the next round pairs), so Vercel's CDN keeps it a week,
+// shared by every visitor since the URL is per event and round, not per user;
+// the browser keeps it a day. A finished round is fetched from upstream
+// (7–20 s a page) once per region, not on every load and refresh. The ink
+// pairs on those matches come along with it.
+function matchesSettled(type: string, data: any): boolean {
+  if (type !== 'matches') return false
+  const matches = data?.results ?? data?.matches
+  return Array.isArray(matches) && matches.length > 0 && matches.every((m: any) => m.status === 'COMPLETE')
+}
+
 function clampInt(v: string | undefined, def: number, max: number): number {
   const n = parseInt(v ?? '', 10)
   if (!Number.isFinite(n) || n < 1) return def
@@ -48,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     case 'event':
       if (!eventId) return res.status(400).json({ error: 'Missing eventId' })
       if (!ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
-      url = `${RAVEN_BASE}/events/${encodeURIComponent(eventId)}`
+      url = `${RAVEN_BASE}/events/${encodeURIComponent(eventId)}/`
       break
     case 'registrations':
       if (!eventId) return res.status(400).json({ error: 'Missing eventId' })
@@ -58,6 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     case 'standings':
       if (!roundId) return res.status(400).json({ error: 'Missing roundId' })
       if (!ID_RE.test(roundId)) return res.status(400).json({ error: 'Invalid roundId' })
+      if (eventId && !ID_RE.test(eventId)) return res.status(400).json({ error: 'Invalid eventId' })
       url = `${RAVEN_BASE}/tournament-rounds/${encodeURIComponent(roundId)}/standings/`
       break
     case 'matches':
@@ -85,13 +111,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const finishedPromise = type === 'standings' ? eventFinishedWith(eventId, roundId).catch(() => false) : Promise.resolve(false)
     const response = await fetch(url)
     const contentType = response.headers.get('content-type') ?? ''
     const body = await response.text()
 
     if (!response.ok) {
       if (response.status === 404 && type === 'matches') {
-        return res.status(200).json({ matches: [], results: [], next_page_number: null })
+        return res.status(200).setHeader('Cache-Control', 'max-age=30, s-maxage=30').json({ matches: [], results: [], next_page_number: null })
       }
       console.error('tournament upstream error', type, response.status, url)
       return res.status(response.status).json({ error: 'Tournament API error', status: response.status })
@@ -111,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.status(200)
-      .setHeader('Cache-Control', 'max-age=30, s-maxage=30')
+      .setHeader('Cache-Control', matchesSettled(type, data) || (await finishedPromise) ? 'public, max-age=86400, s-maxage=604800' : 'max-age=30, s-maxage=30')
       .json(data)
   } catch (e) {
     console.error('tournament upstream unreachable', type, url, e)

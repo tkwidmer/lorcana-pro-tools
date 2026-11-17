@@ -296,6 +296,7 @@ export function getTournamentStructure(eventDetails) {
     phaseRoundsRemaining,
     advancementRequirement,
     tiebreakers: eventDetails.tiebreakers ?? [],
+    eventId: String(eventDetails.id),
     eventName: eventDetails.name,
     startingPlayerCount: eventDetails.starting_player_count ?? null,
     timerEndDatetime: eventDetails.timer_end_datetime ?? null,
@@ -338,17 +339,20 @@ function extractMatches(data) {
   return { matches: [], nextPage: null }
 }
 
-// Every page of one round's matches.
-export async function fetchRoundMatches(eventId, roundId) {
-  const all = []
-  let page = 1
-  let hasMore = true
-  while (hasMore) {
-    const data = await fetchEventMatches(eventId, roundId, page, 500)
-    const { matches, nextPage } = extractMatches(data)
+// Every page of one round's matches. Each page costs the upstream 7–20 s, so
+// the pages a field of `players` needs (half as many matches, 500 a page) are
+// fetched in parallel; a page past that estimate, if any, follows in turn.
+export async function fetchRoundMatches(eventId, roundId, players = 0) {
+  const estimate = Math.max(1, Math.ceil(players / 2 / 500))
+  const pages = await Promise.all(
+    Array.from({ length: estimate }, (_, i) => fetchEventMatches(eventId, roundId, i + 1, 500).then(extractMatches))
+  )
+  const all = pages.flatMap((p) => p.matches)
+  let next = pages.at(-1).nextPage
+  while (next !== null) {
+    const { matches, nextPage } = extractMatches(await fetchEventMatches(eventId, roundId, next, 500))
     all.push(...matches)
-    hasMore = nextPage !== null
-    page = nextPage || page + 1
+    next = nextPage
   }
   return all
 }
@@ -375,7 +379,7 @@ export async function fetchAllRoundMatches(eventId, eventDetails) {
   await Promise.all(
     rounds.map(async ({ roundId, roundNumber, phaseName }) => {
       try {
-        for (const match of await fetchRoundMatches(eventId, roundId)) {
+        for (const match of await fetchRoundMatches(eventId, roundId, eventDetails.starting_player_count)) {
           allMatches.push({ ...match, round_number: roundNumber, phase_name: phaseName })
         }
       } catch {
@@ -414,9 +418,10 @@ export async function fetchAllRegistrations(eventId) {
 
 // A round's full standings in one call ({ standings, round_number }), with
 // match_points normalized to the current total — the standings snapshot
-// field is stale mid-event.
-export async function fetchAllStandings(roundId) {
-  const response = await fetch(`/api/tournament?type=standings&roundId=${roundId}`)
+// field is stale mid-event. With `eventId`, the proxy caches a finished
+// event's standings for a week.
+export async function fetchAllStandings(roundId, eventId = '') {
+  const response = await fetch(`/api/tournament?type=standings&roundId=${roundId}&eventId=${eventId}`)
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throw new Error(`${error.detail || error.error || 'Failed to fetch standings'} (HTTP ${response.status})`)

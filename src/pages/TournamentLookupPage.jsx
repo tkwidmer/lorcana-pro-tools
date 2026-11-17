@@ -122,7 +122,7 @@ function pointsAsRecord(points, totalRounds) {
 
 // Shared by the Favorites and Team tabs — a flat roster of standings entries
 // with the same favorite toggle, team mark and click-through as the main Standings table.
-function RosterTable({ entries, favorites, team, toggleFavorite, registrationMap, onSelectPlayer, emptyMessage, inksById, disableSelect = false }) {
+function RosterTable({ entries, favorites, team, toggleFavorite, onSelectPlayer, emptyMessage, inksById, disableSelect = false }) {
   if (entries.length === 0) {
     return <p className="text-sm text-gray-500 py-8 text-center px-4">{emptyMessage}</p>
   }
@@ -140,8 +140,7 @@ function RosterTable({ entries, favorites, team, toggleFavorite, registrationMap
         </thead>
         <tbody>
           {entries.map((entry) => {
-            const regStatus = registrationMap?.get(entry.player.id)
-            const dropped = regStatus === 'ELIMINATED'
+            const dropped = entry.user_event_status.registration_status === 'ELIMINATED'
             const isFavorite = Boolean(favorites[String(entry.player.id)])
             const onTeam = Boolean(team[String(entry.player.id)])
             return (
@@ -509,7 +508,6 @@ export function TournamentLookupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [registrationMap, setRegistrationMap] = useState(null)
   const [timeRemaining, setTimeRemaining] = useState(null)
   const [allMatches, setAllMatches] = useState(null)
   const [matchesLoading, setMatchesLoading] = useState(false)
@@ -730,7 +728,6 @@ export function TournamentLookupPage() {
     setRoster(null)
     setRosterMode(false)
     setSearchTerm('')
-    setRegistrationMap(null)
     setAllMatches(null)
     setCurrentEventId(null)
     setTickerEvents([])
@@ -773,13 +770,8 @@ export function TournamentLookupPage() {
       setRosterMode(false)
       setActiveTab('standings')
 
-      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId)
+      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId, tournamentStructure.eventId)
       setAllStandings(normalized)
-
-      // Fetch registrations best-effort (non-blocking); key by user.id for reliable lookup
-      fetchAllRegistrations(eventId)
-        .then((regs) => setRegistrationMap(new Map(regs.map((r) => [r.user.id, r.registration_status]))))
-        .catch(() => {})
 
       // Fetch matches per round in parallel (non-blocking — updates independently)
       setMatchesLoading(true)
@@ -817,7 +809,7 @@ export function TournamentLookupPage() {
         return
       }
 
-      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId)
+      const normalized = await fetchAllStandings(tournamentStructure.currentRoundId, tournamentStructure.eventId)
       setAllStandings(normalized)
 
       // The event just started (or standings just generated for the first
@@ -833,10 +825,6 @@ export function TournamentLookupPage() {
       // Keep an open player-detail view's numbers current without kicking
       // the user back to the list.
       setPlayer((prev) => (prev ? normalized.find((e) => e.player.id === prev.player.id) ?? prev : prev))
-
-      fetchAllRegistrations(currentEventId)
-        .then((regs) => setRegistrationMap(new Map(regs.map((r) => [r.user.id, r.registration_status]))))
-        .catch(() => {})
 
       fetchAllRoundMatches(currentEventId, eventDetails)
         .then((matches) => setAllMatches(matches))
@@ -1199,8 +1187,7 @@ export function TournamentLookupPage() {
                 <tbody>
                   {filteredStandings?.map((entry) => {
                     const atCutLine = structure?.topCutSize && entry.rank === structure.topCutSize
-                    const regStatus = registrationMap?.get(entry.player.id)
-                    const dropped = regStatus === 'ELIMINATED'
+                    const dropped = entry.user_event_status.registration_status === 'ELIMINATED'
                     const isFavorite = Boolean(favorites[String(entry.player.id)])
                     const onTeam = Boolean(team[String(entry.player.id)])
                     return (
@@ -1328,7 +1315,6 @@ export function TournamentLookupPage() {
                 favorites={favorites}
                 team={team}
                 toggleFavorite={toggleFavorite}
-                registrationMap={registrationMap}
                 inksById={inksById}
                 onSelectPlayer={() => {}}
                 disableSelect
@@ -1347,7 +1333,6 @@ export function TournamentLookupPage() {
             favorites={favorites}
             team={team}
             toggleFavorite={toggleFavorite}
-            registrationMap={registrationMap}
             inksById={inksById}
             onSelectPlayer={rosterMode ? () => {} : setPlayer}
             disableSelect={rosterMode}
@@ -1466,7 +1451,6 @@ export function TournamentLookupPage() {
                   favorites={favorites}
                   team={team}
                   toggleFavorite={toggleFavorite}
-                  registrationMap={registrationMap}
                   inksById={inksById}
                   onSelectPlayer={rosterMode ? () => {} : setPlayer}
                   disableSelect={rosterMode}

@@ -60,7 +60,7 @@ export function withPhasePoints(eventDetails: any, templates: any[]) {
 export async function fetchEventDetails(eventId: string) {
   assertValidId(eventId, 'eventId')
   const [eventDetails, templates] = await Promise.all([
-    ravenFetch(`/events/${encodeURIComponent(eventId)}`),
+    ravenFetch(`/events/${encodeURIComponent(eventId)}/`),
     fetchPhaseTemplates(),
   ])
   return withPhasePoints(eventDetails, templates)

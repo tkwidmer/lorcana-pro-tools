@@ -21,6 +21,7 @@ import { TeamLogo } from '../components/TeamLogo'
 import { LiveMajorsDetails, LiveMajorsList } from '../components/LiveMajorsList'
 import { useLiveMajors } from '../hooks/useLiveMajors'
 import { useTournamentLiveUpdates } from '../hooks/useTournamentLiveUpdates'
+import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -206,7 +207,10 @@ function matchInvolvesFilter(match, filterMode, favorites, team) {
 // Bubbles matches involving a tagged player to the top of a round's table so
 // a caster doesn't have to scan hundreds of rows to find them — team members
 // outrank plain favorites since the picked team is the more deliberate signal.
+// RPH's feature match (is_feature_match, set while the round is live) goes
+// above both.
 function matchPriority(match, favorites, team) {
+  if (match.is_feature_match) return -1
   if (match.player_match_relationships.some((r) => team[String(r.player.id)])) return 0
   if (match.player_match_relationships.some((r) => favorites[String(r.player.id)])) return 1
   return 2
@@ -418,7 +422,7 @@ function MatchesTab({ allMatches, matchesLoading, notesPathFor, favorites, team,
                         const p2IsFavorite = p2 && !isBye && Boolean(favorites[String(p2.player.id)])
                         const p2OnTeam = p2 && !isBye && Boolean(team[String(p2.player.id)])
                         return (
-                          <tr key={match.id} className="border-t border-gray-100">
+                          <tr key={match.id} className={`border-t border-gray-100${match.is_feature_match ? ' bg-forge-soft' : ''}`}>
                             <td className="px-4 py-2.5 text-gray-400 text-xs">{match.table_number ?? '—'}</td>
                             <td className="px-4 py-2.5">
                               <span className={`inline-flex items-center gap-1 font-medium ${p1Won ? 'text-green-700' : isDraw ? 'text-gray-700' : 'text-gray-400'}`}>
@@ -437,6 +441,11 @@ function MatchesTab({ allMatches, matchesLoading, notesPathFor, favorites, team,
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-500">
+                              {match.is_feature_match && (
+                                <div className="mb-1">
+                                  <Badge className="whitespace-nowrap font-sans">Feature Match</Badge>
+                                </div>
+                              )}
                               {isRivalry && (
                                 <span title="These players have met before" className="mr-1">🔁</span>
                               )}

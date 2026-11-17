@@ -98,6 +98,7 @@ export function playerSummary({ events, matches, playerId }) {
   return {
     eventsPlayed: events.length,
     topCuts: events.filter((e) => e.madeTopCut).length,
+    bestOfs: events.filter((e) => e.wonBestOf).length,
     ...seriesCounts(events),
     bestFinish,
     record,

@@ -58,7 +58,7 @@ describe('toBracketMatch', () => {
 describe('playerSummary', () => {
   const events = [
     { eventId: 'e1', eventName: 'DLC Richmond', rank: 12, madeTopCut: true, startingPlayerCount: 2052 },
-    { eventId: 'e2', eventName: 'DLC Ghent', rank: 12, madeTopCut: true, startingPlayerCount: 2030 },
+    { eventId: 'e2', eventName: 'DLC Ghent', rank: 12, madeTopCut: true, startingPlayerCount: 2030, wonBestOf: true },
     { eventId: 'e3', eventName: 'CCQ Trial', rank: 40, madeTopCut: false, startingPlayerCount: 60 },
   ]
   const matches = [
@@ -72,6 +72,7 @@ describe('playerSummary', () => {
     const s = playerSummary({ events, matches, playerId: 'A' })
     expect(s.eventsPlayed).toBe(3)
     expect(s.topCuts).toBe(2)
+    expect(s.bestOfs).toBe(1)
     expect(s.record).toEqual({ wins: 2, losses: 1, draws: 1 })
     expect(s.bestFinish).toEqual({ rank: 12, eventId: 'e1', eventName: 'DLC Richmond', startingPlayerCount: 2052 })
   })
@@ -99,7 +100,7 @@ describe('playerSummary', () => {
   })
   it('is safe on empty inputs', () => {
     expect(playerSummary({ events: [], matches: [], playerId: 'A' })).toEqual({
-      eventsPlayed: 0, topCuts: 0, dlcs: 0, championships: 0, bestFinish: null, record: { wins: 0, losses: 0, draws: 0 }, rivals: [], inkPairs: [],
+      eventsPlayed: 0, topCuts: 0, bestOfs: 0, dlcs: 0, championships: 0, bestFinish: null, record: { wins: 0, losses: 0, draws: 0 }, rivals: [], inkPairs: [],
     })
   })
   it('rolls events with a known ink pair up by pair, with cuts and the record from those events', () => {

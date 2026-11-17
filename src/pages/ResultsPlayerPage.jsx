@@ -166,12 +166,13 @@ function PlayerView({ playerId }) {
       />
       <Link to="/results" className="text-sm text-gray-500 hover:underline">← All results</Link>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 my-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 my-6">
         <RatingTile rating={data.rating} />
         <StatCard size="lg" label="Events played" value={summary.eventsPlayed} />
         <StatCard size="lg" label="DLCs" value={summary.dlcs} />
         <StatCard size="lg" label="Championships" value={summary.championships} />
         <StatCard size="lg" label="Top cuts" value={summary.topCuts} />
+        <StatCard size="lg" label="Best Ofs won" value={summary.bestOfs} hint="Best on their ink pair at a Best Of event" />
         <StatCard
           size="lg"
           label="Best finish"
@@ -254,7 +255,10 @@ function PlayerView({ playerId }) {
                       {e.startingPlayerCount ? ` of ${e.startingPlayerCount}` : ''}
                     </td>
                     <td className="py-2 pr-4 tabular-nums">{e.record ?? '—'}</td>
-                    <td className="py-2">{e.madeTopCut && <Badge>Top cut</Badge>}</td>
+                    <td className="py-2 space-x-1 whitespace-nowrap">
+                      {e.madeTopCut && <Badge>Top cut</Badge>}
+                      {e.wonBestOf && <Badge>Best Of</Badge>}
+                    </td>
                   </tr>
                   {open === e.eventId && (
                     <tr>

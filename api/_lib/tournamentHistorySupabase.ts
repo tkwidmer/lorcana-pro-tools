@@ -107,6 +107,27 @@ export async function setStandingInks(
   if (error) throw error
 }
 
+// The best standings rank on an ink pair at an event: its Best Of leader's.
+export async function getPairBestRank(rphEventId: string, inks: string[]): Promise<number | null> {
+  const supabase = getSupabaseServiceClient()
+  const { data, error } = await supabase
+    .from('tournament_history_standings')
+    .select('rank, event:tournament_history_events!inner(rph_event_id)')
+    .eq('event.rph_event_id', rphEventId)
+    .eq('inks', `{${inks.join(',')}}`)
+    .not('rank', 'is', null)
+    .order('rank')
+    .limit(1)
+  if (error) throw error
+  return data?.[0]?.rank ?? null
+}
+
+export async function setBestOfPrizing(eventDbId: string, on: boolean): Promise<void> {
+  const supabase = getSupabaseServiceClient()
+  const { error } = await supabase.from('tournament_history_events').update({ best_of_prizing: on }).eq('id', eventDbId)
+  if (error) throw error
+}
+
 export interface MatchRow {
   rphMatchId: string
   roundNumber: number
@@ -167,7 +188,7 @@ export async function getPlayerHistory(rphPlayerId: string) {
   const { data, error } = await supabase
     .from('tournament_history_standings')
     .select(
-      'player_name, rank, match_points, record, made_top_cut, made_day_two, inks, event:tournament_history_events(rph_event_id, event_name, event_date, store_name, top_cut_size, starting_player_count, gameplay_format, event_tier, event_url)'
+      'player_name, rank, match_points, record, made_top_cut, made_day_two, inks, event:tournament_history_events(rph_event_id, event_name, event_date, store_name, top_cut_size, starting_player_count, gameplay_format, event_tier, event_url, best_of_prizing)'
     )
     .eq('rph_player_id', rphPlayerId)
 
@@ -310,7 +331,7 @@ export async function fetchAllRanges<T>(build: () => any): Promise<T[]> {
 }
 
 const EVENT_COLUMNS =
-  'id, rph_event_id, event_name, event_url, event_date, store_name, gameplay_format, starting_player_count, top_cut_size, has_elimination, total_swiss_rounds, event_tier'
+  'id, rph_event_id, event_name, event_url, event_date, store_name, gameplay_format, starting_player_count, top_cut_size, has_elimination, total_swiss_rounds, event_tier, best_of_prizing'
 
 export async function listEvents() {
   const supabase = getSupabaseServiceClient()

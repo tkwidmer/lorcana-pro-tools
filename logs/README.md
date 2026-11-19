@@ -108,3 +108,29 @@ Two traps found on the way:
 - The snapshot comes after the mover's plays, so a side's board is a little larger on its own turn than on the opponent's. Both players are snapshotted on their own turns, so the comparison is even, but it is the board after playing, not before.
 
 Not in the model yet: cards in hand and ink (known for the team's turns only, from `ink.csv`), items, temporary buffs (not logged), and the 11% of turns where the rebuilt board disagrees with the log. Next: score each quest, challenge and end-turn by the win chance before and after it.
+
+## Which board choices cost win chance?
+
+`python3 scripts/decision-value.py` (about three minutes) values every option of every quest, challenge and end-turn decision. A win model is fitted to the state at every decision of both players, out of fold by game. Each option's state after it is built from printed stats: a quest adds the character's lore and exerts it, a challenge exerts the attacker and removes whatever it banishes, ending the turn changes nothing. An option's value is that state's win chance, and a decision's regret is the best option's value minus the chosen one's. The team's decisions go to `decisions/decision-value.csv`.
+
+Nov 2026, 409,586 decisions in 14,726 games:
+
+- **The built state is mostly right.** It matches the next logged decision of the same turn on every field 80% of the time. Most misses are a card played or an effect between two choices (character counts differ 16% of the time); lore matches 96%, ready characters 98%.
+- **But the values don't yet predict winning.** As in the outcome test, a win model on the state is compared with the same plus the chosen option's value and gap to the best, and with the same plus a random option's (the placebo). Choice over random: +4.1 × 10⁻⁴ (95% −0.4 to +8.0). That is close, but the interval crosses zero, so the regret is the model's opinion of a choice, not a measured cost, and nothing is flagged from it.
+
+Where the model disagrees with the team (205,674 of the team's decisions; the model's pick was taken 62% of the time, mean regret 0.012):
+
+| Chosen | Model's pick | Decisions | Mean regret | Share of all regret |
+|---|---|---|---|---|
+| quest | end | 33,140 | 0.019 | 25% |
+| quest | challenge | 7,099 | 0.073 | 21% |
+| challenge | another challenge | 14,613 | 0.022 | 13% |
+| challenge | end | 6,412 | 0.041 | 11% |
+| end | challenge | 4,073 | 0.061 | 10% |
+| end | quest | 11,194 | 0.016 | 7% |
+
+The largest single gaps are a quest or end of turn where the model would challenge, and they sit on the clean kills: at the 3,445 turn ends that left one (`clean kill left` in the coaching flags) the model would challenge 82% of the time, mean regret 0.063 against 0.002 at other turn ends; at the 7,850 quests made while one was open, 68% and 0.060 against 0.013. The most common one is a quest where the model would keep the character ready, which is where it is least trustworthy: the state counts ready characters but not what the opponent can do to an exerted one.
+
+One trap: a game's summed regret looked significant against losing (log-odds −0.17 per 0.1 regret), but regret grows with the number of options, so it tracks the game's length and board size. Short games where the team was run over have the least regret and the most losses. The per-decision placebo test above is the one to trust.
+
+What would make the values trustworthy: the opponent's ready characters that could challenge an exerted quester, damage on the board (a challenge that does not banish changes nothing in the state today), cards in hand, and a sharper test on one spot at a time (for example, quest versus a clean kill with the same lore and board).

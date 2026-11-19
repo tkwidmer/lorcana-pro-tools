@@ -7,7 +7,7 @@ logs/<account>/matches.jsonl      one match-history row per ranked game (every f
 logs/<account>/<game_id>.logs.gz  the gamelog exactly as duels.ink serves it: gzipped JSON array of events, this account's perspective
 ```
 
-`<account>` is the name in `DUELS_TOKENS`; `teagan` is `DUELS_TOKEN`. `max1` and `max2` are two accounts of one player.
+`<account>` is the name in `DUELS_TOKENS`; `teagan` is `DUELS_TOKEN`. A player with two duels.ink accounts lists the name twice (`max=…,max=…`) and both pull into one folder; rows still carry each game's own `your_player` and decklist.
 
 The `.gz` files are stored with Git LFS (`.gitattributes`). A clone needs `git lfs install` once, then `git lfs pull` fetches the logs; without it the files are small pointer stubs. `matches.jsonl` is plain git.
 

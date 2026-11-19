@@ -7,7 +7,7 @@ logs/<account>/matches.jsonl      one match-history row per ranked game (every f
 logs/<account>/<game_id>.logs.gz  the gamelog exactly as duels.ink serves it: gzipped JSON array of events, this account's perspective
 ```
 
-`<account>` is the name in `DUELS_TOKENS`; `teagan` is `DUELS_TOKEN`.
+`<account>` is the name in `DUELS_TOKENS`; `teagan` is `DUELS_TOKEN`. `max1` and `max2` are two accounts of one player.
 
 The `.gz` files are stored with Git LFS (`.gitattributes`). A clone needs `git lfs install` once, then `git lfs pull` fetches the logs; without it the files are small pointer stubs. `matches.jsonl` is plain git.
 
@@ -25,7 +25,7 @@ Read a log with `src/lib/parseGamelog.js` (`your_player` from the row) or `.clau
 
 The mulligan and ink rows carry the game's account, colors, play/draw, MMR and result. The hand is rebuilt from the log by `src/lib/decisionRows.js`, and ink rows are only written while it is known. Logs before mid-June 2026 do not name the player's turn draws, so those games give mulligan rows and, on the play, a turn-1 ink row. From then on about 84% of ink decisions are kept, and the rebuilt hand matches about 95% of the prompts that show the whole hand. The script prints both numbers on every run.
 
-The choice rows come from `src/lib/boardState.js`, which rebuilds both boards (characters and locations, exerted, drying, damage, undo) and checks them against every quest and challenge the log records. The log often says an effect exerted or returned a character without naming it, so a turn becomes rows only when every check passes and nothing had to be inferred. Nov 2026: the board agrees with 99.8% of quests, 96.8% of challengers and 95.8% of challenge targets; 99.1% of logged challenges are in the legal option set; 88% of turns are trusted. Kill and survive use printed stats; temporary buffs are not logged, so they are right about 87% and 94% of the time.
+The choice rows come from `src/lib/boardState.js`, which rebuilds both boards (characters and locations, exerted, drying, damage, undo) and checks them against every quest and challenge the log records. The log often says an effect exerted or returned a character without naming it, so a turn becomes rows only when every check passes and nothing had to be inferred. Nov 2026: the board agrees with 99.8% of quests, 97.1% of challengers and 96.0% of challenge targets; 99.2% of logged challenges are in the legal option set; 89% of turns are trusted. Kill and survive use printed stats; temporary buffs are not logged, so they are right about 87% and 94% of the time.
 
 
 ## Baseline models and coaching flags
@@ -40,18 +40,18 @@ Three models score each decision:
 - `mmr` is the same model with each game weighted by its MMR: the weight doubles every 100 MMR above the median, and a game with no MMR (most Bo3) takes the player's median.
 - `generic` sees only what a card is (cost, type, inkable, stats, rules-text tags) and the game state, so it carries to a new meta. Trained on the games before set 14 and tested on set 14, where 26% of the cards were new, it beats the card model (mulligan 73.2% vs 71.4%, ink 54.9% vs 53.3%), and the tags are part of why (without them: 72.8%, 54.2%).
 
-Nov 2026, every game since February (12,400 with a mulligan, 55,043 ink decisions, 221,375 board decisions):
+Nov 2026, every game since February (14,401 with a mulligan, 66,897 ink decisions, 264,051 board decisions):
 
 | | `card` | `mmr` | `generic` | Best simple baseline |
 |---|---|---|---|---|
-| Mulligan, card kept or sent | 80.0% (AUC 0.88) | 78.0% | 77.7% | 74.6%, the card's keep rate |
-| Ink, picked the choice (incl. no ink) | 57.5% | 55.2% | 55.5% | 41.0%, the card's ink rate (random is 26%) |
-| Board, picked the exact quest / challenge / end turn | 55.8% | | 53.2% | random 31.3% |
-| Board, picked the right kind (quest, challenge or end) | 72.4% | | 70.9% | 56.4%, quest the most lore, else end |
+| Mulligan, card kept or sent | 79.7% (AUC 0.88) | 78.0% | 77.4% | 74.0%, the card's keep rate |
+| Ink, picked the choice (incl. no ink) | 57.6% | 55.4% | 55.6% | 40.8%, the card's ink rate (random is 27%) |
+| Board, picked the exact quest / challenge / end turn | 56.0% | | 53.1% | random 31.3% |
+| Board, picked the right kind (quest, challenge or end) | 72.5% | | 70.9% | 56.4%, quest the most lore, else end |
 
 The rules-text tags and recent opponent items took `generic` from 76.6% and 54.9% to these numbers and left the other two where they were. They also taught it the Aladdin - Doing His Part case: against Emerald/Ruby in set 14 the team inked it 7% of the time, and `generic` now makes it its top ink pick 18% of the time (`card` 8%, `mmr` 5%). Trained only on games before set 14, it still does so 43% of the time, against 73% without the tags.
 
-Weighting by MMR does not predict the 1400+ MMR games any better (`card` vs `mmr`: mulligan 79.7% vs 78.9%, ink 58.2% vs 56.6%). Josh's games (median MMR 1670, more 1400+ games than every other account together) carry 89% of the `mmr` model's weight, so it is close to a model of how Josh plays: on the other accounts it trails the `card` model by 2 to 4 points.
+Weighting by MMR does not predict the 1400+ MMR games any better (`card` vs `mmr`: mulligan 79.3% vs 79.0%, ink 58.4% vs 56.8%). Josh's games (median MMR 1676, more 1400+ games than every other account together) carry 83% of the `mmr` model's weight, so it is close to a model of how Josh plays: on the other accounts it trails the `card` model by 2 to 4 points.
 
 The board models rank every legal quest, challenge and end-turn option (`decisions/choices.csv`). Both players' trusted turns train them, since the opponents are an MMR-matched population, and only the team's choices are flagged. There is no `mmr` board model. 82% of games end by concession, mostly from round 4 on, often with the winner far from 20 lore, so the board decides more games than the lore race; the board models are the ones to grow from here.
 
@@ -72,12 +72,12 @@ Nov 2026, every game since February (log-loss gain per decision, × 10⁻⁴):
 
 | | Choice over random | 95% interval |
 |---|---|---|
-| Ink (55,043 decisions) | +1.3 | −4.4 to +6.6 |
-| Mulligan (12,405 opening hands) | +4.7 | −4.4 to +13.4 |
+| Ink (66,897 decisions) | +2.5 | −2.1 to +7.6 |
+| Mulligan (14,406 opening hands) | +1.3 | −7.0 to +10.0 |
 
 Neither choice predicts winning beyond the spot it was made in, so the results can't yet tell a good ink or mulligan from a bad one, and nothing here is flagged from them. Two traps on the way to that answer:
 
 - An ink model without the hand's costs found a significant signal and advised inking the cheaper card. That was the hand: inking an expensive card goes with a hand full of them, which loses anyway. The whole hand's costs, uninkable cards included, took the signal away.
 - A single placebo draw made the mulligan look significant in 2 of 6 seeds. Averaging five draws settled it.
 
-The mulligan interval is about ±9 × 10⁻⁴ on 12,400 games. It narrows with the square root of the number of games, so about 45,000 hands would show a gain the size of today's estimate. The bought Nationals and Worlds logs, plus the rebuilt board (`src/lib/boardState.js`) as state, are what would let this test say more.
+The mulligan interval is about ±8.5 × 10⁻⁴ on 14,400 games. It narrows with the square root of the number of games, so a gain the size of today's estimate (+1.3) would need about 600,000 hands; the ink gain (+2.5, ±4.9 on 66,900 decisions) about 260,000 decisions. The bought Nationals and Worlds logs, plus the rebuilt board (`src/lib/boardState.js`) as state, are what would let this test say more.

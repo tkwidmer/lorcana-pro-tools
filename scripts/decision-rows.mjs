@@ -36,8 +36,13 @@ const mulliganOut = writer(path.join(OUT, 'mulligan.csv')), inkOut = writer(path
 const totals = {}, board = {}, rows = { mulligan: 0, ink: 0, choices: 0 }
 let games = 0
 for (const account of accounts) {
-  for (const line of fs.readFileSync(path.join('logs', account, 'matches.jsonl'), 'utf8').split('\n').filter(Boolean)) {
-    const m = JSON.parse(line)
+  const matches = fs.readFileSync(path.join('logs', account, 'matches.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l))
+  // duels.ink gives MMR only on the game that decides a Bo3 match, so its presence would tell a win model
+  // which game ended the match. MMR moves only when a match ends, so that game's MMR is every game's.
+  const matchMmr = new Map(matches.filter(m => m.match_id && m.mmr_before != null).map(m => [m.match_id, m]))
+  for (const m of matches) {
+    const decider = matchMmr.get(m.match_id)
+    if (decider) Object.assign(m, { mmr_before: decider.mmr_before, opp_mmr_before: decider.opp_mmr_before })
     if (m.excluded) continue
     const logs = JSON.parse(gunzipSync(fs.readFileSync(path.join('logs', account, `${m.game_id}.logs.gz`))))
     const out = decisionRows(logs, m.your_player, cardById, m.your_decklist)

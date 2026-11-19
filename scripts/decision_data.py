@@ -20,7 +20,7 @@ DECK = ['deck_inkable', 'deck_avg_cost', 'deck_cost_ge5', 'deck_items', 'deck_ac
 def load(name, since=''):
     d = pd.read_csv(f'decisions/{name}.csv')
     d = d[d.started_at >= since]
-    # The weight doubles every 100 MMR above the median. A game with no MMR (most Bo3) takes the
+    # The weight doubles every 100 MMR above the median. A game with no MMR (a Bo3 match never decided) takes the
     # player's median MMR.
     mmr = d.mmr.fillna(d.groupby('account').mmr.transform('median'))
     assert mmr.notna().all(), 'an account has no MMR in any game'
@@ -63,3 +63,18 @@ def ink_options(since=''):
     first = ink.groupby('decision_id', as_index=False).first()
     passes = first.assign(card_id=NO_INK, card_name=NO_INK, inked=first.no_ink, **{c: np.nan for c in NOT_A_CARD})
     return categorize(pd.concat([ink.assign(pass_option=0), passes.assign(pass_option=1)]).sort_values('decision_id', kind='stable'))
+
+
+def log_loss(won, p):
+    # Per-row log-loss of win chances p.
+    p = np.clip(p, 1e-6, 1 - 1e-6)
+    return -(won * np.log(p) + (1 - won) * np.log(1 - p))
+
+
+def gain(game_id, worse, better, rng, n=1000):
+    # Mean per-row log-loss gain of `better` over `worse` (x 1e-4), with a 95% interval resampled by game.
+    per_game = pd.Series(worse - better).groupby(np.asarray(game_id)).agg(['sum', 'count']).to_numpy()
+    draws = [per_game[i].sum(0) for i in rng.integers(0, len(per_game), (n, len(per_game)))]
+    lo, hi = np.percentile([s / c for s, c in draws], [2.5, 97.5])
+    est = per_game[:, 0].sum() / per_game[:, 1].sum()
+    return f'{1e4 * est:+.1f} (95% {1e4 * lo:+.1f} to {1e4 * hi:+.1f}){"  significant" if lo > 0 else ""}'

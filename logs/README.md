@@ -44,14 +44,14 @@ Nov 2026, every game since February (14,401 with a mulligan, 66,897 ink decision
 
 | | `card` | `mmr` | `generic` | Best simple baseline |
 |---|---|---|---|---|
-| Mulligan, card kept or sent | 79.7% (AUC 0.88) | 78.0% | 77.4% | 74.0%, the card's keep rate |
-| Ink, picked the choice (incl. no ink) | 57.5% | 55.4% | 55.5% | 40.8%, the card's ink rate (random is 27%) |
+| Mulligan, card kept or sent | 79.7% (AUC 0.88) | 77.9% | 77.4% | 74.0%, the card's keep rate |
+| Ink, picked the choice (incl. no ink) | 57.5% | 55.2% | 55.5% | 40.8%, the card's ink rate (random is 27%) |
 | Board, picked the exact quest / challenge / end turn | 55.9% | | 53.2% | random 31.3% |
 | Board, picked the right kind (quest, challenge or end) | 72.5% | | 70.9% | 56.4%, quest the most lore, else end |
 
 The rules-text tags and recent opponent items took `generic` from 76.6% and 54.9% to these numbers and left the other two where they were. They also taught it the Aladdin - Doing His Part case: against Emerald/Ruby in set 14 the team inked it 7% of the time, and `generic` now makes it its top ink pick 18% of the time (`card` 8%, `mmr` 5%). Trained only on games before set 14, it still does so 43% of the time, against 73% without the tags.
 
-Weighting by MMR does not predict the 1400+ MMR games any better (`card` vs `mmr`: mulligan 79.3% vs 78.9%, ink 58.3% vs 56.8%). Josh's games (median MMR 1676, more 1400+ games than every other account together) carry 83% of the `mmr` model's weight, so it is close to a model of how Josh plays: on the other accounts it trails the `card` model by 2 to 4 points.
+Weighting by MMR does not predict the 1400+ MMR games any better (`card` vs `mmr`: mulligan 80.1% vs 79.2%, ink 58.4% vs 57.0%). Josh's games (median MMR 1644, nearly half of all 1400+ games) carry 82% of the `mmr` model's weight, so it is close to a model of how Josh plays: on the other accounts it trails the `card` model by 2 to 4 points.
 
 The board models rank every legal quest, challenge and end-turn option (`decisions/choices.csv`). Both players' trusted turns train them, since the opponents are an MMR-matched population, and only the team's choices are flagged. There is no `mmr` board model. 82% of games end by concession, mostly from round 4 on, often with the winner far from 20 lore, so the board decides more games than the lore race; the board models are the ones to grow from here.
 
@@ -72,15 +72,15 @@ Nov 2026, every game since February (log-loss gain per decision, × 10⁻⁴):
 
 | | Choice over random | 95% interval |
 |---|---|---|
-| Ink (66,897 decisions) | +3.0 | −1.5 to +8.1 |
-| Mulligan (14,406 opening hands) | +2.7 | −6.0 to +11.5 |
+| Ink (66,897 decisions) | −0.6 | −5.1 to +4.2 |
+| Mulligan (14,406 opening hands) | +3.9 | −4.0 to +12.4 |
 
 Neither choice predicts winning beyond the spot it was made in, so the results can't yet tell a good ink or mulligan from a bad one, and nothing here is flagged from them. Two traps on the way to that answer:
 
 - An ink model without the hand's costs found a significant signal and advised inking the cheaper card. That was the hand: inking an expensive card goes with a hand full of them, which loses anyway. The whole hand's costs, uninkable cards included, took the signal away.
 - A single placebo draw made the mulligan look significant in 2 of 6 seeds. Averaging five draws settled it.
 
-The mulligan interval is about ±8.8 × 10⁻⁴ on 14,400 games. It narrows with the square root of the number of games, so a gain the size of today's estimate (+2.7) would need about 150,000 hands; the ink gain (+3.0, ±4.8 on 66,900 decisions) about 170,000 decisions. The estimates move by a point or two between runs (the placebo draws are random), so treat these as orders of magnitude. The bought Nationals and Worlds logs, plus the rebuilt board (`src/lib/boardState.js`) as state, are what would let this test say more.
+The mulligan interval is about ±8.2 × 10⁻⁴ on 14,400 games. It narrows with the square root of the number of games, so a gain the size of today's estimate (+3.9) would need about 65,000 hands; the ink estimate is below zero. The estimates move by a point or two between runs (the placebo draws are random), so treat these as orders of magnitude. The bought Nationals and Worlds logs, plus the rebuilt board (`src/lib/boardState.js`) as state, are what would let this test say more.
 
 ## What decides a game?
 

@@ -134,3 +134,30 @@ The largest single gaps are a quest or end of turn where the model would challen
 One trap: a game's summed regret looked significant against losing (log-odds −0.17 per 0.1 regret), but regret grows with the number of options, so it tracks the game's length and board size. Short games where the team was run over have the least regret and the most losses. The per-decision placebo test above is the one to trust.
 
 What would make the values trustworthy: the opponent's ready characters that could challenge an exerted quester, damage on the board (a challenge that does not banish changes nothing in the state today), cards in hand, and a sharper test on one spot at a time (for example, quest versus a clean kill with the same lore and board).
+
+## Does leaving a clean kill cost games?
+
+`python3 scripts/clean-kills.py` (about a minute, after `win-probability.py`) answers one spot directly. A clean kill is a challenge that banishes its target and survives, by printed stats. Turns of either player with one open at their first quest, challenge or end-turn choice are split into **took** (a clean kill was challenged that turn) and **left** (none was, and the turn ended with one still open). Turns where it went away some other way are set aside. Turns are matched on the state at that first choice, before anything was done: round, lore lead, board-cost lead, play/draw and the biggest clean kill's cost. The effect is the win-rate difference within matched groups, weighted to the "left" turns, with a 95% interval resampled by game.
+
+Nov 2026, 24,053 turns (the team: 11,830):
+
+| | Took | Left | Taking it |
+|---|---|---|---|
+| Both players | 17,935 | 6,118 | **+13.7%** (+12.0 to +15.3) |
+| The team | 8,612 | 3,218 | **+11.9%** (+9.6 to +14.3) |
+
+**Yes, by about 12 to 14 points of win rate.** The team leaves an open clean kill on 22% to 33% of these turns, depending on the player. Each check below either matches on another explanation or cuts it away, and none moves the effect much:
+
+| Explanation | Check | Taking it |
+|---|---|---|
+| Weaker players leave kills | Match on MMR gap | +13.1% |
+| | Each team account against itself | +11.5% |
+| Players leave kills in lost games | Win-probability model's chance at the turn's start: 45.6% took, 43.9% left; it expects only +1.2% | |
+| | Also match on that chance's decile | +12.8% |
+| Players leave a kill, then concede | Drop each side's last two turns | +13.2% |
+| Matchup | Also match on colors | +12.8% |
+| The "clean kills" are not real (buffs are not logged) | After a chosen one, the opponent has one character fewer by the next choice 90% of the time (other challenges: 62%) | |
+
+The effect grows with what is left alive, which is what a real cost looks like: +12% when the biggest clean kill costs 1-2, +15% at 3-4, +18% at 5+; +9% in rounds 1-5, +16% in 6-7, +17% from round 8.
+
+It is still observational: what is in hand is not seen, so a player holding a sweeper or planning to quest with the challenger next turn is in "left" with everyone else. The step-3 placebo test did not catch this because these turns are under 1% of all board decisions. Per account, every player with 100 or more such turns shows a positive effect except megan (−2.8% on 103 turns, too few to read). This is the first board spot with evidence behind it: `clean kill left` in `decisions/flags.csv` is now a flag worth coaching, not just a departure from habit.

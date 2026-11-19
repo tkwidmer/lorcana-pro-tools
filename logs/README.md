@@ -37,7 +37,7 @@ All models also see what a card does, read off its rules text by `src/lib/decisi
 Three models score each decision:
 
 - `card` also knows which card it is and how often the team keeps or inks it against those opponent colors in the other games. It is the best in the current meta, but it forgets everything when the cards change.
-- `mmr` is the same model with each game weighted by its MMR: the weight doubles every 100 MMR above the median, and a game with no MMR (most Bo3) takes the player's median.
+- `mmr` is the same model with each game weighted by its MMR: the weight doubles every 100 MMR above the median, and a Bo3 game takes its match's MMR (duels.ink gives it only on the deciding game), and a game with none takes the player's median.
 - `generic` sees only what a card is (cost, type, inkable, stats, rules-text tags) and the game state, so it carries to a new meta. Trained on the games before set 14 and tested on set 14, where 26% of the cards were new, it beats the card model (mulligan 73.2% vs 71.4%, ink 54.9% vs 53.3%), and the tags are part of why (without them: 72.8%, 54.2%).
 
 Nov 2026, every game since February (14,401 with a mulligan, 66,897 ink decisions, 264,051 board decisions):
@@ -81,3 +81,30 @@ Neither choice predicts winning beyond the spot it was made in, so the results c
 - A single placebo draw made the mulligan look significant in 2 of 6 seeds. Averaging five draws settled it.
 
 The mulligan interval is about ±8.8 × 10⁻⁴ on 14,400 games. It narrows with the square root of the number of games, so a gain the size of today's estimate (+2.7) would need about 150,000 hands; the ink gain (+3.0, ±4.8 on 66,900 decisions) about 170,000 decisions. The estimates move by a point or two between runs (the placebo draws are random), so treat these as orders of magnitude. The bought Nationals and Worlds logs, plus the rebuilt board (`src/lib/boardState.js`) as state, are what would let this test say more.
+
+## What decides a game?
+
+`python3 scripts/win-probability.py` (about a minute) fits a win model to the board, turn by turn. Each trusted turn of either player is one snapshot: the state at the mover's first quest, challenge or end-turn choice, so that turn's plays are already on the board. Models that see more and more of it are scored out of fold by game: before the game (colors, play/draw, both MMRs), then lore, then the board (characters, their total ink cost and lore, ready and exerted). It writes every snapshot's win chance to `decisions/winprob.csv`, the base for scoring the decisions between snapshots.
+
+Nov 2026, 212,462 snapshots in 14,726 games (AUC: 0.5 is a coin flip, 1.0 is certain):
+
+| Mover's turn | Before the game | + lore | + board, no lore | Everything | Snapshots at 80%+ either way | ...and right |
+|---|---|---|---|---|---|---|
+| 1 | 0.597 | 0.606 | 0.605 | 0.606 | 0% | |
+| 3 | 0.601 | 0.615 | 0.645 | 0.646 | 1% | 83% |
+| 5 | 0.595 | 0.625 | 0.702 | 0.714 | 12% | 85% |
+| 7 | 0.580 | 0.636 | 0.745 | 0.775 | 25% | 88% |
+| 9 | 0.570 | 0.652 | 0.772 | 0.809 | 31% | 90% |
+| 12+ | 0.553 | 0.682 | 0.751 | 0.812 | 33% | 89% |
+
+- **The board decides games, not the lore race.** From turn 3 on, the board alone predicts the result better than the lore count, and the gap is widest at turns 7 to 9. The difference in the ink cost of each side's characters is the single strongest input (38% of the full model's gain; lore lead 4%).
+- **A board lead is worth more than a lore lead.** At turn 5, ahead on board but behind on lore wins 59%; ahead on lore but behind on board wins 36%. The win rate climbs with the board-cost lead at every turn: 22% at 8 or more behind, 46% level, 74% at 8 or more ahead (turn 5).
+- **Games are mostly decided by turns 6 to 9.** The model is sure (80%+ either way) of a fifth of turn-6 snapshots and right on 87% of them; past turn 9 it gains little.
+- **Before the game, about 0.6.** Play/draw is the largest part: in ranked Bo1 the team wins 62% on the play and 46% on the draw. In Bo3 games 2 and 3, going first mostly means having lost the previous game (the loser chooses, and takes the play 99% of the time), so play/draw there also carries who is ahead in the match.
+
+Two traps found on the way:
+
+- duels.ink gives MMR only on the game that decides a Bo3 match (3,818 of 3,822 deciding games, 1 of 5,691 others), so the presence of an MMR told the model which game ended the match. With who went first, that gave away the result: in game 2 the player on the play won 99% of the games without an MMR and 2% of those with one. `scripts/decision-rows.mjs` now gives every game of a match its deciding game's MMR (MMR moves only when a match ends: 99.9% of rated games start at the previous one's `mmr_after`). It took the before-the-game AUC from 0.665 to 0.597.
+- The snapshot comes after the mover's plays, so a side's board is a little larger on its own turn than on the opponent's. Both players are snapshotted on their own turns, so the comparison is even, but it is the board after playing, not before.
+
+Not in the model yet: cards in hand and ink (known for the team's turns only, from `ink.csv`), items, temporary buffs (not logged), and the 11% of turns where the rebuilt board disagrees with the log. Next: score each quest, challenge and end-turn by the win chance before and after it.

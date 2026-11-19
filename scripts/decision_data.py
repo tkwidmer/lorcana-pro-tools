@@ -20,7 +20,7 @@ DECK = ['deck_inkable', 'deck_avg_cost', 'deck_cost_ge5', 'deck_items', 'deck_ac
 def load(name, since=''):
     d = pd.read_csv(f'decisions/{name}.csv')
     d = d[d.started_at >= since]
-    # The weight doubles every 100 MMR above the median. A game with no MMR (most Bo3) takes the
+    # The weight doubles every 100 MMR above the median. A game with no MMR (a Bo3 match never decided) takes the
     # player's median MMR.
     mmr = d.mmr.fillna(d.groupby('account').mmr.transform('median'))
     assert mmr.notna().all(), 'an account has no MMR in any game'

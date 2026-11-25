@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Pull every ranked duels.ink game for each team account into logs/<account>/, for coaching and training.
-//   node scripts/pull-team-gamelogs.mjs [account ...]      (default: every account in DUELS_TOKEN / DUELS_TOKENS)
+//   node scripts/pull-team-gamelogs.mjs [--season=REGEX] [account ...]   (default: every account in DUELS_TOKEN / DUELS_TOKENS)
+// --season keeps only games whose season_name matches, e.g. --season='Set 1[34]' for sets 13 and 14.
 // A name given twice in DUELS_TOKENS (max=…,max=…) is one player's two duels.ink accounts: both pull into logs/<name>/.
 // Per account: logs/<account>/matches.jsonl (one match-history row per ranked game, plus `excluded`) and one
 // <game_id>.logs.gz per kept game, stored exactly as the CDN serves it. Re-runs only fetch new games.
@@ -19,7 +20,10 @@ if (process.env.DUELS_TOKEN?.trim()) tokens.teagan = [process.env.DUELS_TOKEN.tr
 for (const e of (process.env.DUELS_TOKENS ?? '').split(',').map(s => s.trim()).filter(Boolean)) {
   const i = e.indexOf('='); (tokens[e.slice(0, i).trim()] ??= []).push(e.slice(i + 1).trim()) // a repeated name: one player's accounts, one folder
 }
-const accounts = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(tokens)
+const args = process.argv.slice(2)
+const season = new RegExp(args.find(a => a.startsWith('--season='))?.slice(9) ?? '')
+const names = args.filter(a => !a.startsWith('--'))
+const accounts = names.length ? names : Object.keys(tokens)
 
 async function duels(url, token, init = {}) {
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -55,7 +59,7 @@ for (const [account, token] of accounts.flatMap(a => tokens[a].map(t => [a, t]))
     if (!res.ok) throw new Error(`${account}: match-history ${res.status}`)
     const page = await res.json(); rows.push(...page.games); cursor = page.next_cursor
   } while (cursor)
-  const ranked = rows.filter(r => r.ranked)
+  const ranked = rows.filter(r => r.ranked && season.test(r.season_name ?? ''))
   // A log already on disk (from an interrupted run) is kept without refetching.
   for (const r of ranked) if (!index.has(r.game_id) && fs.existsSync(path.join(dir, `${r.game_id}.logs.gz`))) index.set(r.game_id, { ...r, excluded: exclusion(r, fs.readFileSync(path.join(dir, `${r.game_id}.logs.gz`))) })
   const todo = ranked.filter(r => !index.has(r.game_id))

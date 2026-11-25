@@ -13,7 +13,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import GroupKFold
-from decision_data import DECK, NOT_A_CARD, categorize, ink_options, load
+from decision_data import DECK, NOT_A_CARD, categorize, gain, ink_options, load, log_loss
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--since', default='')
@@ -32,17 +32,7 @@ def out_of_fold(d, features):
 
 
 def loss(d, p):
-    y = d.won.to_numpy()
-    return -(y * np.log(np.clip(p, 1e-6, 1)) + (1 - y) * np.log(np.clip(1 - p, 1e-6, 1)))
-
-
-def gain(d, worse, better, n=1000):
-    # Mean log-loss gain per row of `better` over `worse` (x 1e-4), with a 95% interval resampled by game.
-    per_game = pd.Series(worse - better).groupby(d.game_id.to_numpy()).agg(['sum', 'count']).to_numpy()
-    draws = [per_game[i].sum(0) for i in rng.integers(0, len(per_game), (n, len(per_game)))]
-    lo, hi = np.percentile([s / c for s, c in draws], [2.5, 97.5])
-    est = per_game[:, 0].sum() / per_game[:, 1].sum()
-    return f'{1e4 * est:+.1f} (95% {1e4 * lo:+.1f} to {1e4 * hi:+.1f}){"  significant" if lo > 0 else ""}'
+    return log_loss(d.won.to_numpy(), p)
 
 
 def test(name, chosen, placebo, state, choice, draws=5):
@@ -51,9 +41,9 @@ def test(name, chosen, placebo, state, choice, draws=5):
     by_state, by_choice = loss(chosen, out_of_fold(chosen, state)), loss(chosen, out_of_fold(chosen, state + choice))
     by_random = np.mean([loss(chosen, out_of_fold(placebo(), state + choice)) for _ in range(draws)], axis=0)
     print(f'{name}: {len(chosen)} decisions in {chosen.game_id.nunique()} games, log-loss gain x 1e-4')
-    print(f'  choice over state   {gain(chosen, by_state, by_choice)}')
-    print(f'  random over state   {gain(chosen, by_state, by_random)}   (the placebo, {draws} draws)')
-    print(f'  choice over random  {gain(chosen, by_random, by_choice)}')
+    print(f'  choice over state   {gain(chosen.game_id, by_state, by_choice, rng)}')
+    print(f'  random over state   {gain(chosen.game_id, by_state, by_random, rng)}   (the placebo, {draws} draws)')
+    print(f'  choice over random  {gain(chosen.game_id, by_random, by_choice, rng)}')
 
 
 # Ink: the inked card (or "no ink") against a random option of the same decision.

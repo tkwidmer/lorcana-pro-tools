@@ -2,6 +2,7 @@
 // Pull every ranked duels.ink game for each team account into logs/<account>/, for coaching and training.
 //   node scripts/pull-team-gamelogs.mjs [--season=REGEX] [account ...]   (default: every account in DUELS_TOKEN / DUELS_TOKENS)
 // --season keeps only games whose season_name matches, e.g. --season='Set 1[34]' for sets 13 and 14.
+// A name given twice in DUELS_TOKENS (max=…,max=…) is one player's two duels.ink accounts: both pull into logs/<name>/.
 // Per account: logs/<account>/matches.jsonl (one match-history row per ranked game, plus `excluded`) and one
 // <game_id>.logs.gz per kept game, stored exactly as the CDN serves it. Re-runs only fetch new games.
 // Path: GET /api/me/match-history (250 rows/page) → POST /api/me/bulk-gamelogs (1000 ids/call, CDN URLs)
@@ -15,9 +16,9 @@ import { gunzipSync } from 'node:zlib'
 
 const BASE = 'https://duels.ink'
 const tokens = {}
-if (process.env.DUELS_TOKEN?.trim()) tokens.teagan = process.env.DUELS_TOKEN.trim() // "me" in the MCP server
+if (process.env.DUELS_TOKEN?.trim()) tokens.teagan = [process.env.DUELS_TOKEN.trim()] // "me" in the MCP server
 for (const e of (process.env.DUELS_TOKENS ?? '').split(',').map(s => s.trim()).filter(Boolean)) {
-  const i = e.indexOf('='); tokens[e.slice(0, i).trim()] = e.slice(i + 1).trim()
+  const i = e.indexOf('='); (tokens[e.slice(0, i).trim()] ??= []).push(e.slice(i + 1).trim()) // a repeated name: one player's accounts, one folder
 }
 const args = process.argv.slice(2)
 const season = new RegExp(args.find(a => a.startsWith('--season='))?.slice(9) ?? '')
@@ -44,9 +45,8 @@ function exclusion(row, gz) {
   return reason
 }
 
-for (const account of accounts) {
-  const token = tokens[account]
-  if (!token) throw new Error(`no token for "${account}"; known: ${Object.keys(tokens).join(', ')}`)
+for (const account of accounts) if (!tokens[account]) throw new Error(`no token for "${account}"; known: ${Object.keys(tokens).join(', ')}`)
+for (const [account, token] of accounts.flatMap(a => tokens[a].map(t => [a, t]))) {
   const dir = path.join('logs', account); fs.mkdirSync(dir, { recursive: true })
   const indexPath = path.join(dir, 'matches.jsonl')
   const index = new Map(fs.existsSync(indexPath) ? fs.readFileSync(indexPath, 'utf8').split('\n').filter(Boolean).map(l => { const r = JSON.parse(l); return [r.game_id, r] }) : [])

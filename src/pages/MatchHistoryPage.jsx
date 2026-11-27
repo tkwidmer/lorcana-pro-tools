@@ -79,11 +79,15 @@ function InkIcons({ colors }) {
   )
 }
 
+// Analytics models two seats. A Coconut Pod game has four (your_player 3 or 4),
+// so its gamelog cannot be imported.
+const canImportGamelog = (game) => Boolean(game.gamelog_id) && !(game.your_player > 2)
+
 function ImportGamelogButton({ game }) {
   const navigate = useNavigate()
   const [status, setStatus] = useState(null) // null | 'loading' | 'done' | 'error'
 
-  if (!game.gamelog_id) return null
+  if (!canImportGamelog(game)) return null
 
   async function handleImport() {
     setStatus('loading')
@@ -441,7 +445,7 @@ export function MatchHistoryPage() {
   }
 
   async function handleBulkImportGamelogs() {
-    const toImport = games.filter(g => selected.has(g.game_id) && g.gamelog_id)
+    const toImport = games.filter(g => selected.has(g.game_id) && canImportGamelog(g))
     if (!toImport.length) return
     const storedMyName = localStorage.getItem('lorcana_my_name') ?? ''
     setBulkOp({ done: 0, total: toImport.length, errors: 0, label: 'Importing gamelogs' })
@@ -639,7 +643,7 @@ export function MatchHistoryPage() {
   })()
 
   const selectedGames = filteredGames.filter(g => selected.has(g.game_id))
-  const hasGamelogs = selectedGames.some(g => g.gamelog_id)
+  const hasGamelogs = selectedGames.some(canImportGamelog)
   const allSelected = filteredGames.length > 0 && filteredGames.every(g => selected.has(g.game_id))
   const someSelected = selectedGames.length > 0 && !allSelected
 
@@ -696,7 +700,7 @@ export function MatchHistoryPage() {
                 onClick={handleBulkImportGamelogs}
                 className="px-3 py-1 bg-white text-gray-900 rounded text-xs font-semibold hover:bg-gray-100 transition-colors"
               >
-                Import Gamelogs ({selectedGames.filter(g => g.gamelog_id).length})
+                Import Gamelogs ({selectedGames.filter(canImportGamelog).length})
               </button>
             )}
             <button

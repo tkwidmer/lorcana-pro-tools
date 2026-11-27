@@ -59,7 +59,9 @@ export async function getGamelog(id) {
 export async function getAllGamelogs() {
   const store = await tx('readonly')
   const all = await promisify(store.getAll())
-  return all.sort((a, b) => (b.playedAt ?? b.savedAt) - (a.playedAt ?? a.savedAt))
+  // Four-player pod games imported before Match History refused them carry a
+  // seat of 3 or 4, which no two-seat view can read.
+  return all.filter(g => !(g.myPlayerNum > 2)).sort((a, b) => (b.playedAt ?? b.savedAt) - (a.playedAt ?? a.savedAt))
 }
 
 export async function deleteGamelog(id) {

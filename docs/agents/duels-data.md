@@ -5,7 +5,7 @@ Read before touching Match History, Analytics, the Library and player profiles, 
 ## Match History Game Object Shape
 
 Key fields on game objects from the duels.ink API:
-- `your_player` (1 or 2), `your_deck_id`, `your_deck_colors` ("ruby/sapphire"), `your_decklist` (array of `{cardId, count}`)
+- `your_player` (1 or 2; 3 or 4 in a four-player Coconut Pod game, which Match History does not offer for gamelog import because Analytics models two seats), `your_deck_id`, `your_deck_colors` ("ruby/sapphire"), `your_decklist` (array of `{cardId, count}`)
 - `opp_display_name`, `opp_deck_colors` (the opponent's decklist is never returned)
 - `started_at` (ISO string — game time), `went_first`, `result`, `queue_name`
 - `gamelog_id`, `mmr_delta`, `your_lore`, `opp_lore`
